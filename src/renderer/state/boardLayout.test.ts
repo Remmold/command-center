@@ -114,6 +114,11 @@ describe('board layout', () => {
       expect(all({ repoGroupKeys: ['key:beta'] })).toEqual(['beta/combat#01', 'beta/ui#07'])
     })
 
+    it('ignores a remembered repo that is no longer on the board', () => {
+      expect(all({ repoGroupKeys: ['key:gone'] })).toHaveLength(5)
+      expect(all({ repoGroupKeys: ['key:gone', 'key:beta'] })).toEqual(['beta/combat#01', 'beta/ui#07'])
+    })
+
     it('keeps only the selected features, and ignores selected features of repos no longer selected', () => {
       expect(all({ featureKeys: ['key:alpha/combat', 'key:beta/ui'] })).toEqual(['alpha/combat#01', 'beta/ui#07', 'alpha/combat#02'])
       expect(all({ repoGroupKeys: ['key:beta'], featureKeys: ['key:alpha/combat'] })).toEqual(['beta/combat#01', 'beta/ui#07'])

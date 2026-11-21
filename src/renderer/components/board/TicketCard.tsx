@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import type { Workspace } from '../../../shared/types'
-import type { BoardCard } from '../../state/boardLayout'
+import type { SpecOnlyBoardCard, TicketBoardCard } from '../../state/boardLayout'
 import { useWorkspacesStatus } from '../../state/sessionStatusStore'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
@@ -8,10 +8,8 @@ import { Card, CardMeta, CardNote, CardTitle } from '../ui/Card'
 import { StatusDot } from '../ui/StatusDot'
 import { statusText, TicketStatusBadge } from './TicketStatusBadge'
 
-type TicketCardData = Extract<BoardCard, { kind: 'ticket' }>
-
 /** The worktree tag when no copy of the ticket sits in a main checkout. */
-function onlyWorktreeTag(card: TicketCardData, workspaces: Map<string, Workspace>): string | null {
+function onlyWorktreeTag(card: TicketBoardCard, workspaces: Map<string, Workspace>): string | null {
   const tags = card.ticket.sightings.map((s) => workspaces.get(s.workspaceId)?.worktreeTag ?? '')
   return tags.length > 0 && tags.every((t) => t !== '') ? tags[0] : null
 }
@@ -21,10 +19,10 @@ export function cardAnchorId(cardKey: string): string {
 }
 
 interface Props {
-  card: TicketCardData
+  card: TicketBoardCard
   workspaces: Map<string, Workspace>
   selected: boolean
-  onOpen: (card: TicketCardData) => void
+  onOpen: (card: TicketBoardCard) => void
 }
 
 export const TicketCard = memo(function TicketCard({ card, workspaces, selected, onOpen }: Props) {
@@ -55,7 +53,7 @@ export const TicketCard = memo(function TicketCard({ card, workspaces, selected,
   )
 })
 
-export function SpecOnlyCard({ card }: { card: Extract<BoardCard, { kind: 'spec-only' }> }) {
+export function SpecOnlyCard({ card }: { card: SpecOnlyBoardCard }) {
   return (
     <Card muted tooltip={card.feature.sightings[0]?.specPath ?? undefined}>
       <CardMeta>

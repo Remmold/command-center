@@ -39,7 +39,7 @@ export function MultiSelect({ label, options, selected, onChange }: Props) {
       <button
         ref={anchor}
         type="button"
-        aria-haspopup="dialog"
+        aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className={
@@ -52,7 +52,7 @@ export function MultiSelect({ label, options, selected, onChange }: Props) {
         <ChevronDown size={12} />
       </button>
       <Popover open={open} onClose={close} anchor={anchor.current} label={label}>
-        <ul className="scrollbar-thin flex max-h-80 flex-col overflow-y-auto">
+        <ul role="menu" aria-label={label} className="scrollbar-thin flex max-h-80 flex-col overflow-y-auto">
           <MultiSelectRow checked={!active} onClick={() => onChange([])}>
             All
           </MultiSelectRow>

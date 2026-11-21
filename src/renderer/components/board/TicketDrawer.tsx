@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SquareTerminal } from 'lucide-react'
-import type { BoardColumn, BoardFeature, BoardModel, BoardTicket, Workspace } from '../../../shared/types'
-import { COLUMNS, refOf, worktreeLabel, type FoundTicket, type TicketRef } from '../../state/boardLayout'
+import type { BoardFeature, BoardModel, BoardTicket, Workspace } from '../../../shared/types'
+import { COLUMN_TITLE, refOf, worktreeLabel, type FoundTicket, type TicketRef } from '../../state/boardLayout'
 import { openWorkspace } from '../../state/sessionNavigation'
 import { RepoIcon, RepoName } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
@@ -12,8 +12,6 @@ import { ListItem, ListRow, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { Markdown } from '../ui/Markdown'
 import { EmptyHint } from '../ui/Section'
 import { TicketStatusBadge } from './TicketStatusBadge'
-
-const COLUMN_TITLE = Object.fromEntries(COLUMNS.map((c) => [c.column, c.title])) as Record<BoardColumn, string>
 
 /** undefined while loading; re-reads whenever the board model changes so the drawer follows edits on disk. */
 function useBoardFile(path: string | null, model: BoardModel): string | null | undefined {

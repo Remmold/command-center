@@ -8,12 +8,14 @@ import type {
   Workspace
 } from '../../shared/types'
 
-export const COLUMNS: { column: BoardColumn; title: string }[] = [
-  { column: 'backlog', title: 'Backlog' },
-  { column: 'blocked', title: 'Blocked' },
-  { column: 'in-progress', title: 'In progress' },
-  { column: 'done', title: 'Done' }
-]
+export const COLUMN_TITLE: Record<BoardColumn, string> = {
+  backlog: 'Backlog',
+  blocked: 'Blocked',
+  'in-progress': 'In progress',
+  done: 'Done'
+}
+
+const COLUMN_ORDER: BoardColumn[] = ['backlog', 'blocked', 'in-progress', 'done']
 
 const MAIN_TAG = 'main'
 
@@ -31,7 +33,7 @@ export function refOf(repoGroupKey: string, feature: BoardFeature, ticket: Board
   return { repoGroupKey, featureName: feature.name, fileName: ticket.fileName }
 }
 
-export function sameTicket(a: TicketRef | null, b: TicketRef): boolean {
+function sameTicket(a: TicketRef | null, b: TicketRef): boolean {
   return a !== null && a.repoGroupKey === b.repoGroupKey && a.featureName === b.featureName && a.fileName === b.fileName
 }
 
@@ -51,7 +53,7 @@ export interface BoardViewOptions {
   showFinished: boolean
 }
 
-export function featureKey(repoGroupKey: string, featureName: string): string {
+function featureKey(repoGroupKey: string, featureName: string): string {
   return `${repoGroupKey}/${featureName}`
 }
 
@@ -62,9 +64,13 @@ interface CardBase {
   feature: BoardFeature
 }
 
-export type BoardCard =
-  | (CardBase & { kind: 'ticket'; ref: TicketRef; ticket: BoardTicket; blockers: string[] })
-  | (CardBase & { kind: 'spec-only' })
+export type TicketBoardCard = CardBase & { kind: 'ticket'; ref: TicketRef; ticket: BoardTicket; blockers: string[] }
+export type SpecOnlyBoardCard = CardBase & { kind: 'spec-only' }
+export type BoardCard = TicketBoardCard | SpecOnlyBoardCard
+
+export function cardKeyOf(ref: TicketRef): string {
+  return `${featureKey(ref.repoGroupKey, ref.featureName)}/${ref.fileName}`
+}
 
 export interface LaneColumn {
   column: BoardColumn
@@ -93,7 +99,7 @@ export interface BoardLayout {
 }
 
 /** "02" < "02b" < "03" < "112". */
-export function compareTicketNumbers(a: string, b: string): number {
+function compareTicketNumbers(a: string, b: string): number {
   const split = (n: string): [number, string] => {
     const m = /^(\d+)(.*)$/.exec(n)
     return m ? [Number(m[1]), m[2]] : [Number.POSITIVE_INFINITY, n]
@@ -112,7 +118,7 @@ function byName(a: BoardFeature, b: BoardFeature): number {
 }
 
 function emptyColumns(): LaneColumn[] {
-  return COLUMNS.map(({ column }) => ({ column, cards: [], finished: { cards: 0, features: 0 } }))
+  return COLUMN_ORDER.map((column) => ({ column, cards: [], finished: { cards: 0, features: 0 } }))
 }
 
 /** Same rule as the board reader: a number is resolved once every ticket file carrying it is done. */
@@ -130,7 +136,10 @@ function cardsOf(group: BoardRepoGroup, feature: BoardFeature): BoardCard[] {
   if (feature.state === 'spec-only') return [{ ...base, kind: 'spec-only', key: fKey }]
   return [...feature.tickets]
     .sort((a, b) => compareTicketNumbers(a.number, b.number) || a.fileName.localeCompare(b.fileName))
-    .map((ticket) => ({ ...base, kind: 'ticket', key: `${fKey}/${ticket.fileName}`, ref: refOf(group.repoGroupKey, feature, ticket), ticket, blockers: unresolvedBlockers(feature, ticket) }))
+    .map((ticket) => {
+      const ref = refOf(group.repoGroupKey, feature, ticket)
+      return { ...base, kind: 'ticket', key: cardKeyOf(ref), ref, ticket, blockers: unresolvedBlockers(feature, ticket) }
+    })
 }
 
 function columnOf(card: BoardCard): BoardColumn {
@@ -153,7 +162,8 @@ interface Scope {
 }
 
 function scopeOf(model: BoardModel, filter: BoardFilter): Scope {
-  const repoKeys = new Set(filter.repoGroupKeys)
+  const known = new Set(model.repoGroups.map((g) => g.repoGroupKey))
+  const repoKeys = new Set(filter.repoGroupKeys.filter((k) => known.has(k)))
   const groups = [...model.repoGroups].filter((g) => repoKeys.size === 0 || repoKeys.has(g.repoGroupKey)).sort(compareRepos)
   const available = new Set(groups.flatMap((g) => g.features.map((f) => featureKey(g.repoGroupKey, f.name))))
   const chosen = filter.featureKeys.filter((k) => available.has(k))

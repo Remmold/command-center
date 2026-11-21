@@ -12,9 +12,9 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { ScanRootsButton } from './ScanRootsButton'
 
 const GROUP_BY: { value: GroupBy; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'feature', label: 'Feature' },
-  { value: 'repo', label: 'Repo' }
+  { value: 'none', label: 'No grouping' },
+  { value: 'feature', label: 'By feature' },
+  { value: 'repo', label: 'By repo' }
 ]
 
 export function BoardToolbar({ model }: { model: BoardModel }) {
@@ -53,7 +53,6 @@ export function BoardToolbar({ model }: { model: BoardModel }) {
           onChange={(search) => setFilter({ search })}
         />
       </div>
-      <span className="text-[11px] text-zinc-500">Group by</span>
       <SegmentedControl label="Group by" options={GROUP_BY} value={groupBy} onChange={setGroupBy} />
       <Button variant="ghost" pressed={showFinished} onClick={toggleShowFinished} tooltip="Show the Done cards of features whose tickets are all done">
         Finished features

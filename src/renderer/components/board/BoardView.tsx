@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import type { Workspace } from '../../../shared/types'
 import {
-  COLUMNS,
+  cardKeyOf,
+  COLUMN_TITLE,
   findTicket,
   layoutBoard,
   neighbourCard,
@@ -9,7 +10,7 @@ import {
   type BoardLane,
   type LaneColumn,
   type LaneHeader,
-  type TicketRef
+  type TicketBoardCard
 } from '../../state/boardLayout'
 import { PANEL_MIN_WIDTH, useBoardStore } from '../../state/boardStore'
 import { useRepoDisplayName } from '../../state/repoIdentitiesStore'
@@ -19,6 +20,7 @@ import { Button } from '../ui/Button'
 import { Column, ColumnRow } from '../ui/Column'
 import { DrawerHost, DrawerMain } from '../ui/Drawer'
 import { HeaderRow } from '../ui/HeaderRow'
+import { overlayOpen } from '../ui/overlay'
 import { ProgressBar } from '../ui/ProgressBar'
 import { ScrollStack } from '../ui/ScrollStack'
 import { EmptyHint } from '../ui/Section'
@@ -27,12 +29,6 @@ import { BoardToolbar } from './BoardToolbar'
 import { NotAddedLine } from './NotAddedLine'
 import { cardAnchorId, SpecOnlyCard, TicketCard } from './TicketCard'
 import { TicketDrawer } from './TicketDrawer'
-
-const COLUMN_TITLE = Object.fromEntries(COLUMNS.map((c) => [c.column, c.title]))
-
-function cardKeyOf(ref: TicketRef): string {
-  return `${ref.repoGroupKey}/${ref.featureName}/${ref.fileName}`
-}
 
 function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
@@ -64,7 +60,7 @@ export function BoardView() {
   useEffect(() => {
     if (!selected) return
     const onKey = (e: KeyboardEvent): void => {
-      if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || isTyping(e.target)) return
+      if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || isTyping(e.target) || overlayOpen()) return
       const next = neighbourCard(layout, selected, e.key === 'ArrowUp' ? 'up' : 'down')
       if (!next) return
       e.preventDefault()
@@ -180,7 +176,7 @@ function LaneColumns({ lane, scroll, workspaces, selectedKey }: LaneColumnsProps
 
 function CardView({ card, workspaces, selected }: { card: BoardCard; workspaces: Map<string, Workspace>; selected: boolean }) {
   const select = useBoardStore((s) => s.select)
-  const open = useCallback((c: Extract<BoardCard, { kind: 'ticket' }>) => select(c.ref), [select])
+  const open = useCallback((c: TicketBoardCard) => select(c.ref), [select])
   if (card.kind === 'spec-only') return <SpecOnlyCard card={card} />
   return <TicketCard card={card} workspaces={workspaces} selected={selected} onOpen={open} />
 }

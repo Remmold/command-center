@@ -1,6 +1,7 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { Button } from './Button'
+import { overlayOpen } from './overlay'
 import { SectionLabel } from './SectionLabel'
 
 const MAX_SHARE = 0.8
@@ -31,7 +32,7 @@ export function Drawer({ label, title, onClose, children, share, minWidth, onRes
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !overlayOpen()) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -50,10 +51,10 @@ export function Drawer({ label, title, onClose, children, share, minWidth, onRes
     }
     const stop = (): void => {
       handle.removeEventListener('pointermove', move)
-      handle.removeEventListener('pointerup', stop)
+      handle.removeEventListener('lostpointercapture', stop)
     }
     handle.addEventListener('pointermove', move)
-    handle.addEventListener('pointerup', stop)
+    handle.addEventListener('lostpointercapture', stop)
   }
 
   return (

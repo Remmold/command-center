@@ -5,7 +5,6 @@ interface CardProps {
   tooltip?: string
   onClick?: () => void
   selected?: boolean
-  /** A placeholder: dashed and dim. */
   muted?: boolean
   /** DOM id, so the card can be scrolled into view. */
   anchorId?: string
@@ -51,7 +50,6 @@ export function CardNote({ children }: { children: ReactNode }) {
   return <p className="line-clamp-2 text-[10px] leading-4 text-zinc-500">{children}</p>
 }
 
-/** Wraps to at most three lines. */
 export function CardTitle({ children, prefix }: { children: ReactNode; prefix?: string }) {
   return (
     <div className="line-clamp-3 text-xs leading-snug text-zinc-100">
