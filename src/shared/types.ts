@@ -394,15 +394,16 @@ export interface BoardModel {
   repoGroups: BoardRepoGroup[]
 }
 
-/** An observed session is only ever Live or Quiet. */
-export type ObservedState = 'live' | 'quiet'
+export type ObservedStatus = 'live' | 'quiet'
+
+export const OBSERVED_STATUS_LABEL: Record<ObservedStatus, string> = { live: 'Live', quiet: 'Quiet' }
 
 export interface ObservedSession {
   workspaceId: string
   sessionId: string
   title: string
   modifiedAt: number
-  state: ObservedState
+  status: ObservedStatus
 }
 
 /** Opening an observed session renders at most this many of its latest chat items. */

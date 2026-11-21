@@ -4,23 +4,21 @@ interface Props {
   children: ReactNode
   onClick: () => void
   tooltip?: string
-  /** Nesting under a parent row; 2 sits under a workspace row. */
-  depth?: 0 | 2
+  nested?: boolean
   active?: boolean
 }
 
-const INDENT = { 0: 'px-3', 2: 'pl-9 pr-2' } as const
 const IDLE = 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100 focus-visible:bg-zinc-900'
 const ACTIVE = 'bg-zinc-800 text-zinc-100'
 
-export function ListRow({ children, onClick, tooltip, depth = 0, active = false }: Props) {
+export function ListRow({ children, onClick, tooltip, nested = false, active = false }: Props) {
   return (
     <li>
       <button
         onClick={onClick}
         title={tooltip}
         aria-current={active || undefined}
-        className={`flex w-full min-w-0 items-center gap-2 py-1 text-left text-xs focus-visible:outline-none ${INDENT[depth]} ${active ? ACTIVE : IDLE}`}
+        className={`flex w-full min-w-0 items-center gap-2 py-1 text-left text-xs focus-visible:outline-none ${nested ? 'pl-9 pr-2' : 'px-3'} ${active ? ACTIVE : IDLE}`}
       >
         {children}
       </button>

@@ -39,7 +39,7 @@ export function App() {
   const initApps = useAppsStore((s) => s.init)
   const initSessionStatus = useSessionStatusStore((s) => s.init)
   const initObserved = useObservedStore((s) => s.init)
-  const observedOpen = useObservedStore((s) => s.viewing?.workspaceId === activeProjectId && s.viewing !== null)
+  const observedOpen = useObservedStore((s) => s.viewing !== null && s.viewing.workspaceId === activeProjectId)
 
   const focusInputRef = useRef<() => void>()
 

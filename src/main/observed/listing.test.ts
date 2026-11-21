@@ -53,7 +53,7 @@ describe('listObservedTranscripts', () => {
     transcript(dir, 'aaaa', 1)
     const listed = await listObservedTranscripts(dir, { hostedSessionIds: none, now: NOW })
     expect(listed).toEqual([
-      expect.objectContaining({ sessionId: 'aaaa', state: 'live', modifiedAt: NOW - 1 * MIN })
+      expect.objectContaining({ sessionId: 'aaaa', status: 'live', modifiedAt: NOW - 1 * MIN })
     ])
   })
 
@@ -63,7 +63,7 @@ describe('listObservedTranscripts', () => {
     transcript(dir, 'quiet', 2.1)
     transcript(dir, 'older', 29)
     const listed = await listObservedTranscripts(dir, { hostedSessionIds: none, now: NOW })
-    expect(listed.map((t) => [t.sessionId, t.state])).toEqual([
+    expect(listed.map((t) => [t.sessionId, t.status])).toEqual([
       ['live', 'live'],
       ['quiet', 'quiet'],
       ['older', 'quiet']

@@ -6,10 +6,10 @@ import { Button } from '../ui/Button'
 import { HeaderRow } from '../ui/HeaderRow'
 import { EmptyHint } from '../ui/Section'
 import { StatusDot } from '../ui/StatusDot'
-import { Pane, Toolbar } from '../ui/Toolbar'
+import { Pane } from '../ui/Pane'
+import { Toolbar } from '../ui/Toolbar'
 import { MessageList } from './MessageList'
 
-/** Read-only view of the observed session being viewed: no input box, no approvals. */
 export function ObservedChatView() {
   const viewing = useObservedStore((s) => s.viewing)
   const session = useObservedStore((s) =>
@@ -32,7 +32,7 @@ export function ObservedChatView() {
         }
       >
         <HeaderRow
-          icon={<StatusDot status={session?.state ?? 'quiet'} />}
+          icon={<StatusDot status={session?.status ?? 'quiet'} />}
           title={session?.title ?? viewing.sessionId.slice(0, 8)}
           note="read-only · reply in VS Code"
         >

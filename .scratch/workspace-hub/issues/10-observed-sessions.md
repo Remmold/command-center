@@ -4,9 +4,9 @@
 
 **Blocked by:** 05, 08
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] For each workspace, list transcripts tagged `entrypoint: claude-vscode` that changed in the last 30 minutes and aren't hosted sessions, read from the workspace's profile folder
-- [ ] The one being viewed is tailed and new lines render through the existing chat item rendering, read-only (no input, no approvals)
-- [ ] An observed session is Live if its transcript changed in the last 2 minutes, otherwise Quiet; one quiet for over 30 minutes drops off the list
-- [ ] Tests for the listing and Live/Quiet rule against fixture transcripts
+- [x] For each workspace, list transcripts tagged `entrypoint: claude-vscode` that changed in the last 30 minutes and aren't hosted sessions, read from the workspace's profile folder
+- [x] The one being viewed is tailed and new lines render through the existing chat item rendering, read-only (no input, no approvals)
+- [x] An observed session is Live if its transcript changed in the last 2 minutes, otherwise Quiet; one quiet for over 30 minutes drops off the list
+- [x] Tests for the listing and Live/Quiet rule against fixture transcripts

@@ -43,7 +43,8 @@ export async function readLastItems(file: string, maxItems: number, maxBytes: nu
       items = [...complete.split('\n').flatMap(lineToItems), ...items]
     }
     const shortened = position > 0 || items.length > maxItems
-    return { items: items.slice(-maxItems), offset: offset ?? 0, shortened }
+    // A last line still unterminated after maxBytes: follow from where reading stopped; its fragment fails to parse and is skipped.
+    return { items: items.slice(-maxItems), offset: offset ?? position, shortened }
   } finally {
     await handle.close()
   }
@@ -90,13 +91,18 @@ export class TranscriptFollower {
 
   private async readNew(): Promise<void> {
     if (this.stopped) return
-    const handle = await fs.open(this.file, 'r')
+    let handle
+    try {
+      handle = await fs.open(this.file, 'r')
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') this.stop()
+      throw err
+    }
     try {
       const { size } = await handle.stat()
       if (size < this.offset) {
-        this.offset = size
+        this.offset = 0
         this.parser = createTranscriptParser()
-        return
       }
       while (this.offset < size && !this.stopped) {
         const length = Math.min(CHUNK_BYTES, size - this.offset)

@@ -71,9 +71,13 @@ export class ObservedService {
         const next: ObservedSession[] = []
         this.workspaces ??= await this.listWorkspaces()
         for (const workspace of this.workspaces) {
-          const dir = await this.transcriptsDirFor(workspace)
-          const listed = await listObservedTranscripts(dir, { hostedSessionIds: this.hosted, now })
-          for (const t of listed) next.push({ workspaceId: workspace.id, ...t })
+          try {
+            const dir = await this.transcriptsDirFor(workspace)
+            const listed = await listObservedTranscripts(dir, { hostedSessionIds: this.hosted, now })
+            for (const t of listed) next.push({ workspaceId: workspace.id, ...t })
+          } catch (err) {
+            console.error('[observed] could not list', workspace.path, err)
+          }
         }
         this.sessions = next
         const json = JSON.stringify(next)
@@ -88,7 +92,6 @@ export class ObservedService {
     return this.refreshing
   }
 
-  /** Starts following one transcript, stopping any other; only one is tailed at a time. */
   async open(workspaceId: string, sessionId: string): Promise<ObservedOpenResult> {
     this.close()
     const seq = this.openSeq

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo } from 'react'
 import { FolderPlus, X } from 'lucide-react'
-import type { Workspace } from '../../shared/types'
+import { OBSERVED_STATUS_LABEL, type Workspace } from '../../shared/types'
 import { groupByRepo, type RepoGroupView } from '../../shared/repoGroups'
 import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
@@ -131,14 +131,14 @@ function ObservedRows({ workspace }: { workspace: Workspace }) {
       {sessions.map((o) => (
         <ListRow
           key={o.sessionId}
-          depth={2}
+          nested
           active={viewing === o.sessionId}
           onClick={() => void open(workspace, o.sessionId)}
-          tooltip={`${o.title} · ${o.state === 'live' ? 'Live' : 'Quiet'} · in VS Code (read-only)`}
+          tooltip={`${o.title} · ${OBSERVED_STATUS_LABEL[o.status]} · in VS Code (read-only)`}
         >
-          <StatusDot status={o.state} />
+          <StatusDot status={o.status} />
           <ListRowText primary={o.title} />
-          <Badge>VS Code</Badge>
+          <Badge>in VS Code</Badge>
         </ListRow>
       ))}
     </>

@@ -1,15 +1,17 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import type { ObservedSession, ObservedState } from '../../shared/types'
+import type { ObservedSession, ObservedStatus } from '../../shared/types'
 
 export const LIVE_FOR_MS = 2 * 60_000
 export const LISTED_FOR_MS = 30 * 60_000
 const OBSERVED_ENTRYPOINT = 'claude-vscode'
 const PROBE_BYTES = 64 * 1024
+const ENTRYPOINT_RE = /"entrypoint":"((?:[^"\\]|\\.)*)"/g
+const TITLE_RE = /"aiTitle":"((?:[^"\\]|\\.)*)"/g
 
 export type ObservedTranscript = Omit<ObservedSession, 'workspaceId'>
 
-export function observedState(modifiedAt: number, now: number): ObservedState | null {
+export function observedStatus(modifiedAt: number, now: number): ObservedStatus | null {
   const age = now - modifiedAt
   if (age > LISTED_FOR_MS) return null
   return age <= LIVE_FOR_MS ? 'live' : 'quiet'
@@ -39,17 +41,14 @@ export async function listObservedTranscripts(
     }
     if (!stat.isFile()) continue
     const modifiedAt = stat.mtimeMs
-    const state = observedState(modifiedAt, opts.now)
-    if (!state) continue
+    const status = observedStatus(modifiedAt, opts.now)
+    if (!status) continue
     const probe = await readProbe(file, stat.size)
     if (lastMatch(probe, ENTRYPOINT_RE) !== OBSERVED_ENTRYPOINT) continue
-    listed.push({ sessionId, title: lastMatch(probe, TITLE_RE) ?? sessionId.slice(0, 8), modifiedAt, state })
+    listed.push({ sessionId, title: lastMatch(probe, TITLE_RE) ?? sessionId.slice(0, 8), modifiedAt, status })
   }
   return listed.sort((a, b) => b.modifiedAt - a.modifiedAt)
 }
-
-const ENTRYPOINT_RE = /"entrypoint":"((?:[^"\\]|\\.)*)"/g
-const TITLE_RE = /"aiTitle":"((?:[^"\\]|\\.)*)"/g
 
 /** Tail first so the most recent tag wins, then head; transcripts can be tens of MB. */
 async function readProbe(file: string, size: number): Promise<string[]> {

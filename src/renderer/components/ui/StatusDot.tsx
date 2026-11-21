@@ -1,7 +1,7 @@
-import type { ObservedState, SessionStatus } from '../../../shared/types'
+import { OBSERVED_STATUS_LABEL, type ObservedStatus, type SessionStatus } from '../../../shared/types'
 import { STATUS_LABEL } from '../../../shared/needsYou'
 
-type DotStatus = SessionStatus | ObservedState
+type DotStatus = SessionStatus | ObservedStatus
 
 const TONE: Record<DotStatus, string> = {
   running: 'bg-status-running animate-pulse',
@@ -12,7 +12,7 @@ const TONE: Record<DotStatus, string> = {
   quiet: 'bg-status-quiet'
 }
 
-const LABEL: Record<DotStatus, string> = { ...STATUS_LABEL, live: 'Live', quiet: 'Quiet' }
+const LABEL: Record<DotStatus, string> = { ...STATUS_LABEL, ...OBSERVED_STATUS_LABEL }
 
 export function StatusDot({ status }: { status: DotStatus }) {
   const label = LABEL[status]
