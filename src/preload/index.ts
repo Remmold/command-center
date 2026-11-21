@@ -14,6 +14,7 @@ import type {
   ManagedApp,
   ObservedItemsEvent,
   ObservedSession,
+  ProfileUsage,
   PtyDataEvent,
   PtyExitEvent,
   RendererApi,
@@ -52,6 +53,15 @@ const api: RendererApi = {
     create: (name: string): Promise<AccountProfile> => ipcRenderer.invoke(IPC.PROFILES_CREATE, name),
     rename: (id: string, name: string): Promise<AccountProfile | null> =>
       ipcRenderer.invoke(IPC.PROFILES_RENAME, id, name)
+  },
+  usage: {
+    list: (): Promise<ProfileUsage[]> => ipcRenderer.invoke(IPC.USAGE_LIST),
+    refresh: (profileId?: string) => ipcRenderer.send(IPC.USAGE_REFRESH, profileId),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, all: ProfileUsage[]) => cb(all)
+      ipcRenderer.on(IPC.USAGE_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.USAGE_CHANGED, handler)
+    }
   },
   board: {
     get: (): Promise<BoardModel> => ipcRenderer.invoke(IPC.BOARD_GET),

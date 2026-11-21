@@ -21,6 +21,10 @@ import { approvalBroker } from './claude/approvals'
 import { readModelDefaults, saveModelDefaults } from './claude/userSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
+import { UsageService } from './usage/service'
+import { probeUsage } from './usage/probe'
+import type { RateLimitInfo } from './usage/usageReply'
+import { userDataPath } from './util/paths'
 import { setScreenFocus } from './sessions/screenFocus'
 import {
   DEFAULT_PROFILE_ID,
@@ -161,6 +165,28 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.PROFILES_LIST, () => profiles.list())
   ipcMain.handle(IPC.PROFILES_CREATE, (_e, name: string) => profiles.create(name))
   ipcMain.handle(IPC.PROFILES_RENAME, (_e, id: string, name: string) => profiles.rename(id, name))
+
+  const usage = new UsageService({
+    listProfiles: profiles.list,
+    envFor: async (profileId) => (await profiles.prepareSession(profileId)).env,
+    probe: probeUsage,
+    probeDir: userDataPath('usage-probe'),
+    onChange: (all) => sendAll(IPC.USAGE_CHANGED, all)
+  })
+  usage.start()
+  ipcMain.handle(IPC.USAGE_LIST, () => usage.list())
+  ipcMain.on(IPC.USAGE_REFRESH, (_e, profileId?: unknown) => usage.refresh(typeof profileId === 'string' ? profileId : undefined))
+  unsubscribers.push(
+    () => usage.stop(),
+    claudeManager.onEvent((paneId, event) => {
+      const type = (event as { type?: unknown } | null)?.type
+      if (type === 'result') usage.turnEnded(claudeManager.profileOf(paneId))
+      else if (type === 'rate_limit_event') {
+        const info = (event as { rate_limit_info?: RateLimitInfo }).rate_limit_info
+        if (info) usage.rateLimitEvent(claudeManager.profileOf(paneId), info)
+      }
+    })
+  )
 
   ipcMain.handle(IPC.FILES_LIST, (_event, cwd: string) => listProjectFiles(cwd))
 

@@ -27,7 +27,7 @@ import { usePaneStatus } from '../../state/sessionStatusStore'
 import { IDE_PANELS_SHORTCUT, SHELL_DRAWER_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { itemsToMarkdown } from '../chat/exportMarkdown'
 import { PastSessionsModal } from '../PastSessionsModal'
-import { ProfilePicker } from '../ProfilePicker'
+import { AccountSwitcher } from './AccountSwitcher'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -119,7 +119,7 @@ export function HostedSessionHeader({ workspace, view, session, place }: HostedP
       }
     >
       <HeaderRow icon={<SessionIdentity workspace={workspace} />} title={session.title}>
-        <ProfilePicker workspace={workspace} labelled />
+        <AccountSwitcher workspace={workspace} paneId={session.id} />
         <StatusTag status={status} />
       </HeaderRow>
     </Toolbar>

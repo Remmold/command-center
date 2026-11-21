@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { LogIn, Pencil } from 'lucide-react'
-import { DEFAULT_PROFILE_ID, type AccountProfile, type Workspace } from '../../../shared/types'
+import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
 import { profileEnv } from '../../../shared/profiles'
-import { useProfilesStore } from '../../state/profilesStore'
+import { loginWorkspace, useProfilesStore } from '../../state/profilesStore'
 import { openShell } from '../../state/sessionNavigation'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { Button } from '../ui/Button'
@@ -10,11 +10,6 @@ import { DrawerList } from '../ui/Drawer'
 import { ListItem, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
 import { TextField } from '../ui/TextField'
-
-/** Login needs a shell somewhere; prefer a workspace that already uses the profile. */
-function loginWorkspace(workspaces: Workspace[], profile: AccountProfile): Workspace | undefined {
-  return workspaces.find((w) => w.profileId === profile.id) ?? workspaces[0]
-}
 
 export function AccountsSettings() {
   const profiles = useProfilesStore((s) => s.profiles)

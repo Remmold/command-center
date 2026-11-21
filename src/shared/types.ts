@@ -316,6 +316,12 @@ export interface RendererApi {
     create: (name: string) => Promise<AccountProfile>
     rename: (id: string, name: string) => Promise<AccountProfile | null>
   }
+  usage: {
+    list: () => Promise<ProfileUsage[]>
+    /** Fetches now: one profile, or every profile when none is given. */
+    refresh: (profileId?: string) => void
+    onChanged: (cb: (all: ProfileUsage[]) => void) => () => void
+  }
   board: {
     get: () => Promise<BoardModel>
     onChanged: (cb: (model: BoardModel) => void) => () => void
@@ -554,3 +560,24 @@ export interface ObservedItemsEvent {
 export type ObservedOpenResult =
   | { ok: true; items: ChatItem[]; shortened: boolean }
   | { ok: false; error: string }
+
+export interface UsageWindowReading {
+  /** Percent of the window used, 0-100. */
+  utilization: number
+  /** Epoch ms. */
+  resetsAt: number | null
+}
+
+/** One account profile's plan limits, as the usage service last read them. */
+export interface ProfileUsage {
+  profileId: string
+  loggedIn: boolean
+  account: { email?: string; organization?: string; subscriptionType?: string } | null
+  /** Absent when the CLI reported the window as null. */
+  fiveHour?: UsageWindowReading
+  sevenDay?: UsageWindowReading
+  /** Epoch ms of the last successful read; null before the first. */
+  updatedAt: number | null
+  refreshing: boolean
+  error?: string
+}

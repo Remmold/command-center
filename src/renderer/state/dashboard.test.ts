@@ -50,8 +50,7 @@ function input(over: Partial<DashboardInput> = {}): DashboardInput {
     identities: {},
     board: { repoGroups: [] },
     profiles: [],
-    tallies: { sessions: {}, profiles: {} },
-    rateLimits: {},
+    usage: {},
     chatItems: {},
     observedTail: null,
     now: NOW,
@@ -156,25 +155,28 @@ describe('dashboard: live session snippet', () => {
 })
 
 describe('dashboard: usage per account', () => {
-  it('has one row per profile with how full its window is, when it resets, and today\'s tokens', () => {
-    const today = new Date(NOW).toISOString().slice(0, 10)
-    const resetsAt = NOW / 1000 + 7800
+  it('has one row per profile with the same windows the strip shows', () => {
     const d = dashboard(
       input({
         profiles: [
-          { id: 'default', name: 'Default' },
-          { id: 'work', name: 'Work' }
+          { id: 'default', name: 'Default', loggedIn: true },
+          { id: 'work', name: 'Work', loggedIn: false }
         ],
-        tallies: {
-          sessions: {},
-          profiles: { default: { todayKey: today, todayCostUsd: 1, tokensByModel: { opus: { input: 1000, output: 200, cacheRead: 30, cacheCreation: 4 } } } }
-        },
-        rateLimits: { default: { status: 'allowed', rateLimitType: 'five_hour', utilization: 0.42, resetsAt } }
+        usage: {
+          default: {
+            profileId: 'default',
+            loggedIn: true,
+            account: { email: 'me@example.com', subscriptionType: 'Max' },
+            sevenDay: { utilization: 69, resetsAt: NOW + 3_600_000 },
+            updatedAt: NOW,
+            refreshing: false
+          }
+        }
       })
     )
-    expect(d.usage.map((u) => [u.name, u.window?.percent ?? null, u.window?.resetsAt ?? null, u.todayTokens])).toEqual([
-      ['Default', 42, resetsAt, 1234],
-      ['Work', null, null, 0]
+    expect(d.usage.map((u) => [u.label, u.plan, u.state, u.bars.map((b) => [b.label, b.percent])])).toEqual([
+      ['me@example.com', 'Max', 'ready', [['Weekly (7 day)', 69]]],
+      ['Work', null, 'not-logged-in', []]
     ])
   })
 })

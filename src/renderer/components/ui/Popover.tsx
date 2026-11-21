@@ -11,22 +11,23 @@ interface Props {
   align?: 'start' | 'end'
   /** `above` opens upward, for anchors at the bottom of the window. */
   side?: 'below' | 'above'
+  width?: number
   children: ReactNode
 }
 
 const PANEL_WIDTH = 256
 
 /** A floating panel portalled to the body, so a scrolling parent never clips it. */
-export function Popover({ open, onClose, anchor, label, align = 'start', side = 'below', children }: Props) {
+export function Popover({ open, onClose, anchor, label, align = 'start', side = 'below', width = PANEL_WIDTH, children }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null)
 
   useLayoutEffect(() => {
     if (!open || !anchor) return
     const rect = anchor.getBoundingClientRect()
-    const left = align === 'end' ? rect.right - PANEL_WIDTH : rect.left
+    const left = align === 'end' ? rect.right - width : rect.left
     setPos(side === 'above' ? { bottom: window.innerHeight - rect.top + 4, left } : { top: rect.bottom + 4, left })
-  }, [open, anchor, align, side])
+  }, [open, anchor, align, side, width])
 
   useEffect(() => {
     if (!open) return
@@ -52,7 +53,7 @@ export function Popover({ open, onClose, anchor, label, align = 'start', side = 
       ref={panelRef}
       role="dialog"
       aria-label={label}
-      style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: PANEL_WIDTH }}
+      style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width }}
       onClick={(e) => e.stopPropagation()}
       className="fixed z-50 flex max-h-[80vh] flex-col gap-2 overflow-y-auto rounded border border-strong bg-widget py-2 text-xs text-fg shadow-lg"
     >

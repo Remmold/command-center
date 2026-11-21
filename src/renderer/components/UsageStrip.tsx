@@ -1,12 +1,16 @@
 import { useEffect, useMemo } from 'react'
+import { useMenu } from '../hooks/useMenu'
 import { useMinuteClock } from '../hooks/useMinuteClock'
-import { formatResetTime, formatTokens, totalTokens, useUsageStore } from '../state/usageStore'
-import { buildUsageStrip, type UsageBar } from '../state/usageModel'
+import { usageEntries, type UsageEntry } from '../state/usageModel'
+import { useUsageStore } from '../state/usageStore'
 import { useProfilesStore } from '../state/profilesStore'
 import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useViewStore } from '../state/viewStore'
-import { Meter } from './ui/Meter'
+import { AccountUsagePanel, UsageMeters } from './AccountUsage'
+import { Popover } from './ui/Popover'
+import { TitleBarButton } from './ui/TitleBarButton'
+import { TwoLineLabel } from './ui/TwoLineLabel'
 
 function useProfileOnScreen(): string | null {
   const view = useViewStore((s) => s.view)
@@ -16,87 +20,65 @@ function useProfileOnScreen(): string | null {
   return workspaces.find((w) => w.id === activeProjectId)?.profileId ?? null
 }
 
-/** One rate-limit bar per account profile; the profile of the workspace on screen is highlighted. */
-export function UsageStrip() {
+export function useUsageEntries(activeProfileId: string | null, now: number): UsageEntry[] {
   const profiles = useProfilesStore((s) => s.profiles)
+  const usage = useUsageStore((s) => s.byProfile)
+  return useMemo(() => usageEntries({ profiles, usage, activeProfileId, now }), [profiles, usage, activeProfileId, now])
+}
+
+/** Every account profile with its plan-limit bars; the profile of the chat on screen is highlighted. */
+export function UsageStrip() {
   const loadProfiles = useProfilesStore((s) => s.load)
-  const sessions = useUsageStore((s) => s.sessions)
-  const tallies = useUsageStore((s) => s.profiles)
-  const rateLimits = useUsageStore((s) => s.rateLimits)
-  const activeProfileId = useProfileOnScreen()
   const now = useMinuteClock()
+  const entries = useUsageEntries(useProfileOnScreen(), now)
 
   useEffect(() => {
     void loadProfiles()
   }, [loadProfiles])
 
-  const bars = useMemo(
-    () =>
-      buildUsageStrip({
-        profiles,
-        tallies: { sessions, profiles: tallies },
-        rateLimits,
-        activeProfileId,
-        now
-      }),
-    [profiles, sessions, tallies, rateLimits, activeProfileId, now]
-  )
-
-  if (bars.length === 0) return null
+  if (entries.length === 0) return null
   return (
-    <ul aria-label="usage per account profile" className="flex h-full shrink-0 items-center gap-1 border-l border-subtle px-2">
-      {bars.map((bar) => (
-        <UsageStripItem key={bar.profileId} bar={bar} />
+    <ul aria-label="usage per account profile" className="flex h-full shrink-0 items-stretch border-l border-subtle">
+      {entries.map((entry) => (
+        <li key={entry.profileId} className="flex">
+          <UsageStripEntry entry={entry} now={now} />
+        </li>
       ))}
     </ul>
   )
 }
 
-function UsageStripItem({ bar }: { bar: UsageBar }) {
-  const w = bar.window
-  const reading = w?.percent != null ? `${w.percent}%` : (w?.label ?? '—')
-  const fill = w?.percent ?? (w?.tone === 'limit' ? 100 : null)
+function stripNote(entry: UsageEntry): string | null {
+  if (entry.state === 'not-logged-in') return 'not logged in'
+  return entry.plan
+}
+
+function UsageStripEntry({ entry, now }: { entry: UsageEntry; now: number }) {
+  const menu = useMenu()
+  const loadProfiles = useProfilesStore((s) => s.load)
+
+  const toggle = () => {
+    if (!menu.open) void loadProfiles()
+    menu.toggle()
+  }
+
+  const tooltip = [entry.label, ...entry.bars.map((b) => b.tooltip)].join('\n')
   return (
-    <li
-      aria-current={bar.highlighted || undefined}
-      title={describe(bar)}
-      className={
-        'flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] ' +
-        (bar.highlighted ? 'bg-list-selected text-fg' : 'text-muted')
-      }
-    >
-      <span className="max-w-[6rem] truncate">{bar.name}</span>
-      <Meter
-        percent={fill}
-        tone={w?.tone ?? 'ok'}
-        label={`${bar.name} rate-limit window`}
-      />
-      <span className="tabular-nums">{reading}</span>
-      {w?.usingOverage && <span className="text-meter-warn" title="using overage" aria-label="using overage">+</span>}
-    </li>
+    <>
+      <TitleBarButton
+        ref={menu.setAnchor}
+        onClick={toggle}
+        label={`Account & usage for ${entry.label}`}
+        tooltip={tooltip}
+        pressed={menu.open}
+        current={entry.highlighted}
+      >
+        <TwoLineLabel primary={entry.label} secondary={stripNote(entry)} />
+        <UsageMeters entry={entry} />
+      </TitleBarButton>
+      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" width={320} label="Account & Usage">
+        <AccountUsagePanel entry={entry} now={now} />
+      </Popover>
+    </>
   )
-}
-
-function describe(bar: UsageBar): string {
-  const lines = [bar.name]
-  const w = bar.window
-  if (!w) lines.push('rate limit: no reading yet')
-  else {
-    const fill = w.percent != null ? `${w.percent}% used` : w.tone === 'limit' ? 'limit reached' : 'no reading'
-    lines.push(`${w.label} window: ${fill}${w.resetsAt ? ` · resets in ${formatResetTime(w.resetsAt)}` : ''}`)
-    if (w.usingOverage) lines.push('using overage')
-  }
-  const models = Object.entries(bar.tokensByModel)
-    .map(([model, t]) => ({ model, total: totalTokens(t) }))
-    .filter((m) => m.total > 0)
-    .sort((a, b) => b.total - a.total)
-  if (models.length > 0) {
-    lines.push('today: ' + models.map((m) => `${shortModel(m.model)} ${formatTokens(m.total)}`).join(', '))
-    lines.push(`≈ $${bar.todayCostUsd.toFixed(2)} api-equiv`)
-  }
-  return lines.join('\n')
-}
-
-function shortModel(model: string): string {
-  return model.replace(/^claude-/, '').replace(/-\d{8}.*$/, '')
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AccountProfile } from '../../shared/types'
+import type { AccountProfile, Workspace } from '../../shared/types'
 
 interface ProfilesState {
   profiles: AccountProfile[]
@@ -37,3 +37,8 @@ export const useProfilesStore = create<ProfilesState>((set, get) => ({
     }
   }
 }))
+
+/** Login needs a shell somewhere; prefer a workspace that already uses the profile. */
+export function loginWorkspace(workspaces: readonly Workspace[], profile: AccountProfile): Workspace | undefined {
+  return workspaces.find((w) => w.profileId === profile.id) ?? workspaces[0]
+}

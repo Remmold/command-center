@@ -16,6 +16,7 @@ import { interruptNote } from './interrupt'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { useApprovalsStore } from '../../state/approvalsStore'
+import { useAccountSwitchStore } from '../../state/accountSwitchStore'
 import { availableModes, isPermissionMode, migrateMode, nextMode, type PermissionMode } from '../../state/permissionModes'
 import type { ApprovalRequest } from '../../../shared/approval'
 import { useFocusRequestStore } from '../../state/sessionNavigation'
@@ -386,6 +387,32 @@ export function ChatView({
     setProcessRunning(true)
     return true
   }
+
+  const switchTo = useAccountSwitchStore((s) => s.pending[paneId] ?? null)
+  const switchPhaseRef = useRef<'waiting' | 'stopping' | null>(null)
+  useEffect(() => {
+    if (!switchTo) return
+    const clear = () => useAccountSwitchStore.getState().clear(paneId)
+    if (switchPhaseRef.current === null) {
+      if (!processRunning) {
+        clear()
+        return
+      }
+      switchPhaseRef.current = 'waiting'
+    }
+    if (switchPhaseRef.current === 'waiting' && !turnActive) {
+      switchPhaseRef.current = 'stopping'
+      note(`switching account to ${switchTo}; resuming this session on it`)
+      window.api.claude.stop(paneId)
+      return
+    }
+    if (switchPhaseRef.current === 'stopping' && !processRunning) {
+      switchPhaseRef.current = null
+      clear()
+      void ensureStarted()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [switchTo, processRunning, turnActive])
 
   const handleSend = async (text: string, images?: ImageAttachment[]) => {
     const userText =

@@ -1,160 +1,119 @@
 import { describe, expect, it } from 'vitest'
-import { buildUsageStrip, emptyTallies, migrateUsage, recordResult } from './usageModel'
+import type { AccountProfile, ProfileUsage } from '../../shared/types'
+import { resetAt, resetIn, updatedText, usageEntries } from './usageModel'
 
-const today = '2026-11-21'
+const NOW = Date.parse('2026-11-21T20:00:00Z')
+const MIN = 60_000
+const UTC = 'UTC'
 
-describe('recordResult', () => {
-  it('adds a result to the tally of the profile it ran on only', () => {
-    const t = recordResult(emptyTallies(), 'work', 'pane-1', {
-      costUsd: 0.5,
-      durationMs: 1000,
-      modelUsage: { 'claude-opus-4-7': { inputTokens: 10, outputTokens: 5 } },
-      today
-    })
-    expect(t.profiles.work).toEqual({
-      todayKey: today,
-      todayCostUsd: 0.5,
-      tokensByModel: { 'claude-opus-4-7': { input: 10, output: 5, cacheRead: 0, cacheCreation: 0 } }
-    })
-    expect(t.profiles.default).toBeUndefined()
-    expect(t.sessions['pane-1'].turns).toBe(1)
+const profile = (id: string, name: string, loggedIn = true): AccountProfile => ({ id, name, configDir: `C:/p/${id}`, loggedIn })
+
+const usage = (over: Partial<ProfileUsage> = {}): ProfileUsage => ({
+  profileId: 'default',
+  loggedIn: true,
+  account: { email: 'me@example.com', organization: 'Org', subscriptionType: 'Claude Ultra' },
+  updatedAt: NOW - 2 * MIN,
+  refreshing: false,
+  ...over
+})
+
+describe('reset formatting', () => {
+  it('counts down to a reset in hours and minutes', () => {
+    expect(resetIn(NOW + 130 * MIN, NOW)).toBe('2h 10m')
+    expect(resetIn(NOW + 45 * MIN, NOW)).toBe('45m')
+    expect(resetIn(NOW + 3 * 24 * 60 * MIN, NOW)).toBe('3d')
+    expect(resetIn(NOW - MIN, NOW)).toBe('now')
+  })
+
+  it("words a reset the extension's way: a time today, a day and time for weekly windows", () => {
+    expect(resetAt(NOW + 30_000, NOW, false, UTC)).toBe('soon')
+    expect(resetAt(NOW + 3 * 60 * MIN, NOW, false, UTC)).toBe('at 11:00 PM')
+    expect(resetAt(Date.parse('2026-11-23T22:59:59.860Z'), NOW, true, UTC)).toBe('Mon, Nov 23 at 10:59 PM')
+    expect(resetAt(Date.parse('2027-01-04T09:00:00Z'), NOW, true, UTC)).toBe('Mon, Jan 4, 2027 at 9:00 AM')
+  })
+
+  it('says how long ago the numbers were read', () => {
+    expect(updatedText(NOW - 10_000, NOW)).toBe('Updated just now')
+    expect(updatedText(NOW - 2 * MIN, NOW)).toBe('Updated 2 min ago')
+    expect(updatedText(null, NOW)).toBe('Not updated yet')
   })
 })
 
-describe('recordResult on a new day', () => {
-  it('starts that profile over and leaves other profiles alone', () => {
-    let t = recordResult(emptyTallies(), 'work', 'p1', { costUsd: 1, durationMs: 0, today: '2026-11-20' })
-    t = recordResult(t, 'default', 'p2', { costUsd: 2, durationMs: 0, today: '2026-11-20' })
-    t = recordResult(t, 'work', 'p1', { costUsd: 0.25, durationMs: 0, today })
-    expect(t.profiles.work.todayCostUsd).toBe(0.25)
-    expect(t.profiles.default.todayCostUsd).toBe(2)
-  })
-})
-
-describe('migrateUsage', () => {
-  it('moves a version-1 tally to the Default profile', () => {
-    const v1 = {
-      sessions: { p1: { costUsd: 3, durationMs: 10, turns: 2, tokensByModel: {} } },
-      tokensByModel: { 'claude-sonnet-4-6': { input: 1, output: 2, cacheRead: 3, cacheCreation: 4 } },
-      todayKey: '2026-11-20',
-      todayCostUsd: 3
-    }
-    expect(migrateUsage(v1, 1)).toEqual({
-      sessions: v1.sessions,
-      profiles: {
-        default: {
-          todayKey: '2026-11-20',
-          todayCostUsd: 3,
-          tokensByModel: { 'claude-sonnet-4-6': { input: 1, output: 2, cacheRead: 3, cacheCreation: 4 } }
-        }
+describe('usageEntries', () => {
+  it('labels each profile with its email and plan and shows only the windows that came back', () => {
+    const [entry] = usageEntries({
+      profiles: [profile('default', 'Default')],
+      usage: { default: usage({ sevenDay: { utilization: 69, resetsAt: Date.parse('2026-11-23T23:00:00Z') } }) },
+      activeProfileId: null,
+      now: NOW,
+      timeZone: UTC
+    })
+    expect(entry.label).toBe('me@example.com')
+    expect(entry.plan).toBe('Claude Ultra')
+    expect(entry.state).toBe('ready')
+    expect(entry.bars).toEqual([
+      {
+        key: 'sevenDay',
+        label: 'Weekly (7 day)',
+        percent: 69,
+        tone: 'ok',
+        resetText: 'Mon, Nov 23 at 11:00 PM',
+        tooltip: 'Weekly (7 day) 69% · resets Mon 23:00'
       }
-    })
-  })
-
-  it('starts empty from anything it cannot read', () => {
-    expect(migrateUsage(null, 1)).toEqual(emptyTallies())
-    expect(migrateUsage('junk', 0)).toEqual(emptyTallies())
-  })
-})
-
-describe('buildUsageStrip', () => {
-  const profiles = [
-    { id: 'default', name: 'Default' },
-    { id: 'work', name: 'Work' }
-  ]
-  const now = Date.parse('2026-11-21T12:00:00Z')
-  const inOneHour = now / 1000 + 3600
-
-  it('gives one bar per profile, in profile order, highlighting the profile on screen', () => {
-    const strip = buildUsageStrip({
-      profiles,
-      tallies: emptyTallies(),
-      rateLimits: {
-        work: { status: 'allowed_warning', resetsAt: inOneHour, rateLimitType: 'five_hour', utilization: 0.83 }
-      },
-      activeProfileId: 'work',
-      now
-    })
-    expect(strip.map((b) => [b.profileId, b.name, b.highlighted])).toEqual([
-      ['default', 'Default', false],
-      ['work', 'Work', true]
     ])
-    expect(strip[0].window).toBeNull()
-    expect(strip[1].window).toEqual({ label: '5h', tone: 'warn', percent: 83, resetsAt: inOneHour, usingOverage: false })
   })
 
-  it('shows a rejected window as at the limit, and says when overage is in use', () => {
-    const [bar] = buildUsageStrip({
-      profiles: profiles.slice(0, 1),
-      tallies: emptyTallies(),
-      rateLimits: {
-        default: { status: 'rejected', resetsAt: inOneHour, rateLimitType: 'seven_day', isUsingOverage: true }
-      },
+  it('words the 5-hour tooltip as a countdown and warns from 80%', () => {
+    const [entry] = usageEntries({
+      profiles: [profile('default', 'Default')],
+      usage: { default: usage({ fiveHour: { utilization: 83.6, resetsAt: NOW + 130 * MIN } }) },
       activeProfileId: null,
-      now
+      now: NOW,
+      timeZone: UTC
     })
-    expect(bar.window).toEqual({ label: '7d', tone: 'limit', percent: null, resetsAt: inOneHour, usingOverage: true })
+    expect(entry.bars[0]).toMatchObject({
+      label: 'Session (5hr)',
+      percent: 83,
+      tone: 'warn',
+      resetText: 'at 10:10 PM',
+      tooltip: 'Session (5hr) 83% · resets in 2h 10m'
+    })
   })
 
-  it('reads the five-hour window when the event names no utilization of its own', () => {
-    const [bar] = buildUsageStrip({
-      profiles: profiles.slice(0, 1),
-      tallies: emptyTallies(),
-      rateLimits: {
-        default: {
-          status: 'allowed',
-          resetsAt: inOneHour,
-          rateLimitType: 'five_hour',
-          unifiedWindows: { five_hour: { utilization: 0.4, resetsAt: inOneHour } }
-        }
-      },
+  it('falls back to the profile name, marks a profile without credentials, and highlights the one on screen', () => {
+    const entries = usageEntries({
+      profiles: [profile('default', 'Default'), profile('work', 'Work', false), profile('new', 'New')],
+      usage: { default: usage({ account: null, updatedAt: null, error: 'boom' }) },
+      activeProfileId: 'new',
+      now: NOW,
+      timeZone: UTC
+    })
+    expect(entries.map((e) => [e.label, e.plan, e.state, e.highlighted])).toEqual([
+      ['Default', null, 'error', false],
+      ['Work', null, 'not-logged-in', false],
+      ['New', null, 'loading', true]
+    ])
+  })
+
+  it('treats a profile the CLI reports as logged out as not logged in', () => {
+    const [entry] = usageEntries({
+      profiles: [profile('default', 'Default')],
+      usage: { default: usage({ loggedIn: false, account: null }) },
       activeProfileId: null,
-      now
+      now: NOW,
+      timeZone: UTC
     })
-    expect(bar.window?.percent).toBe(40)
-    expect(bar.window?.tone).toBe('ok')
+    expect(entry.state).toBe('not-logged-in')
   })
 
-  it('forgets the fill of a window whose reset time has passed', () => {
-    const [bar] = buildUsageStrip({
-      profiles: profiles.slice(0, 1),
-      tallies: emptyTallies(),
-      rateLimits: {
-        default: { status: 'rejected', resetsAt: now / 1000 - 60, rateLimitType: 'five_hour', utilization: 1 }
-      },
+  it("trusts the usage service's newer read over a stale profile list after a login", () => {
+    const [entry] = usageEntries({
+      profiles: [profile('work', 'Work', false)],
+      usage: { work: usage({ profileId: 'work' }) },
       activeProfileId: null,
-      now
+      now: NOW,
+      timeZone: UTC
     })
-    expect(bar.window).toEqual({ label: '5h', tone: 'ok', percent: null, resetsAt: null, usingOverage: false })
-  })
-
-  it("counts only today's tokens of each profile", () => {
-    let tallies = recordResult(emptyTallies(), 'default', 'p1', {
-      costUsd: 0,
-      durationMs: 0,
-      modelUsage: { 'claude-opus-4-7': { inputTokens: 100 } },
-      today: '2026-11-20'
-    })
-    tallies = recordResult(tallies, 'work', 'p2', {
-      costUsd: 0.1,
-      durationMs: 0,
-      modelUsage: { 'claude-opus-4-7': { inputTokens: 7, outputTokens: 3 }, 'claude-haiku-4-5': { inputTokens: 1 } },
-      today
-    })
-    const strip = buildUsageStrip({ profiles, tallies, rateLimits: {}, activeProfileId: null, now })
-    expect(strip[0].todayTokens).toBe(0)
-    expect(strip[1].todayTokens).toBe(11)
-    expect(strip[1].todayCostUsd).toBe(0.1)
-  })
-
-  it('still shows a bar for usage from a profile not in the list yet', () => {
-    const strip = buildUsageStrip({
-      profiles: [],
-      tallies: emptyTallies(),
-      rateLimits: { default: { status: 'allowed', resetsAt: inOneHour, rateLimitType: 'five_hour' } },
-      activeProfileId: 'default',
-      now
-    })
-    expect(strip.map((b) => [b.profileId, b.name, b.highlighted])).toEqual([['default', 'Default', true]])
+    expect(entry.state).toBe('ready')
   })
 })

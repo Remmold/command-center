@@ -5,8 +5,7 @@ import { SettingsPage } from './components/settings/SettingsPage'
 import { WorkView } from './components/work/WorkView'
 import { useProjectViewsStore } from './state/projectViewsStore'
 import { useAppsStore } from './state/appsStore'
-import { useUsageStore, type RateLimitInfo } from './state/usageStore'
-import type { RawModelUsage } from './state/usageModel'
+import { useUsageStore } from './state/usageStore'
 import { useApprovalsStore } from './state/approvalsStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
@@ -23,16 +22,10 @@ import { useProfilesStore } from './state/profilesStore'
 import { useReportScreenFocus } from './hooks/useReportScreenFocus'
 import { useMainNavigation } from './hooks/useMainNavigation'
 import { useNotificationIcons } from './hooks/useNotificationIcons'
-import type { ClaudeResultEvent } from '../shared/types'
 import { useObservedStore } from './state/observedStore'
 
-interface RawResultUsage {
-  modelUsage?: Record<string, RawModelUsage>
-}
-
 export function App() {
-  const recordResult = useUsageStore((s) => s.recordResult)
-  const setRateLimit = useUsageStore((s) => s.setRateLimit)
+  const initUsage = useUsageStore((s) => s.init)
   const initApprovals = useApprovalsStore((s) => s.init)
   const appView = useViewStore((s) => s.view)
   const settingsSection = useViewStore((s) => s.settings)
@@ -78,27 +71,8 @@ export function App() {
   }, [initApprovals])
 
   useEffect(() => {
-    const unsub = window.api.claude.onEvent(({ paneId, profileId, event }) => {
-      const type = (event as { type?: string })?.type
-      if (type === 'result') {
-        const re = event as ClaudeResultEvent
-        const modelUsage = (re as unknown as RawResultUsage).modelUsage
-        recordResult(
-          profileId,
-          paneId,
-          typeof re.total_cost_usd === 'number' ? re.total_cost_usd : 0,
-          re.duration_ms ?? 0,
-          modelUsage
-        )
-        return
-      }
-      if (type === 'rate_limit_event') {
-        const info = (event as { rate_limit_info?: RateLimitInfo }).rate_limit_info
-        if (info) setRateLimit(profileId, info)
-      }
-    })
-    return unsub
-  }, [recordResult, setRateLimit])
+    initUsage()
+  }, [initUsage])
 
   useKeyboardShortcuts({
     switchView: (next) => useViewStore.getState().setView(next),
