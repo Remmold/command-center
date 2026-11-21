@@ -36,13 +36,23 @@ export function SettingsPage({ section }: { section: SettingsSection }) {
   const Body = current.body
 
   useEffect(() => {
+    // Focus left in the view underneath would keep taking keystrokes.
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  }, [])
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape' || overlayOpen()) return
-      if (isTyping(e.target)) (e.target as HTMLElement).blur()
-      else closeSettings()
+      if (isTyping(e.target)) {
+        e.target.blur()
+        return
+      }
+      // Capture phase, so a drawer in the view underneath doesn't close on the same Escape.
+      e.stopPropagation()
+      closeSettings()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [closeSettings])
 
   return (

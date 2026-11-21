@@ -31,7 +31,6 @@ export function PageBody({ children }: { children: ReactNode }) {
   return <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">{children}</div>
 }
 
-/** A titled block of related rows inside a PageBody. */
 interface GroupProps {
   title: string
   icon?: ReactNode
@@ -39,6 +38,7 @@ interface GroupProps {
   children: ReactNode
 }
 
+/** A titled block of related rows inside a PageBody. */
 export function PageGroup({ title, icon, actions, children }: GroupProps) {
   return (
     <section aria-label={title} className="flex max-w-3xl flex-col gap-2">

@@ -201,7 +201,7 @@ export function AppsDashboard(): JSX.Element {
     <Page label="Apps">
       <PageHeader
         title="Apps"
-        description="Launch and monitor your projects. Status is by listening port."
+        description="Start and stop your local apps. Status is by listening port."
         actions={
           <>
             <Button variant="ghost" onClick={() => void refresh()}>
