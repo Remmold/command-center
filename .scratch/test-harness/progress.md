@@ -1,0 +1,2 @@
+- 01 fake-claude: in review (fake CLI, locator wiring, fixtures recorded; app verified on the fake)
+- 02 electron-smoke-suite: ready-for-agent (blocked by 01)

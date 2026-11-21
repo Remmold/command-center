@@ -43,3 +43,11 @@ Each entry records what was decided, why, and the alternative. Review these in t
 14. **Typed feedback goes to Claude inside plain double quotes, unescaped, with spaces trimmed from both ends.** Quotes and line breaks inside it are passed on unchanged.
     - Why: escaping would show Claude `\n` and `\"` instead of what was typed. The trimming was already there.
     - Alternative: JSON-escape the text.
+15. **The fake CLI runs on the app's own binary as Node** (`process.execPath` with `ELECTRON_RUN_AS_NODE=1`, passed only for the fake's launch), not on the system `node`.
+    - Why: no dependency on a Node install or its version; vitest runs it the same way under plain Node.
+    - Alternative: system `node` from PATH.
+16. **With `CC_CLAUDE_BIN` set, the Default profile reads `CLAUDE_CONFIG_DIR` instead of `~/.claude`.** Without it the app still always uses `~/.claude`.
+    - Why: otherwise a test run reads and writes the real `~/.claude/settings.json` (model defaults) and credentials check.
+    - Alternative: honour `CLAUDE_CONFIG_DIR` always, like the CLI; rejected because a session's own `CLAUDE_CONFIG_DIR` could leak into a `pnpm dev` started from it.
+17. **The fake's interrupted result is built from the CLI's own result schema, not recorded.** The recording's interrupt arrived before the turn started, so the CLI answered `still_queued: []` and ran the turn. The shape (`subtype: error_during_execution`, `is_error: true`, `errors: []`, no `result`) comes from the schema inside the CLI binary; the "[Request interrupted by user]" note comes from the app's existing interrupt handling.
+    - Real tokens spent: 2 Haiku prompts (the approval turn and the one meant to be interrupted).

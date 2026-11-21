@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] `tools/fake-claude/` — a dependency-free Node program accepting the app's flags (`--input-format stream-json --output-format stream-json --verbose --permission-prompt-tool=stdio --setting-sources … --include-partial-messages --resume --permission-mode --model --effort --allow-dangerously-skip-permissions`), ignoring unknown ones
 - [ ] Answers control requests with recorded shapes from `src/main/claude/fixtures/`: `initialize` (models, account, commands, current_permission_mode), `get_usage`, `set_permission_mode`, `apply_flag_settings`, `set_model`, `set_max_thinking_tokens`, `get_settings`, `interrupt` (ends a running turn with the real interrupted result shape)

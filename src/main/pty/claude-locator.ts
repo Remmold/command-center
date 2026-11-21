@@ -5,7 +5,11 @@ import { dirname, join } from 'node:path'
 export interface ClaudeLaunch {
   command: string
   args: string[]
+  /** Variables the launch itself needs, applied after the cleaned child environment. */
+  env?: Record<string, string>
 }
+
+export const FAKE_CLAUDE_VAR = 'CC_CLAUDE_BIN'
 
 export class ClaudeNotFoundError extends Error {
   constructor(detail?: string) {
@@ -83,7 +87,15 @@ function resolveUnixLaunch(): ClaudeLaunch {
   return { command: claude, args: [] }
 }
 
+/** Under the fake CLI only, so an inherited CLAUDE_CONFIG_DIR never moves the real Default profile. */
+export function harnessConfigDir(env: Record<string, string | undefined> = process.env): string | null {
+  return (env[FAKE_CLAUDE_VAR] && env.CLAUDE_CONFIG_DIR) || null
+}
+
+/** With CC_CLAUDE_BIN set (tests only), the script it names, run by this Electron or Node binary as plain Node. */
 export function locateClaude(): ClaudeLaunch {
+  const fake = process.env[FAKE_CLAUDE_VAR]
+  if (fake) return { command: process.execPath, args: [fake], env: { ELECTRON_RUN_AS_NODE: '1' } }
   if (cached) return cached
   cached = process.platform === 'win32' ? resolveWindowsLaunch() : resolveUnixLaunch()
   return cached

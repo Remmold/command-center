@@ -19,6 +19,7 @@
     "src/preload/**/*.ts",
     "src/shared/**/*.ts",
     "src/checks/**/*.ts",
+    "tools/**/*.ts",
     "electron.vite.config.ts",
     "vitest.config.ts"
   ]

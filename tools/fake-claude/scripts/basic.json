@@ -1,0 +1,12 @@
+{
+  "turns": [
+    {
+      "match": "",
+      "repeat": true,
+      "events": [
+        { "type": "rate_limit_event" },
+        { "type": "text", "text": "Hello! This is a scripted reply from the fake Claude." }
+      ]
+    }
+  ]
+}

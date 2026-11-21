@@ -1,0 +1,23 @@
+{"direction":"host","line":{"type":"control_request","request_id":"r1","request":{"subtype":"get_settings"}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r1","response":{"effective":{},"sources":[],"applied":{"model":"claude-haiku-5-5","effort":"medium","advisor":null,"ultracode":false,"ultracodeRequested":false,"ultracodeAvailable":true}}}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r2","request":{"subtype":"apply_flag_settings","settings":{"model":"sonnet","effortLevel":"low"}}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r2"}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r3","request":{"subtype":"get_settings"}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r3","response":{"effective":{"model":"sonnet","effortLevel":"low"},"sources":[{"source":"flagSettings","settings":{"model":"sonnet","effortLevel":"low"}}],"applied":{"model":"claude-sonnet-5-5","effort":"low","advisor":null,"ultracode":false,"ultracodeRequested":false,"ultracodeAvailable":true}}}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r4","request":{"subtype":"apply_flag_settings","settings":{"model":null}}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r4"}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r5","request":{"subtype":"get_settings"}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r5","response":{"effective":{"effortLevel":"low"},"sources":[{"source":"flagSettings","settings":{"effortLevel":"low"}}],"applied":{"model":"claude-opus-5-5","effort":"low","advisor":null,"ultracode":false,"ultracodeRequested":false,"ultracodeAvailable":true}}}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r6","request":{"subtype":"set_model","model":"haiku"}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r6"}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r7","request":{"subtype":"set_permission_mode","mode":"acceptEdits"}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r7","response":{"mode":"acceptEdits"}}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r8","request":{"subtype":"set_permission_mode","mode":"bypassPermissions"}}}
+{"direction":"cli","line":{"type":"system","subtype":"status","status":null,"permissionMode":"acceptEdits","uuid":"00000000-0000-4000-8000-000000000030","session_id":"00000000-0000-4000-8000-000000000000"}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"error","request_id":"r8","error":"Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions","error_code":"bypass_not_launched"}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r9","request":{"subtype":"set_max_thinking_tokens","max_thinking_tokens":0}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r9"}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r10","request":{"subtype":"get_settings"}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r10","response":{"effective":{"effortLevel":"low"},"sources":[{"source":"flagSettings","settings":{"effortLevel":"low"}}],"applied":{"model":"claude-haiku-5-5","effort":"low","advisor":null,"ultracode":false,"ultracodeRequested":false,"ultracodeAvailable":true}}}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r11","request":{"subtype":"interrupt"}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r11","response":{"still_queued":[]}}}}
