@@ -34,14 +34,6 @@ _Avoid_: Shard set, worktree family
 
 ## Board
 
-**Scan root**:
-A folder the board searches for repos that have tickets but are not added as workspaces yet.
-_Avoid_: Search path, watch folder
-
-**Not added**:
-A repo or worktree found under a scan root that has tickets but is not a workspace yet. The board lists these so one click adds them.
-_Avoid_: Discovered repo, unknown repo, missing workspace
-
 **Board**:
 The single kanban view of the tickets from all workspaces.
 _Avoid_: Kanban, dashboard
@@ -57,6 +49,14 @@ _Avoid_: Issue (in UI text), task
 **Column**:
 One of the board's four stages: Backlog, Blocked, In progress, Done. The stage comes from the ticket's status and blockers.
 _Avoid_: Lane, state
+
+**Scan root**:
+A folder the board searches for repos that have tickets but are not added as workspaces yet.
+_Avoid_: Search path, watch folder
+
+**Not added**:
+A repo or worktree found under a scan root that has tickets but is not a workspace yet. The board lists these so one click adds them.
+_Avoid_: Discovered repo, unknown repo, missing workspace
 
 ## Identity
 

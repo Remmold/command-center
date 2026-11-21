@@ -29,7 +29,7 @@ Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
 - **Claim**: set `Status: claimed` and save before any work.
 - **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`.
 
-`claimed` is the wayfinder flow's own word; outside that flow use the words under Ticket lifecycle. The board shows a `claimed` ticket as In progress.
+`claimed` is the wayfinder flow's own word; the board shows a `claimed` ticket as In progress.
 
 ## Ticket lifecycle
 
