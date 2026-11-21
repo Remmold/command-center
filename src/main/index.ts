@@ -1,49 +1,101 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, dialog } from 'electron'
 import { join } from 'node:path'
 import { registerIpc } from './ipc'
 import { permissionServer } from './permission/server'
 import { ensureHookScriptInstalled } from './permission/hookScript'
+import { sessionStatusTracker } from './sessions/tracker'
+import * as workspaces from './workspaces/store'
+import { startAttention } from './attention/service'
+import { createAppTray } from './tray/tray'
+import { iconPath } from './util/paths'
+import {
+  allowWindowClose,
+  createMainWindow,
+  getMainWindow,
+  onscreen,
+  showMainWindow,
+  showSession,
+  showView
+} from './window'
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    backgroundColor: '#18181b',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false
-    }
-  })
+/** Keep equal to the electron-builder appId, or packaged notifications lose their attribution. */
+const APP_USER_MODEL_ID = 'com.commandcenter.app'
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
+let confirmingQuit = false
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
+async function confirmAndQuit(): Promise<void> {
+  if (confirmingQuit) return
+  confirmingQuit = true
+  try {
+    if (await quitConfirmed()) app.quit()
+  } finally {
+    confirmingQuit = false
   }
 }
 
-app.whenReady().then(async () => {
-  try {
-    await permissionServer.start()
-    console.log('[permission] listening on', permissionServer.port)
-    await ensureHookScriptInstalled(join(app.getPath('userData'), 'permission-hook.cjs'))
-  } catch (err) {
-    console.error('[permission] failed to start', err)
+async function quitConfirmed(): Promise<boolean> {
+  const running = sessionStatusTracker.list().filter((e) => e.status === 'running').length
+  if (running > 0) {
+    const { response } = await dialog.showMessageBox({
+      type: 'warning',
+      title: 'Quit Command Center',
+      message: running === 1 ? '1 session is running.' : `${running} sessions are running.`,
+      detail: 'Quitting stops them mid-turn.',
+      buttons: ['Quit', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true
+    })
+    return response === 0
   }
-  registerIpc()
-  createWindow()
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
-})
+  return true
+}
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  // Unpackaged builds have no Start-menu shortcut carrying the appId, and Windows drops toasts from unknown ids.
+  app.setAppUserModelId(app.isPackaged ? APP_USER_MODEL_ID : process.execPath)
+
+  app.on('second-instance', () => {
+    if (app.isReady()) showMainWindow()
+  })
+  app.on('before-quit', allowWindowClose)
+  app.on('window-all-closed', () => {
+    // Stays alive in the tray.
+  })
+
+  app.whenReady().then(async () => {
+    try {
+      await permissionServer.start()
+      console.log('[permission] listening on', permissionServer.port)
+      await ensureHookScriptInstalled(join(app.getPath('userData'), 'permission-hook.cjs'))
+    } catch (err) {
+      console.error('[permission] failed to start', err)
+    }
+    registerIpc()
+    const win = createMainWindow()
+
+    const tray = createAppTray({
+      open: () => showMainWindow(),
+      showView,
+      quit: () => void confirmAndQuit(),
+      getWindow: getMainWindow
+    })
+    win.on('show', tray.refreshOverlay)
+
+    const stopAttention = startAttention({
+      tracker: sessionStatusTracker,
+      listWorkspaces: workspaces.list,
+      onscreen,
+      setBadge: tray.setBadge,
+      openSession: showSession,
+      notificationIcon: iconPath('icon.png')
+    })
+
+    app.on('will-quit', () => {
+      stopAttention()
+      tray.destroy()
+    })
+  })
+}

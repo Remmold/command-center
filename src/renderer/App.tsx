@@ -15,6 +15,7 @@ import { BoardView } from './components/board/BoardView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
 import { jumpToNextWaiting } from './state/sessionNavigation'
 import { useReportScreenFocus } from './hooks/useReportScreenFocus'
+import { useMainNavigation } from './hooks/useMainNavigation'
 import type { ClaudeResultEvent } from '../shared/types'
 
 interface RawResultUsage {
@@ -47,6 +48,7 @@ export function App() {
   }, [initSessionStatus])
 
   useReportScreenFocus()
+  useMainNavigation()
 
   useEffect(() => {
     const unsub = window.api.permission.onRequest((request) => {

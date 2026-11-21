@@ -65,11 +65,11 @@ describe('session status reducer', () => {
         claude(resultEvent, 500)
       ])
     ).toEqual([
-      ['running', 100],
-      ['running', 100],
-      ['running', 100],
-      ['running', 100],
-      ['running', 100],
+      ['idle', 100],
+      ['idle', 100],
+      ['running', 200],
+      ['running', 200],
+      ['running', 200],
       ['your-turn', 300],
       ['running', 400],
       ['your-turn', 500]
@@ -90,9 +90,9 @@ describe('session status reducer', () => {
         claude(resultEvent, 500)
       ])
     ).toEqual([
-      ['running', 100],
-      ['running', 100],
-      ['running', 100],
+      ['idle', 100],
+      ['running', 200],
+      ['running', 200],
       ['needs-approval', 220],
       ['needs-approval', 220],
       ['needs-approval', 220],
@@ -113,16 +113,35 @@ describe('session status reducer', () => {
         { kind: 'spawned', at: 500 }
       ])
     ).toEqual([
-      ['running', 100],
-      ['running', 100],
+      ['idle', 100],
+      ['running', 200],
       ['needs-approval', 300],
       ['idle', 400],
       ['idle', 400],
-      ['running', 500]
+      ['idle', 400]
     ])
   })
 
-  it('a spawned process is Running', () => {
-    expect(statuses([{ kind: 'spawned', at: 100 }])).toEqual([['running', 100]])
+  it('a spawned process with no turn yet is Idle until the first message', () => {
+    expect(statuses([{ kind: 'spawned', at: 100 }, { kind: 'user-message', at: 250 }])).toEqual([
+      ['idle', 100],
+      ['running', 250]
+    ])
+  })
+
+  it('a respawn while Your turn is Idle', () => {
+    expect(
+      statuses([
+        { kind: 'spawned', at: 100 },
+        { kind: 'user-message', at: 200 },
+        claude(resultEvent, 300),
+        { kind: 'spawned', at: 400 }
+      ])
+    ).toEqual([
+      ['idle', 100],
+      ['running', 200],
+      ['your-turn', 300],
+      ['idle', 400]
+    ])
   })
 })

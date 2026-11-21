@@ -26,7 +26,7 @@ export function reduceSessionStatus(
   const pending = prev?.pendingRequestIds ?? []
   switch (event.kind) {
     case 'spawned':
-      return enter(prev, 'running', event.at, [])
+      return enter(prev, 'idle', event.at, [])
     case 'exit':
       return enter(prev, 'idle', event.at, [])
     case 'user-message':

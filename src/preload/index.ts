@@ -3,6 +3,7 @@ import type { IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type {
   AppExitEvent,
+  AppView,
   AppOutputEvent,
   BoardModel,
   ClaudeEventEnvelope,
@@ -120,6 +121,18 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.SESSION_STATUS_CHANGED, handler)
     },
     reportScreenFocus: (focus: ScreenFocus) => ipcRenderer.send(IPC.SESSION_SCREEN_FOCUS, focus)
+  },
+  navigation: {
+    onShowView: (cb) => {
+      const handler = (_e: IpcRendererEvent, view: AppView) => cb(view)
+      ipcRenderer.on(IPC.NAVIGATION_SHOW_VIEW, handler)
+      return () => ipcRenderer.off(IPC.NAVIGATION_SHOW_VIEW, handler)
+    },
+    onOpenSession: (cb) => {
+      const handler = (_e: IpcRendererEvent, paneId: string) => cb(paneId)
+      ipcRenderer.on(IPC.NAVIGATION_OPEN_SESSION, handler)
+      return () => ipcRenderer.off(IPC.NAVIGATION_OPEN_SESSION, handler)
+    }
   },
   git: {
     status: (cwd: string) => ipcRenderer.invoke(IPC.GIT_STATUS, cwd),

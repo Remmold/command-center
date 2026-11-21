@@ -21,6 +21,8 @@ export const IPC = {
   SESSION_STATUS_LIST: 'sessionStatus:list',
   SESSION_STATUS_CHANGED: 'sessionStatus:changed',
   SESSION_SCREEN_FOCUS: 'sessionStatus:screenFocus',
+  NAVIGATION_SHOW_VIEW: 'navigation:showView',
+  NAVIGATION_OPEN_SESSION: 'navigation:openSession',
   FILES_LIST: 'files:list',
   FILES_SAVE_AS: 'files:saveAs',
   FILES_READ: 'files:read',

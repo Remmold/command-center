@@ -25,6 +25,8 @@ export interface SessionStatusEntry {
   since: number
 }
 
+export type AppView = 'sessions' | 'board'
+
 /** What the renderer has on screen, reported to main for notifications. */
 export interface ScreenFocus {
   paneId: string | null
@@ -280,6 +282,11 @@ export interface RendererApi {
     list: () => Promise<SessionStatusEntry[]>
     onChanged: (cb: (entry: SessionStatusEntry) => void) => () => void
     reportScreenFocus: (focus: ScreenFocus) => void
+  }
+  /** Requests from main (tray menu, notification clicks) to bring something on screen. */
+  navigation: {
+    onShowView: (cb: (view: AppView) => void) => () => void
+    onOpenSession: (cb: (paneId: string) => void) => () => void
   }
   git: {
     status: (cwd: string) => Promise<GitStatusResult>

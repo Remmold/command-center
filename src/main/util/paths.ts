@@ -12,3 +12,9 @@ export function projectsFile(): string {
 export function appsFile(): string {
   return userDataPath('apps.json')
 }
+
+/** Packaging must ship resources/icons as the extra resource "icons". */
+export function iconPath(file: string): string {
+  if (app.isPackaged) return join(process.resourcesPath, 'icons', file)
+  return join(app.getAppPath(), 'resources', 'icons', file)
+}

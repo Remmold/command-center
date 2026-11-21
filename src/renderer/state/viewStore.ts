@@ -1,6 +1,7 @@
 import { create } from 'zustand'
+import type { AppView } from '../../shared/types'
 
-export type AppView = 'sessions' | 'board'
+export type { AppView }
 
 interface ViewState {
   view: AppView

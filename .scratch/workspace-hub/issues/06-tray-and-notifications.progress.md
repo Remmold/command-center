@@ -1,0 +1,3 @@
+- done: spawned→Idle, attention (notify/badge/tooltip/text) test-first, numbered tray badge + taskbar overlay, hide-on-close, single-instance, tray menu (autostart disabled), quit confirm, notification click → session; review fixes; build ok, quick 51/51, dev boots, 2nd launch exits
+- next: Lane 2 (tray, badge, toasts, click-through, quit dialog); ticket 07 wires setStartWithWindows + extraResources icons + appId com.commandcenter.app
+- open reds: none
