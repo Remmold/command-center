@@ -334,6 +334,7 @@ export function ChatView({
             <PermissionPrompt
               key={req.requestId}
               request={req}
+              cwd={cwd}
               primaryActionRef={i === 0 ? firstPromptRef : undefined}
               onResolve={() => resolvePermission(req.requestId)}
             />

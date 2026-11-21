@@ -2,24 +2,18 @@ import { useState, type Ref } from 'react'
 import { CheckCircle2, Lock, ShieldCheck, X } from 'lucide-react'
 import type { PermissionRequest } from '../../../shared/types'
 import { Button } from '../ui/Button'
+import { approvalTarget } from './toolCall'
 
 interface Props {
   request: PermissionRequest
+  cwd: string
   onResolve: () => void
   primaryActionRef?: Ref<HTMLButtonElement>
 }
 
-function summarizeTool(toolName: string, input: unknown): string {
-  if (!input || typeof input !== 'object') return ''
-  const o = input as Record<string, unknown>
-  if (toolName === 'Bash' && typeof o.command === 'string') return o.command
-  if (typeof o.file_path === 'string') return o.file_path
-  if (typeof o.pattern === 'string') return o.pattern
-  return ''
-}
-
 const TOOL_HINT: Record<string, string> = {
   Bash: 'will execute a shell command',
+  PowerShell: 'will execute a PowerShell command',
   Edit: 'will modify a file',
   Write: 'will create or overwrite a file',
   Read: 'will read a file',
@@ -29,9 +23,9 @@ const TOOL_HINT: Record<string, string> = {
   Grep: 'will search file contents'
 }
 
-export function PermissionPrompt({ request, onResolve, primaryActionRef }: Props) {
+export function PermissionPrompt({ request, cwd, onResolve, primaryActionRef }: Props) {
   const [showRaw, setShowRaw] = useState(false)
-  const summary = summarizeTool(request.toolName, request.toolInput)
+  const summary = approvalTarget(request.toolName, request.toolInput, cwd)
   const hint = TOOL_HINT[request.toolName] ?? 'wants permission to run'
 
   const respond = (decision: 'approve' | 'block', allowForSession = false) => {
@@ -55,7 +49,7 @@ export function PermissionPrompt({ request, onResolve, primaryActionRef }: Props
             <span className="text-muted">{hint}</span>
           </div>
           {summary && (
-            <pre className="mt-1.5 overflow-x-auto rounded border border-subtle bg-editor px-2.5 py-1.5 font-mono text-[12px] text-fg">
+            <pre className="mt-1.5 whitespace-pre-wrap break-words rounded border border-subtle bg-editor px-2.5 py-1.5 font-mono text-[12px] text-fg">
               {summary}
             </pre>
           )}
