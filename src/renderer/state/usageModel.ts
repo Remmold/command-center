@@ -178,6 +178,7 @@ export interface UsageWindow {
   percent: number | null
   /** Unix seconds; null once the reset has passed. */
   resetsAt: number | null
+  usingOverage: boolean
 }
 
 export interface UsageBar {
@@ -223,14 +224,15 @@ function toWindow(info: RateLimitInfo, nowSeconds: number): UsageWindow {
   const type = info.rateLimitType ?? 'five_hour'
   const label = WINDOW_LABEL[type] ?? type
   if (typeof info.resetsAt === 'number' && info.resetsAt <= nowSeconds) {
-    return { label, tone: 'ok', percent: null, resetsAt: null }
+    return { label, tone: 'ok', percent: null, resetsAt: null, usingOverage: false }
   }
   const utilization = windowUtilization(info)
   return {
     label,
     tone: windowTone(info.status),
     percent: utilization === undefined ? null : Math.round(utilization * 100),
-    resetsAt: info.resetsAt ?? null
+    resetsAt: info.resetsAt ?? null,
+    usingOverage: info.isUsingOverage === true
   }
 }
 

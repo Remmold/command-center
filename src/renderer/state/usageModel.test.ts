@@ -80,18 +80,20 @@ describe('buildUsageStrip', () => {
       ['work', 'Work', true]
     ])
     expect(strip[0].window).toBeNull()
-    expect(strip[1].window).toEqual({ label: '5h', tone: 'warn', percent: 83, resetsAt: inOneHour })
+    expect(strip[1].window).toEqual({ label: '5h', tone: 'warn', percent: 83, resetsAt: inOneHour, usingOverage: false })
   })
 
-  it('shows a rejected window as at the limit', () => {
+  it('shows a rejected window as at the limit, and says when overage is in use', () => {
     const [bar] = buildUsageStrip({
       profiles: profiles.slice(0, 1),
       tallies: emptyTallies(),
-      rateLimits: { default: { status: 'rejected', resetsAt: inOneHour, rateLimitType: 'seven_day' } },
+      rateLimits: {
+        default: { status: 'rejected', resetsAt: inOneHour, rateLimitType: 'seven_day', isUsingOverage: true }
+      },
       activeProfileId: null,
       now
     })
-    expect(bar.window).toEqual({ label: '7d', tone: 'limit', percent: null, resetsAt: inOneHour })
+    expect(bar.window).toEqual({ label: '7d', tone: 'limit', percent: null, resetsAt: inOneHour, usingOverage: true })
   })
 
   it('reads the five-hour window when the event names no utilization of its own', () => {
@@ -123,7 +125,7 @@ describe('buildUsageStrip', () => {
       activeProfileId: null,
       now
     })
-    expect(bar.window).toEqual({ label: '5h', tone: 'ok', percent: null, resetsAt: null })
+    expect(bar.window).toEqual({ label: '5h', tone: 'ok', percent: null, resetsAt: null, usingOverage: false })
   })
 
   it("counts only today's tokens of each profile", () => {

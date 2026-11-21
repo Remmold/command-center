@@ -4,7 +4,7 @@
 
 **Blocked by:** 08
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Rate-limit and token data from each session is attributed to its workspace's profile
-- [ ] One bar per profile in the header; the profile of the workspace on screen is highlighted
+- [x] Rate-limit and token data from each session is attributed to its workspace's profile
+- [x] One bar per profile in the header; the profile of the workspace on screen is highlighted

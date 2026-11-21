@@ -80,6 +80,7 @@ function UsageStripItem({ bar }: { bar: UsageBar }) {
         label={`${bar.name} rate-limit window`}
       />
       <span className="tabular-nums">{reading}</span>
+      {w?.usingOverage && <span className="text-meter-warn" title="using overage" aria-label="using overage">+</span>}
     </li>
   )
 }
@@ -91,6 +92,7 @@ function describe(bar: UsageBar): string {
   else {
     const fill = w.percent != null ? `${w.percent}% used` : w.tone === 'limit' ? 'limit reached' : 'no reading'
     lines.push(`${w.label} window: ${fill}${w.resetsAt ? ` · resets in ${formatResetTime(w.resetsAt)}` : ''}`)
+    if (w.usingOverage) lines.push('using overage')
   }
   const models = Object.entries(bar.tokensByModel)
     .map(([model, t]) => ({ model, total: totalTokens(t) }))
