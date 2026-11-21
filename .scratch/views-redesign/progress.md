@@ -1,1 +1,2 @@
 - 01 resolved: VS Code Dark Modern tokens (theme.css → tailwind semantic names), no-zinc check src/checks/noLiteralZinc.test.ts, Monaco/xterm themes; 184/184 — 361c299..5b90ea0. Decided: text-sm → 13px (VS Code UI size), applied in 02
+- 02 resolved: views + Settings page, ae2b9d4..HEAD. Ticket 03: chat shortcuts still act while Dashboard/Settings show; GLOSSARY lists 'dashboard' as avoid under Board (07)
