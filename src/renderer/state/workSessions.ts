@@ -4,10 +4,11 @@ import type { SessionStatusEntry } from '../../shared/types'
 import { useObservedStore } from './observedStore'
 import { useProjectViewsStore, type ProjectView } from './projectViewsStore'
 import { useRepoIdentitiesStore } from './repoIdentitiesStore'
-import { openSession } from './sessionNavigation'
+import { halfShowing, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
+import { useChatPairStore } from './chatPairStore'
+import { openObserved, openSession, resolveChat, type OpenOptions, type OpenTarget } from './sessionNavigation'
 import { sessionList, type HostedSessionInput, type SessionGroup, type SessionListInput, type SessionRow } from './sessionList'
 import { useSessionStatusStore } from './sessionStatusStore'
-import { useViewStore } from './viewStore'
 import { useWorkspacesStore } from './workspacesStore'
 
 interface WorkSearchState {
@@ -65,34 +66,31 @@ export function useSessionGroups(): SessionGroup[] {
   )
 }
 
-export type OpenTarget =
-  | { kind: 'hosted'; workspaceId: string; paneId: string }
-  | { kind: 'observed'; workspaceId: string; sessionId: string }
-  | null
-
-export function useOpenTarget(): OpenTarget {
-  const viewing = useObservedStore((s) => s.viewing)
-  const workspaceId = useProjectViewsStore((s) => s.activeProjectId)
-  const paneId = useProjectViewsStore((s) => (s.activeProjectId ? s.views[s.activeProjectId]?.activeClaudeSessionId : null))
-  return useMemo(() => {
-    if (viewing) return { kind: 'observed', ...viewing }
-    return workspaceId && paneId ? { kind: 'hosted', workspaceId, paneId } : null
-  }, [viewing, workspaceId, paneId])
+export interface ShownChats {
+  halves: OpenTarget[]
+  focused: HalfIndex
 }
 
-export function isOpen(row: SessionRow, target: OpenTarget): boolean {
-  if (!target || row.kind !== target.kind) return false
-  if (row.kind === 'hosted') return target.kind === 'hosted' && row.paneId === target.paneId
-  return target.kind === 'observed' && row.workspace.id === target.workspaceId && row.sessionId === target.sessionId
+/** What each half of the chat area shows; one entry unless split. */
+export function useShownChats(): ShownChats {
+  const pair = useChatPairStore((s) => s.pair)
+  const views = useProjectViewsStore((s) => s.views)
+  return useMemo(() => ({ halves: pair.halves.map((h) => resolveChat(h, views)), focused: pair.focused }), [pair, views])
 }
 
-export function openRow(row: SessionRow, options?: { focus?: boolean }): void {
-  if (row.kind === 'hosted') {
-    openSession(row.paneId, options)
-    return
-  }
-  useViewStore.getState().setView('work')
-  void useObservedStore.getState().open(row.workspace, row.sessionId)
+export function rowChat(row: SessionRow): ChatRef {
+  return row.kind === 'hosted'
+    ? { kind: 'hosted', paneId: row.paneId }
+    : { kind: 'observed', workspaceId: row.workspace.id, sessionId: row.sessionId }
+}
+
+export function isShown(row: SessionRow, pair: ChatPair): boolean {
+  return halfShowing(pair, rowChat(row)) !== null
+}
+
+export function openRow(row: SessionRow, options?: OpenOptions): void {
+  if (row.kind === 'hosted') openSession(row.paneId, options)
+  else openObserved(row.workspace.id, row.sessionId, options)
 }
 
 /** Opens the list's nth row as it is shown, search applied. */

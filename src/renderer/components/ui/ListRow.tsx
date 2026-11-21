@@ -1,29 +1,41 @@
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 
 interface Props {
   children: ReactNode
-  onClick: () => void
+  onClick: (e: MouseEvent) => void
   onDoubleClick?: () => void
+  onContextMenu?: (e: MouseEvent) => void
   tooltip?: string
   nested?: boolean
   active?: boolean
+  /** Shown over the row's right end while it is hovered or holds focus, unless pinned. */
+  actions?: ReactNode
+  actionsPinned?: boolean
 }
 
 const IDLE = 'text-fg hover:bg-list-hover focus-visible:bg-list-hover'
 const ACTIVE = 'bg-list-selected text-fg'
 
-export function ListRow({ children, onClick, onDoubleClick, tooltip, nested = false, active = false }: Props) {
+export function ListRow({ children, onClick, onDoubleClick, onContextMenu, tooltip, nested = false, active = false, actions, actionsPinned = false }: Props) {
   return (
-    <li>
+    <li className="group relative">
       <button
         onClick={onClick}
         onDoubleClick={onDoubleClick}
+        onContextMenu={onContextMenu}
         title={tooltip}
         aria-current={active || undefined}
         className={`flex w-full min-w-0 items-center gap-2 py-1 text-left text-xs focus-visible:outline-none ${nested ? 'pl-9 pr-2' : 'px-3'} ${active ? ACTIVE : IDLE}`}
       >
         {children}
       </button>
+      {actions && (
+        <span
+          className={`absolute inset-y-0 right-1 flex items-center ${active ? 'bg-list-selected' : 'bg-list-hover'} ${actionsPinned ? '' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'}`}
+        >
+          {actions}
+        </span>
+      )}
     </li>
   )
 }

@@ -1,5 +1,7 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
+import { useMenu } from '../../hooks/useMenu'
 import {
+  Columns2,
   Copy,
   Download,
   History,
@@ -18,7 +20,6 @@ import {
 } from 'lucide-react'
 import type { ObservedSession, Workspace } from '../../../shared/types'
 import { useChatItemsStore } from '../../state/chatItemsStore'
-import { useObservedStore } from '../../state/observedStore'
 import {
   PERMISSION_MODES,
   useProjectViewsStore,
@@ -27,7 +28,8 @@ import {
   type PermissionMode,
   type ProjectView
 } from '../../state/projectViewsStore'
-import { openSession } from '../../state/sessionNavigation'
+import type { HalfIndex } from '../../state/chatPair'
+import { closeChatHalf, openSession, splitChat } from '../../state/sessionNavigation'
 import { usePaneStatus } from '../../state/sessionStatusStore'
 import { IDE_PANELS_SHORTCUT, SHELL_DRAWER_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { itemsToMarkdown } from '../chat/exportMarkdown'
@@ -64,20 +66,39 @@ function SessionIdentity({ workspace }: { workspace: Workspace }) {
   )
 }
 
-function useMenu() {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
-  const [open, setOpen] = useState(false)
-  const close = useCallback(() => setOpen(false), [])
-  return { anchor, setAnchor, open, toggle: () => setOpen((o) => !o), close }
+/** Where a header's chat sits in the chat area. */
+export interface HalfPlace {
+  half: HalfIndex
+  split: boolean
+  focused: boolean
+}
+
+/** Split from a lone chat; take a chat off screen when two are shown (or always, for an observed one). */
+function HalfControls({ place, closable }: { place: HalfPlace; closable: boolean }) {
+  return (
+    <>
+      {!place.split && (
+        <Button variant="ghost" onClick={splitChat} label="Split" tooltip="Open a second session beside this one (or Ctrl+click a session in the list)">
+          <Columns2 size={14} strokeWidth={2} />
+        </Button>
+      )}
+      {(place.split || closable) && (
+        <Button variant="ghost" onClick={() => closeChatHalf(place.half)} label="Close this half" tooltip="Take this session off screen; it keeps running">
+          <X size={14} strokeWidth={2} />
+        </Button>
+      )}
+    </>
+  )
 }
 
 interface HostedProps {
   workspace: Workspace
   view: ProjectView
   session: ClaudeChatSession
+  place: HalfPlace
 }
 
-export function HostedSessionHeader({ workspace, view, session }: HostedProps) {
+export function HostedSessionHeader({ workspace, view, session, place }: HostedProps) {
   const status = usePaneStatus(session.id)
   const toggleIdePanels = useProjectViewsStore((s) => s.toggleIdePanels)
   const toggleShellDrawer = useProjectViewsStore((s) => s.toggleShellDrawer)
@@ -85,6 +106,7 @@ export function HostedSessionHeader({ workspace, view, session }: HostedProps) {
 
   return (
     <Toolbar
+      highlighted={place.split && place.focused}
       actions={
         <span className="flex shrink-0 items-center gap-1">
           <PermissionMenu session={session} />
@@ -111,6 +133,7 @@ export function HostedSessionHeader({ workspace, view, session }: HostedProps) {
             <Terminal size={14} strokeWidth={2} />
           </Button>
           <ChatMenu view={view} session={session} />
+          <HalfControls place={place} closable={false} />
         </span>
       }
     >
@@ -241,20 +264,34 @@ function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSes
   )
 }
 
-export function ObservedSessionHeader({ workspace, session, sessionId }: { workspace: Workspace; session?: ObservedSession; sessionId: string }) {
-  const close = useObservedStore((s) => s.close)
+interface ObservedProps {
+  workspace: Workspace
+  session?: ObservedSession
+  sessionId: string
+  place: HalfPlace
+}
+
+export function ObservedSessionHeader({ workspace, session, sessionId, place }: ObservedProps) {
   return (
     <Toolbar
+      highlighted={place.split && place.focused}
       actions={
-        <Button variant="ghost" onClick={close} label="stop following" tooltip="stop following">
-          <X size={14} strokeWidth={2} />
-        </Button>
+<HalfControls place={place} closable />
       }
     >
       <HeaderRow icon={<SessionIdentity workspace={workspace} />} title={session?.title ?? sessionId.slice(0, 8)} note="read-only · reply in VS Code">
         <Badge>in VS Code</Badge>
         <StatusTag status={session?.status ?? 'quiet'} />
       </HeaderRow>
+    </Toolbar>
+  )
+}
+
+/** The header of a half that waits for a session to be picked. */
+export function EmptyHalfHeader({ place }: { place: HalfPlace }) {
+  return (
+    <Toolbar highlighted={place.focused} actions={<HalfControls place={place} closable />}>
+      <HeaderRow title="Pick a session" note="Click a session in the list to open it here" />
     </Toolbar>
   )
 }

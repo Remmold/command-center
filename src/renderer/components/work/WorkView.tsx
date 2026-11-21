@@ -1,9 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels'
+import { halfShowing, type HalfIndex } from '../../state/chatPair'
+import { useChatPairStore } from '../../state/chatPairStore'
 import { useObservedStore } from '../../state/observedStore'
 import { chatOnScreen } from '../../state/projectViewLayout'
 import { useProjectViewsStore, type ProjectView } from '../../state/projectViewsStore'
-import { useOpenTarget } from '../../state/workSessions'
+import { focusChatHalf } from '../../state/sessionNavigation'
+import { useShownChats } from '../../state/workSessions'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { ActivityBar } from '../ActivityBar'
 import { ChatView } from '../chat/ChatView'
@@ -15,15 +18,35 @@ import { ShellTabs } from '../ShellTabs'
 import { SourceControlPanel } from '../SourceControlPanel'
 import { EmptyState } from '../ui/EmptyState'
 import { EditorTabs } from './EditorTabs'
-import { HostedSessionHeader, ObservedSessionHeader } from './SessionHeader'
+import { EmptyHalfHeader, HostedSessionHeader, ObservedSessionHeader, type HalfPlace } from './SessionHeader'
 import { SessionList } from './SessionList'
 
 const DRAWER_OPEN_THRESHOLD_PCT = 1
 
-/** Kept mounted but out of sight, so processes, terminals and scroll positions survive. */
-function Layer({ shown, children }: { shown: boolean; children: React.ReactNode }) {
+type Slot = 'full' | 'left' | 'right'
+
+const SLOT: Record<Slot, string> = {
+  full: 'inset-0',
+  left: 'inset-y-0 left-0 w-1/2',
+  right: 'inset-y-0 right-0 w-1/2 border-l border-subtle'
+}
+
+interface LayerProps {
+  slot: Slot | null
+  /** Called on any click or focus inside, so the half it shows becomes the focused one. */
+  onActivate?: () => void
+  children: React.ReactNode
+}
+
+/** Kept mounted but out of sight while `slot` is null, so processes, terminals and scroll positions survive. */
+function Layer({ slot, onActivate, children }: LayerProps) {
   return (
-    <div className={'absolute inset-0 ' + (shown ? '' : 'invisible')} aria-hidden={!shown}>
+    <div
+      className={'absolute flex flex-col ' + (slot ? SLOT[slot] : 'inset-0 invisible')}
+      aria-hidden={!slot}
+      onMouseDownCapture={onActivate}
+      onFocusCapture={onActivate}
+    >
       {children}
     </div>
   )
@@ -44,30 +67,33 @@ export function WorkView({ registerFocus }: { registerFocus: (fn: () => void) =>
 }
 
 function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }) {
-  const target = useOpenTarget()
+  const pair = useChatPairStore((s) => s.pair)
+  const { halves, focused } = useShownChats()
   const views = useProjectViewsStore((s) => s.views)
   const order = useProjectViewsStore((s) => s.order)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
-  const observedSession = useObservedStore((s) =>
-    target?.kind === 'observed'
-      ? s.sessions.find((o) => o.workspaceId === target.workspaceId && o.sessionId === target.sessionId)
-      : undefined
-  )
+  const observedSessions = useObservedStore((s) => s.sessions)
 
-  const workspace = target ? workspaces.find((w) => w.id === target.workspaceId) : undefined
-  const hostedView = target?.kind === 'hosted' ? views[target.workspaceId] : undefined
-  const hostedSession = target?.kind === 'hosted' ? hostedView?.claudeSessions.find((c) => c.id === target.paneId) : undefined
-  const toolsView = hostedView && hostedSession ? hostedView : undefined
+  const split = halves.length === 2
+  const slotOf = (half: HalfIndex | null): Slot | null => (half === null ? null : split ? (half === 0 ? 'left' : 'right') : 'full')
+  const placeOf = (half: HalfIndex): HalfPlace => ({ half, split, focused: half === focused })
+  const workspaceOf = (id: string) => workspaces.find((w) => w.id === id)
+
+  const focusedChat = halves[focused]
+  const toolsView = focusedChat?.kind === 'hosted' ? views[focusedChat.workspaceId] : undefined
   const ideOpen = toolsView?.idePanelsOpen ?? false
+  const observedHalf = halves.findIndex((h) => h?.kind === 'observed') as HalfIndex | -1
+  const observed = observedHalf === -1 ? null : halves[observedHalf]
+  const observedWorkspace = observed ? workspaceOf(observed.workspaceId) : undefined
+  const focusedSession = focusedChat?.kind === 'hosted' ? toolsView?.claudeSessions.find((c) => c.id === focusedChat.paneId) : undefined
+  const toolsWorkspace = toolsView ? workspaceOf(toolsView.projectId) : undefined
+  // A file or diff takes the focused chat's place; its header stays.
+  const editorHeader = toolsView && focusedSession && toolsWorkspace && (
+    <HostedSessionHeader workspace={toolsWorkspace} view={toolsView} session={focusedSession} place={placeOf(focused)} />
+  )
 
   return (
     <div className="relative flex h-full min-w-0 flex-col bg-editor">
-      {workspace && toolsView && hostedSession && (
-        <HostedSessionHeader workspace={workspace} view={toolsView} session={hostedSession} />
-      )}
-      {workspace && target?.kind === 'observed' && (
-        <ObservedSessionHeader workspace={workspace} session={observedSession} sessionId={target.sessionId} />
-      )}
       <div className="flex min-h-0 flex-1">
         {ideOpen && <ActivityBar />}
         <div className="min-w-0 flex-1">
@@ -77,19 +103,25 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
               {order.map((id) => {
                 const view = views[id]
                 if (!view) return null
-                const here = view === toolsView && target?.kind === 'hosted'
+                const workspace = workspaceOf(id)
                 return view.claudeSessions.map((c) => {
-                  const shown = here && c.id === target.paneId && chatOnScreen(view)
+                  const half = halfShowing(pair, { kind: 'hosted', paneId: c.id })
+                  const editing = half === focused && view === toolsView && !chatOnScreen(view)
                   return (
-                    <Layer key={c.id} shown={shown}>
-                      <ChatView
-                        paneId={c.id}
-                        cwd={view.projectPath}
-                        model={c.model}
-                        resumeSessionId={c.claudeSessionId}
-                        permissionMode={c.permissionMode}
-                        registerFocus={shown ? registerFocus : undefined}
-                      />
+                    <Layer key={c.id} slot={editing ? null : slotOf(half)} onActivate={half === null ? undefined : () => focusChatHalf(half)}>
+                      {half !== null && workspace && (
+                        <HostedSessionHeader workspace={workspace} view={view} session={c} place={placeOf(half)} />
+                      )}
+                      <div className="min-h-0 flex-1">
+                        <ChatView
+                          paneId={c.id}
+                          cwd={view.projectPath}
+                          model={c.model}
+                          resumeSessionId={c.claudeSessionId}
+                          permissionMode={c.permissionMode}
+                          registerFocus={half === focused ? registerFocus : undefined}
+                        />
+                      </div>
                     </Layer>
                   )
                 })
@@ -98,22 +130,51 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
                 const view = views[id]
                 if (!view) return null
                 const editing = view === toolsView && view.idePanelsOpen
+                const fileShown = editing && view.centerView === 'file'
+                const diffShown = editing && view.centerView === 'diff'
                 return [
-                  <Layer key={`file-${id}`} shown={editing && view.centerView === 'file'}>
-                    <EditorPane view={view} />
+                  <Layer key={`file-${id}`} slot={fileShown ? slotOf(focused) : null}>
+                    {fileShown && editorHeader}
+                    <div className="min-h-0 flex-1">
+                      <EditorPane view={view} />
+                    </div>
                   </Layer>,
-                  <Layer key={`diff-${id}`} shown={editing && view.centerView === 'diff'}>
-                    <DiffPane view={view} />
+                  <Layer key={`diff-${id}`} slot={diffShown ? slotOf(focused) : null}>
+                    {diffShown && editorHeader}
+                    <div className="min-h-0 flex-1">
+                      <DiffPane view={view} />
+                    </div>
                   </Layer>
                 ]
               })}
-              {target?.kind === 'observed' && (
-                <div className="absolute inset-0">
-                  <ObservedChatView />
-                </div>
+              {observed?.kind === 'observed' && observedHalf !== -1 && (
+                <Layer slot={slotOf(observedHalf)} onActivate={() => focusChatHalf(observedHalf)}>
+                  {observedWorkspace && (
+                    <ObservedSessionHeader
+                      workspace={observedWorkspace}
+                      session={observedSessions.find((o) => o.workspaceId === observed.workspaceId && o.sessionId === observed.sessionId)}
+                      sessionId={observed.sessionId}
+                      place={placeOf(observedHalf)}
+                    />
+                  )}
+                  <div className="min-h-0 flex-1">
+                    <ObservedChatView />
+                  </div>
+                </Layer>
               )}
-              {!target && <EmptyState>Pick a session in the list.</EmptyState>}
-              {target?.kind === 'hosted' && !hostedSession && <EmptyState>This workspace has no session open. Press Ctrl+T to start one.</EmptyState>}
+              {split &&
+                halves.map((h, i) => {
+                  const half = i as HalfIndex
+                  return h ? null : (
+                    <Layer key={`empty-${half}`} slot={slotOf(half)} onActivate={() => focusChatHalf(half)}>
+                      <EmptyHalfHeader place={placeOf(half)} />
+                      <div className="min-h-0 flex-1">
+                        <EmptyState>Click a session in the list to open it here.</EmptyState>
+                      </div>
+                    </Layer>
+                  )
+                })}
+              {!split && !halves[0] && <EmptyState>Pick a session in the list, or start one with + New session (Ctrl+T).</EmptyState>}
             </div>
           </WorkspaceTools>
         </div>
@@ -210,7 +271,7 @@ function WorkspaceTools({ view, children }: { view: ProjectView | undefined; chi
                     const v = views[id]
                     if (!v || v.shellTabs.length === 0) return null
                     return (
-                      <Layer key={id} shown={v.projectId === view?.projectId}>
+                      <Layer key={id} slot={v.projectId === view?.projectId ? 'full' : null}>
                         <ShellTabs view={v} />
                       </Layer>
                     )

@@ -12,7 +12,9 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
-import { jumpToNextWaiting, openSession, paneOnScreen } from './state/sessionNavigation'
+import { closeSession, focusedTarget, initChatPair, jumpToNextWaiting, paneOnScreen } from './state/sessionNavigation'
+import { useLauncherStore } from './state/launcherStore'
+import { SessionLauncher } from './components/work/SessionLauncher'
 import { openRowAt } from './state/workSessions'
 import { useWorkspacesStore } from './state/workspacesStore'
 import { useProfilesStore } from './state/profilesStore'
@@ -58,6 +60,7 @@ export function App() {
 
   useEffect(() => {
     initObserved()
+    initChatPair()
   }, [initObserved])
 
   useReportScreenFocus()
@@ -98,16 +101,11 @@ export function App() {
     switchView: (next) => useViewStore.getState().setView(next),
     openSettings: () => useViewStore.getState().openSettings(),
     nextWaiting: jumpToNextWaiting,
-    newChat: () => {
-      const projectId = openHostedWorkspace()
-      if (!projectId) return
-      const created = useProjectViewsStore.getState().addClaudeSession(projectId)
-      if (created) openSession(created.id)
-    },
+    newChat: () => useLauncherStore.getState().pickWorkspace('new-session'),
+    loadPastSession: () => useLauncherStore.getState().pickWorkspace('past-sessions'),
     closeActiveChat: () => {
       const target = paneOnScreen()
-      const projectId = useProjectViewsStore.getState().activeProjectId
-      if (target && projectId) useProjectViewsStore.getState().closeClaudeSession(projectId, target)
+      if (target) closeSession(target)
     },
     focusInput: () => focusInputRef.current?.(),
     toggleIdePanels: () => {
@@ -142,6 +140,7 @@ export function App() {
           <WorkView registerFocus={registerFocus} />
         </div>
       </div>
+      <SessionLauncher />
       {settingsSection && (
         <div className="absolute inset-0 z-40">
           <SettingsPage section={settingsSection} />
@@ -151,9 +150,8 @@ export function App() {
   )
 }
 
-/** The workspace of the hosted session open in Work; none while an observed session is open. */
+/** The workspace of the hosted session in the focused half; none while that half shows an observed session. */
 function openHostedWorkspace(): string | null {
-  if (useObservedStore.getState().viewing) return null
-  const { activeProjectId, views } = useProjectViewsStore.getState()
-  return activeProjectId && views[activeProjectId]?.activeClaudeSessionId ? activeProjectId : null
+  const target = focusedTarget()
+  return target?.kind === 'hosted' ? target.workspaceId : null
 }

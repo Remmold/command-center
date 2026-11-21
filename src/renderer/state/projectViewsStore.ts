@@ -89,7 +89,8 @@ interface ProjectViewsState {
   activityView: ActivityView
   setActivityView: (view: ActivityView) => void
 
-  openProject: (workspace: Workspace) => void
+  /** Without `firstSession: false` a new view starts with one fresh session. */
+  openProject: (workspace: Workspace, options?: { firstSession?: boolean }) => void
   closeProject: (projectId: string) => void
   setActive: (projectId: string) => void
 
@@ -197,24 +198,22 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
       activityView: 'explorer',
       setActivityView: (view) => set({ activityView: view }),
 
-      openProject: (project) => {
+      openProject: (project, options) => {
         const existing = get().views[project.id]
         if (existing) {
           set({ activeProjectId: project.id })
           return
         }
-        const firstSession: ClaudeChatSession = {
-          id: makeId(),
-          title: NEW_SESSION_TITLE,
-          model: get().defaultModel,
-          permissionMode: get().defaultPermissionMode
-        }
+        const firstSession: ClaudeChatSession | null =
+          options?.firstSession === false
+            ? null
+            : { id: makeId(), title: NEW_SESSION_TITLE, model: get().defaultModel, permissionMode: get().defaultPermissionMode }
         const view: ProjectView = {
           projectId: project.id,
           projectName: project.name,
           projectPath: project.path,
-          claudeSessions: [firstSession],
-          activeClaudeSessionId: firstSession.id,
+          claudeSessions: firstSession ? [firstSession] : [],
+          activeClaudeSessionId: firstSession?.id ?? null,
           shellTabs: [],
           activeShellTabId: null,
           openFiles: [],

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { ChatItem } from '../../shared/chatItems'
-import type { ObservedSession, Workspace } from '../../shared/types'
+import type { ObservedSession } from '../../shared/types'
 import { useProjectViewsStore } from './projectViewsStore'
 
 interface Viewing {
@@ -18,7 +18,7 @@ interface ObservedState {
   error: string | null
   initialized: boolean
   init: () => void
-  open: (workspace: Workspace, sessionId: string) => Promise<void>
+  open: (workspaceId: string, sessionId: string) => Promise<void>
   close: () => void
 }
 
@@ -28,12 +28,6 @@ function hostedSessionIds(): string[] {
     for (const s of view.claudeSessions) if (s.claudeSessionId) ids.add(s.claudeSessionId)
   }
   return [...ids].sort()
-}
-
-function activeChat(): string {
-  const s = useProjectViewsStore.getState()
-  const view = s.activeProjectId ? s.views[s.activeProjectId] : undefined
-  return `${s.activeProjectId ?? ''}|${view?.activeClaudeSessionId ?? ''}|${view?.centerView ?? ''}`
 }
 
 const isViewing = (v: Viewing | null, workspaceId: string, sessionId: string): boolean =>
@@ -62,7 +56,6 @@ export const useObservedStore = create<ObservedState>((set, get) => ({
       .catch((err) => console.error('failed to load observed sessions', err))
 
     let hosted = hostedSessionIds().join(',')
-    let chat = activeChat()
     window.api.observed.setHosted(hostedSessionIds())
     useProjectViewsStore.subscribe(() => {
       const nextHosted = hostedSessionIds()
@@ -70,20 +63,13 @@ export const useObservedStore = create<ObservedState>((set, get) => ({
         hosted = nextHosted.join(',')
         window.api.observed.setHosted(nextHosted)
       }
-      const nextChat = activeChat()
-      if (nextChat !== chat) {
-        chat = nextChat
-        if (get().viewing) get().close()
-      }
     })
   },
 
-  open: async (workspace, sessionId) => {
-    const views = useProjectViewsStore.getState()
-    if (views.views[workspace.id]) views.setActive(workspace.id)
-    const viewing = { workspaceId: workspace.id, sessionId }
+  open: async (workspaceId, sessionId) => {
+    const viewing = { workspaceId, sessionId }
     set({ viewing, items: [], shortened: false, loading: true, error: null })
-    const res = await window.api.observed.open(workspace.id, sessionId)
+    const res = await window.api.observed.open(workspaceId, sessionId)
     if (get().viewing !== viewing) return
     if (res.ok) set((s) => ({ items: [...res.items, ...s.items], shortened: res.shortened, loading: false }))
     else set({ loading: false, error: res.error })
