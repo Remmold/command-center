@@ -78,7 +78,9 @@ describe('repo discovery', () => {
         repoName: 'alpha',
         main: { path: join(root, 'personal/alpha'), worktreeTag: '', featureCount: 2, openTicketCount: 1 },
         mainAdded: false,
-        worktrees: []
+        worktrees: [],
+        featureCount: 2,
+        openTicketCount: 1
       }
     ])
   })
@@ -150,6 +152,24 @@ describe('repo discovery', () => {
       deps()
     )
     expect(allAdded).toEqual([])
+  })
+
+  it('counts a repo once over all its not-added copies, merging worktree copies like the board', async () => {
+    const root = tree({
+      'FantasySurvival/.git/HEAD': 'ref',
+      'FantasySurvival/.scratch/f/issues/01-a.md': ticket('ready-for-agent'),
+      'FantasySurvival/.scratch/f/issues/02-b.md': ticket('ready-for-agent'),
+      'FS-shard-1/.scratch/f/issues/01-a.md': ticket('resolved'),
+      'FS-shard-1/.scratch/f/issues/02-b.md': ticket('in-progress'),
+      'FS-shard-2/.scratch/f/issues/02-b.md': ticket('ready-for-agent'),
+      'FS-shard-2/.scratch/g/spec.md': '# spec'
+    })
+    const main = join(root, 'FantasySurvival')
+    for (const wt of ['FS-shard-1', 'FS-shard-2']) writeFileSync(join(root, wt, '.git'), `gitdir: ${main}`)
+
+    const [repo] = await discoverRepos([root], [], deps())
+    expect([repo.featureCount, repo.openTicketCount]).toEqual([2, 1])
+    expect([repo.main?.openTicketCount, ...repo.worktrees.map((w) => w.openTicketCount)]).toEqual([2, 1, 1])
   })
 
   it('offers worktrees of a repo whose main checkout has no tickets, without calling it added', async () => {

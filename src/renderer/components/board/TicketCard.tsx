@@ -1,5 +1,6 @@
-import type { BoardTicket, Workspace } from '../../../shared/types'
-import { worktreeLabel } from '../../state/boardLayout'
+import { memo } from 'react'
+import type { Workspace } from '../../../shared/types'
+import type { BoardCard } from '../../state/boardLayout'
 import { useWorkspacesStatus } from '../../state/sessionStatusStore'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
@@ -7,43 +8,59 @@ import { Card, CardMeta, CardNote, CardTitle } from '../ui/Card'
 import { StatusDot } from '../ui/StatusDot'
 import { statusText, TicketStatusBadge } from './TicketStatusBadge'
 
-interface SeenIn {
-  workspaceId: string
-  tag: string
+type TicketCardData = Extract<BoardCard, { kind: 'ticket' }>
+
+/** The worktree tag when no copy of the ticket sits in a main checkout. */
+function onlyWorktreeTag(card: TicketCardData, workspaces: Map<string, Workspace>): string | null {
+  const tags = card.ticket.sightings.map((s) => workspaces.get(s.workspaceId)?.worktreeTag ?? '')
+  return tags.length > 0 && tags.every((t) => t !== '') ? tags[0] : null
 }
 
-/** Empty when the only copy is in a main checkout, so plain repos show no tags. */
-function seenIn(ticket: BoardTicket, workspaces: Map<string, Workspace>): SeenIn[] {
-  if (ticket.sightings.length === 1 && !workspaces.get(ticket.sightings[0].workspaceId)?.worktreeTag) return []
-  return ticket.sightings.map((s) => ({ workspaceId: s.workspaceId, tag: worktreeLabel(workspaces.get(s.workspaceId)) }))
+export function cardAnchorId(cardKey: string): string {
+  return `board-card:${cardKey}`
 }
 
 interface Props {
-  repoGroupKey: string
-  repoName: string
-  featureName: string
-  ticket: BoardTicket
+  card: TicketCardData
   workspaces: Map<string, Workspace>
   selected: boolean
-  onOpen: () => void
+  onOpen: (card: TicketCardData) => void
 }
 
-export function TicketCard({ repoGroupKey, repoName, featureName, ticket, workspaces, selected, onOpen }: Props) {
-  const status = useWorkspacesStatus(ticket.sightings.map((s) => s.workspaceId))
+export const TicketCard = memo(function TicketCard({ card, workspaces, selected, onOpen }: Props) {
+  const { ticket } = card
+  const workspaceIds = ticket.sightings.map((s) => s.workspaceId)
+  const status = useWorkspacesStatus(workspaceIds)
+  const tag = onlyWorktreeTag(card, workspaces)
+  const note = statusText(ticket)
+  const copies = ticket.sightings.length
+
   return (
-    <Card tooltip={ticket.sightings[0]?.filePath} onClick={onOpen} selected={selected}>
+    <Card anchorId={cardAnchorId(card.key)} tooltip={ticket.sightings[0]?.filePath} onClick={() => onOpen(card)} selected={selected}>
       <CardMeta>
-        <RepoIcon repoGroupKey={repoGroupKey} repoName={repoName} size="sm" />
-        <span className="min-w-0 flex-1 truncate">{featureName}</span>
+        <RepoIcon repoGroupKey={card.repoGroupKey} repoName={card.repoName} size="sm" />
+        {tag && <Badge tooltip="Only seen in this worktree">{tag}</Badge>}
+        <Badge tooltip={card.feature.name}>{card.feature.name}</Badge>
+        <span className="flex-1" />
+        {copies > 1 && <span title="Seen in more than one worktree">{copies} copies</span>}
         {status && <StatusDot status={status} />}
       </CardMeta>
-      <CardTitle prefix={ticket.number}>{ticket.title}</CardTitle>
-      {statusText(ticket) && <CardNote>{statusText(ticket)}</CardNote>}
+      <CardTitle prefix={`#${ticket.number}`}>{ticket.title}</CardTitle>
       <CardMeta>
         <TicketStatusBadge ticket={ticket} />
-        {seenIn(ticket, workspaces).map(({ workspaceId, tag }) => (
-          <Badge key={workspaceId}>{tag}</Badge>
-        ))}
+        {card.blockers.length > 0 && <span className="truncate">blocked by {card.blockers.join(', ')}</span>}
+      </CardMeta>
+      {note && <CardNote>{note}</CardNote>}
+    </Card>
+  )
+})
+
+export function SpecOnlyCard({ card }: { card: Extract<BoardCard, { kind: 'spec-only' }> }) {
+  return (
+    <Card muted tooltip={card.feature.sightings[0]?.specPath ?? undefined}>
+      <CardMeta>
+        <RepoIcon repoGroupKey={card.repoGroupKey} repoName={card.repoName} size="sm" />
+        <span className="truncate">{card.feature.name} — spec only, no tickets yet</span>
       </CardMeta>
     </Card>
   )

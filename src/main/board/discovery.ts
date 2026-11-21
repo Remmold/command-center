@@ -51,18 +51,21 @@ async function findRepoFolders(roots: string[], files: BoardFileReader): Promise
   return (await Promise.all(roots.map((root) => visit(root, 0)))).flat()
 }
 
-async function countsOf(path: string, files: BoardFileReader): Promise<Pick<DiscoveredFolder, 'featureCount' | 'openTicketCount'>> {
-  const probe: Workspace = {
+type Counts = Pick<DiscoveredFolder, 'featureCount' | 'openTicketCount'>
+
+/** Reads the folders as one repo group, so worktree copies merge exactly as on the board. */
+async function countsOf(paths: string[], files: BoardFileReader): Promise<Counts> {
+  const probes: Workspace[] = paths.map((path) => ({
     id: path,
     name: basename(path),
     path,
     createdAt: 0,
     profileId: '',
-    repoGroupKey: path,
+    repoGroupKey: 'probe',
     repoName: '',
     worktreeTag: ''
-  }
-  const features = (await readBoard([probe], files)).repoGroups.flatMap((g) => g.features)
+  }))
+  const features = (await readBoard(probes, files)).repoGroups.flatMap((g) => g.features)
   return {
     featureCount: features.filter((f) => f.state !== 'empty').length,
     openTicketCount: features.flatMap((f) => f.tickets).filter((t) => t.column !== 'done').length
@@ -79,7 +82,7 @@ export async function discoverRepos(roots: string[], added: Workspace[], deps: D
   const located = await Promise.all(
     folders.map(async (path) => {
       const commonDir = await deps.commonDirOf(path)
-      return commonDir === null ? null : { path, commonDir, ...(await countsOf(path, deps.files)) }
+      return commonDir === null ? null : { path, commonDir, ...(await countsOf([path], deps.files)) }
     })
   )
   for (const folder of located) {
@@ -90,7 +93,9 @@ export async function discoverRepos(roots: string[], added: Workspace[], deps: D
       repoName: group.repoName,
       main: null,
       mainAdded: isMainCheckout(folder.commonDir) && addedKeys.has(pathKey(dirname(folder.commonDir))),
-      worktrees: []
+      worktrees: [],
+      featureCount: 0,
+      openTicketCount: 0
     }
     repos.set(group.repoGroupKey, repo)
     const entry: DiscoveredFolder = {
@@ -104,7 +109,13 @@ export async function discoverRepos(roots: string[], added: Workspace[], deps: D
     else repo.worktrees.push(entry)
   }
   const byPath = (a: DiscoveredFolder, b: DiscoveredFolder): number => a.path.localeCompare(b.path)
-  for (const repo of repos.values()) repo.worktrees.sort(byPath)
+  await Promise.all(
+    [...repos.values()].map(async (repo) => {
+      repo.worktrees.sort(byPath)
+      const paths = [...(repo.main ? [repo.main.path] : []), ...repo.worktrees.map((w) => w.path)]
+      Object.assign(repo, await countsOf(paths, deps.files))
+    })
+  )
   return [...repos.values()].sort(
     (a, b) => a.repoName.toLowerCase().localeCompare(b.repoName.toLowerCase()) || a.repoGroupKey.localeCompare(b.repoGroupKey)
   )

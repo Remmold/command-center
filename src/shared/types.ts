@@ -440,6 +440,9 @@ export interface DiscoveredRepo {
   main: DiscoveredFolder | null
   mainAdded: boolean
   worktrees: DiscoveredFolder[]
+  /** Over the main checkout and worktrees listed here, with worktree copies merged as on the board. */
+  featureCount: number
+  openTicketCount: number
 }
 
 export interface DiscoveryModel {

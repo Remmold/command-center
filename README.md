@@ -9,7 +9,7 @@ Sessions are the real `claude` CLI, driven from the app, not a reimplementation.
 Switch with the title bar or **Ctrl+1** / **Ctrl+2**.
 
 - **Sessions**: a sidebar of every workspace, grouped by repo, with each session's status and account profile. The chat fills the workspace area. **Ctrl+B** slides in the IDE panels (file tree, editor, git), remembered per workspace. **Ctrl+`** opens a shell on demand.
-- **Board**: one kanban of the tickets from all workspaces, in four columns: Backlog, Blocked, In progress, Done. Filter by repo or workspace, see each feature's progress, open a ticket in a drawer, and jump from it to its session. Finished features sit in their own strip.
+- **Board**: one kanban of the tickets from all workspaces, in four side-by-side columns: Backlog, Blocked, In progress, Done. Filter by repo and feature, search, and group into swimlanes by feature or repo (each with its progress bar). Done hides the cards of finished features until you show them. Click a card to read the ticket in a resizable side panel (Esc closes, up/down step through the column) and jump from it to its session. Filters, grouping and the finished toggle are remembered.
 
 ## Needs you
 
@@ -54,7 +54,7 @@ Claude Code chats running in the VS Code extension in an added workspace show up
 
 ## Board discovery and ticket lifecycle
 
-The board reads ticket files from each workspace's `.scratch/<feature>/` folders. It also scans a few folders (scan roots, default `C:\projects` and `C:\darkfall64`) for repos that have tickets but are not added yet, and lists them in a **Not added** strip with an **Add workspace** button. Edit the scan roots from the board settings button; the scan reruns on opening the board and every 5 minutes.
+The board reads ticket files from each workspace's `.scratch/<feature>/` folders. It also scans a few folders (scan roots, default `C:\projects` and `C:\darkfall64`) for repos that have tickets but are not added yet, and shows one line, "N repos with tickets aren't added · Review". **Review** lists those repos with **Add workspace**; tick "show worktrees" to list worktrees too. Edit the scan roots from the board settings button; the scan reruns on opening the board and every 5 minutes.
 
 A ticket's column comes from its `**Status:**` word (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `in-progress`, `blocked`, `resolved`, `wontfix`) and its `**Blocked by:**` line. The full rules, and who sets which word, are in [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md#ticket-lifecycle).
 

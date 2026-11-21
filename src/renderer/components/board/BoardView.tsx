@@ -1,38 +1,54 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import type { BoardModel, Workspace } from '../../../shared/types'
+import type { Workspace } from '../../../shared/types'
 import {
   COLUMNS,
   findTicket,
   layoutBoard,
-  refOf,
-  sameTicket,
-  worktreeLabel,
-  type BoardFilter,
-  type PlacedFeature
+  neighbourCard,
+  type BoardCard,
+  type BoardLane,
+  type LaneColumn,
+  type LaneHeader,
+  type TicketRef
 } from '../../state/boardLayout'
-import { useBoardStore } from '../../state/boardStore'
+import { PANEL_MIN_WIDTH, useBoardStore } from '../../state/boardStore'
+import { useRepoDisplayName } from '../../state/repoIdentitiesStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
-import { RepoIcon, RepoName } from '../RepoIcon'
-import { Chip, ChipBar, ChipRow } from '../ui/Chip'
-import { Collapsible } from '../ui/Collapsible'
-import { ColumnGridHeader, ColumnGridList, ColumnGridRow } from '../ui/ColumnGrid'
-import { DrawerHost } from '../ui/Drawer'
+import { RepoIcon } from '../RepoIcon'
+import { Button } from '../ui/Button'
+import { Column, ColumnRow } from '../ui/Column'
+import { DrawerHost, DrawerMain } from '../ui/Drawer'
+import { HeaderRow } from '../ui/HeaderRow'
+import { ProgressBar } from '../ui/ProgressBar'
+import { ScrollStack } from '../ui/ScrollStack'
 import { EmptyHint } from '../ui/Section'
-import { FeatureHeader } from './FeatureHeader'
-import { NotAddedStrip } from './NotAddedStrip'
-import { ScanRootsButton } from './ScanRootsButton'
-import { TicketCard } from './TicketCard'
+import { Swimlane } from '../ui/Swimlane'
+import { BoardToolbar } from './BoardToolbar'
+import { NotAddedLine } from './NotAddedLine'
+import { cardAnchorId, SpecOnlyCard, TicketCard } from './TicketCard'
 import { TicketDrawer } from './TicketDrawer'
+
+const COLUMN_TITLE = Object.fromEntries(COLUMNS.map((c) => [c.column, c.title]))
+
+function cardKeyOf(ref: TicketRef): string {
+  return `${ref.repoGroupKey}/${ref.featureName}/${ref.fileName}`
+}
+
+function isTyping(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+}
 
 export function BoardView() {
   const model = useBoardStore((s) => s.model)
   const init = useBoardStore((s) => s.init)
-  const filter = useBoardStore((s) => s.filter)
-  const selected = useBoardStore((s) => s.selected)
-  const finishedOpen = useBoardStore((s) => s.finishedOpen)
-  const select = useBoardStore((s) => s.select)
-  const toggleFinished = useBoardStore((s) => s.toggleFinished)
   const rescan = useBoardStore((s) => s.rescan)
+  const filter = useBoardStore((s) => s.filter)
+  const groupBy = useBoardStore((s) => s.groupBy)
+  const showFinished = useBoardStore((s) => s.showFinished)
+  const selected = useBoardStore((s) => s.selected)
+  const select = useBoardStore((s) => s.select)
+  const panelShare = useBoardStore((s) => s.panelShare)
+  const setPanelShare = useBoardStore((s) => s.setPanelShare)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
 
   useEffect(() => {
@@ -40,115 +56,144 @@ export function BoardView() {
     rescan()
   }, [init, rescan])
 
-  const layout = useMemo(() => layoutBoard(model, filter), [model, filter])
-  const workspaceById = useMemo(() => new Map(workspaces.map((w) => [w.id, w])), [workspaces])
+  const layout = useMemo(() => layoutBoard(model, { filter, groupBy, showFinished }), [model, filter, groupBy, showFinished])
+  const workspaceById = useMemo(() => new Map<string, Workspace>(workspaces.map((w) => [w.id, w])), [workspaces])
   const found = selected ? findTicket(model, selected) : null
-  const closeDrawer = useCallback(() => select(null), [select])
+  const closePanel = useCallback(() => select(null), [select])
+
+  useEffect(() => {
+    if (!selected) return
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || isTyping(e.target)) return
+      const next = neighbourCard(layout, selected, e.key === 'ArrowUp' ? 'up' : 'down')
+      if (!next) return
+      e.preventDefault()
+      select(next)
+      document.getElementById(cardAnchorId(cardKeyOf(next)))?.scrollIntoView({ block: 'nearest' })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [layout, selected, select])
+
+  const selectedKey = selected ? cardKeyOf(selected) : null
+  const lanes = (
+    <BoardLanes layout={layout.lanes} grouped={groupBy !== 'none'} workspaces={workspaceById} selectedKey={selectedKey} />
+  )
 
   return (
     <DrawerHost>
-      <BoardFilters model={model} filter={filter} workspaces={workspaces} />
-      <NotAddedStrip />
-      <ColumnGridHeader columns={COLUMNS.map(({ column, title }) => ({ title, count: layout.counts[column] }))} />
-      <ColumnGridList>
-        {layout.rows.length === 0 && layout.finished.length === 0 && <EmptyHint>No features here yet.</EmptyHint>}
-        {layout.rows.map((placed) => (
-          <FeatureRow key={placed.key} placed={placed} workspaces={workspaceById} />
-        ))}
-        {layout.finished.length > 0 && (
-          <Collapsible title="Finished features" count={layout.finished.length} open={finishedOpen} onToggle={toggleFinished}>
-            {layout.finished.map((p) => (
-              <FeatureHeader key={p.key} repoGroupKey={p.repoGroupKey} repoName={p.repoName} feature={p.feature} />
-            ))}
-          </Collapsible>
-        )}
-      </ColumnGridList>
+      <DrawerMain>
+        <NotAddedLine />
+        <BoardToolbar model={model} />
+        {model.repoGroups.length === 0 ? <EmptyHint>No tickets yet. Add a workspace that has a .scratch folder.</EmptyHint> : lanes}
+      </DrawerMain>
       {found && (
-        <TicketDrawer found={found} model={model} workspaces={workspaceById} onSelect={select} onClose={closeDrawer} />
+        <TicketDrawer
+          found={found}
+          model={model}
+          workspaces={workspaceById}
+          onSelect={select}
+          onClose={closePanel}
+          share={panelShare}
+          minWidth={PANEL_MIN_WIDTH}
+          onResize={setPanelShare}
+        />
       )}
     </DrawerHost>
   )
 }
 
-function FeatureRow({ placed, workspaces }: { placed: PlacedFeature; workspaces: Map<string, Workspace> }) {
-  const selected = useBoardStore((s) => s.selected)
-  const select = useBoardStore((s) => s.select)
-  const cells =
-    placed.tickets.length === 0
-      ? []
-      : COLUMNS.map(({ column }) =>
-          placed.tickets
-            .filter((t) => t.column === column)
-            .map((ticket) => {
-              const ref = refOf(placed.repoGroupKey, placed.feature, ticket)
-              return (
-                <TicketCard
-                  key={ticket.fileName}
-                  repoGroupKey={placed.repoGroupKey}
-                  repoName={placed.repoName}
-                  featureName={placed.feature.name}
-                  ticket={ticket}
-                  workspaces={workspaces}
-                  selected={sameTicket(selected, ref)}
-                  onOpen={() => select(ref)}
-                />
-              )
-            })
-        )
+interface LanesProps {
+  layout: BoardLane[]
+  grouped: boolean
+  workspaces: Map<string, Workspace>
+  selectedKey: string | null
+}
+
+function BoardLanes({ layout, grouped, workspaces, selectedKey }: LanesProps) {
+  const collapsed = useBoardStore((s) => s.collapsedLanes)
+  const toggleLane = useBoardStore((s) => s.toggleLane)
+
+  if (!grouped) {
+    return <LaneColumns lane={layout[0]} scroll workspaces={workspaces} selectedKey={selectedKey} />
+  }
   return (
-    <ColumnGridRow
-      header={<FeatureHeader repoGroupKey={placed.repoGroupKey} repoName={placed.repoName} feature={placed.feature} />}
-      cells={cells}
-    />
+    <ScrollStack>
+      {layout.length === 0 && <EmptyHint>No tickets match.</EmptyHint>}
+      {layout.map((lane) => (
+        <Swimlane
+          key={lane.key}
+          label={lane.header?.featureName ?? lane.header?.repoName ?? lane.key}
+          header={lane.header && <LaneTitle header={lane.header} />}
+          open={!collapsed.includes(lane.key)}
+          onToggle={() => toggleLane(lane.key)}
+        >
+          <LaneColumns lane={lane} scroll={false} workspaces={workspaces} selectedKey={selectedKey} />
+        </Swimlane>
+      ))}
+    </ScrollStack>
   )
 }
 
-interface FiltersProps {
-  model: BoardModel
-  filter: BoardFilter
-  workspaces: Workspace[]
+function LaneTitle({ header }: { header: LaneHeader }) {
+  const displayName = useRepoDisplayName(header.repoGroupKey, header.repoName)
+  const { done, total, lastNote } = header.progress
+  const title = header.featureName ?? displayName
+  return (
+    <HeaderRow
+      icon={<RepoIcon repoGroupKey={header.repoGroupKey} repoName={header.repoName} size="sm" />}
+      subtitle={header.featureName ? displayName : undefined}
+      title={title}
+      note={lastNote}
+    >
+      {total > 0 && <ProgressBar value={done} max={total} label={`${title}: ${done} of ${total} done`} />}
+    </HeaderRow>
+  )
 }
 
-function BoardFilters({ model, filter, workspaces }: FiltersProps) {
-  const filterRepoGroup = useBoardStore((s) => s.filterRepoGroup)
-  const filterWorkspace = useBoardStore((s) => s.filterWorkspace)
-  const groupWorkspaces = filter.repoGroupKey ? workspaces.filter((w) => w.repoGroupKey === filter.repoGroupKey) : []
+interface LaneColumnsProps {
+  lane: BoardLane
+  scroll: boolean
+  workspaces: Map<string, Workspace>
+  selectedKey: string | null
+}
 
+function LaneColumns({ lane, scroll, workspaces, selectedKey }: LaneColumnsProps) {
   return (
-    <ChipBar>
-      <ChipRow label="Filter by repo">
-        <ScanRootsButton />
-        <Chip selected={filter.repoGroupKey === null} onClick={() => filterRepoGroup(null)}>
-          All repos
-        </Chip>
-        {model.repoGroups.map((g) => (
-          <Chip
-            key={g.repoGroupKey}
-            selected={filter.repoGroupKey === g.repoGroupKey}
-            onClick={() => filterRepoGroup(filter.repoGroupKey === g.repoGroupKey ? null : g.repoGroupKey)}
-          >
-            <RepoIcon repoGroupKey={g.repoGroupKey} repoName={g.repoName} size="sm" />
-            <RepoName repoGroupKey={g.repoGroupKey} repoName={g.repoName} />
-          </Chip>
-        ))}
-      </ChipRow>
-      {groupWorkspaces.length > 1 && (
-        <ChipRow label="Filter by workspace">
-          <Chip selected={filter.workspaceId === null} onClick={() => filterWorkspace(null)}>
-            All workspaces
-          </Chip>
-          {groupWorkspaces.map((w) => (
-            <Chip
-              key={w.id}
-              selected={filter.workspaceId === w.id}
-              tooltip={w.path}
-              onClick={() => filterWorkspace(filter.workspaceId === w.id ? null : w.id)}
-            >
-              {worktreeLabel(w)}
-            </Chip>
+    <ColumnRow fill={scroll}>
+      {lane.columns.map((column) => (
+        <Column
+          key={column.column}
+          title={COLUMN_TITLE[column.column]}
+          count={column.cards.length}
+          scroll={scroll}
+          footer={<FinishedLine column={column} />}
+        >
+          {column.cards.map((card) => (
+            <CardView key={card.key} card={card} workspaces={workspaces} selected={card.key === selectedKey} />
           ))}
-        </ChipRow>
-      )}
-    </ChipBar>
+        </Column>
+      ))}
+    </ColumnRow>
+  )
+}
+
+function CardView({ card, workspaces, selected }: { card: BoardCard; workspaces: Map<string, Workspace>; selected: boolean }) {
+  const select = useBoardStore((s) => s.select)
+  const open = useCallback((c: Extract<BoardCard, { kind: 'ticket' }>) => select(c.ref), [select])
+  if (card.kind === 'spec-only') return <SpecOnlyCard card={card} />
+  return <TicketCard card={card} workspaces={workspaces} selected={selected} onOpen={open} />
+}
+
+function FinishedLine({ column }: { column: LaneColumn }) {
+  const showFinished = useBoardStore((s) => s.showFinished)
+  const toggle = useBoardStore((s) => s.toggleShowFinished)
+  const { cards, features } = column.finished
+  if (cards === 0) return null
+  const from = `${cards} from ${features} finished ${features === 1 ? 'feature' : 'features'}`
+  return (
+    <Button variant="ghost" onClick={toggle}>
+      {showFinished ? `Hide ${from}` : `+${from} · show`}
+    </Button>
   )
 }

@@ -11,7 +11,7 @@ import { Drawer, DrawerList, DrawerSection, DrawerText } from '../ui/Drawer'
 import { ListItem, ListRow, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { Markdown } from '../ui/Markdown'
 import { EmptyHint } from '../ui/Section'
-import { statusText, TicketStatusBadge } from './TicketStatusBadge'
+import { TicketStatusBadge } from './TicketStatusBadge'
 
 const COLUMN_TITLE = Object.fromEntries(COLUMNS.map((c) => [c.column, c.title])) as Record<BoardColumn, string>
 
@@ -39,9 +39,12 @@ interface Props {
   workspaces: Map<string, Workspace>
   onSelect: (ref: TicketRef) => void
   onClose: () => void
+  share: number
+  minWidth: number
+  onResize: (share: number) => void
 }
 
-export function TicketDrawer({ found, model, workspaces, onSelect, onClose }: Props) {
+export function TicketDrawer({ found, model, workspaces, onSelect, onClose, share, minWidth, onResize }: Props) {
   const { group, feature, ticket } = found
   const notesPath = ticket.sightings.find((s) => s.progressPath !== null)?.progressPath ?? null
   const ticketText = useBoardFile(ticket.sightings[0]?.filePath ?? null, model)
@@ -51,6 +54,9 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose }: Pr
     <Drawer
       label="Ticket"
       onClose={onClose}
+      share={share}
+      minWidth={minWidth}
+      onResize={onResize}
       title={
         <>
           <CardMeta>
@@ -59,7 +65,7 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose }: Pr
               <RepoName repoGroupKey={group.repoGroupKey} repoName={group.repoName} /> / {feature.name}
             </span>
           </CardMeta>
-          <CardTitle prefix={ticket.number}>{ticket.title}</CardTitle>
+          <CardTitle prefix={`#${ticket.number}`}>{ticket.title}</CardTitle>
           <CardMeta>
             <Badge>{COLUMN_TITLE[ticket.column]}</Badge>
             <TicketStatusBadge ticket={ticket} />
@@ -67,11 +73,9 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose }: Pr
         </>
       }
     >
-      {statusText(ticket) && (
-        <DrawerSection title={ticket.statusKnown ? 'Status note' : 'Status line'}>
-          <DrawerText>{statusText(ticket)}</DrawerText>
-        </DrawerSection>
-      )}
+      <DrawerSection title="Status line">
+        <DrawerText>{ticket.statusLine ?? 'No status line.'}</DrawerText>
+      </DrawerSection>
       <BlockersSection ticket={ticket} feature={feature} onSelect={(t) => onSelect(refOf(group.repoGroupKey, feature, t))} />
       <DrawerSection title="Seen in">
         <DrawerList>
@@ -92,14 +96,14 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose }: Pr
           })}
         </DrawerList>
       </DrawerSection>
+      <DrawerSection title="Ticket">
+        <FileBody text={ticketText} />
+      </DrawerSection>
       {notesPath && (
         <DrawerSection title="Progress notes">
           <FileBody text={notesText} />
         </DrawerSection>
       )}
-      <DrawerSection title="Ticket">
-        <FileBody text={ticketText} />
-      </DrawerSection>
     </Drawer>
   )
 }

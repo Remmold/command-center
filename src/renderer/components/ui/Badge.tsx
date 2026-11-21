@@ -15,7 +15,7 @@ interface Props {
 
 export function Badge({ children, tone = 'neutral', tooltip }: Props) {
   return (
-    <span title={tooltip} className={`rounded px-1.5 py-px text-[10px] leading-4 ${TONES[tone]}`}>
+    <span title={tooltip} className={`min-w-0 truncate rounded px-1.5 py-px text-[10px] leading-4 ${TONES[tone]}`}>
       {children}
     </span>
   )
