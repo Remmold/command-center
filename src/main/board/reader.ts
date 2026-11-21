@@ -10,6 +10,7 @@ import type {
   FeatureState,
   TicketNumber,
   TicketSighting,
+  TicketStatus,
   Workspace
 } from '../../shared/types'
 import { groupByRepo } from '../../shared/repoGroups'
@@ -25,7 +26,23 @@ export interface BoardFileReader {
   readFile(path: string): Promise<string | null>
 }
 
-const DONE_STATUSES = new Set(['resolved', 'wontfix'])
+const COLUMN_OF_WORD: Record<string, BoardColumn> = {
+  'needs-triage': 'backlog',
+  'needs-info': 'backlog',
+  'ready-for-agent': 'backlog',
+  'ready-for-human': 'backlog',
+  'in-progress': 'in-progress',
+  blocked: 'blocked',
+  resolved: 'done',
+  wontfix: 'done',
+  done: 'done',
+  complete: 'done',
+  completed: 'done',
+  closed: 'done',
+  claimed: 'in-progress',
+  doing: 'in-progress',
+  wip: 'in-progress'
+}
 const COLUMN_RANK: Record<BoardColumn, number> = { backlog: 0, blocked: 1, 'in-progress': 2, done: 3 }
 const TICKET_FILE = /^(\d+[a-z]?)-(.+)\.md$/i
 const PROGRESS_SUFFIX = '.progress.md'
@@ -34,7 +51,7 @@ interface ParsedTicket {
   number: TicketNumber
   fileName: string
   title: string
-  status: string | null
+  status: TicketStatus
   blockedBy: TicketNumber[]
   filePath: string
   progressPath: string | null
@@ -64,9 +81,19 @@ function field(markdown: string, name: string): string | null {
   return null
 }
 
-function parseStatus(markdown: string): string | null {
-  const word = field(markdown, 'status')?.match(/^[a-z_-]+/i)?.[0]
-  return word ? word.toLowerCase() : null
+const NO_STATUS: TicketStatus = { status: null, statusNote: null, statusLine: null, statusKnown: true }
+
+function parseStatus(markdown: string): TicketStatus {
+  const line = field(markdown, 'status')
+  const match = line ? /^([^\s—]+)(.*)$/s.exec(line) : null
+  if (!line || !match) return NO_STATUS
+  const status = match[1].toLowerCase()
+  const note = match[2].replace(/^[\s—–-]+/, '').trim()
+  return { status, statusNote: note || null, statusLine: line, statusKnown: wordColumn(status) !== null }
+}
+
+function wordColumn(status: string | null): BoardColumn | null {
+  return status !== null && Object.hasOwn(COLUMN_OF_WORD, status) ? COLUMN_OF_WORD[status] : null
 }
 
 function parseTitle(markdown: string, fallback: string): string {
@@ -88,14 +115,15 @@ function parseBlockedBy(markdown: string): TicketNumber[] {
   return numbers
 }
 
-function isDone(status: string | null): boolean {
-  return status !== null && DONE_STATUSES.has(status)
+function isDone(status: TicketStatus): boolean {
+  return wordColumn(status.status) === 'done'
 }
 
 function columnOf(ticket: ParsedTicket, resolved: Set<TicketNumber>): BoardColumn {
-  if (isDone(ticket.status)) return 'done'
-  if (ticket.status === 'blocked' || ticket.blockedBy.some((n) => !resolved.has(n))) return 'blocked'
-  if (ticket.status === 'claimed' || ticket.progressPath !== null) return 'in-progress'
+  const byWord = wordColumn(ticket.status.status)
+  if (byWord === 'done') return 'done'
+  if (byWord === 'blocked' || ticket.blockedBy.some((n) => !resolved.has(n))) return 'blocked'
+  if (byWord === 'in-progress' || ticket.progressPath !== null) return 'in-progress'
   return 'backlog'
 }
 
@@ -186,7 +214,7 @@ function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
       const sighting: TicketSighting = {
         workspaceId: copy.sighting.workspaceId,
         column: columnOf(t, resolved),
-        status: t.status,
+        ...t.status,
         blockedBy: t.blockedBy,
         filePath: t.filePath,
         progressPath: t.progressPath
@@ -198,7 +226,7 @@ function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
           fileName: t.fileName,
           title: t.title,
           column: sighting.column,
-          status: t.status,
+          ...t.status,
           sightings: [sighting]
         })
         continue
@@ -206,7 +234,7 @@ function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
       card.sightings.push(sighting)
       if (COLUMN_RANK[sighting.column] > COLUMN_RANK[card.column]) {
         card.column = sighting.column
-        card.status = sighting.status
+        Object.assign(card, t.status)
         card.title = t.title
       }
     }

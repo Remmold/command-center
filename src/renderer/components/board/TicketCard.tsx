@@ -3,8 +3,9 @@ import { worktreeLabel } from '../../state/boardLayout'
 import { useWorkspacesStatus } from '../../state/sessionStatusStore'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
-import { Card, CardMeta, CardTitle } from '../ui/Card'
+import { Card, CardMeta, CardNote, CardTitle } from '../ui/Card'
 import { StatusDot } from '../ui/StatusDot'
+import { TicketStatusBadge } from './TicketStatusBadge'
 
 interface SeenIn {
   workspaceId: string
@@ -37,8 +38,9 @@ export function TicketCard({ repoGroupKey, repoName, featureName, ticket, worksp
         {status && <StatusDot status={status} />}
       </CardMeta>
       <CardTitle prefix={ticket.number}>{ticket.title}</CardTitle>
+      {ticket.statusNote && <CardNote>{ticket.statusNote}</CardNote>}
       <CardMeta>
-        <Badge>{ticket.status ?? 'no status'}</Badge>
+        <TicketStatusBadge status={ticket} />
         {seenIn(ticket, workspaces).map(({ workspaceId, tag }) => (
           <Badge key={workspaceId}>{tag}</Badge>
         ))}

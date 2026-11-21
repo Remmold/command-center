@@ -1,6 +1,7 @@
 export const IPC = {
   WORKSPACES_LIST: 'workspaces:list',
   WORKSPACES_ADD: 'workspaces:add',
+  WORKSPACES_ADD_PATH: 'workspaces:addPath',
   WORKSPACES_REMOVE: 'workspaces:remove',
   WORKSPACES_SET_PROFILE: 'workspaces:setProfile',
   REPO_IDENTITIES_LIST: 'repoIdentities:list',
@@ -14,6 +15,10 @@ export const IPC = {
   BOARD_GET: 'board:get',
   BOARD_CHANGED: 'board:changed',
   BOARD_READ_FILE: 'board:readFile',
+  DISCOVERY_GET: 'discovery:get',
+  DISCOVERY_CHANGED: 'discovery:changed',
+  DISCOVERY_RESCAN: 'discovery:rescan',
+  DISCOVERY_SET_ROOTS: 'discovery:setRoots',
   PTY_SPAWN: 'pty:spawn',
   PTY_WRITE: 'pty:write',
   PTY_RESIZE: 'pty:resize',

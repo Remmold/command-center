@@ -222,10 +222,14 @@ export interface AppExitEvent {
   exitCode: number | null
 }
 
+export type AddWorkspaceResult = { ok: true; workspace: Workspace } | { ok: false; error: string }
+
 export interface RendererApi {
   workspaces: {
     list: () => Promise<Workspace[]>
     add: () => Promise<Workspace | null>
+    /** Adds a folder without a dialog; main checks it exists and is a directory. */
+    addPath: (path: string) => Promise<AddWorkspaceResult>
     remove: (id: string) => Promise<void>
     setProfile: (id: string, profileId: string) => Promise<Workspace | null>
   }
@@ -249,6 +253,12 @@ export interface RendererApi {
     onChanged: (cb: (model: BoardModel) => void) => () => void
     /** Reads a ticket, ticket notes, spec or progress file named in the current model; null for any other path. */
     readFile: (path: string) => Promise<string | null>
+  }
+  discovery: {
+    get: () => Promise<DiscoveryModel>
+    onChanged: (cb: (model: DiscoveryModel) => void) => () => void
+    rescan: () => Promise<DiscoveryModel>
+    setRoots: (roots: string[]) => Promise<DiscoveryModel>
   }
   apps: {
     list: () => Promise<ManagedApp[]>
@@ -346,12 +356,22 @@ export interface RendererApi {
 
 export type BoardColumn = 'backlog' | 'blocked' | 'in-progress' | 'done'
 
-/** One copy of a ticket file, in one workspace. */
-export interface TicketSighting {
-  workspaceId: string
-  column: BoardColumn
+/** What a ticket's Status line says. */
+export interface TicketStatus {
   /** Lower-cased first word of the Status line; null when the ticket has none. */
   status: string | null
+  /** Text after the word, without a leading em dash. */
+  statusNote: string | null
+  /** The whole Status value as written, for the unknown-status badge. */
+  statusLine: string | null
+  /** False when the word is neither a lifecycle word nor a legacy one; a missing status counts as known. */
+  statusKnown: boolean
+}
+
+/** One copy of a ticket file, in one workspace. */
+export interface TicketSighting extends TicketStatus {
+  workspaceId: string
+  column: BoardColumn
   blockedBy: TicketNumber[]
   filePath: string
   progressPath: string | null
@@ -361,13 +381,12 @@ export interface TicketSighting {
 export type TicketNumber = string
 
 /** One card: every worktree copy of one ticket, merged. */
-export interface BoardTicket {
+export interface BoardTicket extends TicketStatus {
   number: TicketNumber
   /** Lower-cased ticket file name; copies merge on it, so two files sharing a number stay two cards. */
   fileName: string
   title: string
   column: BoardColumn
-  status: string | null
   /** Highest column first, then workspace order. */
   sightings: TicketSighting[]
 }
@@ -403,6 +422,31 @@ export interface BoardRepoGroup {
 
 export interface BoardModel {
   repoGroups: BoardRepoGroup[]
+}
+
+/** A repo folder with tickets that isn't an added workspace. */
+export interface DiscoveredFolder {
+  path: string
+  /** Empty for the main checkout. */
+  worktreeTag: string
+  featureCount: number
+  openTicketCount: number
+}
+
+export interface DiscoveredRepo {
+  repoGroupKey: string
+  repoName: string
+  /** Null when the main checkout is added already or holds no tickets. */
+  main: DiscoveredFolder | null
+  worktrees: DiscoveredFolder[]
+}
+
+export interface DiscoveryModel {
+  scanRoots: string[]
+  repos: DiscoveredRepo[]
+  /** Epoch ms of the last finished scan; null before the first one. */
+  scannedAt: number | null
+  scanMs: number | null
 }
 
 export type ObservedStatus = 'live' | 'quiet'

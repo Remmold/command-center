@@ -4,7 +4,7 @@
 
 **Blocked by:** 04, 11
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Discovery: scan the scan roots (default `C:\projects` and `C:\darkfall64`, editable in a small board settings popover, saved in the app's data folder) for git repo folders up to 3 levels deep that hold at least one `.scratch/<feature>/` with a `spec.md` or an `issues/` folder. Skip `node_modules`, `.git`, `Library`, `Temp` and hidden folders. Rescan on board open and every 5 minutes.
 - [ ] Discovered repos that aren't added appear in a "Not added" strip on the board: repo name, feature count, open ticket count, and an **Add workspace** button that adds the main checkout. Worktrees of an added repo that carry their own `.scratch` are listed under it with their own Add button.

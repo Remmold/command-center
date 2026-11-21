@@ -19,6 +19,8 @@ import { ColumnGridHeader, ColumnGridList, ColumnGridRow } from '../ui/ColumnGri
 import { DrawerHost } from '../ui/Drawer'
 import { EmptyHint } from '../ui/Section'
 import { FeatureHeader } from './FeatureHeader'
+import { NotAddedStrip } from './NotAddedStrip'
+import { ScanRootsButton } from './ScanRootsButton'
 import { TicketCard } from './TicketCard'
 import { TicketDrawer } from './TicketDrawer'
 
@@ -30,11 +32,13 @@ export function BoardView() {
   const finishedOpen = useBoardStore((s) => s.finishedOpen)
   const select = useBoardStore((s) => s.select)
   const toggleFinished = useBoardStore((s) => s.toggleFinished)
+  const rescan = useBoardStore((s) => s.rescan)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
 
   useEffect(() => {
     init()
-  }, [init])
+    rescan()
+  }, [init, rescan])
 
   const layout = useMemo(() => layoutBoard(model, filter), [model, filter])
   const workspaceById = useMemo(() => new Map(workspaces.map((w) => [w.id, w])), [workspaces])
@@ -44,6 +48,7 @@ export function BoardView() {
   return (
     <DrawerHost>
       <BoardFilters model={model} filter={filter} workspaces={workspaces} />
+      <NotAddedStrip />
       <ColumnGridHeader columns={COLUMNS.map(({ column, title }) => ({ title, count: layout.counts[column] }))} />
       <ColumnGridList>
         {layout.rows.length === 0 && layout.finished.length === 0 && <EmptyHint>No features here yet.</EmptyHint>}
@@ -112,6 +117,7 @@ function BoardFilters({ model, filter, workspaces }: FiltersProps) {
   return (
     <ChipBar>
       <ChipRow label="Filter by repo">
+        <ScanRootsButton />
         <Chip selected={filter.repoGroupKey === null} onClick={() => filterRepoGroup(null)}>
           All repos
         </Chip>

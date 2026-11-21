@@ -40,9 +40,9 @@ export function ListRowMeta({ children }: { children: ReactNode }) {
 }
 
 /** A non-clickable row: text plus trailing actions. */
-export function ListItem({ children, tooltip }: { children: ReactNode; tooltip?: string }) {
+export function ListItem({ children, tooltip, nested = false }: { children: ReactNode; tooltip?: string; nested?: boolean }) {
   return (
-    <li title={tooltip} className="flex w-full min-w-0 items-center gap-2 py-0.5 text-xs text-zinc-300">
+    <li title={tooltip} className={`flex w-full min-w-0 items-center gap-2 py-0.5 text-xs text-zinc-300 ${nested ? 'pl-6' : ''}`}>
       {children}
     </li>
   )

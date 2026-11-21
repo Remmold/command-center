@@ -35,6 +35,11 @@ export function CardMeta({ children }: { children: ReactNode }) {
   return <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-zinc-500">{children}</div>
 }
 
+/** Secondary prose under a card's title, cut to two lines. */
+export function CardNote({ children }: { children: ReactNode }) {
+  return <p className="line-clamp-2 text-[10px] leading-4 text-zinc-500">{children}</p>
+}
+
 export function CardTitle({ children, prefix }: { children: ReactNode; prefix?: string }) {
   return (
     <div className="text-xs leading-snug text-zinc-100">

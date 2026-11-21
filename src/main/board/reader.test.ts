@@ -376,3 +376,94 @@ describe('board reader', () => {
     expect(model.repoGroups).toMatchObject([{ features: [] }])
   })
 })
+
+describe('board reader: ticket lifecycle words', () => {
+  async function readOne(statusLine: string): Promise<BoardTicket> {
+    const root = fixture({ '.scratch/f/issues/01-one.md': ticket('01: One', [statusLine]) })
+    return tickets(await readBoard([workspace(root)], nodeFileReader))[0]
+  }
+
+  it.each([
+    ['needs-triage', 'backlog'],
+    ['needs-info', 'backlog'],
+    ['ready-for-agent', 'backlog'],
+    ['ready-for-human', 'backlog'],
+    ['in-progress', 'in-progress'],
+    ['blocked', 'blocked'],
+    ['resolved', 'done'],
+    ['wontfix', 'done']
+  ])('maps the canonical word %s to %s with no unknown badge', async (word, column) => {
+    const t = await readOne(`**Status:** ${word}`)
+    expect(t).toMatchObject({ column, status: word, statusNote: null, statusKnown: true })
+  })
+
+  it.each([
+    ['done', 'done'],
+    ['complete', 'done'],
+    ['Completed', 'done'],
+    ['closed', 'done'],
+    ['claimed', 'in-progress'],
+    ['doing', 'in-progress'],
+    ['WIP', 'in-progress']
+  ])('maps the legacy word %s to %s', async (word, column) => {
+    const t = await readOne(`Status: ${word}`)
+    expect(t).toMatchObject({ column, status: word.toLowerCase(), statusKnown: true })
+  })
+
+  it('puts an unknown word in Backlog, flagged with the raw status line', async () => {
+    const line = 'talking hint resolved (2026-11-20); the axes hint is not built'
+    const t = await readOne(`**Status:** ${line}`)
+    expect(t).toMatchObject({ column: 'backlog', status: 'talking', statusKnown: false, statusLine: line })
+  })
+
+  it('reads the text after an em dash as the status note', async () => {
+    expect(await readOne('**Status:** blocked — waiting on art')).toMatchObject({
+      column: 'blocked',
+      status: 'blocked',
+      statusNote: 'waiting on art'
+    })
+    expect(await readOne('**Status:** in-progress—groups 1 and 2 done')).toMatchObject({
+      column: 'in-progress',
+      status: 'in-progress',
+      statusNote: 'groups 1 and 2 done'
+    })
+  })
+
+  it('reads free text after the word as the note', async () => {
+    expect(await readOne('**Status:** resolved for groups 1 and 2 (2026-11-20)')).toMatchObject({
+      column: 'done',
+      status: 'resolved',
+      statusNote: 'for groups 1 and 2 (2026-11-20)',
+      statusKnown: true
+    })
+  })
+
+  it('treats a legacy done word as resolved for blockers, and keeps Blocked by and progress files ahead of the word', async () => {
+    const root = fixture({
+      '.scratch/f/issues/01-old.md': ticket('01: Old', ['**Status:** done']),
+      '.scratch/f/issues/02-open.md': ticket('02: Open', ['**Status:** ready-for-agent']),
+      '.scratch/f/issues/03-after-old.md': ticket('03: After old', ['**Blocked by:** 01', '**Status:** ready-for-agent']),
+      '.scratch/f/issues/04-after-open.md': ticket('04: After open', ['**Blocked by:** 02', '**Status:** in-progress']),
+      '.scratch/f/issues/05-noted.md': ticket('05: Noted', ['**Status:** ready-for-human']),
+      '.scratch/f/issues/05-noted.progress.md': 'Done: half.'
+    })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    expect(columns(model)).toEqual({
+      '01': 'done',
+      '02': 'backlog',
+      '03': 'backlog',
+      '04': 'blocked',
+      '05': 'in-progress'
+    })
+  })
+
+  it('shows no badge and no note for a missing status', async () => {
+    expect(await readOne('')).toMatchObject({
+      column: 'backlog',
+      status: null,
+      statusNote: null,
+      statusLine: null,
+      statusKnown: true
+    })
+  })
+})

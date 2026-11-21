@@ -7,10 +7,11 @@ import { RepoIcon, RepoName } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { CardMeta, CardTitle } from '../ui/Card'
-import { Drawer, DrawerList, DrawerSection } from '../ui/Drawer'
+import { Drawer, DrawerList, DrawerSection, DrawerText } from '../ui/Drawer'
 import { ListItem, ListRow, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { Markdown } from '../ui/Markdown'
 import { EmptyHint } from '../ui/Section'
+import { TicketStatusBadge } from './TicketStatusBadge'
 
 const COLUMN_TITLE = Object.fromEntries(COLUMNS.map((c) => [c.column, c.title])) as Record<BoardColumn, string>
 
@@ -61,11 +62,16 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose }: Pr
           <CardTitle prefix={ticket.number}>{ticket.title}</CardTitle>
           <CardMeta>
             <Badge>{COLUMN_TITLE[ticket.column]}</Badge>
-            <Badge>{ticket.status ?? 'no status'}</Badge>
+            <TicketStatusBadge status={ticket} />
           </CardMeta>
         </>
       }
     >
+      {(ticket.statusNote || !ticket.statusKnown) && (
+        <DrawerSection title={ticket.statusKnown ? 'Status note' : 'Status line (unknown word)'}>
+          <DrawerText>{ticket.statusKnown ? ticket.statusNote : ticket.statusLine}</DrawerText>
+        </DrawerSection>
+      )}
       <BlockersSection ticket={ticket} feature={feature} onSelect={(t) => onSelect(refOf(group.repoGroupKey, feature, t))} />
       <DrawerSection title="Seen in">
         <DrawerList>

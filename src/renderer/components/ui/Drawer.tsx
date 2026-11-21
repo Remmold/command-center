@@ -49,6 +49,10 @@ export function DrawerSection({ title, children }: { title: string; children: Re
   )
 }
 
+export function DrawerText({ children }: { children: ReactNode }) {
+  return <p className="text-xs leading-5 text-zinc-300">{children}</p>
+}
+
 export function DrawerList({ children }: { children: ReactNode }) {
   return <ul className="flex flex-col gap-0.5">{children}</ul>
 }

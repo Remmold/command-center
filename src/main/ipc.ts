@@ -1,4 +1,6 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
+import { promises as fs } from 'node:fs'
+import { resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
@@ -13,6 +15,7 @@ import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { listLocalSessions } from './claude/local-sessions'
 import { BoardService } from './board/service'
+import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import {
   permissionServer,
@@ -22,7 +25,7 @@ import {
 } from './permission/server'
 import { sessionStatusTracker } from './sessions/tracker'
 import { setScreenFocus } from './sessions/screenFocus'
-import { DEFAULT_PROFILE_ID, type ScreenFocus } from '../shared/types'
+import { DEFAULT_PROFILE_ID, type AddWorkspaceResult, type ScreenFocus } from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
 
 let unsubscribers: Array<() => void> = []
@@ -70,7 +73,34 @@ export function registerIpc({ repoIdentities }: IpcDeps): void {
   ipcMain.on(IPC.OBSERVED_CLOSE, () => observed.close())
   unsubscribers.push(() => observed.stop())
 
+  const discovery = new DiscoveryService(workspaces.list, (model) => sendAll(IPC.DISCOVERY_CHANGED, model))
+  discovery.start()
+  ipcMain.handle(IPC.DISCOVERY_GET, () => discovery.current())
+  ipcMain.handle(IPC.DISCOVERY_RESCAN, () => discovery.rescan())
+  ipcMain.handle(IPC.DISCOVERY_SET_ROOTS, (_e, roots: unknown) => {
+    if (!Array.isArray(roots) || !roots.every((r) => typeof r === 'string')) throw new Error('scan roots must be strings')
+    return discovery.setRoots(roots)
+  })
+  unsubscribers.push(() => discovery.stop())
+
+  const workspacesChanged = (): void => {
+    void refreshBoard()
+    void observed.workspacesChanged()
+    void discovery.rescan()
+  }
+
   ipcMain.handle(IPC.WORKSPACES_LIST, () => workspaces.list())
+
+  ipcMain.handle(IPC.WORKSPACES_ADD_PATH, async (_e, path: unknown): Promise<AddWorkspaceResult> => {
+    if (typeof path !== 'string' || path.trim() === '') return { ok: false, error: 'No folder given' }
+    const folder = resolve(path.trim())
+    const stat = await fs.stat(folder).catch(() => null)
+    if (!stat) return { ok: false, error: `${folder} does not exist` }
+    if (!stat.isDirectory()) return { ok: false, error: `${folder} is not a folder` }
+    const workspace = await workspaces.add(folder)
+    workspacesChanged()
+    return { ok: true, workspace }
+  })
 
   ipcMain.handle(IPC.WORKSPACES_ADD, async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
@@ -83,15 +113,13 @@ export function registerIpc({ repoIdentities }: IpcDeps): void {
         })
     if (result.canceled || result.filePaths.length === 0) return null
     const added = await workspaces.add(result.filePaths[0])
-    void refreshBoard()
-    void observed.workspacesChanged()
+    workspacesChanged()
     return added
   })
 
   ipcMain.handle(IPC.WORKSPACES_REMOVE, async (_event, id: string) => {
     await workspaces.remove(id)
-    void refreshBoard()
-    void observed.workspacesChanged()
+    workspacesChanged()
   })
 
   ipcMain.handle(IPC.WORKSPACES_SET_PROFILE, async (_e, id: string, profileId: string) => {

@@ -6,7 +6,9 @@ import type {
   AppExitEvent,
   AppView,
   AppOutputEvent,
+  AddWorkspaceResult,
   BoardModel,
+  DiscoveryModel,
   ClaudeEventEnvelope,
   ClaudeExitEnvelope,
   ManagedApp,
@@ -27,6 +29,7 @@ const api: RendererApi = {
   workspaces: {
     list: (): Promise<Workspace[]> => ipcRenderer.invoke(IPC.WORKSPACES_LIST),
     add: (): Promise<Workspace | null> => ipcRenderer.invoke(IPC.WORKSPACES_ADD),
+    addPath: (path: string): Promise<AddWorkspaceResult> => ipcRenderer.invoke(IPC.WORKSPACES_ADD_PATH, path),
     remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC.WORKSPACES_REMOVE, id),
     setProfile: (id: string, profileId: string): Promise<Workspace | null> =>
       ipcRenderer.invoke(IPC.WORKSPACES_SET_PROFILE, id, profileId)
@@ -53,6 +56,16 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.BOARD_CHANGED, handler)
     },
     readFile: (path: string): Promise<string | null> => ipcRenderer.invoke(IPC.BOARD_READ_FILE, path)
+  },
+  discovery: {
+    get: (): Promise<DiscoveryModel> => ipcRenderer.invoke(IPC.DISCOVERY_GET),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, model: DiscoveryModel) => cb(model)
+      ipcRenderer.on(IPC.DISCOVERY_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.DISCOVERY_CHANGED, handler)
+    },
+    rescan: (): Promise<DiscoveryModel> => ipcRenderer.invoke(IPC.DISCOVERY_RESCAN),
+    setRoots: (roots: string[]): Promise<DiscoveryModel> => ipcRenderer.invoke(IPC.DISCOVERY_SET_ROOTS, roots)
   },
   apps: {
     list: (): Promise<ManagedApp[]> => ipcRenderer.invoke(IPC.APPS_LIST),

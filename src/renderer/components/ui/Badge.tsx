@@ -1,7 +1,22 @@
 import type { ReactNode } from 'react'
 
-export function Badge({ children }: { children: ReactNode }) {
+type Tone = 'neutral' | 'warning'
+
+const TONES: Record<Tone, string> = {
+  neutral: 'bg-zinc-800 text-zinc-400',
+  warning: 'bg-amber-500/15 text-amber-300'
+}
+
+interface Props {
+  children: ReactNode
+  tone?: Tone
+  tooltip?: string
+}
+
+export function Badge({ children, tone = 'neutral', tooltip }: Props) {
   return (
-    <span className="rounded bg-zinc-800 px-1.5 py-px text-[10px] leading-4 text-zinc-400">{children}</span>
+    <span title={tooltip} className={`rounded px-1.5 py-px text-[10px] leading-4 ${TONES[tone]}`}>
+      {children}
+    </span>
   )
 }

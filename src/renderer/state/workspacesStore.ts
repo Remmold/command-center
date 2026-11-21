@@ -1,11 +1,12 @@
 import { create } from 'zustand'
-import type { Workspace } from '../../shared/types'
+import type { AddWorkspaceResult, Workspace } from '../../shared/types'
 
 interface WorkspacesState {
   workspaces: Workspace[]
   loading: boolean
   load: () => Promise<void>
   add: () => Promise<Workspace | null>
+  addPath: (path: string) => Promise<AddWorkspaceResult>
   remove: (id: string) => Promise<void>
   /** Takes effect from the workspace's next session start. */
   setProfile: (id: string, profileId: string) => Promise<void>
@@ -28,6 +29,11 @@ export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
     const added = await window.api.workspaces.add()
     if (added) await get().load()
     return added
+  },
+  addPath: async (path) => {
+    const result = await window.api.workspaces.addPath(path)
+    if (result.ok) await get().load()
+    return result
   },
   remove: async (id) => {
     await window.api.workspaces.remove(id)
