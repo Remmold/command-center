@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, Image as ImageIcon, Paperclip, Square, X } from 'lucide-react'
 import { AutocompletePopup, type AutocompleteItem } from './AutocompletePopup'
 import { MessageColumn } from './MessageColumn'
@@ -12,6 +12,9 @@ interface Props {
   slashCommands?: string[]
   cwd?: string
   registerFocus?: (focusFn: () => void) => void
+  footerStart?: ReactNode
+  footerEnd?: ReactNode
+  onShiftTab?: () => void
 }
 
 interface AutocompleteState {
@@ -115,7 +118,10 @@ export function InputBox({
   onInterrupt,
   slashCommands,
   cwd,
-  registerFocus
+  registerFocus,
+  footerStart,
+  footerEnd,
+  onShiftTab
 }: Props) {
   const [value, setValue] = useState('')
   const [autocomplete, setAutocomplete] = useState<AutocompleteState | null>(null)
@@ -209,6 +215,20 @@ export function InputBox({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && onShiftTab) {
+      e.preventDefault()
+      onShiftTab()
+      return
+    }
+    if (disabled) {
+      if (e.key === 'Escape' && onInterrupt) {
+        e.preventDefault()
+        onInterrupt()
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+      }
+      return
+    }
     if (autocomplete && items.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -252,6 +272,7 @@ export function InputBox({
   }
 
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (disabled) return
     const items = e.clipboardData?.items
     if (!items) return
     const imageFiles: File[] = []
@@ -360,7 +381,8 @@ export function InputBox({
           <textarea
             ref={textareaRef}
             value={value}
-            disabled={disabled}
+            readOnly={disabled}
+            aria-disabled={disabled}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             onSelect={updateAutocomplete}
@@ -368,10 +390,10 @@ export function InputBox({
             onPaste={handlePaste}
             rows={1}
             placeholder={placeholder ?? 'message claude…'}
-            className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none disabled:opacity-50"
+            className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none read-only:opacity-50"
           />
           <div className="flex items-end justify-between gap-2">
-            <div className="flex items-center gap-1">
+            <div className="flex min-w-0 items-center gap-1">
               <button
                 onClick={handleAttachClick}
                 className="rounded p-1.5 text-muted hover:bg-list-hover hover:text-fg"
@@ -380,7 +402,8 @@ export function InputBox({
               >
                 <Paperclip size={14} strokeWidth={2} />
               </button>
-              <span className="text-[10px] text-faint">
+              {footerStart}
+              <span className="min-w-0 truncate text-[10px] text-faint">
                 enter to send · shift+enter newline · / commands · @ files ·{' '}
                 <ImageIcon
                   size={10}
@@ -390,31 +413,34 @@ export function InputBox({
                 paste images
               </span>
             </div>
-            {disabled && onInterrupt ? (
-              <button
-                onClick={onInterrupt}
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-error text-accent-fg hover:bg-error/80"
-                title="stop"
-                type="button"
-              >
-                <Square size={12} strokeWidth={2.5} fill="currentColor" />
-              </button>
-            ) : (
-              <button
-                onClick={send}
-                disabled={!canSend}
-                className={
-                  'flex h-7 w-7 items-center justify-center rounded-md transition-colors ' +
-                  (canSend
-                    ? 'bg-accent text-accent-fg hover:bg-accent-hover'
-                    : 'text-faint')
-                }
-                title="send (enter)"
-                type="button"
-              >
-                <ArrowUp size={14} strokeWidth={2.5} />
-              </button>
-            )}
+            <div className="flex shrink-0 items-center gap-1">
+              {footerEnd}
+              {disabled && onInterrupt ? (
+                <button
+                  onClick={onInterrupt}
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-error text-accent-fg hover:bg-error/80"
+                  title="stop"
+                  type="button"
+                >
+                  <Square size={12} strokeWidth={2.5} fill="currentColor" />
+                </button>
+              ) : (
+                <button
+                  onClick={send}
+                  disabled={!canSend}
+                  className={
+                    'flex h-7 w-7 items-center justify-center rounded-md transition-colors ' +
+                    (canSend
+                      ? 'bg-accent text-accent-fg hover:bg-accent-hover'
+                      : 'text-faint')
+                  }
+                  title="send (enter)"
+                  type="button"
+                >
+                  <ArrowUp size={14} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </MessageColumn>

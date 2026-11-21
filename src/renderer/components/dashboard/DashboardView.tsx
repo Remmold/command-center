@@ -8,15 +8,14 @@ import { elapsed, timeAgo, type NowBuildingRow } from '../../state/nowBuilding'
 import { openSession } from '../../state/sessionNavigation'
 import type { HostedRow, SessionRow } from '../../state/sessionList'
 import { useDashboard } from '../../state/useDashboard'
-import { formatResetTime, formatTokens } from '../../state/usageStore'
-import type { UsageBar } from '../../state/usageModel'
+import type { UsageEntry } from '../../state/usageModel'
+import { UsageMeters } from '../AccountUsage'
 import { useViewStore } from '../../state/viewStore'
 import { openRow } from '../../state/workSessions'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Card, CardGrid, CardMeta, CardMetaText, CardNote, CardTitle } from '../ui/Card'
 import { ListRow, ListRowMeta, ListRowText } from '../ui/ListRow'
-import { Meter } from '../ui/Meter'
 import { Page, PageBody } from '../ui/Page'
 import { Panel, PanelColumns } from '../ui/Panel'
 import { StatRow } from '../ui/StatRow'
@@ -56,8 +55,8 @@ export function DashboardView() {
           side={
             <Panel title="Usage per account" count={dash.usage.length} empty="No usage yet" boxed>
               <ul>
-                {dash.usage.map((bar) => (
-                  <UsageRow key={bar.profileId} bar={bar} />
+                {dash.usage.map((entry) => (
+                  <UsageRow key={entry.profileId} entry={entry} />
                 ))}
               </ul>
             </Panel>
@@ -113,18 +112,25 @@ function LiveSessionCard({ card, now }: { card: LiveCard; now: number }) {
   )
 }
 
-function UsageRow({ bar }: { bar: UsageBar }) {
-  const win = bar.window
-  const fill = win?.percent ?? (win?.tone === 'limit' ? 100 : null)
-  const value = win?.percent != null ? `${win.percent}% of ${win.label}` : win?.tone === 'limit' ? 'limit reached' : 'no reading yet'
-  const resets = win?.resetsAt ? `resets in ${formatResetTime(win.resetsAt)}` : null
-  const detail = [resets, `${formatTokens(bar.todayTokens)} tokens today`].filter(Boolean).join(' · ')
+const STATE_TEXT: Record<Exclude<UsageEntry['state'], 'ready'>, string> = {
+  loading: 'Loading usage data…',
+  error: 'Failed to load usage data',
+  'not-logged-in': 'not logged in'
+}
+
+function UsageRow({ entry }: { entry: UsageEntry }) {
+  const detail =
+    entry.state === 'ready'
+      ? entry.bars.map((b) => `${b.label} ${b.percent}%${b.resetText ? ` · resets ${b.resetText}` : ''}`).join(' · ') ||
+        "Plan limits aren't available for this login method."
+      : STATE_TEXT[entry.state]
   return (
     <StatRow
-      label={bar.name}
-      value={value}
-      gauge={<Meter percent={fill} tone={win?.tone ?? 'ok'} label={`${bar.name} rate-limit window`} size="fill" />}
+      label={entry.label}
+      value={entry.plan ?? ''}
+      gauge={<UsageMeters entry={entry} size="fill" />}
       detail={detail}
+      tooltip={entry.bars.map((b) => b.tooltip).join('\n') || undefined}
     />
   )
 }

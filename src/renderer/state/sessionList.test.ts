@@ -44,6 +44,12 @@ function input(over: Partial<SessionListInput>): SessionListInput {
 const shape = (list: ReturnType<typeof sessionList>) => list.map((g) => [g.id, g.rows.map((r) => r.title)])
 
 describe('session list', () => {
+  it("carries a hosted session's model · effort tag onto its row", () => {
+    const list = sessionList(input({ hosted: [{ ...hosted('a', 'one'), modelTag: 'Opus 5.5 · High' }, hosted('b', 'two')] }))
+    const rows = list.flatMap((g) => g.rows)
+    expect(rows.map((r) => (r.kind === 'hosted' ? r.modelTag : null))).toEqual(['Opus 5.5 · High', undefined])
+  })
+
   it('groups sessions as Needs you, Running, Idle, In VS Code, leaving out empty groups', () => {
     const list = sessionList(
       input({

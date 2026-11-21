@@ -7,6 +7,8 @@ export interface HostedSessionInput {
   workspaceId: string
   title: string
   lastActivityAt: number
+  /** `model · effort`, e.g. "Opus 5.5 · High". */
+  modelTag?: string
 }
 
 export interface SessionListInput {
@@ -33,6 +35,7 @@ export interface HostedRow extends RowBase {
   status: SessionStatus
   /** When the current status began; 0 before the session has reported one. */
   statusSince: number
+  modelTag?: string
 }
 
 export interface ObservedRow extends RowBase {
@@ -92,7 +95,8 @@ export function sessionList(input: SessionListInput): SessionGroup[] {
       title: h.title,
       lastActivityAt: h.lastActivityAt,
       status,
-      statusSince: entry?.since ?? 0
+      statusSince: entry?.since ?? 0,
+      modelTag: h.modelTag
     })
   }
   for (const o of input.observed) {

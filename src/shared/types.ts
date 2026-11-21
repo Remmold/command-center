@@ -1,6 +1,7 @@
 import type { BuiltinIconChoice, ChooseImageResult, RepoIdentityViews } from './repoIdentity'
 import type { ChatItem } from './chatItems'
 import type { AppView } from './views'
+import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
 
@@ -79,6 +80,80 @@ export interface ClaudeEventEnvelope {
   event: ClaudeEvent
 }
 
+/** A model the CLI offers, from its `initialize` reply. */
+export interface CliModel {
+  value: string
+  /** The full model id an alias such as `default` or `opus` stands for. */
+  resolvedModel: string
+  displayName: string
+  description: string
+  supportsEffort: boolean
+  supportedEffortLevels: string[]
+  supportsAutoMode: boolean
+}
+
+export interface CliAccount {
+  email?: string
+  organization?: string
+  subscriptionType?: string
+  apiProvider?: string
+}
+
+export interface CliCommand {
+  name: string
+  description: string
+  argumentHint: string
+}
+
+/** What a hosted session's CLI reported in its `initialize` handshake. */
+export interface SessionInit {
+  models: CliModel[]
+  account: CliAccount | null
+  commands: CliCommand[]
+  permissionMode: string
+}
+
+export interface SessionInitEnvelope {
+  paneId: string
+  profileId: string
+  init: SessionInit
+}
+
+export type ControlResult =
+  | { ok: true; response: Record<string, unknown> }
+  | { ok: false; error: string }
+
+/** The extension's thinking budget when extended thinking is on. */
+export const THINKING_BUDGET = 31999
+
+export interface ClaudeStartOptions {
+  paneId: string
+  cwd: string
+  model?: string
+  effort?: string
+  /** Extended thinking; on unless false. */
+  thinking?: boolean
+  resumeSessionId?: string
+  permissionMode?: string
+  /** Launches with `--allow-dangerously-skip-permissions`, so Bypass can be switched to later. */
+  allowBypass?: boolean
+}
+
+/** The model keys of the user `settings.json` that new sessions start with. */
+export interface ModelDefaults {
+  model?: string
+  /** Saved effort per full model id, as the CLI keeps it under `modelSettings`. */
+  effortByModel: Record<string, string>
+}
+
+/** A change to the saved defaults; `model: null` removes the key, so the CLI picks its own default. */
+export interface ModelDefaultsPatch {
+  model?: string | null
+  effort?: { resolvedModel: string; level: string }
+}
+
+export type SaveDefaultsResult = { ok: true } | { ok: false; error: string }
+
 export type ClaudeEvent =
   | ClaudeSystemEvent
   | ClaudeAssistantEvent
@@ -152,20 +227,6 @@ export interface ClaudeExitEnvelope {
 export interface ImageAttachment {
   media_type: string
   data: string
-}
-
-export interface PermissionRequest {
-  requestId: string
-  paneId: string
-  toolName: string
-  toolInput: unknown
-  sessionId?: string
-}
-
-export interface PermissionResponse {
-  decision: 'approve' | 'block'
-  reason?: string
-  modifiedInput?: unknown
 }
 
 export interface GitFile {
@@ -255,6 +316,12 @@ export interface RendererApi {
     create: (name: string) => Promise<AccountProfile>
     rename: (id: string, name: string) => Promise<AccountProfile | null>
   }
+  usage: {
+    list: () => Promise<ProfileUsage[]>
+    /** Fetches now: one profile, or every profile when none is given. */
+    refresh: (profileId?: string) => void
+    onChanged: (cb: (all: ProfileUsage[]) => void) => () => void
+  }
   board: {
     get: () => Promise<BoardModel>
     onChanged: (cb: (model: BoardModel) => void) => () => void
@@ -308,13 +375,13 @@ export interface RendererApi {
     ) => Promise<{ ok: boolean; error?: string }>
   }
   claude: {
-    start: (
-      paneId: string,
-      cwd: string,
-      model?: string,
-      resumeSessionId?: string,
-      permissionMode?: string
-    ) => Promise<SpawnResult>
+    start: (options: ClaudeStartOptions) => Promise<SpawnResult>
+    control: (paneId: string, subtype: string, fields?: Record<string, unknown>) => Promise<ControlResult>
+    getInit: (paneId: string) => Promise<SessionInit | null>
+    /** The model and effort new sessions start with, from the user `settings.json`. */
+    readDefaults: () => Promise<ModelDefaults>
+    saveDefaults: (patch: ModelDefaultsPatch) => Promise<SaveDefaultsResult>
+    onInit: (cb: (envelope: SessionInitEnvelope) => void) => () => void
     send: (paneId: string, text: string, images?: ImageAttachment[]) => void
     interrupt: (paneId: string) => void
     stop: (paneId: string) => void
@@ -332,13 +399,11 @@ export interface RendererApi {
     close: () => void
     onItems: (cb: (event: ObservedItemsEvent) => void) => () => void
   }
-  permission: {
-    onRequest: (cb: (request: PermissionRequest) => void) => () => void
-    respond: (
-      requestId: string,
-      response: PermissionResponse,
-      allowForSession?: boolean
-    ) => void
+  approval: {
+    list: () => Promise<ApprovalRequest[]>
+    onRequest: (cb: (request: ApprovalRequest) => void) => () => void
+    onSettled: (cb: (settled: ApprovalSettled) => void) => () => void
+    respond: (requestId: string, reply: ApprovalReply) => void
   }
   sessionStatus: {
     list: () => Promise<SessionStatusEntry[]>
@@ -495,3 +560,24 @@ export interface ObservedItemsEvent {
 export type ObservedOpenResult =
   | { ok: true; items: ChatItem[]; shortened: boolean }
   | { ok: false; error: string }
+
+export interface UsageWindowReading {
+  /** Percent of the window used, 0-100. */
+  utilization: number
+  /** Epoch ms. */
+  resetsAt: number | null
+}
+
+/** One account profile's plan limits, as the usage service last read them. */
+export interface ProfileUsage {
+  profileId: string
+  loggedIn: boolean
+  account: { email?: string; organization?: string; subscriptionType?: string } | null
+  /** Absent when the CLI reported the window as null. */
+  fiveHour?: UsageWindowReading
+  sevenDay?: UsageWindowReading
+  /** Epoch ms of the last successful read; null before the first. */
+  updatedAt: number | null
+  refreshing: boolean
+  error?: string
+}

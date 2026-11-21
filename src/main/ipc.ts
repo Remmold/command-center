@@ -1,6 +1,6 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import { promises as fs } from 'node:fs'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
@@ -17,15 +17,23 @@ import { listLocalSessions } from './claude/local-sessions'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
-import {
-  permissionServer,
-  type PermissionRequest,
-  type PermissionResolved,
-  type PermissionResponse
-} from './permission/server'
+import { approvalBroker } from './claude/approvals'
+import { readModelDefaults, saveModelDefaults } from './claude/userSettings'
+import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
+import { UsageService } from './usage/service'
+import { probeUsage } from './usage/probe'
+import type { RateLimitInfo } from './usage/usageReply'
+import { userDataPath } from './util/paths'
 import { setScreenFocus } from './sessions/screenFocus'
-import { DEFAULT_PROFILE_ID, type AddWorkspaceResult, type ScreenFocus } from '../shared/types'
+import {
+  DEFAULT_PROFILE_ID,
+  type AddWorkspaceResult,
+  type ClaudeStartOptions,
+  type ModelDefaultsPatch,
+  type ScreenFocus,
+  type SessionInitEnvelope
+} from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
 import type { StartWithWindowsControl } from './tray/startWithWindows'
 
@@ -158,6 +166,28 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.PROFILES_CREATE, (_e, name: string) => profiles.create(name))
   ipcMain.handle(IPC.PROFILES_RENAME, (_e, id: string, name: string) => profiles.rename(id, name))
 
+  const usage = new UsageService({
+    listProfiles: profiles.list,
+    envFor: async (profileId) => (await profiles.prepareSession(profileId)).env,
+    probe: probeUsage,
+    probeDir: userDataPath('usage-probe'),
+    onChange: (all) => sendAll(IPC.USAGE_CHANGED, all)
+  })
+  usage.start()
+  ipcMain.handle(IPC.USAGE_LIST, () => usage.list())
+  ipcMain.on(IPC.USAGE_REFRESH, (_e, profileId?: unknown) => usage.refresh(typeof profileId === 'string' ? profileId : undefined))
+  unsubscribers.push(
+    () => usage.stop(),
+    claudeManager.onEvent((paneId, event) => {
+      const type = (event as { type?: unknown } | null)?.type
+      if (type === 'result') usage.turnEnded(claudeManager.profileOf(paneId))
+      else if (type === 'rate_limit_event') {
+        const info = (event as { rate_limit_info?: RateLimitInfo }).rate_limit_info
+        if (info) usage.rateLimitEvent(claudeManager.profileOf(paneId), info)
+      }
+    })
+  )
+
   ipcMain.handle(IPC.FILES_LIST, (_event, cwd: string) => listProjectFiles(cwd))
 
   // Managed apps (machine-wide launchers/servers — independent of any project)
@@ -231,24 +261,24 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
 
   // Claude (stream-json subprocess)
+  ipcMain.handle(IPC.CLAUDE_START, async (_e, options: ClaudeStartOptions) => {
+    const workspace = await workspaces.findByPath(options.cwd)
+    if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
+    const { profileId, env } = workspace
+      ? await profiles.prepareSession(workspace.profileId)
+      : { profileId: DEFAULT_PROFILE_ID, env: {} }
+    return claudeManager.start({ ...options, profileEnv: env, profileId })
+  })
   ipcMain.handle(
-    IPC.CLAUDE_START,
-    async (
-      _e,
-      paneId: string,
-      cwd: string,
-      model?: string,
-      resumeSessionId?: string,
-      permissionMode?: string
-    ) => {
-      const workspace = await workspaces.findByPath(cwd)
-      if (!workspace) console.warn('[profiles] no workspace at', cwd, '- session runs on Default')
-      const { profileId, env } = workspace
-        ? await profiles.prepareSession(workspace.profileId)
-        : { profileId: DEFAULT_PROFILE_ID, env: {} }
-      return claudeManager.start(paneId, cwd, model, resumeSessionId, permissionMode, env, profileId)
-    }
+    IPC.CLAUDE_CONTROL,
+    (_e, paneId: string, subtype: string, fields?: Record<string, unknown>) =>
+      claudeManager.control(paneId, subtype, fields)
   )
+  ipcMain.handle(IPC.CLAUDE_GET_INIT, (_e, paneId: string) => claudeManager.initOf(paneId))
+  // Every profile's settings.json is a hard link to Default's, so Default's file is the one to change.
+  const userSettingsFile = (): string => join(profiles.defaultConfigDir(), 'settings.json')
+  ipcMain.handle(IPC.CLAUDE_READ_DEFAULTS, () => readModelDefaults(userSettingsFile()))
+  ipcMain.handle(IPC.CLAUDE_SAVE_DEFAULTS, (_e, patch: ModelDefaultsPatch) => saveModelDefaults(userSettingsFile(), patch))
   ipcMain.on(
     IPC.CLAUDE_SEND,
     (
@@ -293,6 +323,14 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     })
   )
   unsubscribers.push(
+    claudeManager.onInit((paneId, init) => {
+      const envelope: SessionInitEnvelope = { paneId, profileId: claudeManager.profileOf(paneId), init }
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.CLAUDE_INIT, envelope)
+      }
+    })
+  )
+  unsubscribers.push(
     claudeManager.onExit((paneId, exitCode) => {
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) win.webContents.send(IPC.CLAUDE_EXIT, { paneId, exitCode })
@@ -300,17 +338,21 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     })
   )
 
-  const onPermissionRequest = (req: PermissionRequest) => {
-    sessionStatusTracker.apply(req.paneId, { kind: 'permission-raised', requestId: req.requestId })
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) win.webContents.send(IPC.PERMISSION_REQUEST, req)
-    }
-  }
-  permissionServer.on('request', onPermissionRequest)
-  const onPermissionResolved = ({ requestId, paneId }: PermissionResolved) => {
-    sessionStatusTracker.apply(paneId, { kind: 'permission-resolved', requestId })
-  }
-  permissionServer.on('resolved', onPermissionResolved)
+  claudeManager.setIncomingHandlerFactory((paneId) => approvalBroker.handlerFor(paneId))
+  unsubscribers.push(
+    approvalBroker.onRaised((request) => {
+      sessionStatusTracker.apply(request.paneId, { kind: 'permission-raised', requestId: request.requestId })
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.APPROVAL_REQUEST, request)
+      }
+    }),
+    approvalBroker.onSettled((settled) => {
+      sessionStatusTracker.apply(settled.paneId, { kind: 'permission-resolved', requestId: settled.requestId })
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.APPROVAL_SETTLED, settled)
+      }
+    })
+  )
 
   unsubscribers.push(
     claudeManager.onSpawn((paneId, cwd) => sessionStatusTracker.spawned(paneId, cwd)),
@@ -326,24 +368,15 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.SESSION_STATUS_LIST, () => sessionStatusTracker.list())
   ipcMain.on(IPC.SESSION_SCREEN_FOCUS, (_e, focus: ScreenFocus) => setScreenFocus(focus))
 
-  ipcMain.on(
-    IPC.PERMISSION_RESPOND,
-    (
-      _e,
-      requestId: string,
-      response: PermissionResponse,
-      allowForSession?: boolean
-    ) => {
-      permissionServer.respond(requestId, response, { allowForSession })
-    }
-  )
+  ipcMain.handle(IPC.APPROVAL_LIST, () => approvalBroker.list())
+  ipcMain.on(IPC.APPROVAL_RESPOND, (_e, requestId: string, reply: ApprovalReply) => {
+    approvalBroker.respond(requestId, reply)
+  })
 
   app.on('before-quit', () => {
     ptyManager.killAll()
     claudeManager.stopAll()
-    permissionServer.off('request', onPermissionRequest)
-    permissionServer.off('resolved', onPermissionResolved)
-    void permissionServer.stop()
+    claudeManager.setIncomingHandlerFactory(null)
     for (const u of unsubscribers) u()
     unsubscribers = []
   })

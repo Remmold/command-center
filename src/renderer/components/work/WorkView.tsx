@@ -117,6 +117,8 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
                           paneId={c.id}
                           cwd={view.projectPath}
                           model={c.model}
+                          effort={c.effort}
+                          thinking={c.thinking}
                           resumeSessionId={c.claudeSessionId}
                           permissionMode={c.permissionMode}
                           registerFocus={half === focused ? registerFocus : undefined}

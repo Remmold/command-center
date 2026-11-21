@@ -17,9 +17,7 @@ export function useDashboard(now: number): Dashboard {
   const sources = useSessionSources()
   const board = useBoardStore((s) => s.model)
   const profiles = useProfilesStore((s) => s.profiles)
-  const sessionTallies = useUsageStore((s) => s.sessions)
-  const profileTallies = useUsageStore((s) => s.profiles)
-  const rateLimits = useUsageStore((s) => s.rateLimits)
+  const usage = useUsageStore((s) => s.byProfile)
   const chatItems = useChatItemsStore((s) => s.items)
   const observedTail = useObservedTail()
   return useMemo(
@@ -28,12 +26,11 @@ export function useDashboard(now: number): Dashboard {
         ...sources,
         board,
         profiles,
-        tallies: { sessions: sessionTallies, profiles: profileTallies },
-        rateLimits,
+        usage,
         chatItems,
         observedTail,
         now
       }),
-    [sources, board, profiles, sessionTallies, profileTallies, rateLimits, chatItems, observedTail, now]
+    [sources, board, profiles, usage, chatItems, observedTail, now]
   )
 }

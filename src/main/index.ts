@@ -1,9 +1,6 @@
 import { app, dialog } from 'electron'
-import { join } from 'node:path'
 import { registerIpc } from './ipc'
-import { permissionServer } from './permission/server'
-import { ensureHookScriptInstalled } from './permission/hookScript'
-import { removeLegacyHook } from './permission/launch'
+import { removeLegacyHook } from './permission/legacyHook'
 import { sessionStatusTracker } from './sessions/tracker'
 import * as workspaces from './workspaces/store'
 import { startAttention } from './attention/service'
@@ -71,13 +68,6 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(async () => {
-    try {
-      await permissionServer.start()
-      console.log('[permission] listening on', permissionServer.port)
-      await ensureHookScriptInstalled(join(app.getPath('userData'), 'permission-hook.cjs'))
-    } catch (err) {
-      console.error('[permission] failed to start', err)
-    }
     void workspaces
       .list()
       .then((all) => Promise.all(all.map((w) => removeLegacyHook(w.path).then((changed) => changed && console.log('[permission] removed legacy hook from', w.path)))))

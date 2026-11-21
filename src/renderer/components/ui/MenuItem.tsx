@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 
 interface Props {
-  icon: LucideIcon
+  icon?: LucideIcon
   label: string
   description?: string
   onClick: () => void
@@ -21,7 +21,7 @@ export function MenuItem({ icon: Icon, label, description, onClick, disabled, ch
       disabled={disabled}
       className="flex w-full items-start gap-2.5 px-3 py-1.5 text-left text-xs text-fg hover:bg-list-hover focus-visible:bg-list-hover focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <Icon size={14} strokeWidth={1.75} className="mt-px shrink-0 text-muted" />
+      {Icon && <Icon size={14} strokeWidth={1.75} className="mt-px shrink-0 text-muted" />}
       <span className="min-w-0 flex-1">
         <span className="block">{label}</span>
         {description && <span className="block text-[11px] text-muted">{description}</span>}

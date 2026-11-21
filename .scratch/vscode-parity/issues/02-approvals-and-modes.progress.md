@@ -1,0 +1,3 @@
+- Done: stdio approvals (broker, can_use_tool, cancel, reload list), extension prompt and plan prompt, footer mode picker + Shift+Tab, mode migration, "Interrupted" wording, hook/server removed; review fixes; build + pnpm quick (36 files, 316 tests) green; real-CLI app checks pass.
+- Next: ticket 03 (model, effort, thinking) adds its effort row to the Modes menu.
+- Open reds: none.

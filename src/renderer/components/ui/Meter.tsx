@@ -12,16 +12,18 @@ interface Props {
   tone: MeterTone
   label: string
   size?: 'compact' | 'fill'
+  tooltip?: string
 }
 
 const TRACK = { compact: 'w-12', fill: 'w-full' } as const
 
-export function Meter({ percent, tone, label, size = 'compact' }: Props) {
+export function Meter({ percent, tone, label, size = 'compact', tooltip }: Props) {
   const width = percent === null ? 0 : Math.min(100, Math.max(0, percent))
   return (
     <span
       role="meter"
       aria-label={label}
+      title={tooltip}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent ?? undefined}

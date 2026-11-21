@@ -2,7 +2,8 @@ import type { ChatItem } from '../../shared/chatItems'
 import type { BoardModel, SessionStatus } from '../../shared/types'
 import { nowBuilding, type NowBuilding } from './nowBuilding'
 import { sessionList, type HostedRow, type SessionGroupId, type SessionListInput, type SessionRow } from './sessionList'
-import { buildUsageStrip, type RateLimitInfo, type UsageBar, type UsageStripInput, type UsageTallies } from './usageModel'
+import type { ProfileUsage } from '../../shared/types'
+import { usageEntries, type UsageEntriesInput, type UsageEntry } from './usageModel'
 
 export interface ObservedTail {
   workspaceId: string
@@ -12,9 +13,8 @@ export interface ObservedTail {
 
 export interface DashboardInput extends Omit<SessionListInput, 'search'> {
   board: BoardModel
-  profiles: UsageStripInput['profiles']
-  tallies: UsageTallies
-  rateLimits: Record<string, RateLimitInfo>
+  profiles: UsageEntriesInput['profiles']
+  usage: Readonly<Record<string, ProfileUsage>>
   /** Hosted chat items by pane id. */
   chatItems: Readonly<Record<string, readonly ChatItem[]>>
   /** Items of the one observed session being followed, if any. */
@@ -34,7 +34,7 @@ export interface Dashboard {
   needsYou: HostedRow[]
   nowBuilding: NowBuilding
   live: LiveCard[]
-  usage: UsageBar[]
+  usage: UsageEntry[]
 }
 
 const SNIPPET_MAX = 300
@@ -105,6 +105,6 @@ export function dashboard(input: DashboardInput): Dashboard {
       worktreeTags: Object.fromEntries(input.workspaces.map((w) => [w.id, w.worktreeTag])),
       now: input.now
     }),
-    usage: buildUsageStrip({ ...input, activeProfileId: null })
+    usage: usageEntries({ profiles: input.profiles, usage: input.usage, activeProfileId: null, now: input.now })
   }
 }

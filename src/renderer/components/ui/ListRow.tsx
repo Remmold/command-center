@@ -11,21 +11,24 @@ interface Props {
   /** Shown over the row's right end while it is hovered or holds focus, unless pinned. */
   actions?: ReactNode
   actionsPinned?: boolean
+  disabled?: boolean
 }
 
+const DISABLED = 'cursor-default text-faint'
 const IDLE = 'text-fg hover:bg-list-hover focus-visible:bg-list-hover'
 const ACTIVE = 'bg-list-selected text-fg'
 
-export function ListRow({ children, onClick, onDoubleClick, onContextMenu, tooltip, nested = false, active = false, actions, actionsPinned = false }: Props) {
+export function ListRow({ children, onClick, onDoubleClick, onContextMenu, tooltip, nested = false, active = false, actions, actionsPinned = false, disabled = false }: Props) {
   return (
     <li className="group relative">
       <button
         onClick={onClick}
+        disabled={disabled}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
         title={tooltip}
         aria-current={active || undefined}
-        className={`flex w-full min-w-0 items-center gap-2 py-1 text-left text-xs focus-visible:outline-none ${nested ? 'pl-9 pr-2' : 'px-3'} ${active ? ACTIVE : IDLE}`}
+        className={`flex w-full min-w-0 items-center gap-2 py-1 text-left text-xs focus-visible:outline-none ${nested ? 'pl-9 pr-2' : 'px-3'} ${disabled ? DISABLED : active ? ACTIVE : IDLE}`}
       >
         {children}
       </button>

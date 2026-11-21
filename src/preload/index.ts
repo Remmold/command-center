@@ -14,8 +14,7 @@ import type {
   ManagedApp,
   ObservedItemsEvent,
   ObservedSession,
-  PermissionRequest,
-  PermissionResponse,
+  ProfileUsage,
   PtyDataEvent,
   PtyExitEvent,
   RendererApi,
@@ -23,8 +22,14 @@ import type {
   SessionStatusEntry,
   SpawnResult,
   StartWithWindowsState,
-  Workspace
+  Workspace,
+  ControlResult,
+  SessionInit,
+  ModelDefaults,
+  SaveDefaultsResult,
+  SessionInitEnvelope
 } from '../shared/types'
+import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from '../shared/approval'
 
 const api: RendererApi = {
   workspaces: {
@@ -48,6 +53,15 @@ const api: RendererApi = {
     create: (name: string): Promise<AccountProfile> => ipcRenderer.invoke(IPC.PROFILES_CREATE, name),
     rename: (id: string, name: string): Promise<AccountProfile | null> =>
       ipcRenderer.invoke(IPC.PROFILES_RENAME, id, name)
+  },
+  usage: {
+    list: (): Promise<ProfileUsage[]> => ipcRenderer.invoke(IPC.USAGE_LIST),
+    refresh: (profileId?: string) => ipcRenderer.send(IPC.USAGE_REFRESH, profileId),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, all: ProfileUsage[]) => cb(all)
+      ipcRenderer.on(IPC.USAGE_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.USAGE_CHANGED, handler)
+    }
   },
   board: {
     get: (): Promise<BoardModel> => ipcRenderer.invoke(IPC.BOARD_GET),
@@ -113,15 +127,17 @@ const api: RendererApi = {
     }
   },
   claude: {
-    start: (paneId, cwd, model, resumeSessionId, permissionMode): Promise<SpawnResult> =>
-      ipcRenderer.invoke(
-        IPC.CLAUDE_START,
-        paneId,
-        cwd,
-        model,
-        resumeSessionId,
-        permissionMode
-      ),
+    start: (options): Promise<SpawnResult> => ipcRenderer.invoke(IPC.CLAUDE_START, options),
+    control: (paneId, subtype, fields): Promise<ControlResult> =>
+      ipcRenderer.invoke(IPC.CLAUDE_CONTROL, paneId, subtype, fields),
+    getInit: (paneId): Promise<SessionInit | null> => ipcRenderer.invoke(IPC.CLAUDE_GET_INIT, paneId),
+    readDefaults: (): Promise<ModelDefaults> => ipcRenderer.invoke(IPC.CLAUDE_READ_DEFAULTS),
+    saveDefaults: (patch): Promise<SaveDefaultsResult> => ipcRenderer.invoke(IPC.CLAUDE_SAVE_DEFAULTS, patch),
+    onInit: (cb) => {
+      const handler = (_e: IpcRendererEvent, envelope: SessionInitEnvelope) => cb(envelope)
+      ipcRenderer.on(IPC.CLAUDE_INIT, handler)
+      return () => ipcRenderer.off(IPC.CLAUDE_INIT, handler)
+    },
     send: (paneId, text, images) => ipcRenderer.send(IPC.CLAUDE_SEND, paneId, text, images),
     listLocalSessions: (cwd) => ipcRenderer.invoke(IPC.CLAUDE_LIST_LOCAL_SESSIONS, cwd),
     interrupt: (paneId) => ipcRenderer.send(IPC.CLAUDE_INTERRUPT, paneId),
@@ -154,14 +170,19 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.OBSERVED_ITEMS, handler)
     }
   },
-  permission: {
+  approval: {
+    list: (): Promise<ApprovalRequest[]> => ipcRenderer.invoke(IPC.APPROVAL_LIST),
     onRequest: (cb) => {
-      const handler = (_e: IpcRendererEvent, request: PermissionRequest) => cb(request)
-      ipcRenderer.on(IPC.PERMISSION_REQUEST, handler)
-      return () => ipcRenderer.off(IPC.PERMISSION_REQUEST, handler)
+      const handler = (_e: IpcRendererEvent, request: ApprovalRequest) => cb(request)
+      ipcRenderer.on(IPC.APPROVAL_REQUEST, handler)
+      return () => ipcRenderer.off(IPC.APPROVAL_REQUEST, handler)
     },
-    respond: (requestId: string, response: PermissionResponse, allowForSession?: boolean) =>
-      ipcRenderer.send(IPC.PERMISSION_RESPOND, requestId, response, allowForSession)
+    onSettled: (cb) => {
+      const handler = (_e: IpcRendererEvent, settled: ApprovalSettled) => cb(settled)
+      ipcRenderer.on(IPC.APPROVAL_SETTLED, handler)
+      return () => ipcRenderer.off(IPC.APPROVAL_SETTLED, handler)
+    },
+    respond: (requestId: string, reply: ApprovalReply) => ipcRenderer.send(IPC.APPROVAL_RESPOND, requestId, reply)
   },
   sessionStatus: {
     list: (): Promise<SessionStatusEntry[]> => ipcRenderer.invoke(IPC.SESSION_STATUS_LIST),

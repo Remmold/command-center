@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { StartWithWindowsState } from '../../../shared/types'
+import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
 import { Checkbox } from '../ui/Checkbox'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
 
@@ -25,6 +26,8 @@ function useStartWithWindows(): [StartWithWindowsState | null, (checked: boolean
 
 export function GeneralSettings() {
   const [startWithWindows, toggle] = useStartWithWindows()
+  const allowBypass = useGeneralSettingsStore((s) => s.allowDangerouslySkipPermissions)
+  const setAllowBypass = useGeneralSettingsStore((s) => s.setAllowDangerouslySkipPermissions)
 
   return (
     <Page label="General">
@@ -39,6 +42,12 @@ export function GeneralSettings() {
               ? `Not available: ${startWithWindows.reason}.`
               : 'Starts in the tray when you sign in to Windows.'}
           </PageNote>
+        </PageGroup>
+        <PageGroup title="Sessions">
+          <Checkbox checked={allowBypass} onChange={setAllowBypass}>
+            Allow Dangerously Skip Permissions
+          </Checkbox>
+          <PageNote>Allow bypass permissions mode. Recommended only for sandboxes with no internet access.</PageNote>
         </PageGroup>
       </PageBody>
     </Page>

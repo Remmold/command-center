@@ -1,0 +1,3 @@
+- Done: model pill + "Select a model" menu with Effort row, Effort row in Modes menu, Thinking toggle, live apply_flag_settings / set_max_thinking_tokens, defaults merged into user settings.json (model + modelSettings effort), work list model tag, Allow Dangerously Skip Permissions setting; build + pnpm quick (38 files, 343 tests) green; real-CLI app check passed.
+- Next: ticket 04 (accounts and usage).
+- Open reds: none.
