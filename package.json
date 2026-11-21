@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "quick": "pnpm typecheck && pnpm test",
-    "dist": "electron-vite build && electron-builder --win"
+    "dist": "electron-vite build && electron-builder --win",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",

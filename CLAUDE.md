@@ -23,5 +23,6 @@ Package manager is pnpm (`pnpm install`).
 - `pnpm test`: Vitest once (`src/**/*.test.ts`, Node environment, no Electron)
 - `pnpm dist`: build the per-user NSIS installer into `release/` (`release/win-unpacked/` is the unpacked app)
 - `pnpm quick`: quick tier, typecheck + tests; non-zero on any failure. Run it every round.
+- Every commit that touches a non-`.md` file runs `pnpm quick` through `.githooks/pre-commit` (wired by `pnpm install`). A red quick tier blocks the commit; fix it, never `--no-verify`.
 
 `node-pty` loads its prebuilt N-API binaries in Electron, so no rebuild is needed. Its install script must still run (allowed in `pnpm.onlyBuiltDependencies`): it copies `conpty.dll` into place.
