@@ -10,21 +10,10 @@ import {
   toggleIdePanels,
   type ShellOptions
 } from './projectViewLayout'
+import { migratePermissionModes, type PermissionMode, type SavedModes } from './permissionModes'
 import { NEW_SESSION_TITLE, migratedTitle, titleAfterPrompt, titleAfterRename, type SessionTitle } from './sessionTitle'
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku' | string
-export type PermissionMode =
-  | 'ask'
-  | 'acceptEdits'
-  | 'bypassPermissions'
-  | 'plan'
-
-export const PERMISSION_MODES: PermissionMode[] = [
-  'acceptEdits',
-  'ask',
-  'bypassPermissions',
-  'plan'
-]
 
 export interface ClaudeChatSession extends SessionTitle {
   id: string
@@ -707,6 +696,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         }
         migrateLayout(state, fromVersion)
         if (fromVersion < 9 && state.views) migrateTitles(state.views)
+        if (fromVersion < 10) migratePermissionModes(state as SavedModes)
         return persisted as ProjectViewsState
       },
       partialize: (state) => ({

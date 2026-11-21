@@ -1,6 +1,7 @@
 import type { BuiltinIconChoice, ChooseImageResult, RepoIdentityViews } from './repoIdentity'
 import type { ChatItem } from './chatItems'
 import type { AppView } from './views'
+import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
 
@@ -86,6 +87,7 @@ export interface CliModel {
   description: string
   supportsEffort: boolean
   supportedEffortLevels: string[]
+  supportsAutoMode: boolean
 }
 
 export interface CliAccount {
@@ -200,20 +202,6 @@ export interface ClaudeExitEnvelope {
 export interface ImageAttachment {
   media_type: string
   data: string
-}
-
-export interface PermissionRequest {
-  requestId: string
-  paneId: string
-  toolName: string
-  toolInput: unknown
-  sessionId?: string
-}
-
-export interface PermissionResponse {
-  decision: 'approve' | 'block'
-  reason?: string
-  modifiedInput?: unknown
 }
 
 export interface GitFile {
@@ -377,13 +365,11 @@ export interface RendererApi {
     close: () => void
     onItems: (cb: (event: ObservedItemsEvent) => void) => () => void
   }
-  permission: {
-    onRequest: (cb: (request: PermissionRequest) => void) => () => void
-    respond: (
-      requestId: string,
-      response: PermissionResponse,
-      allowForSession?: boolean
-    ) => void
+  approval: {
+    list: () => Promise<ApprovalRequest[]>
+    onRequest: (cb: (request: ApprovalRequest) => void) => () => void
+    onSettled: (cb: (settled: ApprovalSettled) => void) => () => void
+    respond: (requestId: string, reply: ApprovalReply) => void
   }
   sessionStatus: {
     list: () => Promise<SessionStatusEntry[]>

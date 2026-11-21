@@ -10,8 +10,14 @@ export interface IncomingControlRequest {
   [field: string]: unknown
 }
 
+export interface IncomingContext {
+  requestId: string
+  /** Aborted when the CLI cancels the request or the process goes away. */
+  signal: AbortSignal
+}
+
 /** Resolves to the success payload; a throw is sent back as an error reply. */
-export type IncomingHandler = (request: IncomingControlRequest) => Promise<ControlPayload>
+export type IncomingHandler = (request: IncomingControlRequest, context: IncomingContext) => Promise<ControlPayload>
 
 export interface ControlChannelOptions {
   write: (line: string) => void
@@ -32,6 +38,7 @@ export class ControlChannel {
   private readonly newId: () => string
   private readonly pending = new Map<string, Pending>()
   private incoming: IncomingHandler | null = null
+  private readonly answering = new Map<string, AbortController>()
 
   constructor(options: ControlChannelOptions) {
     this.write = options.write
@@ -78,7 +85,11 @@ export class ControlChannel {
       }
       return true
     }
-    return message.type === 'control_cancel_request'
+    if (message.type === 'control_cancel_request') {
+      if (typeof message.request_id === 'string') this.answering.get(message.request_id)?.abort()
+      return true
+    }
+    return false
   }
 
   /** Rejects every open request; later replies are ignored. */
@@ -86,6 +97,9 @@ export class ControlChannel {
     const open = Array.from(this.pending.values())
     this.pending.clear()
     for (const entry of open) entry.reject(new Error(reason))
+    const answering = Array.from(this.answering.values())
+    this.answering.clear()
+    for (const controller of answering) controller.abort()
   }
 
   setIncomingHandler(handler: IncomingHandler | null): void {
@@ -93,16 +107,21 @@ export class ControlChannel {
   }
 
   private async answer(requestId: string, request: IncomingControlRequest): Promise<void> {
+    if (this.answering.has(requestId)) return
+    const controller = new AbortController()
+    this.answering.set(requestId, controller)
     let response: ControlPayload
     try {
       if (!this.incoming) throw new Error(`Unsupported control request: ${request.subtype}`)
       response = {
         subtype: 'success',
         request_id: requestId,
-        response: await this.incoming(request)
+        response: await this.incoming(request, { requestId, signal: controller.signal })
       }
     } catch (err) {
       response = { subtype: 'error', request_id: requestId, error: (err as Error).message }
+    } finally {
+      this.answering.delete(requestId)
     }
     this.write(JSON.stringify({ type: 'control_response', response }) + '\n')
   }

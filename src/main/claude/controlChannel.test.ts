@@ -114,4 +114,29 @@ describe('ControlChannel', () => {
     channel.close('claude process exited')
     await expect(open).rejects.toThrow('claude process exited')
   })
+
+  it('tells the handler when the CLI cancels the request it is answering', async () => {
+    const { channel } = makeChannel()
+    let signal: AbortSignal | undefined
+    channel.setIncomingHandler((_request, context) => {
+      signal = context.signal
+      return new Promise(() => {})
+    })
+    channel.accept(canUseTool)
+    expect(signal?.aborted).toBe(false)
+    channel.accept({ type: 'control_cancel_request', request_id: 'cli-7' })
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it('cancels the requests it is still answering when the process goes away', () => {
+    const { channel } = makeChannel()
+    let signal: AbortSignal | undefined
+    channel.setIncomingHandler((_request, context) => {
+      signal = context.signal
+      return new Promise(() => {})
+    })
+    channel.accept(canUseTool)
+    channel.close('claude process exited')
+    expect(signal?.aborted).toBe(true)
+  })
 })

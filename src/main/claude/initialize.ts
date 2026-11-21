@@ -22,7 +22,8 @@ function toModel(raw: Raw): CliModel | null {
     displayName: text(raw.displayName) ?? value,
     description: text(raw.description) ?? '',
     supportsEffort: raw.supportsEffort === true,
-    supportedEffortLevels: levels
+    supportedEffortLevels: levels,
+    supportsAutoMode: raw.supportsAutoMode === true
   }
 }
 

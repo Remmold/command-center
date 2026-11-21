@@ -6,7 +6,6 @@ import {
 } from '../../shared/types'
 import { ClaudeSession } from './session'
 import type { ControlPayload, IncomingHandler } from './controlChannel'
-import { permissionServer } from '../permission/server'
 
 type EventCallback = (paneId: string, event: unknown) => void
 type ExitCallback = (paneId: string, code: number | null) => void
@@ -57,8 +56,6 @@ class ClaudeManager {
           if (current && current !== session) return
           this.sessions.delete(id)
           for (const cb of this.exitListeners) cb(id, code)
-          // After the exit listeners, so the status reducer ignores the resolves this emits.
-          permissionServer.clearPane(id)
         }
       })
       if (this.incomingFactory) session.setIncomingHandler(this.incomingFactory(paneId))

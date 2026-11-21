@@ -2,43 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { hookSettings, permissionLaunch, removeLegacyHook } from './launch'
-
-describe('permissionLaunch', () => {
-  it('gates an ask session through the hook when the approval server is up', () => {
-    expect(permissionLaunch('ask', 5000, 'p1')).toEqual({
-      cliMode: 'bypassPermissions',
-      useHook: true,
-      env: { CC_PERMISSION_PORT: '5000', CC_PANE_ID: 'p1', CC_PERMISSION_MODE: 'ask' }
-    })
-  })
-
-  it('falls back to the CLI prompts for an ask session when the approval server is down', () => {
-    expect(permissionLaunch('ask', null, 'p1')).toEqual({ cliMode: 'default', useHook: false, env: {} })
-  })
-
-  it('keeps acceptEdits on the CLI and asks the app for everything else', () => {
-    expect(permissionLaunch('acceptEdits', 5000, 'p1')).toMatchObject({ cliMode: 'acceptEdits', useHook: true })
-    expect(permissionLaunch('acceptEdits', null, 'p1')).toEqual({ cliMode: 'acceptEdits', useHook: false, env: {} })
-  })
-
-  it('passes plan and bypass straight to the CLI without the hook', () => {
-    expect(permissionLaunch('plan', 5000, 'p1')).toEqual({ cliMode: 'plan', useHook: false, env: {} })
-    expect(permissionLaunch('bypassPermissions', 5000, 'p1')).toEqual({ cliMode: 'bypassPermissions', useHook: false, env: {} })
-  })
-
-  it('leaves the mode to the CLI when none is chosen', () => {
-    expect(permissionLaunch(undefined, 5000, 'p1')).toEqual({ cliMode: undefined, useHook: false, env: {} })
-  })
-})
-
-describe('hookSettings', () => {
-  it('runs the hook for every tool', () => {
-    expect(hookSettings('node "C:/x/permission-hook.cjs"')).toEqual({
-      hooks: { PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: 'node "C:/x/permission-hook.cjs"' }] }] }
-    })
-  })
-})
+import { removeLegacyHook } from './legacyHook'
 
 describe('removeLegacyHook', () => {
   const dirs: string[] = []

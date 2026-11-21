@@ -7,7 +7,7 @@ import { useProjectViewsStore } from './state/projectViewsStore'
 import { useAppsStore } from './state/appsStore'
 import { useUsageStore, type RateLimitInfo } from './state/usageStore'
 import type { RawModelUsage } from './state/usageModel'
-import { usePermissionsStore } from './state/permissionsStore'
+import { useApprovalsStore } from './state/approvalsStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
@@ -32,7 +32,7 @@ interface RawResultUsage {
 export function App() {
   const recordResult = useUsageStore((s) => s.recordResult)
   const setRateLimit = useUsageStore((s) => s.setRateLimit)
-  const addPermissionRequest = usePermissionsStore((s) => s.addRequest)
+  const initApprovals = useApprovalsStore((s) => s.init)
   const appView = useViewStore((s) => s.view)
   const settingsSection = useViewStore((s) => s.settings)
   const initApps = useAppsStore((s) => s.init)
@@ -71,11 +71,8 @@ export function App() {
   useNotificationIcons()
 
   useEffect(() => {
-    const unsub = window.api.permission.onRequest((request) => {
-      addPermissionRequest(request)
-    })
-    return unsub
-  }, [addPermissionRequest])
+    initApprovals()
+  }, [initApprovals])
 
   useEffect(() => {
     const unsub = window.api.claude.onEvent(({ paneId, profileId, event }) => {

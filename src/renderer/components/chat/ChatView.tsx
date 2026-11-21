@@ -10,10 +10,14 @@ import type {
   ToolResultItem
 } from './types'
 import { InputBox } from './InputBox'
-import { PermissionPrompt } from './PermissionPrompt'
+import { ApprovalPrompt } from './ApprovalPrompt'
+import { PermissionModePicker } from './PermissionModePicker'
+import { interruptNote } from './interrupt'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
-import { usePermissionsStore } from '../../state/permissionsStore'
+import { useApprovalsStore } from '../../state/approvalsStore'
+import { availableModes, isPermissionMode, migrateMode, nextMode, type PermissionMode } from '../../state/permissionModes'
+import type { ApprovalRequest } from '../../../shared/approval'
 import { useFocusRequestStore } from '../../state/sessionNavigation'
 import { useSessionInit } from '../../state/sessionInitStore'
 import type {
@@ -27,8 +31,10 @@ import type {
 } from '../../../shared/types'
 
 const EMPTY_ITEMS: ChatItem[] = []
-const EMPTY_REQUESTS: ReturnType<typeof usePermissionsStore.getState>['requestsByPane'][string] =
-  []
+const EMPTY_REQUESTS: ApprovalRequest[] = []
+
+/** The extension saves these as the default for new sessions when the user picks them. */
+const DEFAULT_WORTHY: ReadonlySet<PermissionMode> = new Set(['default', 'auto', 'acceptEdits'])
 
 interface Props {
   paneId: string
@@ -76,10 +82,7 @@ export function ChatView({
   const items = useChatItemsStore((s) => s.items[paneId] ?? EMPTY_ITEMS)
   const appendItems = useChatItemsStore((s) => s.appendItems)
   const setClaudeSessionId = useProjectViewsStore((s) => s.setClaudeSessionId)
-  const pendingPermissions = usePermissionsStore(
-    (s) => s.requestsByPane[paneId] ?? EMPTY_REQUESTS
-  )
-  const resolvePermission = usePermissionsStore((s) => s.resolveRequest)
+  const pendingApprovals = useApprovalsStore((s) => s.byPane[paneId] ?? EMPTY_REQUESTS)
 
   const [processRunning, setProcessRunning] = useState(false)
   const [turnActive, setTurnActive] = useState(false)
@@ -91,8 +94,34 @@ export function ChatView({
   const itemsLenRef = useRef(0)
   const initialItemsCountRef = useRef(items.length)
   const focusInputRef = useRef<(() => void) | null>(null)
-  const firstPromptRef = useRef<HTMLButtonElement | null>(null)
+  const paneRef = useRef<HTMLDivElement | null>(null)
   const focusRequest = useFocusRequestStore((s) => (s.request?.paneId === paneId ? s.request.nonce : null))
+  const launchedModeRef = useRef<string | undefined>(undefined)
+  const interruptedRef = useRef(false)
+  const mode = migrateMode(permissionMode)
+  const modelInfo =
+    sessionInit?.models.find((m) => m.value === (model ?? 'default')) ?? sessionInit?.models.find((m) => m.value === 'default')
+  const autoAvailable = modelInfo?.supportsAutoMode === true
+  const modes = availableModes({
+    current: mode,
+    autoAvailable,
+    bypassAvailable: launchedModeRef.current === 'bypassPermissions' || mode === 'bypassPermissions'
+  })
+
+  const setMode = async (next: PermissionMode): Promise<boolean> => {
+    const store = useProjectViewsStore.getState()
+    const previous = mode
+    store.setSessionPermissionMode(paneId, next)
+    const res = await window.api.claude.control(paneId, 'set_permission_mode', { mode: next })
+    if (res.ok || res.error === 'claude process is not running') return true
+    store.setSessionPermissionMode(paneId, previous)
+    setError(res.error)
+    return false
+  }
+
+  const pickMode = async (next: PermissionMode): Promise<void> => {
+    if ((await setMode(next)) && DEFAULT_WORTHY.has(next)) useProjectViewsStore.getState().setDefaultPermissionMode(next)
+  }
 
   const registerInputFocus = useCallback(
     (fn: () => void) => {
@@ -106,7 +135,8 @@ export function ChatView({
     if (focusRequest === null) return
     // The pane turns visible in this same commit; focus once the browser has applied it.
     const frame = requestAnimationFrame(() => {
-      if (firstPromptRef.current) firstPromptRef.current.focus()
+      const firstChoice = paneRef.current?.querySelector<HTMLButtonElement>('[data-choice-prompt] button')
+      if (firstChoice) firstChoice.focus()
       else focusInputRef.current?.()
       useFocusRequestStore.getState().clear()
     })
@@ -208,6 +238,10 @@ export function ChatView({
     }
     if (event.type === 'system') {
       const sys = event as ClaudeSystemEvent
+      if (sys.subtype === 'status' && isPermissionMode(sys.permissionMode)) {
+        useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
+        return
+      }
       if (sys.subtype === 'init') {
         if (Array.isArray(sys.slash_commands)) {
           setSlashCommands(sys.slash_commands as string[])
@@ -233,6 +267,14 @@ export function ChatView({
     if (event.type === 'user') {
       const content = (event as { message?: { content?: ContentBlock[] } }).message?.content
       if (!Array.isArray(content)) return
+      const notes = content.flatMap((block) => {
+        const note = interruptNote(block)
+        return note ? [note] : []
+      })
+      if (notes.length > 0) {
+        interruptedRef.current = true
+        appendItems(paneId, notes.map((text) => ({ kind: 'system' as const, id: crypto.randomUUID(), text })))
+      }
       const results: ToolResultItem[] = content.filter(isToolResultBlock).map((block) => ({
         kind: 'tool_result' as const,
         id: crypto.randomUUID(),
@@ -245,6 +287,12 @@ export function ChatView({
     }
     if (event.type === 'result') {
       const re = event as ClaudeResultEvent
+      if (interruptedRef.current) {
+        interruptedRef.current = false
+        setTurnActive(false)
+        setInProgress(null)
+        return
+      }
       const item: ResultItem = {
         kind: 'result',
         id: crypto.randomUUID(),
@@ -264,7 +312,8 @@ export function ChatView({
   const ensureStarted = async (): Promise<boolean> => {
     if (processRunning) return true
     setError(null)
-    const res = await window.api.claude.start({ paneId, cwd, model, resumeSessionId, permissionMode })
+    launchedModeRef.current = mode
+    const res = await window.api.claude.start({ paneId, cwd, model, resumeSessionId, permissionMode: mode })
     if (!res.ok) {
       setError(res.error ?? 'failed to start claude')
       if (resumeSessionId) useProjectViewsStore.getState().clearClaudeSessionId(paneId)
@@ -310,7 +359,7 @@ export function ChatView({
     initialItemsCountRef.current > 0
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
         <MessageColumn className="space-y-3">
           {error && (
@@ -335,16 +384,10 @@ export function ChatView({
             </ChatBanner>
           )}
           <ChatItems items={items} cwd={cwd} streaming={inProgress} />
-          {pendingPermissions.map((req, i) => (
-            <PermissionPrompt
-              key={req.requestId}
-              request={req}
-              cwd={cwd}
-              primaryActionRef={i === 0 ? firstPromptRef : undefined}
-              onResolve={() => resolvePermission(req.requestId)}
-            />
+          {pendingApprovals.map((req) => (
+            <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
           ))}
-          {turnActive && !inProgress && pendingPermissions.length === 0 && (
+          {turnActive && !inProgress && pendingApprovals.length === 0 && (
             <div className="px-1.5 text-xs text-faint">claude is thinking…</div>
           )}
         </MessageColumn>
@@ -356,6 +399,8 @@ export function ChatView({
         slashCommands={knownSlashCommands}
         cwd={cwd}
         registerFocus={registerInputFocus}
+        footerEnd={<PermissionModePicker mode={mode} modes={modes} onSelect={(m) => void pickMode(m)} />}
+        onShiftTab={() => void pickMode(nextMode(modes, mode))}
       />
     </div>
   )

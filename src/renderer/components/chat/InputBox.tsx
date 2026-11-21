@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, Image as ImageIcon, Paperclip, Square, X } from 'lucide-react'
 import { AutocompletePopup, type AutocompleteItem } from './AutocompletePopup'
 import { MessageColumn } from './MessageColumn'
@@ -12,6 +12,8 @@ interface Props {
   slashCommands?: string[]
   cwd?: string
   registerFocus?: (focusFn: () => void) => void
+  footerEnd?: ReactNode
+  onShiftTab?: () => void
 }
 
 interface AutocompleteState {
@@ -115,7 +117,9 @@ export function InputBox({
   onInterrupt,
   slashCommands,
   cwd,
-  registerFocus
+  registerFocus,
+  footerEnd,
+  onShiftTab
 }: Props) {
   const [value, setValue] = useState('')
   const [autocomplete, setAutocomplete] = useState<AutocompleteState | null>(null)
@@ -209,6 +213,11 @@ export function InputBox({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && onShiftTab) {
+      e.preventDefault()
+      onShiftTab()
+      return
+    }
     if (disabled) {
       if (e.key === 'Escape' && onInterrupt) {
         e.preventDefault()
@@ -401,31 +410,34 @@ export function InputBox({
                 paste images
               </span>
             </div>
-            {disabled && onInterrupt ? (
-              <button
-                onClick={onInterrupt}
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-error text-accent-fg hover:bg-error/80"
-                title="stop"
-                type="button"
-              >
-                <Square size={12} strokeWidth={2.5} fill="currentColor" />
-              </button>
-            ) : (
-              <button
-                onClick={send}
-                disabled={!canSend}
-                className={
-                  'flex h-7 w-7 items-center justify-center rounded-md transition-colors ' +
-                  (canSend
-                    ? 'bg-accent text-accent-fg hover:bg-accent-hover'
-                    : 'text-faint')
-                }
-                title="send (enter)"
-                type="button"
-              >
-                <ArrowUp size={14} strokeWidth={2.5} />
-              </button>
-            )}
+            <div className="flex items-center gap-1">
+              {footerEnd}
+              {disabled && onInterrupt ? (
+                <button
+                  onClick={onInterrupt}
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-error text-accent-fg hover:bg-error/80"
+                  title="stop"
+                  type="button"
+                >
+                  <Square size={12} strokeWidth={2.5} fill="currentColor" />
+                </button>
+              ) : (
+                <button
+                  onClick={send}
+                  disabled={!canSend}
+                  className={
+                    'flex h-7 w-7 items-center justify-center rounded-md transition-colors ' +
+                    (canSend
+                      ? 'bg-accent text-accent-fg hover:bg-accent-hover'
+                      : 'text-faint')
+                  }
+                  title="send (enter)"
+                  type="button"
+                >
+                  <ArrowUp size={14} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </MessageColumn>

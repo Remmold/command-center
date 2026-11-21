@@ -1,27 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
-import { app } from 'electron'
-import { join } from 'node:path'
 import { locateClaude } from '../pty/claude-locator'
-import { hookCommandFor } from '../permission/hookScript'
-import { hookSettings, permissionLaunch } from '../permission/launch'
-import { permissionServer } from '../permission/server'
 import { CONFIG_DIR_VAR } from '../../shared/profiles'
 import type { ClaudeStartOptions, SessionInit } from '../../shared/types'
 import { childEnv } from '../util/childEnv'
 import { ControlChannel, type ControlPayload, type IncomingHandler } from './controlChannel'
 import { parseInitialize } from './initialize'
 
-
-function hookScriptPath(): string {
-  return join(app.getPath('userData'), 'permission-hook.cjs')
-}
-
-function hookSettingsPath(): string {
-  const path = join(app.getPath('userData'), 'permission-settings.json')
-  writeFileSync(path, JSON.stringify(hookSettings(hookCommandFor(hookScriptPath()))), 'utf-8')
-  return path
-}
 
 export type EventCallback = (paneId: string, event: unknown) => void
 export type ExitCallback = (paneId: string, code: number | null) => void
@@ -59,6 +43,7 @@ export class ClaudeSession {
       'stream-json',
       '--verbose',
       '--include-partial-messages',
+      '--permission-prompt-tool=stdio',
       '--setting-sources',
       'user,project,local'
     ]
@@ -68,10 +53,9 @@ export class ClaudeSession {
     if (resumeSessionId) {
       args.push('--resume', resumeSessionId)
     }
-    const permissions = permissionLaunch(permissionMode, permissionServer.port ?? null, paneId)
-    if (permissions.cliMode) args.push('--permission-mode', permissions.cliMode)
-    if (permissions.useHook) args.push('--settings', hookSettingsPath())
-    const extraEnv: Record<string, string> = { ...profileEnv, ...permissions.env }
+    if (permissionMode) args.push('--permission-mode', permissionMode)
+    // The CLI refuses a later switch back to bypass unless the launch allowed it.
+    if (permissionMode === 'bypassPermissions') args.push('--allow-dangerously-skip-permissions')
 
     console.log('[claude] spawn', {
       paneId,
@@ -80,14 +64,13 @@ export class ClaudeSession {
       resume: resumeSessionId,
       permissionMode,
       configDir: profileEnv[CONFIG_DIR_VAR] ?? 'default',
-      hookEnabled: permissions.useHook,
       command: launch.command,
       args
     })
     this.child = spawn(launch.command, args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: childEnv(process.env, extraEnv),
+      env: childEnv(process.env, profileEnv),
       shell: false,
       windowsHide: true
     })
@@ -104,9 +87,10 @@ export class ClaudeSession {
     })
     this.child.on('exit', (code) => {
       this.alive = false
-      this.control.close('claude process exited')
       console.log('[claude] exit', { paneId, code })
       options.onExit(paneId, code)
+      // After onExit, so the status tracker has already gone idle when open approvals drop.
+      this.control.close('claude process exited')
     })
     this.child.on('error', (err) => {
       console.error('[claude] error', paneId, err)
@@ -197,7 +181,6 @@ export class ClaudeSession {
   kill(): void {
     if (!this.alive) return
     this.alive = false
-    this.control.close('claude process stopped')
     try {
       this.child.stdin?.end()
     } catch {

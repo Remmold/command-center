@@ -17,12 +17,8 @@ import { listLocalSessions } from './claude/local-sessions'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
-import {
-  permissionServer,
-  type PermissionRequest,
-  type PermissionResolved,
-  type PermissionResponse
-} from './permission/server'
+import { approvalBroker } from './claude/approvals'
+import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
 import { setScreenFocus } from './sessions/screenFocus'
 import {
@@ -310,17 +306,21 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     })
   )
 
-  const onPermissionRequest = (req: PermissionRequest) => {
-    sessionStatusTracker.apply(req.paneId, { kind: 'permission-raised', requestId: req.requestId })
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) win.webContents.send(IPC.PERMISSION_REQUEST, req)
-    }
-  }
-  permissionServer.on('request', onPermissionRequest)
-  const onPermissionResolved = ({ requestId, paneId }: PermissionResolved) => {
-    sessionStatusTracker.apply(paneId, { kind: 'permission-resolved', requestId })
-  }
-  permissionServer.on('resolved', onPermissionResolved)
+  claudeManager.setIncomingHandlerFactory((paneId) => approvalBroker.handlerFor(paneId))
+  unsubscribers.push(
+    approvalBroker.onRaised((request) => {
+      sessionStatusTracker.apply(request.paneId, { kind: 'permission-raised', requestId: request.requestId })
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.APPROVAL_REQUEST, request)
+      }
+    }),
+    approvalBroker.onSettled((settled) => {
+      sessionStatusTracker.apply(settled.paneId, { kind: 'permission-resolved', requestId: settled.requestId })
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.APPROVAL_SETTLED, settled)
+      }
+    })
+  )
 
   unsubscribers.push(
     claudeManager.onSpawn((paneId, cwd) => sessionStatusTracker.spawned(paneId, cwd)),
@@ -336,24 +336,15 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.SESSION_STATUS_LIST, () => sessionStatusTracker.list())
   ipcMain.on(IPC.SESSION_SCREEN_FOCUS, (_e, focus: ScreenFocus) => setScreenFocus(focus))
 
-  ipcMain.on(
-    IPC.PERMISSION_RESPOND,
-    (
-      _e,
-      requestId: string,
-      response: PermissionResponse,
-      allowForSession?: boolean
-    ) => {
-      permissionServer.respond(requestId, response, { allowForSession })
-    }
-  )
+  ipcMain.handle(IPC.APPROVAL_LIST, () => approvalBroker.list())
+  ipcMain.on(IPC.APPROVAL_RESPOND, (_e, requestId: string, reply: ApprovalReply) => {
+    approvalBroker.respond(requestId, reply)
+  })
 
   app.on('before-quit', () => {
     ptyManager.killAll()
     claudeManager.stopAll()
-    permissionServer.off('request', onPermissionRequest)
-    permissionServer.off('resolved', onPermissionResolved)
-    void permissionServer.stop()
+    claudeManager.setIncomingHandlerFactory(null)
     for (const u of unsubscribers) u()
     unsubscribers = []
   })

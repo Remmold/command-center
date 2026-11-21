@@ -14,8 +14,6 @@ import type {
   ManagedApp,
   ObservedItemsEvent,
   ObservedSession,
-  PermissionRequest,
-  PermissionResponse,
   PtyDataEvent,
   PtyExitEvent,
   RendererApi,
@@ -28,6 +26,7 @@ import type {
   SessionInit,
   SessionInitEnvelope
 } from '../shared/types'
+import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from '../shared/approval'
 
 const api: RendererApi = {
   workspaces: {
@@ -157,14 +156,19 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.OBSERVED_ITEMS, handler)
     }
   },
-  permission: {
+  approval: {
+    list: (): Promise<ApprovalRequest[]> => ipcRenderer.invoke(IPC.APPROVAL_LIST),
     onRequest: (cb) => {
-      const handler = (_e: IpcRendererEvent, request: PermissionRequest) => cb(request)
-      ipcRenderer.on(IPC.PERMISSION_REQUEST, handler)
-      return () => ipcRenderer.off(IPC.PERMISSION_REQUEST, handler)
+      const handler = (_e: IpcRendererEvent, request: ApprovalRequest) => cb(request)
+      ipcRenderer.on(IPC.APPROVAL_REQUEST, handler)
+      return () => ipcRenderer.off(IPC.APPROVAL_REQUEST, handler)
     },
-    respond: (requestId: string, response: PermissionResponse, allowForSession?: boolean) =>
-      ipcRenderer.send(IPC.PERMISSION_RESPOND, requestId, response, allowForSession)
+    onSettled: (cb) => {
+      const handler = (_e: IpcRendererEvent, settled: ApprovalSettled) => cb(settled)
+      ipcRenderer.on(IPC.APPROVAL_SETTLED, handler)
+      return () => ipcRenderer.off(IPC.APPROVAL_SETTLED, handler)
+    },
+    respond: (requestId: string, reply: ApprovalReply) => ipcRenderer.send(IPC.APPROVAL_RESPOND, requestId, reply)
   },
   sessionStatus: {
     list: (): Promise<SessionStatusEntry[]> => ipcRenderer.invoke(IPC.SESSION_STATUS_LIST),

@@ -9,23 +9,16 @@ import {
   MoreHorizontal,
   PanelLeft,
   PieChart,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldOff,
   Terminal,
   Trash2,
-  X,
-  type LucideIcon
+  X
 } from 'lucide-react'
 import type { ObservedSession, Workspace } from '../../../shared/types'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import {
-  PERMISSION_MODES,
   useProjectViewsStore,
   type ClaudeChatSession,
   type ClaudeModel,
-  type PermissionMode,
   type ProjectView
 } from '../../state/projectViewsStore'
 import type { HalfIndex } from '../../state/chatPair'
@@ -43,17 +36,6 @@ import { MenuItem } from '../ui/MenuItem'
 import { Popover, PopoverMenu } from '../ui/Popover'
 import { StatusTag } from '../ui/StatusDot'
 import { Toolbar } from '../ui/Toolbar'
-
-const PERMISSION: Record<PermissionMode, { label: string; hint: string; icon: LucideIcon }> = {
-  ask: { label: 'ask (popup)', hint: 'shows an inline approval popup for every tool call', icon: ShieldAlert },
-  acceptEdits: {
-    label: 'accept edits',
-    hint: 'auto-approves file edits, popup for everything else (bash, web, etc.)',
-    icon: ShieldCheck
-  },
-  bypassPermissions: { label: 'bypass (yolo)', hint: 'no prompts — use only in trusted dirs', icon: ShieldOff },
-  plan: { label: 'plan (read-only)', hint: 'no tool execution at all — research only', icon: Shield }
-}
 
 const MODELS: ClaudeModel[] = ['sonnet', 'opus', 'haiku']
 
@@ -109,7 +91,6 @@ export function HostedSessionHeader({ workspace, view, session, place }: HostedP
       highlighted={place.split && place.focused}
       actions={
         <span className="flex shrink-0 items-center gap-1">
-          <PermissionMenu session={session} />
           <Button
             variant="ghost"
             pressed={view.idePanelsOpen}
@@ -142,43 +123,6 @@ export function HostedSessionHeader({ workspace, view, session, place }: HostedP
         <StatusTag status={status} />
       </HeaderRow>
     </Toolbar>
-  )
-}
-
-function PermissionMenu({ session }: { session: ClaudeChatSession }) {
-  const menu = useMenu()
-  const setSessionPermissionMode = useProjectViewsStore((s) => s.setSessionPermissionMode)
-  const current = PERMISSION[session.permissionMode]
-
-  const choose = (mode: PermissionMode) => {
-    setSessionPermissionMode(session.id, mode)
-    window.api.claude.stop(session.id)
-    menu.close()
-  }
-
-  return (
-    <>
-      <span ref={menu.setAnchor} className="inline-flex">
-        <Button variant="ghost" pressed={menu.open} onClick={menu.toggle} tooltip={current.hint} label="permission mode">
-          <current.icon size={13} strokeWidth={2} />
-          {current.label}
-        </Button>
-      </span>
-      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" label="permission mode">
-        <PopoverMenu label="permission mode">
-          {PERMISSION_MODES.map((m) => (
-            <MenuItem
-              key={m}
-              icon={PERMISSION[m].icon}
-              label={PERMISSION[m].label}
-              description={PERMISSION[m].hint}
-              checked={m === session.permissionMode}
-              onClick={() => choose(m)}
-            />
-          ))}
-        </PopoverMenu>
-      </Popover>
-    </>
   )
 }
 
