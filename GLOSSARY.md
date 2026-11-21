@@ -34,6 +34,14 @@ _Avoid_: Shard set, worktree family
 
 ## Board
 
+**Scan root**:
+A folder the board searches for repos that have tickets but are not added as workspaces yet.
+_Avoid_: Search path, watch folder
+
+**Not added**:
+A repo or worktree found under a scan root that has tickets but is not a workspace yet. The board lists these so one click adds them.
+_Avoid_: Discovered repo, unknown repo, missing workspace
+
 **Board**:
 The single kanban view of the tickets from all workspaces.
 _Avoid_: Kanban, dashboard
@@ -51,6 +59,10 @@ One of the board's four stages: Backlog, Blocked, In progress, Done. The stage c
 _Avoid_: Lane, state
 
 ## Identity
+
+**Repo identity**:
+How one repo group is shown everywhere in the app: its display name and its repo icon.
+_Avoid_: Branding, repo profile
 
 **Repo icon**:
 The picture that marks one repo group everywhere in the app: a chosen icon with an accent colour, an image, or a letter by default.
