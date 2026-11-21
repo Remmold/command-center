@@ -5,6 +5,7 @@ import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useAppsStore } from '../state/appsStore'
 import { useViewStore, type AppView } from '../state/viewStore'
 import { SegmentedControl } from './ui/SegmentedControl'
+import { UsageStrip } from './UsageStrip'
 
 export function ProjectTabs() {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
@@ -102,6 +103,7 @@ export function ProjectTabs() {
           )
         })}
       </div>
+      <UsageStrip />
       <button
         onClick={() => setShowApps(!showApps)}
         className={

@@ -4,10 +4,10 @@ import { ProjectTabs } from './components/ProjectTabs'
 import { Sidebar } from './components/Sidebar'
 import { ProjectView } from './components/ProjectView'
 import { AppsDashboard } from './components/AppsDashboard'
-import { UsageBar } from './components/UsageBar'
 import { useProjectViewsStore } from './state/projectViewsStore'
 import { useAppsStore } from './state/appsStore'
 import { useUsageStore, type RateLimitInfo } from './state/usageStore'
+import type { RawModelUsage } from './state/usageModel'
 import { usePermissionsStore } from './state/permissionsStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
@@ -19,7 +19,7 @@ import { useMainNavigation } from './hooks/useMainNavigation'
 import type { ClaudeResultEvent } from '../shared/types'
 
 interface RawResultUsage {
-  modelUsage?: Record<string, unknown>
+  modelUsage?: Record<string, RawModelUsage>
 }
 
 export function App() {
@@ -58,22 +58,23 @@ export function App() {
   }, [addPermissionRequest])
 
   useEffect(() => {
-    const unsub = window.api.claude.onEvent(({ paneId, event }) => {
+    const unsub = window.api.claude.onEvent(({ paneId, profileId, event }) => {
       const type = (event as { type?: string })?.type
       if (type === 'result') {
         const re = event as ClaudeResultEvent
         const modelUsage = (re as unknown as RawResultUsage).modelUsage
         recordResult(
+          profileId,
           paneId,
           typeof re.total_cost_usd === 'number' ? re.total_cost_usd : 0,
           re.duration_ms ?? 0,
-          modelUsage as Record<string, never> | undefined
+          modelUsage
         )
         return
       }
       if (type === 'rate_limit_event') {
         const info = (event as { rate_limit_info?: RateLimitInfo }).rate_limit_info
-        if (info) setRateLimit(info)
+        if (info) setRateLimit(profileId, info)
       }
     })
     return unsub
@@ -167,7 +168,6 @@ export function App() {
           </div>
         </div>
       </div>
-      <UsageBar />
     </div>
   )
 }

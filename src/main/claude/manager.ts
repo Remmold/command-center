@@ -1,3 +1,4 @@
+import { DEFAULT_PROFILE_ID } from '../../shared/types'
 import { ClaudeSession } from './session'
 import { permissionServer } from '../permission/server'
 
@@ -8,6 +9,7 @@ type SendCallback = (paneId: string) => void
 
 class ClaudeManager {
   private sessions = new Map<string, ClaudeSession>()
+  private profileIds = new Map<string, string>()
   private eventListeners: EventCallback[] = []
   private exitListeners: ExitCallback[] = []
   private spawnListeners: SpawnCallback[] = []
@@ -19,7 +21,8 @@ class ClaudeManager {
     model?: string,
     resumeSessionId?: string,
     permissionMode?: string,
-    profileEnv: Record<string, string> = {}
+    profileEnv: Record<string, string> = {},
+    profileId: string = DEFAULT_PROFILE_ID
   ): { ok: boolean; error?: string } {
     const existing = this.sessions.get(paneId)
     if (existing && existing.isAlive()) return { ok: true }
@@ -45,11 +48,17 @@ class ClaudeManager {
         profileEnv
       )
       this.sessions.set(paneId, session)
+      this.profileIds.set(paneId, profileId)
       for (const cb of this.spawnListeners) cb(paneId, cwd)
       return { ok: true }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
     }
+  }
+
+  /** The account profile the pane's latest process was started on. */
+  profileOf(paneId: string): string {
+    return this.profileIds.get(paneId) ?? DEFAULT_PROFILE_ID
   }
 
   isAlive(paneId: string): boolean {

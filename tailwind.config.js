@@ -5,6 +5,11 @@ module.exports = {
     extend: {
       colors: {
         progress: '#10b981',
+        meter: {
+          ok: '#10b981',
+          warn: '#f59e0b',
+          limit: '#f87171'
+        },
         status: {
           running: '#38bdf8',
           approval: '#f59e0b',

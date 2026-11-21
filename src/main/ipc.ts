@@ -21,7 +21,7 @@ import {
 } from './permission/server'
 import { sessionStatusTracker } from './sessions/tracker'
 import { setScreenFocus } from './sessions/screenFocus'
-import type { ScreenFocus } from '../shared/types'
+import { DEFAULT_PROFILE_ID, type ScreenFocus } from '../shared/types'
 
 let unsubscribers: Array<() => void> = []
 
@@ -159,8 +159,10 @@ export function registerIpc(): void {
     ) => {
       const workspace = await workspaces.findByPath(cwd)
       if (!workspace) console.warn('[profiles] no workspace at', cwd, '- session runs on Default')
-      const env = workspace ? await profiles.prepareSession(workspace.profileId) : {}
-      return claudeManager.start(paneId, cwd, model, resumeSessionId, permissionMode, env)
+      const { profileId, env } = workspace
+        ? await profiles.prepareSession(workspace.profileId)
+        : { profileId: DEFAULT_PROFILE_ID, env: {} }
+      return claudeManager.start(paneId, cwd, model, resumeSessionId, permissionMode, env, profileId)
     }
   )
   ipcMain.on(
@@ -200,8 +202,9 @@ export function registerIpc(): void {
 
   unsubscribers.push(
     claudeManager.onEvent((paneId, event) => {
+      const envelope = { paneId, profileId: claudeManager.profileOf(paneId), event }
       for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) win.webContents.send(IPC.CLAUDE_EVENT, { paneId, event })
+        if (!win.isDestroyed()) win.webContents.send(IPC.CLAUDE_EVENT, envelope)
       }
     })
   )

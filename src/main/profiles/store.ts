@@ -116,8 +116,10 @@ export function rename(id: string, name: string): Promise<AccountProfile | null>
   })
 }
 
-/** Repairs the profile's links and returns the variables a session on it needs. */
-export async function prepareSession(profileId: string): Promise<Record<string, string>> {
+/** Repairs the profile's links; returns the profile a session actually runs on and the variables it needs. */
+export async function prepareSession(
+  profileId: string
+): Promise<{ profileId: string; env: Record<string, string> }> {
   const profile = await get(profileId)
   if (profile.id !== DEFAULT_PROFILE_ID) {
     try {
@@ -126,5 +128,5 @@ export async function prepareSession(profileId: string): Promise<Record<string, 
       console.error('[profiles] link check failed', profile.name, err)
     }
   }
-  return profileEnv(profile)
+  return { profileId: profile.id, env: profileEnv(profile) }
 }

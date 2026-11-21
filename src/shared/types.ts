@@ -65,6 +65,8 @@ export interface PtyExitEvent {
 // pass them through as `unknown` and narrow at the call site.
 export interface ClaudeEventEnvelope {
   paneId: string
+  /** Account profile the session runs on, fixed when its process started. */
+  profileId: string
   event: ClaudeEvent
 }
 
