@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ChatItems } from './ChatItems'
 import { MessageColumn } from './MessageColumn'
 import { ChatBanner } from './ChatBanner'
@@ -13,6 +13,11 @@ import { InputBox } from './InputBox'
 import { ApprovalPrompt } from './ApprovalPrompt'
 import { PermissionModePicker } from './PermissionModePicker'
 import { interruptNote } from './interrupt'
+import { UserPrompt } from './Message'
+import { pickUp, type HeldPrompt } from './heldPrompts'
+import { historyEntries, userItemText } from './promptHistory'
+import { overlayOpen } from '../ui/overlay'
+import { useHeldPromptsStore } from '../../state/heldPromptsStore'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { useApprovalsStore } from '../../state/approvalsStore'
@@ -41,6 +46,7 @@ import type {
 const EMPTY_ITEMS: ChatItem[] = []
 const NOT_RUNNING = 'claude process is not running'
 const EMPTY_REQUESTS: ApprovalRequest[] = []
+const EMPTY_HELD: HeldPrompt[] = []
 
 /** The extension saves these as the default for new sessions when the user picks them. */
 const DEFAULT_WORTHY: ReadonlySet<PermissionMode> = new Set(['default', 'auto', 'acceptEdits'])
@@ -96,6 +102,8 @@ export function ChatView({
   const appendItems = useChatItemsStore((s) => s.appendItems)
   const setClaudeSessionId = useProjectViewsStore((s) => s.setClaudeSessionId)
   const pendingApprovals = useApprovalsStore((s) => s.byPane[paneId] ?? EMPTY_REQUESTS)
+  const held = useHeldPromptsStore((s) => s.byPane[paneId] ?? EMPTY_HELD)
+  const history = useMemo(() => historyEntries(items, held), [items, held])
 
   const [processRunning, setProcessRunning] = useState(false)
   const [turnActive, setTurnActive] = useState(false)
@@ -207,6 +215,8 @@ export function ChatView({
       setProcessRunning(false)
       setTurnActive(false)
       setInProgress(null)
+      release(useHeldPromptsStore.getState().byPane[paneId] ?? [])
+      useHeldPromptsStore.getState().set(paneId, [])
       appendItems(paneId, [
         { kind: 'system', id: crypto.randomUUID(), text: 'claude process exited' }
       ])
@@ -226,12 +236,12 @@ export function ChatView({
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    const len = items.length + (inProgress ? 1 : 0)
+    const len = items.length + (inProgress ? 1 : 0) + held.length
     if (len !== itemsLenRef.current) {
       itemsLenRef.current = len
       el.scrollTop = el.scrollHeight
     }
-  }, [items, inProgress])
+  }, [items, inProgress, held.length])
 
   const handleStreamEvent = (inner: AnthropicStreamInner) => {
     if (inner.type === 'message_start') {
@@ -281,9 +291,34 @@ export function ChatView({
     }
   }
 
+  /** Moves prompts the CLI has taken from under the live turn into the transcript. */
+  const release = (prompts: HeldPrompt[]): void => {
+    if (prompts.length === 0) return
+    appendItems(
+      paneId,
+      prompts.flatMap((p): ChatItem[] => [
+        { kind: 'user', id: p.uuid, text: p.text },
+        ...(p.notice ? [{ kind: 'system' as const, id: crypto.randomUUID(), text: p.notice }] : [])
+      ])
+    )
+  }
+
+  /** True for the CLI's queue frames: `command_lifecycle` and the replay echo of a sent prompt. */
+  const handleQueueFrame = (event: ClaudeEvent): boolean => {
+    const isReplay = event.type === 'user' && (event as { isReplay?: unknown }).isReplay === true
+    if (!isReplay && event.type !== 'command_lifecycle') return false
+    const store = useHeldPromptsStore.getState()
+    const pickup = pickUp(store.byPane[paneId] ?? [], event)
+    store.set(paneId, pickup.held)
+    release(pickup.pickedUp)
+    if (pickup.startsTurn) setTurnActive(true)
+    return true
+  }
+
   const handleEvent = (event: ClaudeEvent) => {
     const sessId = (event as { session_id?: string }).session_id
     if (sessId) setClaudeSessionId(paneId, sessId)
+    if (handleQueueFrame(event)) return
 
     if (event.type === 'stream_event') {
       const se = event as ClaudeStreamEvent
@@ -416,19 +451,26 @@ export function ChatView({
   }, [switchTo, processRunning, turnActive])
 
   const handleSend = async (text: string, images?: ImageAttachment[]) => {
-    const userText =
-      text +
-      (images && images.length > 0
-        ? `\n\n_[${images.length} image${images.length === 1 ? '' : 's'} attached]_`
-        : '')
-    appendItems(paneId, [
-      { kind: 'user', id: crypto.randomUUID(), text: userText } as ChatItem
-    ])
+    const uuid = crypto.randomUUID()
+    const userText = userItemText(text, images?.length ?? 0)
+    // As the extension's `turnRunningOrQueued`: the CLI queues it and says when it starts.
+    const queued = turnActive || held.length > 0
+    if (queued) useHeldPromptsStore.getState().hold(paneId, { uuid, text: userText })
+    else appendItems(paneId, [{ kind: 'user', id: uuid, text: userText }])
     useProjectViewsStore.getState().notePrompt(paneId, text)
     const ok = await ensureStarted()
     if (!ok) return
-    setTurnActive(true)
-    window.api.claude.send(paneId, text, images)
+    if (!queued) setTurnActive(true)
+    window.api.claude.send(paneId, text, images, uuid)
+  }
+
+  /** Esc anywhere in the chat stops Claude, as the extension's document-level handler; menus and approvals take it first. */
+  const handlePaneKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.repeat || e.nativeEvent.isComposing) return
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+    if (!turnActive || pendingApprovals.length > 0 || overlayOpen()) return
+    e.preventDefault()
+    handleInterrupt()
   }
 
   const handleInterrupt = () => {
@@ -451,8 +493,8 @@ export function ChatView({
     initialItemsCountRef.current > 0
 
   return (
-    <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
+    <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col" onKeyDown={handlePaneKeyDown}>
+      <div ref={scrollRef} tabIndex={-1} className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
         <MessageColumn className="space-y-3">
           {error && (
             <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
@@ -482,10 +524,17 @@ export function ChatView({
           {turnActive && !inProgress && pendingApprovals.length === 0 && (
             <div className="px-1.5 text-xs text-faint">claude is thinking…</div>
           )}
+          {held.map((p) => (
+            <UserPrompt key={p.uuid} text={p.text} queued />
+          ))}
+          <div role="status" className="sr-only">
+            {held.length > 0 ? 'Message queued.' : ''}
+          </div>
         </MessageColumn>
       </div>
       <InputBox
-        disabled={turnActive}
+        busy={turnActive}
+        history={history}
         onSend={handleSend}
         onInterrupt={handleInterrupt}
         slashCommands={knownSlashCommands}

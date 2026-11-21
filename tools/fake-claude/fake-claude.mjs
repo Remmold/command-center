@@ -20,6 +20,9 @@ const recorded = {
   usage: readJson(join(FIXTURES, 'get-usage-reply.json')).response.response,
   unsupported: readJson(join(FIXTURES, 'error-reply.json')).response.error,
   turn: readLines(join(FIXTURES, 'turn-write-approval.jsonl')),
+  queued: readLines(join(FIXTURES, 'turn-queued-message.jsonl'))
+    .filter((entry) => entry.direction === 'cli')
+    .map((entry) => entry.line),
   control: readLines(join(FIXTURES, 'control-replies.jsonl'))
     .filter((entry) => entry.direction === 'cli')
     .map((entry) => entry.line)
@@ -52,6 +55,8 @@ const template = {
   settings: clone(recorded.control.find((l) => l.response?.response?.applied).response.response),
   permissionStatus: clone(recorded.control.find((l) => l.type === 'system' && 'permissionMode' in l)),
   bypassRefused: clone(recorded.control.find((l) => l.response?.error_code === 'bypass_not_launched').response),
+  lifecycle: clone(recorded.queued.find((l) => l.type === 'command_lifecycle')),
+  replay: clone(recorded.queued.find((l) => l.type === 'user' && l.isReplay)),
   interruptReply: clone(recorded.control.find((l) => l.response?.response && 'still_queued' in l.response.response).response.response)
 }
 
@@ -130,6 +135,7 @@ class Fake {
       this.flags['--dangerously-skip-permissions'] === true ||
       this.permissionMode === 'bypassPermissions'
     this.partial = this.flags['--include-partial-messages'] === true
+    this.replays = this.flags['--replay-user-messages'] === true
     this.model = this.flags['--model'] || 'default'
     this.effort = this.flags['--effort'] || 'medium'
     this.flagSettings = {}
@@ -180,9 +186,28 @@ class Fake {
     if (line.type === 'control_request') this.answer(line.request_id, line.request ?? {})
     else if (line.type === 'control_response') this.settleApproval(line.response ?? {})
     else if (line.type === 'user') {
-      this.queue.push(textOf(line))
+      const prompt = { text: textOf(line), uuid: typeof line.uuid === 'string' ? line.uuid : null, content: line.message?.content }
+      this.queue.push(prompt)
+      this.lifecycle(prompt, 'queued')
       this.pump()
     }
+  }
+
+  /** Prompts sent without a uuid get no frames, as in the real CLI. */
+  lifecycle(prompt, state) {
+    if (!prompt.uuid) return
+    const line = clone(template.lifecycle)
+    line.command_uuid = prompt.uuid
+    line.state = state
+    this.send(this.stamp(line))
+  }
+
+  replay(prompt) {
+    if (!this.replays || !prompt.uuid) return
+    const line = this.stamp(clone(template.replay))
+    line.uuid = prompt.uuid
+    line.message.content = clone(prompt.content)
+    this.send(line)
   }
 
   answer(requestId, request) {
@@ -261,11 +286,13 @@ class Fake {
   async pump() {
     if (this.running) return
     while (this.queue.length) {
-      const text = this.queue.shift()
-      const turn = new Turn(this, this.pickTurn(text))
+      const prompt = this.queue.shift()
+      this.lifecycle(prompt, 'started')
+      const turn = new Turn(this, this.pickTurn(prompt.text), prompt)
       this.running = turn
       try {
         await turn.run()
+        this.lifecycle(prompt, turn.interrupted ? 'cancelled' : 'completed')
       } catch (err) {
         process.stderr.write(`fake-claude: ${err.message}
 `)
@@ -290,9 +317,13 @@ class Fake {
 }
 
 class Turn {
-  constructor(fake, script) {
+  constructor(fake, script, prompt) {
     this.fake = fake
     this.script = script
+    this.prompt = prompt
+    /** Prompts that arrived during a tool call and joined this turn after its result. */
+    this.folded = []
+    this.interrupted = false
     this.aborted = false
     this.wakers = new Set()
     this.lastText = ''
@@ -332,9 +363,27 @@ class Turn {
     init.model = this.fake.resolvedModel()
     init.permissionMode = this.fake.permissionMode
     this.emit(init)
-    const ended = await this.play(this.script.events ?? [])
-    if (this.aborted) return this.endInterrupted(this.awaitingTool)
+    this.fake.replay(this.prompt)
+    let ended = await this.play(this.script.events ?? [])
+    for (let i = 0; i < this.folded.length && !ended && !this.aborted; i++) {
+      ended = await this.play(this.fake.pickTurn(this.folded[i].text).events ?? [])
+    }
+    if (this.aborted && !this.interrupted) return this.endInterrupted(this.awaitingTool)
     if (!ended) this.endSuccess()
+  }
+
+  foldQueued() {
+    const fake = this.fake
+    while (fake.queue.length) {
+      const prompt = fake.queue.shift()
+      fake.replay(prompt)
+      fake.lifecycle(prompt, 'started')
+      this.folded.push(prompt)
+    }
+  }
+
+  settleFolded(state) {
+    for (const prompt of this.folded) this.fake.lifecycle(prompt, state)
   }
 
   /** True once a result has been sent. */
@@ -443,6 +492,7 @@ class Turn {
     if (decision.behavior === 'allow') {
       fake.remember(decision.updatedPermissions)
       this.toolResult(toolUseId, event.result ?? 'Done.', false)
+      this.foldQueued()
       return false
     }
     if (decision.interrupt) {
@@ -451,6 +501,7 @@ class Turn {
       return true
     }
     this.toolResult(toolUseId, decision.message || REJECTED, true)
+    this.foldQueued()
     if (event.onDeny) return (await this.play(event.onDeny)) || this.finishEarly()
     return false
   }
@@ -505,6 +556,7 @@ class Turn {
   }
 
   endSuccess(text) {
+    this.settleFolded('completed')
     const result = clone(template.result)
     result.result = text ?? this.lastText
     result.num_turns = this.numTurns
@@ -512,6 +564,8 @@ class Turn {
   }
 
   endInterrupted(pendingToolUseId, noteSent = false) {
+    this.interrupted = true
+    this.settleFolded('cancelled')
     if (!noteSent) {
       if (pendingToolUseId) this.toolResult(pendingToolUseId, REJECTED, true, INTERRUPTED_TOOL)
       else this.userMessage([{ type: 'text', text: INTERRUPTED }])

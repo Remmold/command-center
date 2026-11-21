@@ -386,3 +386,71 @@ describe('log', () => {
     expect(log[4].line.response.response.behavior).toBe('allow')
   })
 })
+
+describe('queued prompts', () => {
+  const REPLAY = ['--replay-user-messages']
+  const ask = (fake: Fake, text: string, uuid: string): void =>
+    fake.write({ type: 'user', uuid, message: { role: 'user', content: [{ type: 'text', text }] } })
+  /** Queue frames as `<uuid> <state>`, replay echoes as `<uuid> replay`, results as `result`. */
+  const frames = (fake: Fake): string[] =>
+    fake.lines.flatMap((l) => {
+      if (l.type === 'command_lifecycle') return [`${l.command_uuid} ${l.state}`]
+      if (l.type === 'user' && l.isReplay) return [`${l.uuid} replay`]
+      if (l.type === 'result') return ['result']
+      return []
+    })
+
+  it('reports a prompt queued, started, echoed and completed, like the recording', async () => {
+    const fake = start(REPLAY)
+    ask(fake, 'hello', 'a')
+    await fake.next(isResult)
+    await fake.next((l) => l.type === 'command_lifecycle' && l.state === 'completed')
+    expect(frames(fake)).toEqual(['a queued', 'a started', 'a replay', 'result', 'a completed'])
+    const echo = fake.lines.find((l) => l.isReplay)!
+    expect(echo.message.content).toEqual([{ type: 'text', text: 'hello' }])
+  })
+
+  it('sends no replay echo without --replay-user-messages, and no frames for a prompt without a uuid', async () => {
+    const fake = start()
+    ask(fake, 'hello', 'a')
+    await fake.next((l) => l.type === 'command_lifecycle' && l.state === 'completed')
+    fake.say('no uuid')
+    await fake.next(isResult, fake.lines.length)
+    expect(frames(fake)).toEqual(['a queued', 'a started', 'result', 'a completed', 'result'])
+  })
+
+  it('a prompt sent mid-reply waits for the turn, then starts its own', async () => {
+    const fake = start(REPLAY, {
+      turns: [
+        { match: 'first', events: [{ type: 'text', text: 'One.' }, { type: 'wait', ms: 300 }, { type: 'text', text: 'Two.' }] },
+        { match: 'second', events: [{ type: 'text', text: 'Three.' }] }
+      ]
+    })
+    ask(fake, 'first', 'a')
+    await fake.next((l) => l.type === 'assistant')
+    ask(fake, 'second', 'b')
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'b' && l.state === 'completed')
+    expect(frames(fake)).toEqual([
+      'a queued', 'a started', 'a replay', 'b queued', 'result', 'a completed',
+      'b started', 'b replay', 'result', 'b completed'
+    ])
+  })
+
+  it('a prompt queued during a tool call joins the running turn after the tool result, as the real CLI does', async () => {
+    const fake = start(REPLAY, {
+      turns: [
+        { match: 'sleep', events: [WRITE] },
+        { match: 'pong', events: [{ type: 'text', text: 'PONG' }] }
+      ]
+    })
+    ask(fake, 'sleep', 'a')
+    const approval = await fake.next(isApproval)
+    ask(fake, 'pong', 'b')
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'b')
+    reply(fake, approval, { behavior: 'allow', updatedInput: WRITE.input, updatedPermissions: [] })
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'a' && l.state === 'completed')
+    expect(frames(fake)).toEqual(['a queued', 'a started', 'a replay', 'b queued', 'b replay', 'b started', 'b completed', 'result', 'a completed'])
+    expect(fake.lines.filter(isResult)).toHaveLength(1)
+    expect(fake.lines.find(isResult)!.result).toBe('PONG')
+  })
+})

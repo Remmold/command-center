@@ -138,7 +138,7 @@ const api: RendererApi = {
       ipcRenderer.on(IPC.CLAUDE_INIT, handler)
       return () => ipcRenderer.off(IPC.CLAUDE_INIT, handler)
     },
-    send: (paneId, text, images) => ipcRenderer.send(IPC.CLAUDE_SEND, paneId, text, images),
+    send: (paneId, text, images, uuid) => ipcRenderer.send(IPC.CLAUDE_SEND, paneId, text, images, uuid),
     listLocalSessions: (cwd) => ipcRenderer.invoke(IPC.CLAUDE_LIST_LOCAL_SESSIONS, cwd),
     interrupt: (paneId) => ipcRenderer.send(IPC.CLAUDE_INTERRUPT, paneId),
     stop: (paneId) => ipcRenderer.send(IPC.CLAUDE_STOP, paneId),

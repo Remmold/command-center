@@ -2,10 +2,15 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, Image as ImageIcon, Paperclip, Square, X } from 'lucide-react'
 import { AutocompletePopup, type AutocompleteItem } from './AutocompletePopup'
 import { MessageColumn } from './MessageColumn'
+import { NO_RECALL, stepHistory, type HistoryCursor } from './promptHistory'
+import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
 import type { ImageAttachment } from '../../../shared/types'
 
 interface Props {
-  disabled?: boolean
+  /** Claude is working: sending still works (the prompt is queued) and Stop replaces Send while the input is empty. */
+  busy?: boolean
+  /** This session's earlier prompts, newest first, for ↑/↓. */
+  history?: readonly string[]
   placeholder?: string
   onSend: (text: string, images?: ImageAttachment[]) => void
   onInterrupt?: () => void
@@ -105,6 +110,12 @@ function readFileAsImage(file: File): Promise<PendingImage> {
   })
 }
 
+/** Shift+Enter, or Ctrl+J as in the extension (`eLt`). */
+function isNewlineKey(e: React.KeyboardEvent): boolean {
+  if (e.key === 'Enter' && e.shiftKey) return true
+  return e.key.toLowerCase() === 'j' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
@@ -112,7 +123,8 @@ function formatBytes(bytes: number): string {
 }
 
 export function InputBox({
-  disabled,
+  busy = false,
+  history = [],
   placeholder,
   onSend,
   onInterrupt,
@@ -129,6 +141,8 @@ export function InputBox({
   const [allFiles, setAllFiles] = useState<string[]>([])
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  const [recall, setRecall] = useState<HistoryCursor>(NO_RECALL)
+  const ctrlEnterSends = useGeneralSettingsStore((s) => s.useCtrlEnterToSend)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -137,6 +151,10 @@ export function InputBox({
     if (!ta) return
     ta.style.height = 'auto'
     ta.style.height = Math.min(Math.max(ta.scrollHeight, 24), 240) + 'px'
+  }, [value])
+
+  useEffect(() => {
+    if (value === '') setRecall(NO_RECALL)
   }, [value])
 
   useEffect(() => {
@@ -214,19 +232,42 @@ export function InputBox({
     }, 0)
   }
 
+  const insertAtCaret = (ta: HTMLTextAreaElement, text: string) => {
+    const start = ta.selectionStart
+    const next = value.slice(0, start) + text + value.slice(ta.selectionEnd)
+    setValue(next)
+    setAutocomplete(null)
+    setTimeout(() => ta.setSelectionRange(start + text.length, start + text.length), 0)
+  }
+
+  const recallPrompt = (ta: HTMLTextAreaElement, direction: 'older' | 'newer'): boolean => {
+    const step = stepHistory(recall, history, direction, value)
+    if (!step) return false
+    setRecall(step.cursor)
+    setValue(step.value)
+    setAutocomplete(null)
+    // ↑ leaves the caret at the start so the next ↑ keeps going back; ↓ leaves it at the end.
+    const pos = direction === 'older' && step.cursor.index !== -1 ? 0 : step.value.length
+    setTimeout(() => ta.setSelectionRange(pos, pos), 0)
+    return true
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing) return
+    const ta = e.currentTarget
     if (e.key === 'Tab' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && onShiftTab) {
       e.preventDefault()
       onShiftTab()
       return
     }
-    if (disabled) {
-      if (e.key === 'Escape' && onInterrupt) {
-        e.preventDefault()
-        onInterrupt()
-      } else if (e.key === 'Enter') {
-        e.preventDefault()
-      }
+    if (e.key === 'Escape' && autocomplete && items.length > 0) {
+      e.preventDefault()
+      setAutocomplete(null)
+      return
+    }
+    if (isNewlineKey(e)) {
+      e.preventDefault()
+      insertAtCaret(ta, '\n')
       return
     }
     if (autocomplete && items.length > 0) {
@@ -245,15 +286,20 @@ export function InputBox({
         applySelection(items[selectedIndex])
         return
       }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        setAutocomplete(null)
-        return
-      }
     }
-    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    if (e.key === 'ArrowUp' && ta.selectionStart === 0 && recallPrompt(ta, 'older')) {
       e.preventDefault()
-      send()
+      return
+    }
+    if (e.key === 'ArrowDown' && ta.selectionEnd === value.length && recallPrompt(ta, 'newer')) {
+      e.preventDefault()
+      return
+    }
+    if (e.key === 'Enter') {
+      const mod = e.ctrlKey || e.metaKey
+      e.preventDefault()
+      if (ctrlEnterSends && !mod) insertAtCaret(ta, '\n')
+      else if (!e.repeat) send()
     }
   }
 
@@ -272,7 +318,6 @@ export function InputBox({
   }
 
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    if (disabled) return
     const items = e.clipboardData?.items
     if (!items) return
     const imageFiles: File[] = []
@@ -315,7 +360,7 @@ export function InputBox({
     e.target.value = ''
   }
 
-  const canSend = !disabled && (value.trim().length > 0 || pendingImages.length > 0)
+  const canSend = value.trim().length > 0 || pendingImages.length > 0
 
   return (
     <div
@@ -381,8 +426,6 @@ export function InputBox({
           <textarea
             ref={textareaRef}
             value={value}
-            readOnly={disabled}
-            aria-disabled={disabled}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             onSelect={updateAutocomplete}
@@ -390,7 +433,7 @@ export function InputBox({
             onPaste={handlePaste}
             rows={1}
             placeholder={placeholder ?? 'message claude…'}
-            className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none read-only:opacity-50"
+            className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none"
           />
           <div className="flex items-end justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1">
@@ -404,7 +447,7 @@ export function InputBox({
               </button>
               {footerStart}
               <span className="min-w-0 truncate text-[10px] text-faint">
-                enter to send · shift+enter newline · / commands · @ files ·{' '}
+                {ctrlEnterSends ? 'ctrl+enter to send · enter newline' : 'enter to send · shift+enter newline'} · / commands · @ files ·{' '}
                 <ImageIcon
                   size={10}
                   strokeWidth={2}
@@ -415,11 +458,12 @@ export function InputBox({
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {footerEnd}
-              {disabled && onInterrupt ? (
+              {busy && !canSend && onInterrupt ? (
                 <button
                   onClick={onInterrupt}
                   className="flex h-7 w-7 items-center justify-center rounded-md bg-error text-accent-fg hover:bg-error/80"
-                  title="stop"
+                  title="Stop"
+                  aria-label="Stop"
                   type="button"
                 >
                   <Square size={12} strokeWidth={2.5} fill="currentColor" />

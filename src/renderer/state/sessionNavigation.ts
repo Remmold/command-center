@@ -9,7 +9,7 @@ import { useSessionStatusStore } from './sessionStatusStore'
 import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
 
-export const NEXT_WAITING_SHORTCUT = 'Ctrl+J'
+export const NEXT_WAITING_SHORTCUT = 'Ctrl+Shift+J'
 
 export interface HostedSessionRef {
   paneId: string

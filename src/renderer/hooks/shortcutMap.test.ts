@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { shortcutApplies, shortcutFor, type KeyChord } from './shortcutMap'
 
-const ctrl = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: true, metaKey: false, altKey: false })
-const alt = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: false, metaKey: false, altKey: true })
+const ctrl = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: true, metaKey: false, altKey: false, shiftKey: false })
+const ctrlShift = (key: string, code: string): KeyChord => ({ ...ctrl(key, code), shiftKey: true })
+const alt = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: false, metaKey: false, altKey: true, shiftKey: false })
+const plain = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
 
 describe('keyboard shortcuts', () => {
   it('Ctrl+1/2/3 pick Dashboard, Work and Board', () => {
@@ -26,11 +28,33 @@ describe('keyboard shortcuts', () => {
   })
 
   it('AltGr (Ctrl+Alt) with a digit is typing, not a shortcut', () => {
-    expect(shortcutFor({ key: '@', code: 'Digit2', ctrlKey: true, metaKey: false, altKey: true })).toBeNull()
+    expect(shortcutFor({ key: '@', code: 'Digit2', ctrlKey: true, metaKey: false, altKey: true, shiftKey: false })).toBeNull()
   })
 
-  it('keeps Ctrl+J, Ctrl+B and Ctrl+` (by position)', () => {
-    expect(shortcutFor(ctrl('j', 'KeyJ'))).toEqual({ name: 'nextWaiting' })
+  it('Ctrl+Shift+J jumps to the next waiting session', () => {
+    expect(shortcutFor(ctrlShift('J', 'KeyJ'))).toEqual({ name: 'nextWaiting' })
+  })
+
+  it('leaves the prompt box its keys: Ctrl+J newline, Enter, Ctrl+Enter, Shift+Enter, Shift+Tab, Escape', () => {
+    const promptKeys = [
+      ctrl('j', 'KeyJ'),
+      plain('Enter', 'Enter'),
+      ctrl('Enter', 'Enter'),
+      { ...plain('Enter', 'Enter'), shiftKey: true },
+      { ...plain('Tab', 'Tab'), shiftKey: true },
+      plain('Escape', 'Escape'),
+      plain('ArrowUp', 'ArrowUp'),
+      plain('ArrowDown', 'ArrowDown')
+    ]
+    expect(promptKeys.map(shortcutFor)).toEqual(promptKeys.map(() => null))
+  })
+
+  it('Shift does not turn a Ctrl shortcut into another one', () => {
+    expect(shortcutFor(ctrlShift('T', 'KeyT'))).toBeNull()
+    expect(shortcutFor(ctrlShift('K', 'KeyK'))).toBeNull()
+  })
+
+  it('keeps Ctrl+B and Ctrl+` (by position)', () => {
     expect(shortcutFor(ctrl('b', 'KeyB'))).toEqual({ name: 'toggleIdePanels' })
     expect(shortcutFor(ctrl('§', 'Backquote'))).toEqual({ name: 'toggleShellDrawer' })
   })
@@ -46,7 +70,7 @@ describe('keyboard shortcuts', () => {
     const chords = [
       ...['1', '2', '3'].map((d) => ctrl(d, `Digit${d}`)),
       ctrl(',', 'Comma'),
-      ctrl('j', 'KeyJ'),
+      ctrlShift('J', 'KeyJ'),
       ctrl('b', 'KeyB'),
       ctrl('`', 'Backquote'),
       ...['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => alt(d, `Digit${d}`))
@@ -58,7 +82,7 @@ describe('keyboard shortcuts', () => {
 
   describe('outside Work', () => {
     const workOnly = [ctrl('t', 'KeyT'), ctrl('w', 'KeyW'), ctrl('k', 'KeyK'), ctrl('b', 'KeyB'), ctrl('`', 'Backquote'), alt('1', 'Digit1')]
-    const everywhere = [ctrl('1', 'Digit1'), ctrl('2', 'Digit2'), ctrl(',', 'Comma'), ctrl('j', 'KeyJ')]
+    const everywhere = [ctrl('1', 'Digit1'), ctrl('2', 'Digit2'), ctrl(',', 'Comma'), ctrlShift('J', 'KeyJ')]
     const applies = (c: KeyChord, screen: Parameters<typeof shortcutApplies>[1]) => shortcutApplies(shortcutFor(c)!, screen)
 
     it('leaves the chat, row, IDE and shell shortcuts to Work', () => {
@@ -69,13 +93,13 @@ describe('keyboard shortcuts', () => {
       expect(workOnly.map((c) => applies(c, { view: 'work', settingsOpen: false }))).toEqual(workOnly.map(() => true))
     })
 
-    it('keeps view switching, Settings and Ctrl+J everywhere', () => {
+    it('keeps view switching, Settings and Ctrl+Shift+J everywhere', () => {
       expect(everywhere.map((c) => applies(c, { view: 'board', settingsOpen: true }))).toEqual(everywhere.map(() => true))
     })
   })
 
   it('ignores unmodified keys', () => {
-    expect(shortcutFor({ key: '1', code: 'Digit1', ctrlKey: false, metaKey: false, altKey: false })).toBeNull()
-    expect(shortcutFor({ key: ',', code: 'Comma', ctrlKey: false, metaKey: false, altKey: false })).toBeNull()
+    expect(shortcutFor(plain('1', 'Digit1'))).toBeNull()
+    expect(shortcutFor(plain(',', 'Comma'))).toBeNull()
   })
 })

@@ -27,7 +27,7 @@ describe('chat pair', () => {
     })
   })
 
-  it('opens a plain click, Ctrl+J or Needs you target in the focused half', () => {
+  it('opens a plain click, Ctrl+Shift+J or Needs you target in the focused half', () => {
     expect(openChat(split('a', 'b', 1), hosted('c'))).toEqual(split('a', 'c', 1))
   })
 

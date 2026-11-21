@@ -43,6 +43,7 @@ export class ClaudeSession {
       'stream-json',
       '--verbose',
       '--include-partial-messages',
+      '--replay-user-messages',
       '--permission-prompt-tool=stdio',
       '--setting-sources',
       'user,project,local'
@@ -140,7 +141,8 @@ export class ClaudeSession {
 
   send(
     text: string,
-    images?: Array<{ media_type: string; data: string }>
+    images: Array<{ media_type: string; data: string }> | undefined,
+    uuid: string
   ): void {
     if (!this.alive) return
     const content: Array<unknown> = []
@@ -156,7 +158,7 @@ export class ClaudeSession {
       content.push({ type: 'text', text })
     }
     if (content.length === 0) return
-    const line = JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n'
+    const line = JSON.stringify({ type: 'user', uuid, message: { role: 'user', content } }) + '\n'
     void this.handshake.then(() => this.writeLine(line))
   }
 

@@ -382,7 +382,8 @@ export interface RendererApi {
     readDefaults: () => Promise<ModelDefaults>
     saveDefaults: (patch: ModelDefaultsPatch) => Promise<SaveDefaultsResult>
     onInit: (cb: (envelope: SessionInitEnvelope) => void) => () => void
-    send: (paneId: string, text: string, images?: ImageAttachment[]) => void
+    /** `uuid` names the prompt in the CLI's `command_lifecycle` frames and replay echo. */
+    send: (paneId: string, text: string, images: ImageAttachment[] | undefined, uuid: string) => void
     interrupt: (paneId: string) => void
     stop: (paneId: string) => void
     onEvent: (cb: (envelope: ClaudeEventEnvelope) => void) => () => void

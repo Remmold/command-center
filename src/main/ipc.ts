@@ -285,8 +285,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       _e,
       paneId: string,
       text: string,
-      images?: Array<{ media_type: string; data: string }>
-    ) => claudeManager.send(paneId, text, images)
+      images: Array<{ media_type: string; data: string }> | undefined,
+      uuid: string
+    ) => claudeManager.send(paneId, text, images, uuid)
   )
 
   ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, async (_e, cwd: string) =>

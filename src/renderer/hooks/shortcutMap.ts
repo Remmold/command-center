@@ -1,6 +1,6 @@
 import { APP_VIEWS, type AppView } from '../../shared/views'
 
-export type KeyChord = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey'>
+export type KeyChord = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>
 
 interface PlainShortcut {
   name:
@@ -24,8 +24,12 @@ const CTRL_LETTERS: Record<string, PlainShortcut['name']> = {
   w: 'closeActiveChat',
   k: 'focusInput',
   b: 'toggleIdePanels',
-  j: 'nextWaiting',
   l: 'loadPastSession'
+}
+
+/** Ctrl+J is the prompt box's newline, as in the VS Code extension. */
+const CTRL_SHIFT_LETTERS: Record<string, PlainShortcut['name']> = {
+  j: 'nextWaiting'
 }
 
 export function shortcutFor(e: KeyChord): ShortcutAction | null {
@@ -44,7 +48,7 @@ export function shortcutFor(e: KeyChord): ShortcutAction | null {
   if (e.code === 'Backquote') return { name: 'toggleShellDrawer' }
   if (e.code === 'Comma' || e.key === ',') return { name: 'openSettings' }
 
-  const letter = CTRL_LETTERS[e.key]
+  const letter = (e.shiftKey ? CTRL_SHIFT_LETTERS : CTRL_LETTERS)[e.key.toLowerCase()]
   return letter ? { name: letter } : null
 }
 

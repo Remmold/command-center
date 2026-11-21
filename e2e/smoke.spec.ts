@@ -81,6 +81,62 @@ test.describe('slow turn', () => {
     await expect(prompt(page)).toBeEditable()
     await expect(page.getByText('The long job finished.')).toHaveCount(0)
   })
+
+  test('a prompt sent mid-turn shows queued and starts after Esc from the transcript stops the turn', async ({ launched }) => {
+    const { page, log } = launched
+    const pane = page.locator('[data-chat-pane]')
+    const queued = pane.getByRole('article', { name: 'You, queued' })
+    const userLines = () => log.entries().filter((e) => e.kind === 'received' && e.line?.type === 'user')
+    await startSession(launched)
+    await send(page, 'run the long job')
+    await expect(page.getByText('Starting a long job.')).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'Stop' })).toBeVisible()
+
+    await prompt(page).fill('and then this')
+    await expect(pane.getByRole('button', { name: 'Stop' })).toHaveCount(0)
+    await prompt(page).press('Enter')
+    await expect(queued).toHaveText('and then this')
+    await expect(pane.getByRole('button', { name: 'Stop' })).toBeVisible()
+    await expect.poll(() => userLines().length).toBe(2)
+    expect(userLines()[1].line).toMatchObject({ uuid: expect.any(String) })
+    expect(log.controlRequests('interrupt')).toHaveLength(0)
+
+    await pane.locator('[tabindex="-1"]').click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('Escape')
+    await expect.poll(() => log.controlRequests('interrupt').length).toBe(1)
+    await expect(queued).toHaveCount(0)
+    await expect(pane.getByText('and then this')).toBeVisible()
+    await expect(page.getByText('Starting a long job.')).toHaveCount(2)
+  })
+})
+
+test('↑/↓ recall earlier prompts and Ctrl+J adds a line', async ({ launched }) => {
+  const { page } = launched
+  await startSession(launched)
+  await send(page, 'first prompt')
+  await expect(page.getByText(BASIC_REPLY)).toHaveCount(1)
+  await send(page, 'second prompt')
+  await expect(page.getByText(BASIC_REPLY)).toHaveCount(2)
+
+  await prompt(page).fill('draft')
+  await prompt(page).press('Home')
+  await prompt(page).press('ArrowUp')
+  await expect(prompt(page)).toHaveValue('second prompt')
+  await prompt(page).press('ArrowUp')
+  await expect(prompt(page)).toHaveValue('first prompt')
+  await prompt(page).press('End')
+  await prompt(page).press('ArrowDown')
+  await expect(prompt(page)).toHaveValue('second prompt')
+  await prompt(page).press('End')
+  await prompt(page).press('ArrowDown')
+  await expect(prompt(page)).toHaveValue('draft')
+
+  await prompt(page).fill('')
+  await prompt(page).pressSequentially('a')
+  await prompt(page).press('Control+j')
+  await prompt(page).pressSequentially('b')
+  await expect(prompt(page)).toHaveValue(['a', 'b'].join(String.fromCharCode(10)))
+  await expect(page.getByTestId('view-work')).toBeVisible()
 })
 
 test.describe('tool approval', () => {

@@ -23,9 +23,15 @@ export function Message({ item }: { item: ChatItem }) {
   }
 }
 
-function UserPrompt({ text }: { text: string }) {
+/** `queued` is a prompt still waiting on the CLI; it looks the same, as in the extension, and only reads differently. */
+export function UserPrompt({ text, queued = false }: { text: string; queued?: boolean }) {
   return (
-    <div className="whitespace-pre-wrap break-words rounded-md border border-strong bg-input px-3 py-2 text-[13px] leading-relaxed text-fg">
+    <div
+      role={queued ? 'article' : undefined}
+      aria-label={queued ? 'You, queued' : undefined}
+      data-queued={queued || undefined}
+      className="whitespace-pre-wrap break-words rounded-md border border-strong bg-input px-3 py-2 text-[13px] leading-relaxed text-fg"
+    >
       {text}
     </div>
   )

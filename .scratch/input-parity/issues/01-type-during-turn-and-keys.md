@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] The input is editable during a turn; Send during a turn writes the message to the CLI's stdin immediately and shows it as a queued bubble until the CLI starts it (wording/look per the research doc); Stop replaces Send only while the input is empty
 - [ ] ↑ with the caret at the start (and ↓ at the end) steps through this session's earlier prompts, as the extension does; editing a recalled prompt doesn't change history
