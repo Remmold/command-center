@@ -103,7 +103,7 @@ Each workspace uses an **account profile**, a named Claude login of its own. Eve
 
 - **Package manager first.** Move from npm to pnpm. Allow the native terminal module's build script, and keep the existing rebuild-for-Electron step working.
 - **The main process owns session status.** Session status is derived in the main process from the Claude event stream plus the permission server's pending requests, not in the renderer. The tray badge and notifications need it while the window is hidden. A pure **session status reducer** takes (previous status, event) to the next status:
-  - process spawned → Running
+  - process spawned → Idle (a fresh or resumed chat with no turn yet is not working and not waiting)
   - user message sent → Running
   - permission request raised for the session → Needs approval
   - permission request resolved, and none left → Running

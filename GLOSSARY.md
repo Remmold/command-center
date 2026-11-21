@@ -21,7 +21,7 @@ A Claude Code session running somewhere else (the VS Code extension). The comman
 _Avoid_: External session, VS Code chat
 
 **Session status**:
-What a hosted session is doing: Running, Needs approval, Your turn, or Idle. An observed session is only ever Live or Quiet.
+What a hosted session is doing: Running, Needs approval, Your turn, or Idle (no process, or a process that has not had a turn yet). An observed session is only ever Live or Quiet.
 _Avoid_: State, activity
 
 **Waiting session**:

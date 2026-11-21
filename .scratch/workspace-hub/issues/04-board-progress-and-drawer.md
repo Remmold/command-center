@@ -11,4 +11,5 @@
 - [ ] A spec but zero tickets → shown as "spec only"
 - [ ] Filter chips by repo group and by workspace
 - [ ] Clicking a card opens a side drawer with the rendered ticket, its progress notes and blockers, and an Open session button that switches to Sessions on that workspace
-- [ ] Fixture tests cover a finished feature and a spec-only feature
+- [ ] Worktree merge: tickets with the same repo group, feature name and ticket file name merge into one card (two different files sharing a number stay two cards). Real case: FantasySurvival's animation-round2 has two different 09 files.
+- [ ] Fixture tests cover a finished feature, a spec-only feature, and two files sharing a number
