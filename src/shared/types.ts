@@ -13,6 +13,24 @@ export interface Workspace {
   worktreeTag: string
 }
 
+export type SessionStatus = 'running' | 'needs-approval' | 'your-turn' | 'idle'
+
+export const WAITING_STATUSES: readonly SessionStatus[] = ['needs-approval', 'your-turn']
+
+export interface SessionStatusEntry {
+  paneId: string
+  cwd: string
+  status: SessionStatus
+  /** Epoch ms when the current status began. */
+  since: number
+}
+
+/** What the renderer has on screen, reported to main for notifications. */
+export interface ScreenFocus {
+  paneId: string | null
+  windowVisible: boolean
+}
+
 export type PtyKind = 'pwsh' | 'powershell' | 'cmd' | 'bash'
 
 export interface SpawnResult {
@@ -255,6 +273,11 @@ export interface RendererApi {
       response: PermissionResponse,
       allowForSession?: boolean
     ) => void
+  }
+  sessionStatus: {
+    list: () => Promise<SessionStatusEntry[]>
+    onChanged: (cb: (entry: SessionStatusEntry) => void) => () => void
+    reportScreenFocus: (focus: ScreenFocus) => void
   }
   git: {
     status: (cwd: string) => Promise<GitStatusResult>

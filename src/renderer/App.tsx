@@ -12,6 +12,9 @@ import { usePermissionsStore } from './state/permissionsStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
+import { useSessionStatusStore } from './state/sessionStatusStore'
+import { jumpToNextWaiting } from './state/sessionNavigation'
+import { useReportScreenFocus } from './hooks/useReportScreenFocus'
 import type { ClaudeResultEvent } from '../shared/types'
 
 interface RawResultUsage {
@@ -28,12 +31,19 @@ export function App() {
   const showApps = useAppsStore((s) => s.showApps)
   const appView = useViewStore((s) => s.view)
   const initApps = useAppsStore((s) => s.init)
+  const initSessionStatus = useSessionStatusStore((s) => s.init)
 
   const focusInputRef = useRef<() => void>()
 
   useEffect(() => {
     initApps()
   }, [initApps])
+
+  useEffect(() => {
+    initSessionStatus()
+  }, [initSessionStatus])
+
+  useReportScreenFocus()
 
   useEffect(() => {
     const unsub = window.api.permission.onRequest((request) => {
@@ -66,6 +76,7 @@ export function App() {
 
   useKeyboardShortcuts({
     switchView: (next) => useViewStore.getState().setView(next),
+    nextWaiting: jumpToNextWaiting,
     newChat: () => {
       const projectId = useProjectViewsStore.getState().activeProjectId
       if (!projectId) return

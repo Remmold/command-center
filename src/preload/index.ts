@@ -13,6 +13,8 @@ import type {
   PtyDataEvent,
   PtyExitEvent,
   RendererApi,
+  ScreenFocus,
+  SessionStatusEntry,
   SpawnResult,
   Workspace
 } from '../shared/types'
@@ -108,6 +110,15 @@ const api: RendererApi = {
     },
     respond: (requestId: string, response: PermissionResponse, allowForSession?: boolean) =>
       ipcRenderer.send(IPC.PERMISSION_RESPOND, requestId, response, allowForSession)
+  },
+  sessionStatus: {
+    list: (): Promise<SessionStatusEntry[]> => ipcRenderer.invoke(IPC.SESSION_STATUS_LIST),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, entry: SessionStatusEntry) => cb(entry)
+      ipcRenderer.on(IPC.SESSION_STATUS_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.SESSION_STATUS_CHANGED, handler)
+    },
+    reportScreenFocus: (focus: ScreenFocus) => ipcRenderer.send(IPC.SESSION_SCREEN_FOCUS, focus)
   },
   git: {
     status: (cwd: string) => ipcRenderer.invoke(IPC.GIT_STATUS, cwd),

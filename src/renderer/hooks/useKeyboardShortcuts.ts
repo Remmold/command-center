@@ -10,6 +10,7 @@ export interface ShortcutHandlers {
   switchTabIndex?: (index: number) => void
   loadPastSession?: () => void
   sendUsage?: () => void
+  nextWaiting?: () => void
 }
 
 export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
@@ -50,6 +51,11 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
       if (e.key === 'b' && handlers.toggleBottomPanel) {
         e.preventDefault()
         handlers.toggleBottomPanel()
+        return
+      }
+      if (e.key === 'j' && handlers.nextWaiting) {
+        e.preventDefault()
+        handlers.nextWaiting()
         return
       }
       if (e.key === 'l' && handlers.loadPastSession) {

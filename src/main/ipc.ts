@@ -14,8 +14,12 @@ import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import {
   permissionServer,
   type PermissionRequest,
+  type PermissionResolved,
   type PermissionResponse
 } from './permission/server'
+import { sessionStatusTracker } from './sessions/tracker'
+import { setScreenFocus } from './sessions/screenFocus'
+import type { ScreenFocus } from '../shared/types'
 
 let unsubscribers: Array<() => void> = []
 
@@ -187,11 +191,30 @@ export function registerIpc(): void {
   )
 
   const onPermissionRequest = (req: PermissionRequest) => {
+    sessionStatusTracker.apply(req.paneId, { kind: 'permission-raised', requestId: req.requestId })
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send(IPC.PERMISSION_REQUEST, req)
     }
   }
   permissionServer.on('request', onPermissionRequest)
+  const onPermissionResolved = ({ requestId, paneId }: PermissionResolved) => {
+    sessionStatusTracker.apply(paneId, { kind: 'permission-resolved', requestId })
+  }
+  permissionServer.on('resolved', onPermissionResolved)
+
+  unsubscribers.push(
+    claudeManager.onSpawn((paneId, cwd) => sessionStatusTracker.spawned(paneId, cwd)),
+    claudeManager.onSend((paneId) => sessionStatusTracker.apply(paneId, { kind: 'user-message' })),
+    claudeManager.onEvent((paneId, event) => sessionStatusTracker.apply(paneId, { kind: 'claude-event', event })),
+    claudeManager.onExit((paneId) => sessionStatusTracker.apply(paneId, { kind: 'exit' })),
+    sessionStatusTracker.onChange((entry) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.SESSION_STATUS_CHANGED, entry)
+      }
+    })
+  )
+  ipcMain.handle(IPC.SESSION_STATUS_LIST, () => sessionStatusTracker.list())
+  ipcMain.on(IPC.SESSION_SCREEN_FOCUS, (_e, focus: ScreenFocus) => setScreenFocus(focus))
 
   ipcMain.on(
     IPC.PERMISSION_RESPOND,
@@ -209,6 +232,7 @@ export function registerIpc(): void {
     ptyManager.killAll()
     claudeManager.stopAll()
     permissionServer.off('request', onPermissionRequest)
+    permissionServer.off('resolved', onPermissionResolved)
     void permissionServer.stop()
     for (const u of unsubscribers) u()
     unsubscribers = []

@@ -4,10 +4,10 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A pure reducer in the main process maps (previous status, event) to the next status: process spawned → Running; user message sent → Running; permission request raised for the session → Needs approval; permission request resolved and none left → Running; result event (turn finished) → Your turn; process exit → Idle
-- [ ] It records when each status started; the queue sorts by longest wait
-- [ ] Status changes are broadcast to the renderer; status dots show on sidebar rows, session tabs and board cards (workspace level)
-- [ ] The renderer reports which session is on screen and whether the window is visible (consumed by ticket 06)
-- [ ] Tests from recorded event sequences, including two overlapping permission requests and an exit during Needs approval
+- [x] A pure reducer in the main process maps (previous status, event) to the next status: process spawned → Running; user message sent → Running; permission request raised for the session → Needs approval; permission request resolved and none left → Running; result event (turn finished) → Your turn; process exit → Idle
+- [x] It records when each status started; the queue sorts by longest wait
+- [x] Status changes are broadcast to the renderer; status dots show on sidebar rows, session tabs and board cards (workspace level)
+- [x] The renderer reports which session is on screen and whether the window is visible (consumed by ticket 06)
+- [x] Tests from recorded event sequences, including two overlapping permission requests and an exit during Needs approval

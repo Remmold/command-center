@@ -116,7 +116,6 @@ export class ClaudeSession {
     })
     this.child.on('exit', (code) => {
       this.alive = false
-      permissionServer.clearPane(paneId)
       console.log('[claude] exit', { paneId, code })
       this.onExit(paneId, code)
     })

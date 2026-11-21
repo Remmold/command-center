@@ -6,6 +6,8 @@ import { Column, ColumnRow } from '../ui/Column'
 import { Card, CardMeta, CardTitle } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { RepoIcon } from '../RepoIcon'
+import { StatusDot } from '../ui/StatusDot'
+import { useWorkspacesStatus } from '../../state/sessionStatusStore'
 
 const COLUMNS: { column: BoardColumn; title: string }[] = [
   { column: 'backlog', title: 'Backlog' },
@@ -80,11 +82,13 @@ export function BoardView() {
 
 function TicketCard({ placed, tags }: { placed: PlacedTicket; tags: SeenIn[] }) {
   const { ticket } = placed
+  const status = useWorkspacesStatus(ticket.sightings.map((s) => s.workspaceId))
   return (
     <Card tooltip={ticket.sightings[0]?.filePath}>
       <CardMeta>
         <RepoIcon repoGroupKey={placed.repoGroupKey} repoName={placed.repoName} size="sm" />
-        <span className="truncate">{placed.featureName}</span>
+        <span className="min-w-0 flex-1 truncate">{placed.featureName}</span>
+        {status && <StatusDot status={status} />}
       </CardMeta>
       <CardTitle prefix={ticket.number}>{ticket.title}</CardTitle>
       <CardMeta>

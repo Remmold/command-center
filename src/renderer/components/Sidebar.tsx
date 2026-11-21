@@ -5,6 +5,9 @@ import { groupByRepo, type RepoGroupView } from '../../shared/repoGroups'
 import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
 import { RepoIcon } from './RepoIcon'
+import { StatusDot } from './ui/StatusDot'
+import { NeedsYouQueue } from './NeedsYouQueue'
+import { useWorkspaceStatus } from '../state/sessionStatusStore'
 
 export function Sidebar() {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
@@ -38,6 +41,7 @@ export function Sidebar() {
           <FolderPlus size={14} strokeWidth={2} />
         </button>
       </div>
+      <NeedsYouQueue />
       <ul className="scrollbar-thin flex-1 overflow-y-auto py-1">
         {groups.length === 0 && (
           <li className="px-3 py-4 text-xs text-zinc-500">no workspaces yet</li>
@@ -71,7 +75,7 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
   const openProject = useProjectViewsStore((s) => s.openProject)
   const closeProject = useProjectViewsStore((s) => s.closeProject)
   const active = useProjectViewsStore((s) => s.activeProjectId === workspace.id)
-  const open = useProjectViewsStore((s) => !!s.views[workspace.id])
+  const status = useWorkspaceStatus(workspace.id)
 
   const label = workspace.worktreeTag || workspace.name
 
@@ -86,9 +90,7 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
     >
       <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {open && (
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-label="open" />
-      )}
+      {status && <StatusDot status={status} />}
       <button
         onClick={(e) => {
           e.stopPropagation()
