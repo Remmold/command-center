@@ -1,0 +1,10 @@
+{
+  "contextTokens": 700000,
+  "turns": [
+    {
+      "match": "",
+      "repeat": true,
+      "events": [{ "type": "text", "text": "This chat is getting long." }]
+    }
+  ]
+}

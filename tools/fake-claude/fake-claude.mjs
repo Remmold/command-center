@@ -18,6 +18,7 @@ const clone = (value) => structuredClone(value)
 const recorded = {
   initialize: readJson(join(FIXTURES, 'initialize-reply.json')).response.response,
   usage: readJson(join(FIXTURES, 'get-usage-reply.json')).response.response,
+  context: readJson(join(FIXTURES, 'get-context-usage-reply.json')).response.response,
   unsupported: readJson(join(FIXTURES, 'error-reply.json')).response.error,
   turn: readLines(join(FIXTURES, 'turn-write-approval.jsonl')),
   queued: readLines(join(FIXTURES, 'turn-queued-message.jsonl'))
@@ -168,6 +169,22 @@ class Fake {
     return line
   }
 
+  /** The recorded reply; a script's `contextTokens` moves the difference between Messages and Free space. */
+  contextUsage() {
+    const reply = clone(recorded.context)
+    reply.model = this.resolvedModel()
+    const total = this.script.contextTokens
+    if (typeof total !== 'number') return reply
+    const extra = total - reply.totalTokens
+    for (const category of reply.categories) {
+      if (category.name === 'Messages') category.tokens += extra
+      if (category.name === 'Free space') category.tokens -= extra
+    }
+    reply.totalTokens = total
+    reply.percentage = Math.round((total / reply.maxTokens) * 100)
+    return reply
+  }
+
   resolvedModel() {
     const models = recorded.initialize.models
     const hit = models.find((m) => m.value === this.model) ?? (this.model === 'default' ? models[0] : null)
@@ -218,6 +235,8 @@ class Fake {
         return ok({ ...clone(recorded.initialize), pid: process.pid, current_permission_mode: this.permissionMode })
       case 'get_usage':
         return ok(clone(recorded.usage))
+      case 'get_context_usage':
+        return ok(this.contextUsage())
       case 'set_permission_mode': {
         if (request.mode === 'bypassPermissions' && !this.bypassAllowed) {
           return this.send({ type: 'control_response', response: { ...clone(template.bypassRefused), request_id: requestId } })

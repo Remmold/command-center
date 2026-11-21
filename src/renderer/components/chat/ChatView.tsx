@@ -31,6 +31,11 @@ import { useModelChoice } from '../../state/useModelChoice'
 import { DEFAULT_MODEL, effortLabel, launchChoice, versionedName } from '../../state/modelPicker'
 import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
 import { ModelPicker } from './ModelPicker'
+import { ContextPie } from './ContextPie'
+import { ContextDialog } from './ContextDialog'
+import { contextIndicator, parseContextUsage, type ContextUsage } from './contextUsage'
+import type { LocalAction, OpenTarget } from './slashMenuModel'
+import { useUsagePopoverStore } from '../../state/usagePopoverStore'
 import { Brain } from 'lucide-react'
 import { THINKING_BUDGET } from '../../../shared/types'
 import type {
@@ -50,6 +55,15 @@ const EMPTY_HELD: HeldPrompt[] = []
 
 /** The extension saves these as the default for new sessions when the user picks them. */
 const DEFAULT_WORTHY: ReadonlySet<PermissionMode> = new Set(['default', 'auto', 'acceptEdits'])
+
+/** The extension's own menu rows the app can run, with its wording. */
+const LOCAL_ACTIONS: readonly LocalAction[] = [
+  { id: 'attach-file', section: 'Context', label: 'Attach file…', description: 'Upload a file to include in conversation' },
+  { id: 'mention-file', section: 'Context', label: 'Mention file from this project…', description: 'Reference a project file with @mention' },
+  { id: 'model', section: 'Model', label: 'Switch model…', description: 'Change the AI model' },
+  { id: 'toggle-thinking', section: 'Model', label: 'Thinking', description: 'Toggle extended thinking mode', keepOpen: true },
+  { id: 'account-usage', section: 'Model', label: 'Account & usage…', description: 'View account info and usage' }
+]
 
 interface Props {
   paneId: string
@@ -109,7 +123,11 @@ export function ChatView({
   const [turnActive, setTurnActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inProgress, setInProgress] = useState<AssistantMessageItem | null>(null)
-  const [slashCommands, setSlashCommands] = useState<string[]>([])
+  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
+  const [contextOpen, setContextOpen] = useState(false)
+  const closeContext = useCallback(() => setContextOpen(false), [])
+  const [initCommandNames, setInitCommandNames] = useState<string[]>([])
+  const [modelMenuSignal, setModelMenuSignal] = useState(0)
   const sessionInit = useSessionInit(paneId)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const itemsLenRef = useRef(0)
@@ -330,10 +348,12 @@ export function ChatView({
         useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
         return
       }
+      if (sys.subtype === 'compact_boundary') {
+        setContextUsage((u) => (u ? { ...u, totalTokens: 0 } : u))
+        return
+      }
       if (sys.subtype === 'init') {
-        if (Array.isArray(sys.slash_commands)) {
-          setSlashCommands(sys.slash_commands as string[])
-        }
+        if (Array.isArray(sys.slash_commands)) setInitCommandNames(sys.slash_commands.filter((n): n is string => typeof n === 'string'))
         appendItems(paneId, [
           { kind: 'system', id: crypto.randomUUID(), text: formatInitNote(sys) }
         ])
@@ -375,6 +395,7 @@ export function ChatView({
     }
     if (event.type === 'result') {
       const re = event as ClaudeResultEvent
+      void refreshContextUsage()
       if (interruptedRef.current) {
         interruptedRef.current = false
         setTurnActive(false)
@@ -395,6 +416,25 @@ export function ChatView({
       setInProgress(null)
       return
     }
+  }
+
+  const refreshContextUsage = async (): Promise<void> => {
+    const res = await window.api.claude.control(paneId, 'get_context_usage')
+    if (!res.ok) return
+    const usage = parseContextUsage(res.response)
+    if (usage) setContextUsage(usage)
+  }
+
+  const openTarget = (target: OpenTarget): void => {
+    if (target === 'model') setModelMenuSignal((n) => n + 1)
+    else if (target === 'usage') useUsagePopoverStore.getState().open()
+    else setContextOpen(true)
+  }
+
+  const runAction = (id: string): void => {
+    if (id === 'model') openTarget('model')
+    else if (id === 'account-usage') openTarget('usage')
+    else if (id === 'toggle-thinking') void toggleThinking()
   }
 
   const ensureStarted = async (): Promise<boolean> => {
@@ -419,6 +459,7 @@ export function ChatView({
       return false
     }
     setProcessRunning(true)
+    void refreshContextUsage()
     return true
   }
 
@@ -488,8 +529,11 @@ export function ChatView({
     await ensureStarted()
   }
 
-  const knownSlashCommands =
-    slashCommands.length > 0 ? slashCommands : (sessionInit?.commands.map((c) => c.name) ?? [])
+  const indicator = contextUsage ? contextIndicator(contextUsage) : null
+  const commands = useMemo(
+    () => sessionInit?.commands ?? initCommandNames.map((name) => ({ name, description: '', argumentHint: '', aliases: [], builtin: false })),
+    [sessionInit, initCommandNames]
+  )
 
   const showIdleBanner =
     items.length > 0 &&
@@ -542,7 +586,14 @@ export function ChatView({
         history={history}
         onSend={handleSend}
         onInterrupt={handleInterrupt}
-        slashCommands={knownSlashCommands}
+        commands={commands}
+        localActions={LOCAL_ACTIONS}
+        onAction={runAction}
+        onOpen={openTarget}
+        menuTrailing={{
+          model: <span className="shrink-0 text-[11px] text-muted">{choice.pill.label}</span>,
+          'toggle-thinking': <span className="shrink-0 text-[11px] text-muted">{thinking ? 'On' : 'Off'}</span>
+        }}
         cwd={cwd}
         registerFocus={registerInputFocus}
         footerStart={
@@ -555,6 +606,7 @@ export function ChatView({
               levels={choice.levels}
               onSelectModel={(m) => void pickModel(m)}
               onSelectEffort={(l) => void pickEffort(l)}
+              openSignal={modelMenuSignal}
             />
             <Button variant="ghost" pressed={thinking} onClick={() => void toggleThinking()} tooltip="Toggle extended thinking mode">
               <Brain size={13} strokeWidth={2} />
@@ -563,15 +615,19 @@ export function ChatView({
           </>
         }
         footerEnd={
-          <PermissionModePicker
-            mode={mode}
-            modes={modes}
-            onSelect={(m) => void pickMode(m)}
-            effort={{ level: choice.effort, levels: choice.levels, onSelect: (l) => void pickEffort(l) }}
-          />
+          <>
+            {indicator && <ContextPie indicator={indicator} onCompact={() => void handleSend('/compact')} />}
+            <PermissionModePicker
+              mode={mode}
+              modes={modes}
+              onSelect={(m) => void pickMode(m)}
+              effort={{ level: choice.effort, levels: choice.levels, onSelect: (l) => void pickEffort(l) }}
+            />
+          </>
         }
         onShiftTab={() => void pickMode(nextMode(modes, mode))}
       />
+      {contextOpen && <ContextDialog paneId={paneId} onClose={closeContext} />}
     </div>
   )
 }

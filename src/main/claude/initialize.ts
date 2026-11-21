@@ -41,7 +41,14 @@ function toAccount(raw: unknown): CliAccount | null {
 function toCommand(raw: Raw): CliCommand | null {
   const name = text(raw.name)
   if (!name) return null
-  return { name, description: text(raw.description) ?? '', argumentHint: text(raw.argumentHint) ?? '' }
+  const aliases = Array.isArray(raw.aliases) ? raw.aliases.filter((a): a is string => typeof a === 'string') : []
+  return {
+    name,
+    description: text(raw.description) ?? '',
+    argumentHint: text(raw.argumentHint) ?? '',
+    aliases,
+    builtin: raw.builtin === true
+  }
 }
 
 /** Narrows the CLI's `initialize` reply to what the app keeps. */

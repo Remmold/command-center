@@ -136,6 +136,22 @@ describe('control replies', () => {
     expect(reply.response).toEqual(recorded)
   })
 
+  it('answers get_context_usage with the recorded reply for the current model', async () => {
+    const recorded = JSON.parse(readFileSync(join(FIXTURES, 'get-context-usage-reply.json'), 'utf-8')).response.response
+    const reply = await start(['--model', 'haiku']).control('get_context_usage')
+    expect(reply.response).toEqual({ ...recorded, model: 'claude-haiku-5-5' })
+  })
+
+  it("moves a script's contextTokens into Messages and out of Free space", async () => {
+    const recorded = JSON.parse(readFileSync(join(FIXTURES, 'get-context-usage-reply.json'), 'utf-8')).response.response
+    const reply = await start([], { contextTokens: 600000, turns: [] }).control('get_context_usage')
+    const tokens = (name: string, from: Line) => from.categories.find((c: Line) => c.name === name).tokens
+    const extra = 600000 - recorded.totalTokens
+    expect(reply.response).toMatchObject({ totalTokens: 600000, percentage: 60 })
+    expect(tokens('Messages', reply.response)).toBe(tokens('Messages', recorded) + extra)
+    expect(tokens('Free space', reply.response)).toBe(tokens('Free space', recorded) - extra)
+  })
+
   it('switches the permission mode and reports it as a status line', async () => {
     const fake = start()
     const reply = await fake.control('set_permission_mode', { mode: 'acceptEdits' })

@@ -139,6 +139,60 @@ test('↑/↓ recall earlier prompts and Ctrl+J adds a line', async ({ launched 
   await expect(page.getByTestId('view-work')).toBeVisible()
 })
 
+test('the slash menu sends on Enter, inserts with a hint on Tab, and opens the app’s own UI', async ({ launched }) => {
+  const { page, log } = launched
+  const menu = page.getByRole('listbox', { name: 'Actions' })
+  await startSession(launched)
+
+  await prompt(page).pressSequentially('/comp')
+  await expect(menu.getByRole('option', { name: '/compact' })).toHaveAttribute('aria-selected', 'true')
+  await prompt(page).press('Enter')
+  await expect.poll(() => log.userTexts()).toContain('/compact')
+  await expect(prompt(page)).toHaveValue('')
+  await expect(menu).toHaveCount(0)
+
+  await prompt(page).pressSequentially('/mod')
+  await prompt(page).press('Tab')
+  await expect(prompt(page)).toHaveValue('/model ')
+  await expect(page.locator('[data-argument-hint]')).toHaveText('<model>')
+
+  await prompt(page).fill('')
+  await prompt(page).pressSequentially('/model')
+  await prompt(page).press('Enter')
+  await expect(page.getByRole('dialog', { name: 'Select a model' })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await prompt(page).pressSequentially('/context')
+  await prompt(page).press('Enter')
+  const context = page.getByRole('dialog', { name: 'Context usage' })
+  await expect(context.getByText('22.1k / 1.0M tokens (2%)')).toBeVisible()
+  await expect(context.getByText('~\\.claude\\CLAUDE.md')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(context).toHaveCount(0)
+
+  await prompt(page).pressSequentially('/usage')
+  await prompt(page).press('Enter')
+  await expect(page.getByRole('dialog', { name: 'Account & Usage' })).toBeVisible()
+  expect(log.userTexts()).toEqual(['/compact'])
+})
+
+test.describe('a full context', () => {
+  test.use({ script: 'context' })
+
+  test('the context pie shows from the start, refreshes after a turn and sends /compact when clicked', async ({ launched }) => {
+    const { page, log } = launched
+    await startSession(launched)
+    const pie = page.getByRole('button', { name: '72% context used — click to compact' })
+    await expect(pie).toBeVisible()
+    await send(page, 'hello')
+    await expect(page.getByText('This chat is getting long.')).toBeVisible()
+    await expect.poll(() => log.controlRequests('get_context_usage').length).toBe(2)
+    await expect(pie).toHaveAttribute('title', '28% of context remaining until auto-compact.\nClick to compact now.')
+    await pie.click()
+    await expect.poll(() => log.userTexts()).toEqual(['hello', '/compact'])
+  })
+})
+
 test.describe('tool approval', () => {
   test.use({ script: 'approval' })
 

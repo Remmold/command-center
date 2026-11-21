@@ -40,6 +40,18 @@
   --cc-meter-limit: 241 76 76;
   --cc-meter-track: 76 76 76;
 
+  /* Dark+ charts.* colours, in the extension's --app-chart-N order. */
+  --cc-chart-1: 209 134 22;
+  --cc-chart-2: 55 148 255;
+  --cc-chart-3: 137 209 133;
+  --cc-chart-4: 204 167 0;
+  --cc-chart-5: 177 128 215;
+  --cc-chart-6: 241 76 76;
+  --cc-chart-7: 17 168 205;
+  --cc-chart-8: 204 204 204;
+  --cc-claude-clay: 198 97 63;
+  --cc-scrim: 0 0 0;
+
   /* Dark+ token colours, read by syntax.css for highlight.js. */
   --cc-syntax-keyword: 86 156 214;
   --cc-syntax-meta: 197 134 192;

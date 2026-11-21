@@ -44,6 +44,18 @@ module.exports = {
           limit: theme('meter-limit'),
           track: theme('meter-track')
         },
+        chart: {
+          1: theme('chart-1'),
+          2: theme('chart-2'),
+          3: theme('chart-3'),
+          4: theme('chart-4'),
+          5: theme('chart-5'),
+          6: theme('chart-6'),
+          7: theme('chart-7'),
+          8: theme('chart-8')
+        },
+        clay: theme('claude-clay'),
+        scrim: theme('scrim'),
         status: {
           running: theme('status-running'),
           approval: theme('status-approval'),

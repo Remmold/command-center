@@ -12,7 +12,8 @@ const ELECTRON = require('electron') as unknown as string
 export const SCRIPTS = {
   basic: join(REPO, 'tools', 'fake-claude', 'scripts', 'basic.json'),
   approval: join(REPO, 'tools', 'fake-claude', 'scripts', 'approval.json'),
-  slow: join(__dirname, 'scripts', 'slow.json')
+  slow: join(__dirname, 'scripts', 'slow.json'),
+  context: join(__dirname, 'scripts', 'context.json')
 } as const
 
 export type ScriptName = keyof typeof SCRIPTS
@@ -54,6 +55,17 @@ export class FakeLog {
     return this.entries().flatMap((e) => {
       const reply = e.kind === 'received' ? bodyOf(e, 'control_response')?.response : undefined
       return isRecord(reply) && 'behavior' in reply ? [reply] : []
+    })
+  }
+
+  /** The text of each user message the app sent. */
+  userTexts(): string[] {
+    return this.entries().flatMap((e) => {
+      if (e.kind !== 'received' || e.line?.type !== 'user') return []
+      const content = (e.line.message as { content?: unknown } | undefined)?.content
+      if (typeof content === 'string') return [content]
+      if (!Array.isArray(content)) return []
+      return [content.flatMap((b) => (isRecord(b) && typeof b.text === 'string' ? [b.text] : [])).join('')]
     })
   }
 

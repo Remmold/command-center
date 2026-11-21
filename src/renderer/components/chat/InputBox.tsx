@@ -1,10 +1,24 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, Image as ImageIcon, Paperclip, Square, X } from 'lucide-react'
 import { AutocompletePopup, type AutocompleteItem } from './AutocompletePopup'
+import { SlashMenu } from './SlashMenu'
+import {
+  argumentHint,
+  buildMenu,
+  initialActive,
+  menuSections,
+  moveActive,
+  selectCommand,
+  slashTrigger,
+  type LocalAction,
+  type MenuCommand,
+  type OpenTarget,
+  type SlashTrigger
+} from './slashMenuModel'
 import { MessageColumn } from './MessageColumn'
 import { NO_RECALL, stepHistory, type HistoryCursor } from './promptHistory'
 import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
-import type { ImageAttachment } from '../../../shared/types'
+import type { CliCommand, ImageAttachment } from '../../../shared/types'
 
 interface Props {
   /** Claude is working: sending still works (the prompt is queued) and Stop replaces Send while the input is empty. */
@@ -14,7 +28,15 @@ interface Props {
   placeholder?: string
   onSend: (text: string, images?: ImageAttachment[]) => void
   onInterrupt?: () => void
-  slashCommands?: string[]
+  /** The session's CLI commands, from its `initialize` reply. */
+  commands?: readonly CliCommand[]
+  /** The app's own rows in the slash menu; `attach-file` and `mention-file` are handled here. */
+  localActions?: readonly LocalAction[]
+  onAction?: (id: string) => void
+  /** A CLI command the app opens its own UI for. */
+  onOpen?: (target: OpenTarget) => void
+  /** Extra content at the end of a slash-menu row, by command id. */
+  menuTrailing?: Readonly<Record<string, ReactNode>>
   cwd?: string
   registerFocus?: (focusFn: () => void) => void
   footerStart?: ReactNode
@@ -22,10 +44,15 @@ interface Props {
   onShiftTab?: () => void
 }
 
-interface AutocompleteState {
-  type: 'slash' | 'mention'
+interface MentionState {
   triggerStart: number
   query: string
+}
+
+interface SlashState {
+  trigger: SlashTrigger
+  /** Set by ↑/↓ or the mouse; otherwise the menu's initial row for this query. */
+  picked: { id: string; query: string } | null
 }
 
 interface PendingImage {
@@ -39,17 +66,10 @@ interface PendingImage {
   previewUrl: string
 }
 
-function detectTrigger(
-  value: string,
-  cursor: number,
-  hasSlashCommands: boolean
-): AutocompleteState | null {
-  if (hasSlashCommands && value.startsWith('/')) {
-    const beforeCursor = value.slice(0, cursor)
-    if (!/\s/.test(beforeCursor)) {
-      return { type: 'slash', triggerStart: 0, query: beforeCursor.slice(1) }
-    }
-  }
+const NO_COMMANDS: readonly CliCommand[] = []
+const NO_ACTIONS: readonly LocalAction[] = []
+
+function detectMention(value: string, cursor: number): MentionState | null {
   for (let i = cursor - 1; i >= 0; i--) {
     const ch = value[i]
     if (ch === '@') {
@@ -57,7 +77,7 @@ function detectTrigger(
       if (i === 0 || /\s/.test(before)) {
         const query = value.slice(i + 1, cursor)
         if (!/\s/.test(query)) {
-          return { type: 'mention', triggerStart: i, query }
+          return { triggerStart: i, query }
         }
       }
       break
@@ -128,7 +148,11 @@ export function InputBox({
   placeholder,
   onSend,
   onInterrupt,
-  slashCommands,
+  commands = NO_COMMANDS,
+  localActions = NO_ACTIONS,
+  onAction,
+  onOpen,
+  menuTrailing,
   cwd,
   registerFocus,
   footerStart,
@@ -136,7 +160,8 @@ export function InputBox({
   onShiftTab
 }: Props) {
   const [value, setValue] = useState('')
-  const [autocomplete, setAutocomplete] = useState<AutocompleteState | null>(null)
+  const [mention, setMention] = useState<MentionState | null>(null)
+  const [slash, setSlash] = useState<SlashState | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [allFiles, setAllFiles] = useState<string[]>([])
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
@@ -145,6 +170,8 @@ export function InputBox({
   const ctrlEnterSends = useGeneralSettingsStore((s) => s.useCtrlEnterToSend)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const menu = useMemo(() => buildMenu(commands, localActions), [commands, localActions])
+  const hasMenu = menu.sections.length > 0
 
   useEffect(() => {
     const ta = textareaRef.current
@@ -164,44 +191,50 @@ export function InputBox({
   }, [registerFocus])
 
   useEffect(() => {
-    if (autocomplete?.type === 'mention' && cwd && allFiles.length === 0) {
+    if (mention && cwd && allFiles.length === 0) {
       void window.api.files.list(cwd).then((files) => setAllFiles(files))
     }
-  }, [autocomplete?.type, cwd, allFiles.length])
+  }, [mention, cwd, allFiles.length])
 
-  let items: AutocompleteItem[] = []
-  if (autocomplete?.type === 'slash' && slashCommands) {
-    items = slashCommands
-      .filter((cmd) => fuzzyMatch(cmd, autocomplete.query))
-      .map((cmd) => ({ id: cmd, primary: '/' + cmd }))
-      .sort(
-        (a, b) =>
-          fuzzyRank(a.primary.slice(1), autocomplete.query) -
-          fuzzyRank(b.primary.slice(1), autocomplete.query)
-      )
-      .slice(0, 30)
-  } else if (autocomplete?.type === 'mention') {
-    items = allFiles
-      .filter((path) => fuzzyMatch(path, autocomplete.query))
-      .sort((a, b) => fuzzyRank(a, autocomplete.query) - fuzzyRank(b, autocomplete.query))
-      .slice(0, 30)
-      .map((path) => ({ id: path, primary: path }))
-  }
+  const mentionItems: AutocompleteItem[] = mention
+    ? allFiles
+        .filter((path) => fuzzyMatch(path, mention.query))
+        .sort((a, b) => fuzzyRank(a, mention.query) - fuzzyRank(b, mention.query))
+        .slice(0, 30)
+        .map((path) => ({ id: path, primary: path }))
+    : []
+
+  const sections = useMemo(() => (slash ? menuSections(menu, slash.trigger.query) : []), [menu, slash])
+  const flat = useMemo(() => sections.flatMap((s) => s.commands), [sections])
+  const slashQuery = slash?.trigger.query.toLowerCase() ?? ''
+  const pickedId = slash?.picked && slash.picked.query === slashQuery && flat.some((c) => c.id === slash.picked?.id) ? slash.picked.id : null
+  const activeId = pickedId ?? initialActive(sections, slashQuery)
 
   useEffect(() => {
     setSelectedIndex(0)
-  }, [autocomplete?.query, autocomplete?.type])
+  }, [mention?.query])
+
+  const detect = (v: string, caret: number) => {
+    const trigger = hasMenu ? slashTrigger(v, caret) : null
+    setSlash((prev) => (trigger ? { trigger, picked: prev?.picked ?? null } : null))
+    setMention(trigger ? null : detectMention(v, caret))
+  }
+
+  const closeMenus = () => {
+    setSlash(null)
+    setMention(null)
+  }
 
   const updateAutocomplete = () => {
     const ta = textareaRef.current
     if (!ta) return
-    setAutocomplete(detectTrigger(value, ta.selectionStart, !!slashCommands?.length))
+    detect(value, ta.selectionStart)
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const v = e.target.value
     setValue(v)
-    setAutocomplete(detectTrigger(v, e.target.selectionStart, !!slashCommands?.length))
+    detect(v, e.target.selectionStart)
   }
 
   const send = () => {
@@ -211,32 +244,57 @@ export function InputBox({
     onSend(trimmed, images.length > 0 ? images : undefined)
     setValue('')
     setPendingImages([])
-    setAutocomplete(null)
+    closeMenus()
   }
 
-  const applySelection = (item: AutocompleteItem) => {
-    if (!autocomplete) return
-    const ta = textareaRef.current
-    if (!ta) return
-    const cursor = ta.selectionStart
-    const before = value.slice(0, autocomplete.triggerStart)
-    const after = value.slice(cursor)
-    const inserted = autocomplete.type === 'slash' ? item.primary : '@' + item.primary
-    const newValue = before + inserted + ' ' + after
-    setValue(newValue)
-    setAutocomplete(null)
+  const placeCaret = (ta: HTMLTextAreaElement, pos: number) =>
     setTimeout(() => {
       ta.focus()
-      const pos = before.length + inserted.length + 1
       ta.setSelectionRange(pos, pos)
     }, 0)
+
+  const applyMention = (item: AutocompleteItem) => {
+    const ta = textareaRef.current
+    if (!mention || !ta) return
+    const before = value.slice(0, mention.triggerStart)
+    const inserted = '@' + item.primary
+    setValue(before + inserted + ' ' + value.slice(ta.selectionStart))
+    setMention(null)
+    placeCaret(ta, before.length + inserted.length + 1)
+  }
+
+  const runLocal = (id: string, ta: HTMLTextAreaElement, nextValue: string, caret: number) => {
+    if (id === 'attach-file') return fileInputRef.current?.click()
+    if (id === 'mention-file') {
+      const inserted = nextValue.slice(0, caret) + '@' + nextValue.slice(caret)
+      setValue(inserted)
+      setMention({ triggerStart: caret, query: '' })
+      return placeCaret(ta, caret + 1)
+    }
+    onAction?.(id)
+  }
+
+  const applyCommand = (cmd: MenuCommand, viaTab: boolean) => {
+    const ta = textareaRef.current
+    if (!slash || !ta) return
+    if (cmd.keepOpen) {
+      onAction?.(cmd.id)
+      return
+    }
+    const result = selectCommand(cmd, viaTab, value, slash.trigger)
+    setValue(result.value)
+    setSlash(null)
+    placeCaret(ta, result.caret)
+    if (result.kind === 'send') onSend(result.text)
+    else if (result.kind === 'open') onOpen?.(result.target)
+    else if (result.kind === 'action') runLocal(result.id, ta, result.value, result.caret)
   }
 
   const insertAtCaret = (ta: HTMLTextAreaElement, text: string) => {
     const start = ta.selectionStart
     const next = value.slice(0, start) + text + value.slice(ta.selectionEnd)
     setValue(next)
-    setAutocomplete(null)
+    closeMenus()
     setTimeout(() => ta.setSelectionRange(start + text.length, start + text.length), 0)
   }
 
@@ -245,11 +303,35 @@ export function InputBox({
     if (!step) return false
     setRecall(step.cursor)
     setValue(step.value)
-    setAutocomplete(null)
+    closeMenus()
     // ↑ leaves the caret at the start so the next ↑ keeps going back; ↓ leaves it at the end.
     const pos = direction === 'older' && step.cursor.index !== -1 ? 0 : step.value.length
     setTimeout(() => ta.setSelectionRange(pos, pos), 0)
     return true
+  }
+
+  /** The extension's menu keys: arrows wrap, Enter or Tab pick, Esc closes. True when the key was the menu's. */
+  const handleSlashKey = (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!slash) return false
+    if (e.key === 'Escape') {
+      setSlash(null)
+      return true
+    }
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && flat.length > 0) {
+      const id = moveActive(flat, activeId, e.key === 'ArrowDown' ? 'down' : 'up')
+      setSlash({ ...slash, picked: id ? { id, query: slashQuery } : null })
+      return true
+    }
+    if ((e.key === 'Tab' || e.key === 'Enter') && !e.shiftKey) {
+      const active = flat.find((c) => c.id === activeId)
+      const typed = slashQuery.length > 0
+      if (e.key === 'Enter' && !active && typed) return false
+      const first = flat[0]
+      const pick = active ?? (e.key === 'Tab' && typed && first?.slash ? first : undefined)
+      if (pick && !e.repeat) applyCommand(pick, e.key === 'Tab')
+      return true
+    }
+    return false
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -260,9 +342,13 @@ export function InputBox({
       onShiftTab()
       return
     }
-    if (e.key === 'Escape' && autocomplete && items.length > 0) {
+    if (handleSlashKey(e)) {
       e.preventDefault()
-      setAutocomplete(null)
+      return
+    }
+    if (e.key === 'Escape' && mention && mentionItems.length > 0) {
+      e.preventDefault()
+      setMention(null)
       return
     }
     if (isNewlineKey(e)) {
@@ -270,10 +356,10 @@ export function InputBox({
       insertAtCaret(ta, '\n')
       return
     }
-    if (autocomplete && items.length > 0) {
+    if (mention && mentionItems.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setSelectedIndex((i) => Math.min(i + 1, items.length - 1))
+        setSelectedIndex((i) => Math.min(i + 1, mentionItems.length - 1))
         return
       }
       if (e.key === 'ArrowUp') {
@@ -283,7 +369,7 @@ export function InputBox({
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault()
-        applySelection(items[selectedIndex])
+        applyMention(mentionItems[selectedIndex])
         return
       }
     }
@@ -303,6 +389,8 @@ export function InputBox({
       else if (!e.repeat) send()
     }
   }
+
+  const hint = argumentHint(menu, value)
 
   const ingestFiles = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'))
@@ -382,13 +470,24 @@ export function InputBox({
           className="hidden"
           onChange={handleFileInput}
         />
-        {autocomplete && items.length > 0 && (
+        {slash && (
+          <SlashMenu
+            sections={sections}
+            activeId={activeId}
+            onSelect={(cmd) => applyCommand(cmd, false)}
+            onHover={(id) => {
+              if (id !== activeId) setSlash({ ...slash, picked: { id, query: slashQuery } })
+            }}
+            trailing={menuTrailing}
+          />
+        )}
+        {mention && mentionItems.length > 0 && (
           <AutocompletePopup
-            items={items}
+            items={mentionItems}
             selectedIndex={selectedIndex}
-            onSelect={applySelection}
+            onSelect={applyMention}
             onHoverIndex={setSelectedIndex}
-            header={autocomplete.type === 'slash' ? 'slash commands' : 'mention a file'}
+            header="mention a file"
           />
         )}
         {pendingImages.length > 0 && (
@@ -424,18 +523,28 @@ export function InputBox({
           </div>
         )}
         <div className="flex flex-col gap-1.5 rounded-md border border-strong bg-input px-3 py-2 focus-within:border-focus">
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            onSelect={updateAutocomplete}
-            onClick={updateAutocomplete}
-            onPaste={handlePaste}
-            rows={1}
-            placeholder={placeholder ?? 'message claude…'}
-            className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none"
-          />
+          <div className="relative flex">
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              onSelect={updateAutocomplete}
+              onClick={updateAutocomplete}
+              onPaste={handlePaste}
+              rows={1}
+              placeholder={placeholder ?? 'message claude…'}
+              className="min-h-[22px] w-full resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none"
+            />
+            {hint && (
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words text-[13px] leading-relaxed">
+                <span className="invisible">{value}</span>
+                <span data-argument-hint className="text-faint">
+                  {hint}
+                </span>
+              </div>
+            )}
+          </div>
           <div className="flex items-end justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1">
               <button

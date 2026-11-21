@@ -103,6 +103,9 @@ export interface CliCommand {
   name: string
   description: string
   argumentHint: string
+  aliases: string[]
+  /** The CLI's own command, as opposed to a skill, plugin or custom command. */
+  builtin: boolean
 }
 
 /** What a hosted session's CLI reported in its `initialize` handshake. */

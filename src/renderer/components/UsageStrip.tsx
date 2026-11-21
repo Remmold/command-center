@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useMenu } from '../hooks/useMenu'
 import { useMinuteClock } from '../hooks/useMinuteClock'
 import type { UsageEntry } from '../state/usageModel'
@@ -7,6 +7,7 @@ import { useProfilesStore } from '../state/profilesStore'
 import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useViewStore } from '../state/viewStore'
+import { useUsagePopoverStore } from '../state/usagePopoverStore'
 import { AccountUsagePanel, UsageMeters } from './AccountUsage'
 import { Popover } from './ui/Popover'
 import { TitleBarButton } from './ui/TitleBarButton'
@@ -31,11 +32,12 @@ export function UsageStrip() {
   }, [loadProfiles])
 
   if (entries.length === 0) return null
+  const target = (entries.find((e) => e.highlighted) ?? entries[0]).profileId
   return (
     <ul aria-label="usage per account profile" className="flex h-full shrink-0 items-stretch border-l border-subtle">
       {entries.map((entry) => (
         <li key={entry.profileId} className="flex">
-          <UsageStripEntry entry={entry} now={now} />
+          <UsageStripEntry entry={entry} now={now} opensOnRequest={entry.profileId === target} />
         </li>
       ))}
     </ul>
@@ -47,9 +49,20 @@ function stripNote(entry: UsageEntry): string | null {
   return entry.plan
 }
 
-function UsageStripEntry({ entry, now }: { entry: UsageEntry; now: number }) {
+function UsageStripEntry({ entry, now, opensOnRequest }: { entry: UsageEntry; now: number; opensOnRequest: boolean }) {
   const menu = useMenu()
   const loadProfiles = useProfilesStore((s) => s.load)
+  const request = useUsagePopoverStore((s) => s.nonce)
+  const seen = useRef(request)
+  const { show } = menu
+
+  useEffect(() => {
+    if (request === seen.current) return
+    seen.current = request
+    if (!opensOnRequest) return
+    void loadProfiles()
+    show()
+  }, [request, opensOnRequest, loadProfiles, show])
 
   const toggle = () => {
     if (!menu.open) void loadProfiles()
