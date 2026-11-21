@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { Fragment, useEffect, useMemo } from 'react'
 import { FolderPlus, X } from 'lucide-react'
 import type { Workspace } from '../../shared/types'
 import { groupByRepo, type RepoGroupView } from '../../shared/repoGroups'
@@ -10,6 +10,9 @@ import { NeedsYouQueue } from './NeedsYouQueue'
 import { ProfilePicker } from './ProfilePicker'
 import { useProfilesStore } from '../state/profilesStore'
 import { useWorkspaceStatus } from '../state/sessionStatusStore'
+import { useObservedSessions, useObservedStore } from '../state/observedStore'
+import { ListRow, ListRowText } from './ui/ListRow'
+import { Badge } from './ui/Badge'
 
 export function Sidebar() {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
@@ -67,7 +70,10 @@ function RepoGroupItem({ group }: { group: RepoGroupView }) {
       </div>
       <ul>
         {group.workspaces.map((w) => (
-          <WorkspaceRow key={w.id} workspace={w} />
+          <Fragment key={w.id}>
+            <WorkspaceRow workspace={w} />
+            <ObservedRows workspace={w} />
+          </Fragment>
         ))}
       </ul>
     </li>
@@ -80,12 +86,16 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
   const closeProject = useProjectViewsStore((s) => s.closeProject)
   const active = useProjectViewsStore((s) => s.activeProjectId === workspace.id)
   const status = useWorkspaceStatus(workspace.id)
+  const closeObserved = useObservedStore((s) => s.close)
 
   const label = workspace.worktreeTag || workspace.name
 
   return (
     <li
-      onClick={() => openProject(workspace)}
+      onClick={() => {
+        closeObserved()
+        openProject(workspace)
+      }}
       title={workspace.path}
       className={
         'group flex cursor-pointer items-center gap-2 py-1 pl-6 pr-2 text-xs ' +
@@ -109,5 +119,28 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
         <X size={11} strokeWidth={2.25} />
       </button>
     </li>
+  )
+}
+
+function ObservedRows({ workspace }: { workspace: Workspace }) {
+  const sessions = useObservedSessions(workspace.id)
+  const open = useObservedStore((s) => s.open)
+  const viewing = useObservedStore((s) => (s.viewing?.workspaceId === workspace.id ? s.viewing.sessionId : null))
+  return (
+    <>
+      {sessions.map((o) => (
+        <ListRow
+          key={o.sessionId}
+          depth={2}
+          active={viewing === o.sessionId}
+          onClick={() => void open(workspace, o.sessionId)}
+          tooltip={`${o.title} · ${o.state === 'live' ? 'Live' : 'Quiet'} · in VS Code (read-only)`}
+        >
+          <StatusDot status={o.state} />
+          <ListRowText primary={o.title} />
+          <Badge>VS Code</Badge>
+        </ListRow>
+      ))}
+    </>
   )
 }

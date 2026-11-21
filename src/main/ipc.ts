@@ -2,7 +2,8 @@ import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
-import { transcriptsDirForCwd } from './profiles/transcripts'
+import { transcriptsDirForCwd, transcriptsDirForWorkspace } from './profiles/transcripts'
+import { ObservedService } from './observed/service'
 import * as apps from './apps/store'
 import { appManager } from './apps/manager'
 import { ptyManager } from './pty/manager'
@@ -44,6 +45,26 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.BOARD_READ_FILE, (_e, path: string) => board.readFile(path))
   unsubscribers.push(() => board.stop())
 
+  const sendAll = (channel: string, payload: unknown): void => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(channel, payload)
+    }
+  }
+  const observed = new ObservedService(
+    workspaces.list,
+    transcriptsDirForWorkspace,
+    (sessions) => sendAll(IPC.OBSERVED_CHANGED, sessions),
+    (event) => sendAll(IPC.OBSERVED_ITEMS, event)
+  )
+  observed.start()
+  ipcMain.handle(IPC.OBSERVED_LIST, () => observed.list())
+  ipcMain.on(IPC.OBSERVED_SET_HOSTED, (_e, sessionIds: string[]) => observed.setHosted(sessionIds))
+  ipcMain.handle(IPC.OBSERVED_OPEN, (_e, workspaceId: string, sessionId: string) =>
+    observed.open(workspaceId, sessionId)
+  )
+  ipcMain.on(IPC.OBSERVED_CLOSE, () => observed.close())
+  unsubscribers.push(() => observed.stop())
+
   ipcMain.handle(IPC.WORKSPACES_LIST, () => workspaces.list())
 
   ipcMain.handle(IPC.WORKSPACES_ADD, async (event) => {
@@ -58,17 +79,21 @@ export function registerIpc(): void {
     if (result.canceled || result.filePaths.length === 0) return null
     const added = await workspaces.add(result.filePaths[0])
     void refreshBoard()
+    void observed.workspacesChanged()
     return added
   })
 
   ipcMain.handle(IPC.WORKSPACES_REMOVE, async (_event, id: string) => {
     await workspaces.remove(id)
     void refreshBoard()
+    void observed.workspacesChanged()
   })
 
-  ipcMain.handle(IPC.WORKSPACES_SET_PROFILE, (_e, id: string, profileId: string) =>
-    workspaces.setProfile(id, profileId)
-  )
+  ipcMain.handle(IPC.WORKSPACES_SET_PROFILE, async (_e, id: string, profileId: string) => {
+    const updated = await workspaces.setProfile(id, profileId)
+    void observed.workspacesChanged()
+    return updated
+  })
 
   ipcMain.handle(IPC.PROFILES_LIST, () => profiles.list())
   ipcMain.handle(IPC.PROFILES_CREATE, (_e, name: string) => profiles.create(name))

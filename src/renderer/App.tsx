@@ -17,6 +17,8 @@ import { jumpToNextWaiting } from './state/sessionNavigation'
 import { useReportScreenFocus } from './hooks/useReportScreenFocus'
 import { useMainNavigation } from './hooks/useMainNavigation'
 import type { ClaudeResultEvent } from '../shared/types'
+import { useObservedStore } from './state/observedStore'
+import { ObservedChatView } from './components/chat/ObservedChatView'
 
 interface RawResultUsage {
   modelUsage?: Record<string, RawModelUsage>
@@ -36,6 +38,8 @@ export function App() {
   const appView = useViewStore((s) => s.view)
   const initApps = useAppsStore((s) => s.init)
   const initSessionStatus = useSessionStatusStore((s) => s.init)
+  const initObserved = useObservedStore((s) => s.init)
+  const observedOpen = useObservedStore((s) => s.viewing?.workspaceId === activeProjectId && s.viewing !== null)
 
   const focusInputRef = useRef<() => void>()
 
@@ -46,6 +50,10 @@ export function App() {
   useEffect(() => {
     initSessionStatus()
   }, [initSessionStatus])
+
+  useEffect(() => {
+    initObserved()
+  }, [initObserved])
 
   useReportScreenFocus()
   useMainNavigation()
@@ -135,6 +143,11 @@ export function App() {
             {showApps && (
               <div className="absolute inset-0 z-20">
                 <AppsDashboard />
+              </div>
+            )}
+            {observedOpen && (
+              <div className="absolute inset-0 z-10">
+                <ObservedChatView />
               </div>
             )}
             {order.length === 0 && (

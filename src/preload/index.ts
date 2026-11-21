@@ -10,6 +10,8 @@ import type {
   ClaudeEventEnvelope,
   ClaudeExitEnvelope,
   ManagedApp,
+  ObservedItemsEvent,
+  ObservedSession,
   PermissionRequest,
   PermissionResponse,
   PtyDataEvent,
@@ -111,6 +113,23 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, envelope: ClaudeExitEnvelope) => cb(envelope)
       ipcRenderer.on(IPC.CLAUDE_EXIT, handler)
       return () => ipcRenderer.off(IPC.CLAUDE_EXIT, handler)
+    }
+  },
+  observed: {
+    list: (): Promise<ObservedSession[]> => ipcRenderer.invoke(IPC.OBSERVED_LIST),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, sessions: ObservedSession[]) => cb(sessions)
+      ipcRenderer.on(IPC.OBSERVED_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.OBSERVED_CHANGED, handler)
+    },
+    setHosted: (sessionIds: string[]) => ipcRenderer.send(IPC.OBSERVED_SET_HOSTED, sessionIds),
+    open: (workspaceId: string, sessionId: string) =>
+      ipcRenderer.invoke(IPC.OBSERVED_OPEN, workspaceId, sessionId),
+    close: () => ipcRenderer.send(IPC.OBSERVED_CLOSE),
+    onItems: (cb) => {
+      const handler = (_e: IpcRendererEvent, event: ObservedItemsEvent) => cb(event)
+      ipcRenderer.on(IPC.OBSERVED_ITEMS, handler)
+      return () => ipcRenderer.off(IPC.OBSERVED_ITEMS, handler)
     }
   },
   permission: {

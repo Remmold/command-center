@@ -1,3 +1,4 @@
+import type { ChatItem } from './chatItems'
 export const DEFAULT_PROFILE_ID = 'default'
 
 export interface Workspace {
@@ -293,6 +294,16 @@ export interface RendererApi {
     onExit: (cb: (envelope: ClaudeExitEnvelope) => void) => () => void
     listLocalSessions: (cwd: string) => Promise<LocalSessionInfo[]>
   }
+  observed: {
+    list: () => Promise<ObservedSession[]>
+    onChanged: (cb: (sessions: ObservedSession[]) => void) => () => void
+    /** The app's own sessions' claude ids; their transcripts are never listed as observed. */
+    setHosted: (sessionIds: string[]) => void
+    /** Returns the last items and starts tailing; any session opened before stops being tailed. */
+    open: (workspaceId: string, sessionId: string) => Promise<ObservedOpenResult>
+    close: () => void
+    onItems: (cb: (event: ObservedItemsEvent) => void) => () => void
+  }
   permission: {
     onRequest: (cb: (request: PermissionRequest) => void) => () => void
     respond: (
@@ -382,3 +393,27 @@ export interface BoardRepoGroup {
 export interface BoardModel {
   repoGroups: BoardRepoGroup[]
 }
+
+/** An observed session is only ever Live or Quiet. */
+export type ObservedState = 'live' | 'quiet'
+
+export interface ObservedSession {
+  workspaceId: string
+  sessionId: string
+  title: string
+  modifiedAt: number
+  state: ObservedState
+}
+
+/** Opening an observed session renders at most this many of its latest chat items. */
+export const OBSERVED_INITIAL_ITEMS = 200
+
+export interface ObservedItemsEvent {
+  workspaceId: string
+  sessionId: string
+  items: ChatItem[]
+}
+
+export type ObservedOpenResult =
+  | { ok: true; items: ChatItem[]; shortened: boolean }
+  | { ok: false; error: string }

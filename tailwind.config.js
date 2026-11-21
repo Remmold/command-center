@@ -14,7 +14,9 @@ module.exports = {
           running: '#38bdf8',
           approval: '#f59e0b',
           turn: '#10b981',
-          idle: '#52525b'
+          idle: '#52525b',
+          live: '#10b981',
+          quiet: '#52525b'
         }
       }
     }
