@@ -1,0 +1,1 @@
+- 01 resolved: pnpm (onlyBuiltDependencies electron/esbuild/node-pty), Vitest node-only config, `pnpm quick` = typecheck + vitest; node-pty prebuilds load in Electron 31, no source rebuild (MSB8040 Spectre libs missing). Lane 2: open a shell tab in the UI — 1e7a1f9
