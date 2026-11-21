@@ -13,7 +13,7 @@ function isRecord(x: unknown): x is Record<string, unknown> {
   return !!x && typeof x === 'object' && !Array.isArray(x)
 }
 
-function parseIcon(x: unknown): RepoIconChoice | undefined {
+export function parseIcon(x: unknown): RepoIconChoice | undefined {
   if (!isRecord(x)) return undefined
   if (x.kind === 'builtin' && isBuiltinIconName(x.name) && isRepoAccent(x.accent)) {
     return { kind: 'builtin', name: x.name, accent: x.accent }

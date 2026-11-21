@@ -1,29 +1,40 @@
-import { promises as fs } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { existsSync, promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type { Workspace } from '../../shared/types'
-import type { ChooseImageResult, RepoIconChoice, RepoIdentities, RepoIdentityView } from '../../shared/repoIdentity'
-import { createRepoIdentityStore, type ImportImageResult } from './store'
+import type {
+  BuiltinIconChoice,
+  ChooseImageResult,
+  RepoIdentities,
+  RepoIdentityViews
+} from '../../shared/repoIdentity'
+import { createRepoIdentityStore, shortHash } from './store'
 import { chooseNotificationIcon } from './notificationIcon'
-import { parseRepoIdentities } from './validate'
+import { parseIcon } from './validate'
 
 const PNG_DATA_URL = 'data:image/png;base64,'
 const MAX_RENDERED_BYTES = 256 * 1024
 
-/** Accepts only a built-in choice or none: images enter through importImage, never by a renderer-supplied file name. */
-function builtinOrNone(icon: unknown): RepoIconChoice | undefined | null {
+function requireKey(repoGroupKey: unknown): string {
+  if (typeof repoGroupKey !== 'string' || !repoGroupKey) throw new Error('repo group key must be a string')
+  return repoGroupKey
+}
+
+/** Images enter only through importImage, never by a file name the renderer supplies. */
+function requireBuiltinOrNone(icon: unknown): BuiltinIconChoice | undefined {
   if (icon === undefined || icon === null) return undefined
-  const parsed = parseRepoIdentities({ k: { icon } }).k?.icon
-  return parsed?.kind === 'builtin' ? parsed : null
+  const parsed = parseIcon(icon)
+  if (parsed?.kind !== 'builtin') throw new Error('not a built-in repo icon')
+  return parsed
 }
 
 export function createRepoIdentityService(dataDir: string, appIcon: string, listWorkspaces: () => Promise<Workspace[]>) {
   const store = createRepoIdentityStore(dataDir)
   const renderedDir = join(dataDir, 'repo-icons', 'notify')
-  const rendered = new Map<string, string>()
+  // Kept on disk, so notifications show the repo icon right after a restart, before the renderer redraws.
+  const renderedPath = (repoGroupKey: string): string => join(renderedDir, `${shortHash(repoGroupKey)}.png`)
 
-  const toViews = async (identities: RepoIdentities): Promise<Record<string, RepoIdentityView>> => {
-    const views: Record<string, RepoIdentityView> = {}
+  const toViews = async (identities: RepoIdentities): Promise<RepoIdentityViews> => {
+    const views: RepoIdentityViews = {}
     for (const [key, identity] of Object.entries(identities)) {
       views[key] = { ...identity }
       if (identity.icon?.kind !== 'image') continue
@@ -40,32 +51,33 @@ export function createRepoIdentityService(dataDir: string, appIcon: string, list
 
   return {
     list: async () => toViews(await store.list()),
-    setDisplayName: async (repoGroupKey: string, name: string) =>
-      toViews(await store.setDisplayName(repoGroupKey, String(name ?? ''))),
-    setIcon: async (repoGroupKey: string, icon: unknown) => {
-      const choice = builtinOrNone(icon)
-      if (choice === null) throw new Error('not a built-in repo icon')
-      return toViews(await store.setIcon(repoGroupKey, choice))
-    },
-    importImage: async (repoGroupKey: string, sourcePath: string): Promise<ChooseImageResult> => {
-      const result: ImportImageResult = await store.importImage(repoGroupKey, sourcePath)
+    setDisplayName: async (repoGroupKey: unknown, name: unknown) =>
+      toViews(await store.setDisplayName(requireKey(repoGroupKey), typeof name === 'string' ? name : '')),
+    setIcon: async (repoGroupKey: unknown, icon: unknown) =>
+      toViews(await store.setIcon(requireKey(repoGroupKey), requireBuiltinOrNone(icon))),
+    importImage: async (repoGroupKey: unknown, sourcePath: string): Promise<ChooseImageResult> => {
+      const result = await store.importImage(requireKey(repoGroupKey), sourcePath)
       return result.ok ? { ok: true, identities: await toViews(result.identities) } : result
     },
     /** The renderer draws each repo icon to a PNG, since Windows toasts can't show SVG or a React icon. */
-    setRendered: async (repoGroupKey: string, dataUrl: string): Promise<void> => {
+    setRendered: async (repoGroupKey: unknown, dataUrl: unknown): Promise<void> => {
       if (typeof dataUrl !== 'string' || !dataUrl.startsWith(PNG_DATA_URL)) return
       const bytes = Buffer.from(dataUrl.slice(PNG_DATA_URL.length), 'base64')
       if (bytes.length === 0 || bytes.length > MAX_RENDERED_BYTES) return
-      const file = join(renderedDir, `${createHash('sha256').update(repoGroupKey).digest('hex').slice(0, 32)}.png`)
       await fs.mkdir(renderedDir, { recursive: true })
-      await fs.writeFile(file, bytes)
-      rendered.set(repoGroupKey, file)
+      await fs.writeFile(renderedPath(requireKey(repoGroupKey)), bytes)
     },
     notificationIcon: async (cwd: string): Promise<string> => {
       const [workspaces, identities] = await Promise.all([listWorkspaces(), store.list()])
-      const choice = chooseNotificationIcon({ cwd, workspaces, identities, rendered: new Set(rendered.keys()) })
+      const choice = chooseNotificationIcon({
+        cwd,
+        workspaces,
+        identities,
+        hasRendered: (key) => existsSync(renderedPath(key)),
+        imageExists: (file) => existsSync(store.imagePath(file))
+      })
       if (choice.kind === 'image') return store.imagePath(choice.file)
-      if (choice.kind === 'rendered') return rendered.get(choice.repoGroupKey) ?? appIcon
+      if (choice.kind === 'rendered') return renderedPath(choice.repoGroupKey)
       return appIcon
     }
   }

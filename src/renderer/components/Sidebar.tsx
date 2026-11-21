@@ -142,6 +142,7 @@ function ObservedRows({ workspace }: { workspace: Workspace }) {
         >
           <StatusDot status={o.status} />
           <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
+          {workspace.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
           <ListRowText primary={o.title} />
           <Badge>in VS Code</Badge>
         </ListRow>

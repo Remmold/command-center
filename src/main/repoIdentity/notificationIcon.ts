@@ -12,16 +12,18 @@ interface Input {
   cwd: string
   workspaces: readonly Pick<Workspace, 'path' | 'repoGroupKey'>[]
   identities: RepoIdentities
-  /** Repo group keys that have a drawn PNG. */
-  rendered: ReadonlySet<string>
+  hasRendered: (repoGroupKey: string) => boolean
+  imageExists: (file: string) => boolean
 }
 
 /** Windows toasts take PNG but not SVG, so everything except a custom PNG goes through the drawn picture. */
-export function chooseNotificationIcon({ cwd, workspaces, identities, rendered }: Input): NotificationIconChoice {
+export function chooseNotificationIcon({ cwd, workspaces, identities, hasRendered, imageExists }: Input): NotificationIconChoice {
   const workspace = workspaceAt(cwd, workspaces)
   if (!workspace) return { kind: 'app' }
   const icon = identities[workspace.repoGroupKey]?.icon
-  if (icon?.kind === 'image' && icon.file.endsWith('.png')) return { kind: 'image', file: icon.file }
-  if (rendered.has(workspace.repoGroupKey)) return { kind: 'rendered', repoGroupKey: workspace.repoGroupKey }
+  if (icon?.kind === 'image' && icon.file.endsWith('.png') && imageExists(icon.file)) {
+    return { kind: 'image', file: icon.file }
+  }
+  if (hasRendered(workspace.repoGroupKey)) return { kind: 'rendered', repoGroupKey: workspace.repoGroupKey }
   return { kind: 'app' }
 }

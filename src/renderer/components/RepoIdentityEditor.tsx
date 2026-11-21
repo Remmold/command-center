@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { CaseUpper, ImagePlus, Pencil } from 'lucide-react'
 import {
   BUILTIN_ICON_NAMES,
+  MAX_REPO_IMAGE_LABEL,
   REPO_ACCENTS,
   repoDisplayName,
   type RepoAccent
@@ -9,6 +10,7 @@ import {
 import type { RepoGroupView } from '../../shared/repoGroups'
 import { useRepoIdentitiesStore, useRepoIdentity } from '../state/repoIdentitiesStore'
 import { Button } from './ui/Button'
+import { IconButton } from './ui/IconButton'
 import { Popover, PopoverActions, PopoverNote, PopoverSection } from './ui/Popover'
 import { SectionLabel } from './ui/SectionLabel'
 import { Swatch, SwatchGrid } from './ui/SwatchGrid'
@@ -17,25 +19,22 @@ import { BUILTIN_ICONS } from './repoIconSet'
 
 const DEFAULT_ACCENT: RepoAccent = 'blue'
 
-/** The edit button on a repo group's sidebar row, with its name and icon editor. */
 export function RepoIdentityEditor({ group }: { group: RepoGroupView }) {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   return (
     <>
-      <button
+      <IconButton
         ref={setAnchor}
         onClick={() => setOpen(!open)}
-        aria-label={`edit icon and name of ${group.repoName}`}
-        title="edit repo icon and name"
-        className={
-          'rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 ' +
-          (open ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100')
-        }
+        label={`edit icon and name of ${group.repoName}`}
+        tooltip="edit repo icon and name"
+        revealOnHover
+        pinned={open}
       >
         <Pencil size={11} strokeWidth={2.25} />
-      </button>
+      </IconButton>
       <Popover open={open} onClose={close} anchor={anchor} label="repo icon">
         <IdentityForm group={group} />
       </Popover>
@@ -53,9 +52,14 @@ function IdentityForm({ group }: { group: RepoGroupView }) {
   const [error, setError] = useState<string | null>(null)
   const key = group.repoGroupKey
 
+  const run = (change: Promise<string | null>) => {
+    setError(null)
+    void change.then(setError)
+  }
+
   const pickAccent = (next: RepoAccent) => {
     setAccent(next)
-    if (builtin) void setIcon(key, { ...builtin, accent: next })
+    if (builtin) run(setIcon(key, { ...builtin, accent: next }))
   }
 
   return (
@@ -65,11 +69,11 @@ function IdentityForm({ group }: { group: RepoGroupView }) {
         <TextField
           label="display name"
           placeholder={repoDisplayName(group.repoName, identity)}
-          onSubmit={(name) => void setDisplayName(key, name)}
+          onSubmit={(name) => run(setDisplayName(key, name))}
         />
         {identity?.displayName && (
           <PopoverActions>
-            <Button variant="ghost" onClick={() => void setDisplayName(key, '')}>
+            <Button variant="ghost" onClick={() => run(setDisplayName(key, ''))}>
               Use folder name
             </Button>
           </PopoverActions>
@@ -93,7 +97,7 @@ function IdentityForm({ group }: { group: RepoGroupView }) {
                 key={name}
                 label={name}
                 selected={builtin?.name === name}
-                onClick={() => void setIcon(key, { kind: 'builtin', name, accent })}
+                onClick={() => run(setIcon(key, { kind: 'builtin', name, accent }))}
               >
                 <Icon size={13} strokeWidth={2} />
               </Swatch>
@@ -105,22 +109,19 @@ function IdentityForm({ group }: { group: RepoGroupView }) {
         <PopoverActions>
           <Button
             variant="ghost"
-            onClick={() => {
-              setError(null)
-              void chooseImage(key).then(setError)
-            }}
+            onClick={() => run(chooseImage(key))}
           >
             <ImagePlus size={11} strokeWidth={2.25} />
             Use image…
           </Button>
           {identity?.icon && (
-            <Button variant="ghost" onClick={() => void setIcon(key, undefined)}>
+            <Button variant="ghost" onClick={() => run(setIcon(key, undefined))}>
               <CaseUpper size={11} strokeWidth={2.25} />
               Use letter
             </Button>
           )}
         </PopoverActions>
-        <PopoverNote>{error ?? 'Your own icon: a PNG or SVG of up to 1 MB.'}</PopoverNote>
+        <PopoverNote>{error ?? `Your own icon: a PNG or SVG of up to ${MAX_REPO_IMAGE_LABEL}. Colours apply to built-in icons.`}</PopoverNote>
       </PopoverSection>
     </>
   )

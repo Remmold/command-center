@@ -9,10 +9,24 @@ import {
 interface RepoIdentitiesState {
   identities: RepoIdentityViews
   load: () => Promise<void>
-  setDisplayName: (repoGroupKey: string, name: string) => Promise<void>
-  setIcon: (repoGroupKey: string, icon: BuiltinIconChoice | undefined) => Promise<void>
-  /** Resolves to an error message to show, or null. */
+  /** Each change resolves to an error message to show, or null. */
+  setDisplayName: (repoGroupKey: string, name: string) => Promise<string | null>
+  setIcon: (repoGroupKey: string, icon: BuiltinIconChoice | undefined) => Promise<string | null>
   chooseImage: (repoGroupKey: string) => Promise<string | null>
+}
+
+async function saved(
+  request: Promise<RepoIdentityViews>,
+  set: (state: Pick<RepoIdentitiesState, 'identities'>) => void,
+  failure: string
+): Promise<string | null> {
+  try {
+    set({ identities: await request })
+    return null
+  } catch (err) {
+    console.error(failure, err)
+    return failure
+  }
 }
 
 export const useRepoIdentitiesStore = create<RepoIdentitiesState>((set) => ({
@@ -24,12 +38,10 @@ export const useRepoIdentitiesStore = create<RepoIdentitiesState>((set) => ({
       console.error('failed to load repo identities', err)
     }
   },
-  setDisplayName: async (repoGroupKey, name) => {
-    set({ identities: await window.api.repoIdentities.setDisplayName(repoGroupKey, name) })
-  },
-  setIcon: async (repoGroupKey, icon) => {
-    set({ identities: await window.api.repoIdentities.setIcon(repoGroupKey, icon) })
-  },
+  setDisplayName: (repoGroupKey, name) =>
+    saved(window.api.repoIdentities.setDisplayName(repoGroupKey, name), set, 'Could not save the name.'),
+  setIcon: (repoGroupKey, icon) =>
+    saved(window.api.repoIdentities.setIcon(repoGroupKey, icon), set, 'Could not save the icon.'),
   chooseImage: async (repoGroupKey) => {
     try {
       const result = await window.api.repoIdentities.chooseImage(repoGroupKey)

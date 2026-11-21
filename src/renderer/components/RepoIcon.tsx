@@ -1,4 +1,4 @@
-import { resolveRepoIcon, type RepoIconSpec } from '../../shared/repoIdentity'
+import { letterColor, resolveRepoIcon, type RepoIconSpec } from '../../shared/repoIdentity'
 import { useRepoDisplayName, useRepoIdentity } from '../state/repoIdentitiesStore'
 import { BUILTIN_ICONS } from './repoIconSet'
 
@@ -13,21 +13,16 @@ const SIZES = {
   md: { box: 'h-5 w-5 text-[11px]', glyph: 13 }
 } as const
 
-export function letterColor(hue: number): string {
-  return `hsl(${hue}, 55%, 40%)`
-}
-
 export function RepoIcon({ repoGroupKey, repoName, size = 'md' }: Props) {
   const identity = useRepoIdentity(repoGroupKey)
   return <RepoIconView spec={resolveRepoIcon({ repoGroupKey, repoName, identity })} size={size} />
 }
 
-/** The repo group's display name as text. */
 export function RepoName({ repoGroupKey, repoName }: { repoGroupKey: string; repoName: string }) {
   return <>{useRepoDisplayName(repoGroupKey, repoName)}</>
 }
 
-export function RepoIconView({ spec, size = 'md' }: { spec: RepoIconSpec; size?: 'sm' | 'md' }) {
+function RepoIconView({ spec, size = 'md' }: { spec: RepoIconSpec; size?: 'sm' | 'md' }) {
   const { box, glyph } = SIZES[size]
   const frame = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded font-semibold text-white ${box}`
   if (spec.kind === 'image') {

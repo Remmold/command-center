@@ -1,12 +1,21 @@
 import { promises as fs } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { extname, join } from 'node:path'
-import type { RepoIconChoice, RepoIdentities, RepoIdentity } from '../../shared/repoIdentity'
+import {
+  MAX_REPO_IMAGE_BYTES,
+  MAX_REPO_IMAGE_LABEL,
+  type ImageImportResult,
+  type RepoIconChoice,
+  type RepoIdentities,
+  type RepoIdentity
+} from '../../shared/repoIdentity'
 import { IMAGE_FILE_NAME, parseRepoIdentities } from './validate'
 
-export const MAX_IMAGE_BYTES = 1024 * 1024
+export type ImportImageResult = ImageImportResult<RepoIdentities>
 
-export type ImportImageResult = { ok: true; identities: RepoIdentities } | { ok: false; error: string }
+export function shortHash(data: string | Buffer): string {
+  return createHash('sha256').update(data).digest('hex').slice(0, 32)
+}
 
 const PNG_SIGNATURE = Buffer.from('89504e470d0a1a0a', 'hex')
 
@@ -22,12 +31,11 @@ export interface RepoIdentityStore {
   setDisplayName: (repoGroupKey: string, name: string) => Promise<RepoIdentities>
   /** undefined goes back to the letter. */
   setIcon: (repoGroupKey: string, icon: RepoIconChoice | undefined) => Promise<RepoIdentities>
-  /** Copies a PNG or SVG of at most 1 MB into the icons folder; the source file can move or vanish afterwards. */
+  /** Copies the file into the icons folder, so the source can move or vanish afterwards. */
   importImage: (repoGroupKey: string, sourcePath: string) => Promise<ImportImageResult>
   imagePath: (file: string) => string
 }
 
-/** `dir` is the app's data folder; identities live in repo-identities.json there. */
 export function createRepoIdentityStore(dir: string): RepoIdentityStore {
   const file = join(dir, 'repo-identities.json')
   const imagesDir = join(dir, 'repo-icons')
@@ -87,11 +95,13 @@ export function createRepoIdentityStore(dir: string): RepoIdentityStore {
       serial(async (): Promise<ImportImageResult> => {
         const ext = extname(sourcePath).slice(1).toLowerCase()
         if (ext !== 'png' && ext !== 'svg') return { ok: false, error: 'Choose a PNG or SVG file.' }
-        if ((await fs.stat(sourcePath)).size > MAX_IMAGE_BYTES) return { ok: false, error: 'The image is over 1 MB.' }
+        if ((await fs.stat(sourcePath)).size > MAX_REPO_IMAGE_BYTES) {
+          return { ok: false, error: `The image is over ${MAX_REPO_IMAGE_LABEL}.` }
+        }
         const bytes = await fs.readFile(sourcePath)
         const error = contentMismatch(ext, bytes)
         if (error) return { ok: false, error }
-        const name = `${createHash('sha256').update(bytes).digest('hex').slice(0, 32)}.${ext}`
+        const name = `${shortHash(bytes)}.${ext}`
         await fs.mkdir(imagesDir, { recursive: true })
         await fs.writeFile(imagePath(name), bytes)
         const identities = await applyChange(repoGroupKey, (current) => ({

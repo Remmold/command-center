@@ -1,8 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { RepoIconSpec } from '../../shared/repoIdentity'
-import { BUILTIN_ICONS } from '../components/repoIconSet'
-import { letterColor } from '../components/RepoIcon'
+import { letterColor, type RepoIconSpec } from '../../shared/repoIdentity'
+import { BUILTIN_ICONS } from './repoIconSet'
 
 const SIZE = 64
 const RADIUS = 12

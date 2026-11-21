@@ -3,7 +3,7 @@ import { groupByRepo } from '../../shared/repoGroups'
 import { resolveRepoIcon } from '../../shared/repoIdentity'
 import { useRepoIdentitiesStore } from '../state/repoIdentitiesStore'
 import { useWorkspacesStore } from '../state/workspacesStore'
-import { drawRepoIconPng } from '../state/drawRepoIcon'
+import { drawRepoIconPng } from '../components/drawRepoIcon'
 
 /** Keeps main supplied with each repo group's icon drawn as a PNG, redrawing only what changed. */
 export function useNotificationIcons(): void {

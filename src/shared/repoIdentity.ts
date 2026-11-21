@@ -89,7 +89,16 @@ export interface RepoIdentityView extends RepoIdentity {
 
 export type RepoIdentityViews = Record<string, RepoIdentityView>
 
-export type ChooseImageResult = { ok: true; identities: RepoIdentityViews } | { ok: false; error: string }
+export const MAX_REPO_IMAGE_BYTES = 1024 * 1024
+export const MAX_REPO_IMAGE_LABEL = '1 MB'
+
+export type ImageImportResult<T> = { ok: true; identities: T } | { ok: false; error: string }
+
+export type ChooseImageResult = ImageImportResult<RepoIdentityViews>
+
+export function letterColor(hue: number): string {
+  return `hsl(${hue}, 55%, 40%)`
+}
 
 export type BuiltinIconChoice = Extract<RepoIconChoice, { kind: 'builtin' }>
 

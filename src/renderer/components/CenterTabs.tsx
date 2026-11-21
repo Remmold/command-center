@@ -1,4 +1,7 @@
 import { GitCompare, MessageCircle, X } from 'lucide-react'
+import { useWorkspacesStore } from '../state/workspacesStore'
+import { RepoIcon } from './RepoIcon'
+import { Badge } from './ui/Badge'
 import { ClaudePane } from './ClaudePane'
 import { DiffPane } from './DiffPane'
 import { EditorPane } from './files/EditorPane'
@@ -31,6 +34,7 @@ export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
   const closeFile = useProjectViewsStore((s) => s.closeFile)
   const setActiveDiff = useProjectViewsStore((s) => s.setActiveDiff)
   const closeDiff = useProjectViewsStore((s) => s.closeDiff)
+  const workspace = useWorkspacesStore((s) => s.workspaces.find((w) => w.id === view.projectId))
 
   const chatActive = chatOnly || view.centerView === 'chat'
   const fileActive = !chatOnly && view.centerView === 'file'
@@ -54,7 +58,12 @@ export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
           }
           title="claude chat"
         >
-          <MessageCircle size={13} strokeWidth={2} className="text-blue-400" />
+          {workspace ? (
+            <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
+          ) : (
+            <MessageCircle size={13} strokeWidth={2} className="text-blue-400" />
+          )}
+          {workspace?.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
           <span>chat</span>
         </button>
         {view.openFiles.map((file) => {
