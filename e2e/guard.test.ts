@@ -11,7 +11,7 @@ describe('assertFakeClaude', () => {
     expect(() => assertFakeClaude(join('tools', 'fake-claude', '..', 'fake-claude', 'fake-claude.mjs'))).not.toThrow()
   })
 
-  it.each([undefined, '', 'claude', 'C:\Users\someone\.local\bin\claude.exe', join(FAKE_BIN, '..', 'other.mjs')])(
+  it.each([undefined, '', 'claude', String.raw`C:\Users\someone\.local\bin\claude.exe`, join(FAKE_BIN, '..', 'other.mjs')])(
     'refuses %s',
     (bin) => {
       expect(() => assertFakeClaude(bin)).toThrow(/e2e refuses to run/)

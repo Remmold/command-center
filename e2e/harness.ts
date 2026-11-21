@@ -38,14 +38,13 @@ export class FakeLog {
   initializedIn(cwd: string): boolean {
     const entries = this.entries()
     const start = entries.findIndex((e) => e.kind === 'argv' && e.cwd === cwd)
-    return start !== -1 && entries.slice(start).some((e) => e.kind === 'received' && (e.line?.request as { subtype?: string } | undefined)?.subtype === 'initialize')
+    return start !== -1 && entries.slice(start).some((e) => e.kind === 'received' && bodyOf(e, 'control_request')?.subtype === 'initialize')
   }
 
   /** The `request` bodies of control requests the app sent with this subtype. */
   controlRequests(subtype: string): Record<string, unknown>[] {
     return this.entries().flatMap((e) => {
-      const line = e.kind === 'received' ? e.line : undefined
-      const request = line?.type === 'control_request' ? (line.request as Record<string, unknown> | undefined) : undefined
+      const request = e.kind === 'received' ? bodyOf(e, 'control_request') : undefined
       return request?.subtype === subtype ? [request] : []
     })
   }
@@ -53,16 +52,23 @@ export class FakeLog {
   /** The app's answers to the fake's `can_use_tool` requests. */
   approvalReplies(): Record<string, unknown>[] {
     return this.entries().flatMap((e) => {
-      const line = e.kind === 'received' ? e.line : undefined
-      if (line?.type !== 'control_response') return []
-      const reply = (line.response as { response?: Record<string, unknown> } | undefined)?.response
-      return reply && 'behavior' in reply ? [reply] : []
+      const reply = e.kind === 'received' ? bodyOf(e, 'control_response')?.response : undefined
+      return isRecord(reply) && 'behavior' in reply ? [reply] : []
     })
   }
 
   toolPrompts(): number {
-    return this.entries().filter((e) => e.kind === 'sent' && (e.line?.request as { subtype?: string } | undefined)?.subtype === 'can_use_tool').length
+    return this.entries().filter((e) => e.kind === 'sent' && bodyOf(e, 'control_request')?.subtype === 'can_use_tool').length
   }
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+
+/** `request` of a control_request line, `response` of a control_response line. */
+function bodyOf(entry: FakeLogEntry, type: 'control_request' | 'control_response'): Record<string, unknown> | undefined {
+  if (entry.line?.type !== type) return undefined
+  const body = entry.line[type === 'control_request' ? 'request' : 'response']
+  return isRecord(body) ? body : undefined
 }
 
 interface Launched {
@@ -106,14 +112,46 @@ function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName): Record<s
   return env
 }
 
-/** The app hides to the tray on close, so quit it, then kill the tree if it lingers. */
+interface ProcessRow {
+  pid: number
+  parent: number
+  started: string
+}
+
+function processTable(): ProcessRow[] {
+  const out = execFileSync(
+    'powershell.exe',
+    ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.CreationDate.Ticks)" }'],
+    { encoding: 'utf-8' }
+  )
+  return out
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .map((l) => {
+      const [pid, parent, started] = l.trim().split(' ')
+      return { pid: Number(pid), parent: Number(parent), started }
+    })
+}
+
+function treeOf(root: number, table: ProcessRow[]): ProcessRow[] {
+  const tree = table.filter((p) => p.pid === root)
+  for (let i = 0; i < tree.length; i++) tree.push(...table.filter((p) => p.parent === tree[i].pid && p.pid !== tree[i].pid))
+  return tree
+}
+
+/**
+ * The app hides to the tray on close, so quit it, then kill whatever of its tree outlived the quit.
+ * Rows match on start time too, so a reused PID is never killed.
+ */
 async function shutdown(app: ElectronApplication): Promise<void> {
-  const proc = app.process()
-  const pid = proc.pid
+  const pid = app.process().pid
+  const tree = pid === undefined ? [] : treeOf(pid, processTable())
   await Promise.race([app.close().catch(() => undefined), new Promise((r) => setTimeout(r, 5000))])
-  if (pid !== undefined && proc.exitCode === null && proc.signalCode === null) {
+  const running = processTable()
+  for (const p of tree) {
+    if (!running.some((r) => r.pid === p.pid && r.started === p.started)) continue
     try {
-      execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
+      execFileSync('taskkill', ['/PID', String(p.pid), '/F'], { stdio: 'ignore' })
     } catch {
       // Already gone between the check and the kill.
     }

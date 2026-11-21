@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test'
 import { chooseMode, expect, prompt, send, startSession, test } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
@@ -8,7 +9,7 @@ test('a new session streams the fake reply', async ({ launched }) => {
   await startSession(launched)
   await send(page, 'say hello')
   await expect(page.getByText(BASIC_REPLY)).toBeVisible()
-  expect(log.entries().some((e) => e.kind === 'argv')).toBe(true)
+  await expect.poll(() => log.entries().filter((e) => e.kind === 'received' && e.line?.type === 'user').length).toBe(1)
 })
 
 test('Ctrl+1/2/3 switch Dashboard, Work and Board', async ({ launched }) => {
@@ -62,8 +63,8 @@ test('a model and effort change send apply_flag_settings', async ({ launched }) 
 
   await pill.click()
   await page.getByRole('dialog', { name: 'Select a model' }).getByRole('button', { name: /^Effort/ }).click()
-  await expect.poll(() => settings().some((s) => typeof s.effortLevel === 'string')).toBe(true)
-  await expect(page.getByText(/^Set effort to /)).toBeVisible()
+  await expect.poll(settings).toContainEqual({ effortLevel: 'high' })
+  await expect(page.getByText('Set effort to High')).toBeVisible()
 })
 
 test.describe('slow turn', () => {
@@ -77,14 +78,15 @@ test.describe('slow turn', () => {
     await page.getByRole('button', { name: 'stop' }).click()
     await expect.poll(() => log.controlRequests('interrupt').length).toBe(1)
     await expect(page.getByText('Interrupted', { exact: true })).toBeVisible()
-    await expect(page.getByText('The long job finished.')).toBeHidden()
+    await expect(prompt(page)).toBeEditable()
+    await expect(page.getByText('The long job finished.')).toHaveCount(0)
   })
 })
 
 test.describe('tool approval', () => {
   test.use({ script: 'approval' })
 
-  const approval = (page: import('@playwright/test').Page) => page.getByRole('group', { name: 'Approve Write' })
+  const approval = (page: Page) => page.getByRole('group', { name: 'Approve Write' })
 
   test.beforeEach(async ({ launched }) => {
     const { page, log } = launched
@@ -100,7 +102,7 @@ test.describe('tool approval', () => {
     await page.keyboard.press('1')
     await expect(page.getByText(WRITE_DONE)).toBeVisible()
     await expect(approval(page)).toBeHidden()
-    expect(log.approvalReplies()).toEqual([expect.objectContaining({ behavior: 'allow' })])
+    await expect.poll(() => log.approvalReplies()).toEqual([expect.objectContaining({ behavior: 'allow' })])
   })
 
   test('3 with feedback denies and logs the feedback', async ({ launched }) => {
@@ -126,7 +128,10 @@ test.describe('tool approval', () => {
 
     await send(page, 'create it again')
     await expect(page.getByText(WRITE_DONE)).toHaveCount(2)
-    expect(log.toolPrompts()).toBe(1)
-    expect(log.approvalReplies()).toEqual([expect.objectContaining({ behavior: 'allow', updatedPermissions: expect.arrayContaining([expect.anything()]) })])
+    await expect(approval(page)).toHaveCount(0)
+    await expect.poll(() => log.toolPrompts()).toBe(1)
+    expect(log.approvalReplies()).toEqual([
+      expect.objectContaining({ behavior: 'allow', updatedPermissions: [expect.objectContaining({ type: 'setMode', mode: 'acceptEdits' })] })
+    ])
   })
 })
