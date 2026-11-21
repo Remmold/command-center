@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Control channel per session (main process): write `{"type":"control_request","request_id":<uuid>,"request":{"subtype":…}}` lines to stdin; match `{"type":"control_response","response":{"subtype":"success"|"error","request_id",…}}` by id; reject after 20 s; incoming `control_request`s from the CLI are routed to a handler (used by ticket 02) instead of the chat stream; `control_response`/`control_request` lines never reach the chat items
 - [ ] Spawn adds `--setting-sources user,project,local` to today's flags (keep `--input-format stream-json --output-format stream-json --verbose --include-partial-messages`, `--resume`, the current permission wiring)

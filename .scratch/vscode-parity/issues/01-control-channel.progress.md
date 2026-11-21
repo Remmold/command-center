@@ -1,0 +1,3 @@
+- Done: control channel + initialize handshake + interrupt over the channel + IPC (claude.control / getInit / onInit); build, pnpm quick (33 files, 291 tests) green; real CLI and in-app checks pass.
+- Next: code review, then commit.
+- Open reds: none.

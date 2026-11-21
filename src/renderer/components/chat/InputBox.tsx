@@ -209,6 +209,15 @@ export function InputBox({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (disabled) {
+      if (e.key === 'Escape' && onInterrupt) {
+        e.preventDefault()
+        onInterrupt()
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+      }
+      return
+    }
     if (autocomplete && items.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -360,7 +369,8 @@ export function InputBox({
           <textarea
             ref={textareaRef}
             value={value}
-            disabled={disabled}
+            readOnly={disabled}
+            aria-disabled={disabled}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             onSelect={updateAutocomplete}
@@ -368,7 +378,7 @@ export function InputBox({
             onPaste={handlePaste}
             rows={1}
             placeholder={placeholder ?? 'message claude…'}
-            className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none disabled:opacity-50"
+            className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none read-only:opacity-50"
           />
           <div className="flex items-end justify-between gap-2">
             <div className="flex items-center gap-1">

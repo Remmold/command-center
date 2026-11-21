@@ -12,6 +12,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
+import { useSessionInitStore } from './state/sessionInitStore'
 import { closeSession, focusedTarget, initChatPair, jumpToNextWaiting, paneOnScreen } from './state/sessionNavigation'
 import { useLauncherStore } from './state/launcherStore'
 import { SessionLauncher } from './components/work/SessionLauncher'
@@ -36,6 +37,7 @@ export function App() {
   const settingsSection = useViewStore((s) => s.settings)
   const initApps = useAppsStore((s) => s.init)
   const initSessionStatus = useSessionStatusStore((s) => s.init)
+  const initSessionInit = useSessionInitStore((s) => s.init)
   const initObserved = useObservedStore((s) => s.init)
   const loadWorkspaces = useWorkspacesStore((s) => s.load)
   const loadProfiles = useProfilesStore((s) => s.load)
@@ -56,7 +58,8 @@ export function App() {
 
   useEffect(() => {
     initSessionStatus()
-  }, [initSessionStatus])
+    initSessionInit()
+  }, [initSessionStatus, initSessionInit])
 
   useEffect(() => {
     initObserved()

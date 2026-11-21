@@ -79,6 +79,54 @@ export interface ClaudeEventEnvelope {
   event: ClaudeEvent
 }
 
+/** A model the CLI offers, from its `initialize` reply. */
+export interface CliModel {
+  value: string
+  displayName: string
+  description: string
+  supportsEffort: boolean
+  supportedEffortLevels: string[]
+}
+
+export interface CliAccount {
+  email?: string
+  organization?: string
+  subscriptionType?: string
+  apiProvider?: string
+}
+
+export interface CliCommand {
+  name: string
+  description: string
+  argumentHint: string
+}
+
+/** What a hosted session's CLI reported in its `initialize` handshake. */
+export interface SessionInit {
+  models: CliModel[]
+  account: CliAccount | null
+  commands: CliCommand[]
+  permissionMode: string
+}
+
+export interface SessionInitEnvelope {
+  paneId: string
+  profileId: string
+  init: SessionInit
+}
+
+export type ControlResult =
+  | { ok: true; response: Record<string, unknown> }
+  | { ok: false; error: string }
+
+export interface ClaudeStartOptions {
+  paneId: string
+  cwd: string
+  model?: string
+  resumeSessionId?: string
+  permissionMode?: string
+}
+
 export type ClaudeEvent =
   | ClaudeSystemEvent
   | ClaudeAssistantEvent
@@ -308,13 +356,11 @@ export interface RendererApi {
     ) => Promise<{ ok: boolean; error?: string }>
   }
   claude: {
-    start: (
-      paneId: string,
-      cwd: string,
-      model?: string,
-      resumeSessionId?: string,
-      permissionMode?: string
-    ) => Promise<SpawnResult>
+    start: (options: ClaudeStartOptions) => Promise<SpawnResult>
+    /** Sends a control request to the pane's CLI and resolves with its reply. */
+    control: (paneId: string, subtype: string, fields?: Record<string, unknown>) => Promise<ControlResult>
+    getInit: (paneId: string) => Promise<SessionInit | null>
+    onInit: (cb: (envelope: SessionInitEnvelope) => void) => () => void
     send: (paneId: string, text: string, images?: ImageAttachment[]) => void
     interrupt: (paneId: string) => void
     stop: (paneId: string) => void

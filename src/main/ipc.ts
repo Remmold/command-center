@@ -25,7 +25,13 @@ import {
 } from './permission/server'
 import { sessionStatusTracker } from './sessions/tracker'
 import { setScreenFocus } from './sessions/screenFocus'
-import { DEFAULT_PROFILE_ID, type AddWorkspaceResult, type ScreenFocus } from '../shared/types'
+import {
+  DEFAULT_PROFILE_ID,
+  type AddWorkspaceResult,
+  type ClaudeStartOptions,
+  type ScreenFocus,
+  type SessionInitEnvelope
+} from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
 import type { StartWithWindowsControl } from './tray/startWithWindows'
 
@@ -231,24 +237,20 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
 
   // Claude (stream-json subprocess)
+  ipcMain.handle(IPC.CLAUDE_START, async (_e, options: ClaudeStartOptions) => {
+    const workspace = await workspaces.findByPath(options.cwd)
+    if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
+    const { profileId, env } = workspace
+      ? await profiles.prepareSession(workspace.profileId)
+      : { profileId: DEFAULT_PROFILE_ID, env: {} }
+    return claudeManager.start({ ...options, profileEnv: env, profileId })
+  })
   ipcMain.handle(
-    IPC.CLAUDE_START,
-    async (
-      _e,
-      paneId: string,
-      cwd: string,
-      model?: string,
-      resumeSessionId?: string,
-      permissionMode?: string
-    ) => {
-      const workspace = await workspaces.findByPath(cwd)
-      if (!workspace) console.warn('[profiles] no workspace at', cwd, '- session runs on Default')
-      const { profileId, env } = workspace
-        ? await profiles.prepareSession(workspace.profileId)
-        : { profileId: DEFAULT_PROFILE_ID, env: {} }
-      return claudeManager.start(paneId, cwd, model, resumeSessionId, permissionMode, env, profileId)
-    }
+    IPC.CLAUDE_CONTROL,
+    (_e, paneId: string, subtype: string, fields?: Record<string, unknown>) =>
+      claudeManager.control(paneId, subtype, fields)
   )
+  ipcMain.handle(IPC.CLAUDE_GET_INIT, (_e, paneId: string) => claudeManager.initOf(paneId))
   ipcMain.on(
     IPC.CLAUDE_SEND,
     (
@@ -289,6 +291,14 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       const envelope = { paneId, profileId: claudeManager.profileOf(paneId), event }
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) win.webContents.send(IPC.CLAUDE_EVENT, envelope)
+      }
+    })
+  )
+  unsubscribers.push(
+    claudeManager.onInit((paneId, init) => {
+      const envelope: SessionInitEnvelope = { paneId, profileId: claudeManager.profileOf(paneId), init }
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.CLAUDE_INIT, envelope)
       }
     })
   )

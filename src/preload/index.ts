@@ -23,7 +23,10 @@ import type {
   SessionStatusEntry,
   SpawnResult,
   StartWithWindowsState,
-  Workspace
+  Workspace,
+  ControlResult,
+  SessionInit,
+  SessionInitEnvelope
 } from '../shared/types'
 
 const api: RendererApi = {
@@ -113,15 +116,15 @@ const api: RendererApi = {
     }
   },
   claude: {
-    start: (paneId, cwd, model, resumeSessionId, permissionMode): Promise<SpawnResult> =>
-      ipcRenderer.invoke(
-        IPC.CLAUDE_START,
-        paneId,
-        cwd,
-        model,
-        resumeSessionId,
-        permissionMode
-      ),
+    start: (options): Promise<SpawnResult> => ipcRenderer.invoke(IPC.CLAUDE_START, options),
+    control: (paneId, subtype, fields): Promise<ControlResult> =>
+      ipcRenderer.invoke(IPC.CLAUDE_CONTROL, paneId, subtype, fields),
+    getInit: (paneId): Promise<SessionInit | null> => ipcRenderer.invoke(IPC.CLAUDE_GET_INIT, paneId),
+    onInit: (cb) => {
+      const handler = (_e: IpcRendererEvent, envelope: SessionInitEnvelope) => cb(envelope)
+      ipcRenderer.on(IPC.CLAUDE_INIT, handler)
+      return () => ipcRenderer.off(IPC.CLAUDE_INIT, handler)
+    },
     send: (paneId, text, images) => ipcRenderer.send(IPC.CLAUDE_SEND, paneId, text, images),
     listLocalSessions: (cwd) => ipcRenderer.invoke(IPC.CLAUDE_LIST_LOCAL_SESSIONS, cwd),
     interrupt: (paneId) => ipcRenderer.send(IPC.CLAUDE_INTERRUPT, paneId),

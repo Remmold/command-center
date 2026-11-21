@@ -1,11 +1,26 @@
-import { DEFAULT_PROFILE_ID } from '../../shared/types'
+import { DEFAULT_PROFILE_ID, type ControlResult, type SessionInit } from '../../shared/types'
 import { ClaudeSession } from './session'
+import type { ControlPayload, IncomingHandler } from './controlChannel'
 import { permissionServer } from '../permission/server'
 
 type EventCallback = (paneId: string, event: unknown) => void
 type ExitCallback = (paneId: string, code: number | null) => void
 type SpawnCallback = (paneId: string, cwd: string) => void
 type SendCallback = (paneId: string) => void
+type InitCallback = (paneId: string, init: SessionInit) => void
+
+export interface StartOptions {
+  paneId: string
+  cwd: string
+  model?: string
+  resumeSessionId?: string
+  permissionMode?: string
+  profileEnv?: Record<string, string>
+  profileId?: string
+}
+
+/** Builds the handler for requests the CLI sends on a pane, e.g. `can_use_tool`. */
+export type IncomingHandlerFactory = (paneId: string) => IncomingHandler
 
 class ClaudeManager {
   private sessions = new Map<string, ClaudeSession>()
@@ -14,26 +29,29 @@ class ClaudeManager {
   private exitListeners: ExitCallback[] = []
   private spawnListeners: SpawnCallback[] = []
   private sendListeners: SendCallback[] = []
+  private initListeners: InitCallback[] = []
+  private incomingFactory: IncomingHandlerFactory | null = null
 
-  start(
-    paneId: string,
-    cwd: string,
-    model?: string,
-    resumeSessionId?: string,
-    permissionMode?: string,
-    profileEnv: Record<string, string> = {},
-    profileId: string = DEFAULT_PROFILE_ID
-  ): { ok: boolean; error?: string } {
+  start(options: StartOptions): { ok: boolean; error?: string } {
+    const { paneId, cwd, profileId = DEFAULT_PROFILE_ID } = options
     const existing = this.sessions.get(paneId)
     if (existing && existing.isAlive()) return { ok: true }
     try {
-      const session = new ClaudeSession(
+      const session: ClaudeSession = new ClaudeSession({
         paneId,
         cwd,
-        (id, event) => {
+        model: options.model,
+        resumeSessionId: options.resumeSessionId,
+        permissionMode: options.permissionMode,
+        profileEnv: options.profileEnv,
+        onEvent: (id, event) => {
           for (const cb of this.eventListeners) cb(id, event)
         },
-        (id, code) => {
+        onInit: (id, init) => {
+          if (this.sessions.get(id) !== session) return
+          for (const cb of this.initListeners) cb(id, init)
+        },
+        onExit: (id, code) => {
           // A stopped process can exit after a new one took its pane; that exit is stale.
           const current = this.sessions.get(id)
           if (current && current !== session) return
@@ -41,12 +59,9 @@ class ClaudeManager {
           for (const cb of this.exitListeners) cb(id, code)
           // After the exit listeners, so the status reducer ignores the resolves this emits.
           permissionServer.clearPane(id)
-        },
-        model,
-        resumeSessionId,
-        permissionMode,
-        profileEnv
-      )
+        }
+      })
+      if (this.incomingFactory) session.setIncomingHandler(this.incomingFactory(paneId))
       this.sessions.set(paneId, session)
       this.profileIds.set(paneId, profileId)
       for (const cb of this.spawnListeners) cb(paneId, cwd)
@@ -63,6 +78,26 @@ class ClaudeManager {
 
   isAlive(paneId: string): boolean {
     return this.sessions.get(paneId)?.isAlive() ?? false
+  }
+
+  /** The pane's `initialize` data, or null before the handshake replied. */
+  initOf(paneId: string): SessionInit | null {
+    return this.sessions.get(paneId)?.initInfo() ?? null
+  }
+
+  async control(paneId: string, subtype: string, fields: ControlPayload = {}): Promise<ControlResult> {
+    const session = this.sessions.get(paneId)
+    if (!session?.isAlive()) return { ok: false, error: 'claude process is not running' }
+    try {
+      return { ok: true, response: await session.request(subtype, fields) }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  }
+
+  /** Applies to sessions started from now on. */
+  setIncomingHandlerFactory(factory: IncomingHandlerFactory | null): void {
+    this.incomingFactory = factory
   }
 
   send(
@@ -95,6 +130,13 @@ class ClaudeManager {
     this.eventListeners.push(cb)
     return () => {
       this.eventListeners = this.eventListeners.filter((c) => c !== cb)
+    }
+  }
+
+  onInit(cb: InitCallback): () => void {
+    this.initListeners.push(cb)
+    return () => {
+      this.initListeners = this.initListeners.filter((c) => c !== cb)
     }
   }
 

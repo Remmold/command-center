@@ -15,6 +15,7 @@ import { useChatItemsStore } from '../../state/chatItemsStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { usePermissionsStore } from '../../state/permissionsStore'
 import { useFocusRequestStore } from '../../state/sessionNavigation'
+import { useSessionInit } from '../../state/sessionInitStore'
 import type {
   ClaudeAssistantEvent,
   ClaudeEvent,
@@ -85,6 +86,7 @@ export function ChatView({
   const [error, setError] = useState<string | null>(null)
   const [inProgress, setInProgress] = useState<AssistantMessageItem | null>(null)
   const [slashCommands, setSlashCommands] = useState<string[]>([])
+  const sessionInit = useSessionInit(paneId)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const itemsLenRef = useRef(0)
   const initialItemsCountRef = useRef(items.length)
@@ -262,7 +264,7 @@ export function ChatView({
   const ensureStarted = async (): Promise<boolean> => {
     if (processRunning) return true
     setError(null)
-    const res = await window.api.claude.start(paneId, cwd, model, resumeSessionId, permissionMode)
+    const res = await window.api.claude.start({ paneId, cwd, model, resumeSessionId, permissionMode })
     if (!res.ok) {
       setError(res.error ?? 'failed to start claude')
       if (resumeSessionId) useProjectViewsStore.getState().clearClaudeSessionId(paneId)
@@ -348,7 +350,9 @@ export function ChatView({
         disabled={turnActive}
         onSend={handleSend}
         onInterrupt={handleInterrupt}
-        slashCommands={slashCommands}
+        slashCommands={
+          slashCommands.length > 0 ? slashCommands : (sessionInit?.commands.map((c) => c.name) ?? [])
+        }
         cwd={cwd}
         registerFocus={registerInputFocus}
       />
