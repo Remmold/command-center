@@ -1,1 +1,2 @@
 - 01 resolved: pnpm (onlyBuiltDependencies electron/esbuild/node-pty), Vitest node-only config, `pnpm quick` = typecheck + vitest; node-pty prebuilds load in Electron 31, no source rebuild (MSB8040 Spectre libs missing). Lane 2: open a shell tab in the UI — 1e7a1f9
+- 02 resolved: Workspace type {profileId, repoGroupKey, repoName, worktreeTag}, key git:<commondir>|dir:<path>, IPC workspaces:*, groupByRepo/repoGroupHue in shared/repoGroups.ts, RepoIcon + useWorkspacesStore; tag = strip repo name or its initials (FS) as whole word; 13/13. Lane 2: grouped sidebar look — bf53ad0
