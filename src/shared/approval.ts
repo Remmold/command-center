@@ -16,16 +16,17 @@ export interface DenyReply {
   interrupt: boolean
 }
 
-// Verbatim from the VS Code extension; the double space after the colon is theirs too.
-const REJECTED_WITH_REASON =
-  "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). The user provided the following reason for the rejection: "
+// Verbatim from the VS Code extension.
 const REJECTED_STOP =
   "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."
+
+// Deliberately not the extension's wording: with it, Claude sometimes took the feedback for prompt injection.
+const DENIED_WITH_INSTRUCTION = 'The user denied this tool call and typed this instruction for you to follow instead:'
 
 export function denyReply(feedback: string): DenyReply {
   const text = feedback.trim()
   if (!text) return { behavior: 'deny', message: REJECTED_STOP, interrupt: true }
-  return { behavior: 'deny', message: `${REJECTED_WITH_REASON} ${text}`, interrupt: false }
+  return { behavior: 'deny', message: `${DENIED_WITH_INSTRUCTION} "${text}"`, interrupt: false }
 }
 
 export type PermissionDestination = 'localSettings' | 'userSettings' | 'projectSettings' | 'session' | 'cliArg'

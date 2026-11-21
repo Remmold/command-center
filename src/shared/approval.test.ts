@@ -19,13 +19,18 @@ describe('approval replies', () => {
     expect(allowReply(input)).toEqual({ behavior: 'allow', updatedInput: input, updatedPermissions: [] })
   })
 
-  it('No with feedback passes the feedback to Claude and lets it carry on', () => {
+  it('No with feedback hands Claude the typed text as the user\'s own instruction and lets it carry on', () => {
     expect(denyReply('write c.txt instead')).toEqual({
       behavior: 'deny',
-      message:
-        "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). The user provided the following reason for the rejection:  write c.txt instead",
+      message: 'The user denied this tool call and typed this instruction for you to follow instead: "write c.txt instead"',
       interrupt: false
     })
+  })
+
+  it('No with feedback keeps quotes and line breaks in the typed text as they are', () => {
+    expect(denyReply('  use "b.txt"\nand say \'done\'\r\nafter  ').message).toBe(
+      'The user denied this tool call and typed this instruction for you to follow instead: "use "b.txt"\nand say \'done\'\r\nafter"'
+    )
   })
 
   it('No without feedback tells Claude to stop and interrupts the turn', () => {
