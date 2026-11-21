@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { Project, PtyKind } from '../../shared/types'
+import type { PtyKind, Workspace } from '../../shared/types'
 import { useChatItemsStore } from './chatItemsStore'
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku' | string
@@ -80,7 +80,7 @@ interface ProjectViewsState {
   activityView: ActivityView
   setActivityView: (view: ActivityView) => void
 
-  openProject: (project: Project) => void
+  openProject: (workspace: Workspace) => void
   closeProject: (projectId: string) => void
   setActive: (projectId: string) => void
 

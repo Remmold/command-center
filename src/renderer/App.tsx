@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { ActivityBar } from './components/ActivityBar'
 import { ProjectTabs } from './components/ProjectTabs'
+import { Sidebar } from './components/Sidebar'
 import { ProjectView } from './components/ProjectView'
 import { AppsDashboard } from './components/AppsDashboard'
 import { UsageBar } from './components/UsageBar'
@@ -94,6 +95,7 @@ export function App() {
     <div className="flex h-full flex-col">
       <ProjectTabs />
       <div className="flex min-h-0 flex-1">
+        <Sidebar />
         <ActivityBar />
         <div className="relative min-w-0 flex-1">
           {showApps && (
@@ -103,7 +105,7 @@ export function App() {
           )}
           {order.length === 0 && (
             <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-              click + at the top to open a project
+              pick a workspace in the sidebar, or click + to add one
             </div>
           )}
           {order.map((projectId) => {

@@ -1,8 +1,16 @@
-export interface Project {
+export const DEFAULT_PROFILE_ID = 'default'
+
+export interface Workspace {
   id: string
   name: string
   path: string
   createdAt: number
+  profileId: string
+  /** Shared by every worktree of one git repo; a folder outside git is its own group. */
+  repoGroupKey: string
+  repoName: string
+  /** Empty for the main checkout. */
+  worktreeTag: string
 }
 
 export type PtyKind = 'pwsh' | 'powershell' | 'cmd' | 'bash'
@@ -182,9 +190,9 @@ export interface AppExitEvent {
 }
 
 export interface RendererApi {
-  projects: {
-    list: () => Promise<Project[]>
-    add: () => Promise<Project | null>
+  workspaces: {
+    list: () => Promise<Workspace[]>
+    add: () => Promise<Workspace | null>
     remove: (id: string) => Promise<void>
   }
   apps: {

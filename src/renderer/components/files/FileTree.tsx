@@ -78,7 +78,7 @@ export function FileTree({ cwd, onOpenFile, activeFilePath }: Props) {
         )}
         {files !== null && tree.children.length === 0 && (
           <div className="px-3 py-2 text-xs italic text-zinc-600">
-            {filter ? 'no matches' : 'empty project'}
+            {filter ? 'no matches' : 'empty workspace'}
           </div>
         )}
         {tree.children.map((node) => (

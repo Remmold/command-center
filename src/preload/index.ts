@@ -9,18 +9,18 @@ import type {
   ManagedApp,
   PermissionRequest,
   PermissionResponse,
-  Project,
   PtyDataEvent,
   PtyExitEvent,
   RendererApi,
-  SpawnResult
+  SpawnResult,
+  Workspace
 } from '../shared/types'
 
 const api: RendererApi = {
-  projects: {
-    list: (): Promise<Project[]> => ipcRenderer.invoke(IPC.PROJECTS_LIST),
-    add: (): Promise<Project | null> => ipcRenderer.invoke(IPC.PROJECTS_ADD),
-    remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC.PROJECTS_REMOVE, id)
+  workspaces: {
+    list: (): Promise<Workspace[]> => ipcRenderer.invoke(IPC.WORKSPACES_LIST),
+    add: (): Promise<Workspace | null> => ipcRenderer.invoke(IPC.WORKSPACES_ADD),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC.WORKSPACES_REMOVE, id)
   },
   apps: {
     list: (): Promise<ManagedApp[]> => ipcRenderer.invoke(IPC.APPS_LIST),

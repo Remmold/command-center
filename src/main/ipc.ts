@@ -1,6 +1,6 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import { IPC } from '../shared/ipc-channels'
-import * as projects from './projects/store'
+import * as workspaces from './workspaces/store'
 import * as apps from './apps/store'
 import { appManager } from './apps/manager'
 import { ptyManager } from './pty/manager'
@@ -19,10 +19,9 @@ import {
 let unsubscribers: Array<() => void> = []
 
 export function registerIpc(): void {
-  // Projects
-  ipcMain.handle(IPC.PROJECTS_LIST, () => projects.list())
+  ipcMain.handle(IPC.WORKSPACES_LIST, () => workspaces.list())
 
-  ipcMain.handle(IPC.PROJECTS_ADD, async (event) => {
+  ipcMain.handle(IPC.WORKSPACES_ADD, async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     const result = win
       ? await dialog.showOpenDialog(win, {
@@ -32,10 +31,10 @@ export function registerIpc(): void {
           properties: ['openDirectory', 'createDirectory']
         })
     if (result.canceled || result.filePaths.length === 0) return null
-    return projects.add(result.filePaths[0])
+    return workspaces.add(result.filePaths[0])
   })
 
-  ipcMain.handle(IPC.PROJECTS_REMOVE, (_event, id: string) => projects.remove(id))
+  ipcMain.handle(IPC.WORKSPACES_REMOVE, (_event, id: string) => workspaces.remove(id))
 
   ipcMain.handle(IPC.FILES_LIST, (_event, cwd: string) => listProjectFiles(cwd))
 

@@ -1,7 +1,7 @@
 export const IPC = {
-  PROJECTS_LIST: 'projects:list',
-  PROJECTS_ADD: 'projects:add',
-  PROJECTS_REMOVE: 'projects:remove',
+  WORKSPACES_LIST: 'workspaces:list',
+  WORKSPACES_ADD: 'workspaces:add',
+  WORKSPACES_REMOVE: 'workspaces:remove',
   PTY_SPAWN: 'pty:spawn',
   PTY_WRITE: 'pty:write',
   PTY_RESIZE: 'pty:resize',
