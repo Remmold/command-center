@@ -195,6 +195,10 @@ export interface RendererApi {
     add: () => Promise<Workspace | null>
     remove: (id: string) => Promise<void>
   }
+  board: {
+    get: () => Promise<BoardModel>
+    onChanged: (cb: (model: BoardModel) => void) => () => void
+  }
   apps: {
     list: () => Promise<ManagedApp[]>
     add: (app: ManagedAppInput) => Promise<ManagedApp>
@@ -261,4 +265,49 @@ export interface RendererApi {
       untracked?: boolean
     ) => Promise<GitDiffResult>
   }
+}
+
+export type BoardColumn = 'backlog' | 'blocked' | 'in-progress' | 'done'
+
+/** One copy of a ticket file, in one workspace. */
+export interface TicketSighting {
+  workspaceId: string
+  column: BoardColumn
+  /** Lower-cased first word of the Status line; null when the ticket has none. */
+  status: string | null
+  blockedBy: number[]
+  filePath: string
+  progressPath: string | null
+}
+
+/** One card: every worktree copy of one ticket, merged. */
+export interface BoardTicket {
+  number: number
+  title: string
+  column: BoardColumn
+  status: string | null
+  /** Highest column first, then workspace order. */
+  sightings: TicketSighting[]
+}
+
+export interface FeatureSighting {
+  workspaceId: string
+  specPath: string | null
+  progressPath: string | null
+}
+
+export interface BoardFeature {
+  name: string
+  tickets: BoardTicket[]
+  sightings: FeatureSighting[]
+}
+
+export interface BoardRepoGroup {
+  repoGroupKey: string
+  repoName: string
+  features: BoardFeature[]
+}
+
+export interface BoardModel {
+  repoGroups: BoardRepoGroup[]
 }

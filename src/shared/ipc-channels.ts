@@ -2,6 +2,8 @@ export const IPC = {
   WORKSPACES_LIST: 'workspaces:list',
   WORKSPACES_ADD: 'workspaces:add',
   WORKSPACES_REMOVE: 'workspaces:remove',
+  BOARD_GET: 'board:get',
+  BOARD_CHANGED: 'board:changed',
   PTY_SPAWN: 'pty:spawn',
   PTY_WRITE: 'pty:write',
   PTY_RESIZE: 'pty:resize',

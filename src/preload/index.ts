@@ -4,6 +4,7 @@ import { IPC } from '../shared/ipc-channels'
 import type {
   AppExitEvent,
   AppOutputEvent,
+  BoardModel,
   ClaudeEventEnvelope,
   ClaudeExitEnvelope,
   ManagedApp,
@@ -21,6 +22,14 @@ const api: RendererApi = {
     list: (): Promise<Workspace[]> => ipcRenderer.invoke(IPC.WORKSPACES_LIST),
     add: (): Promise<Workspace | null> => ipcRenderer.invoke(IPC.WORKSPACES_ADD),
     remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC.WORKSPACES_REMOVE, id)
+  },
+  board: {
+    get: (): Promise<BoardModel> => ipcRenderer.invoke(IPC.BOARD_GET),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, model: BoardModel) => cb(model)
+      ipcRenderer.on(IPC.BOARD_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.BOARD_CHANGED, handler)
+    }
   },
   apps: {
     list: (): Promise<ManagedApp[]> => ipcRenderer.invoke(IPC.APPS_LIST),

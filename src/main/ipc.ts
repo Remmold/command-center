@@ -9,6 +9,7 @@ import { listProjectFiles } from './files/lister'
 import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { listLocalSessions } from './claude/local-sessions'
+import { BoardService } from './board/service'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import {
   permissionServer,
@@ -19,6 +20,23 @@ import {
 let unsubscribers: Array<() => void> = []
 
 export function registerIpc(): void {
+  const board = new BoardService(workspaces.list, (model) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IPC.BOARD_CHANGED, model)
+    }
+  })
+  const refreshBoard = (): Promise<void> =>
+    board.refresh().then(
+      () => undefined,
+      (err) => console.error('[board] refresh failed', err)
+    )
+  const firstRead = refreshBoard()
+  ipcMain.handle(IPC.BOARD_GET, async () => {
+    await firstRead
+    return board.current()
+  })
+  unsubscribers.push(() => board.stop())
+
   ipcMain.handle(IPC.WORKSPACES_LIST, () => workspaces.list())
 
   ipcMain.handle(IPC.WORKSPACES_ADD, async (event) => {
@@ -31,10 +49,15 @@ export function registerIpc(): void {
           properties: ['openDirectory', 'createDirectory']
         })
     if (result.canceled || result.filePaths.length === 0) return null
-    return workspaces.add(result.filePaths[0])
+    const added = await workspaces.add(result.filePaths[0])
+    void refreshBoard()
+    return added
   })
 
-  ipcMain.handle(IPC.WORKSPACES_REMOVE, (_event, id: string) => workspaces.remove(id))
+  ipcMain.handle(IPC.WORKSPACES_REMOVE, async (_event, id: string) => {
+    await workspaces.remove(id)
+    void refreshBoard()
+  })
 
   ipcMain.handle(IPC.FILES_LIST, (_event, cwd: string) => listProjectFiles(cwd))
 

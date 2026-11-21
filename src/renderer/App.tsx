@@ -10,6 +10,8 @@ import { useAppsStore } from './state/appsStore'
 import { useUsageStore, type RateLimitInfo } from './state/usageStore'
 import { usePermissionsStore } from './state/permissionsStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useViewStore } from './state/viewStore'
+import { BoardView } from './components/board/BoardView'
 import type { ClaudeResultEvent } from '../shared/types'
 
 interface RawResultUsage {
@@ -24,6 +26,7 @@ export function App() {
   const setRateLimit = useUsageStore((s) => s.setRateLimit)
   const addPermissionRequest = usePermissionsStore((s) => s.addRequest)
   const showApps = useAppsStore((s) => s.showApps)
+  const appView = useViewStore((s) => s.view)
   const initApps = useAppsStore((s) => s.init)
 
   const focusInputRef = useRef<() => void>()
@@ -94,43 +97,53 @@ export function App() {
   return (
     <div className="flex h-full flex-col">
       <ProjectTabs />
-      <div className="flex min-h-0 flex-1">
-        <Sidebar />
-        <ActivityBar />
-        <div className="relative min-w-0 flex-1">
-          {showApps && (
-            <div className="absolute inset-0 z-20">
-              <AppsDashboard />
-            </div>
-          )}
-          {order.length === 0 && (
-            <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-              pick a workspace in the sidebar, or click + to add one
-            </div>
-          )}
-          {order.map((projectId) => {
-            const view = views[projectId]
-            if (!view) return null
-            const active = projectId === activeProjectId
-            return (
-              <div
-                key={projectId}
-                className={'absolute inset-0 ' + (active ? '' : 'invisible')}
-                aria-hidden={!active}
-              >
-                <ProjectView
-                  view={view}
-                  registerFocus={
-                    active
-                      ? (fn) => {
-                          focusInputRef.current = fn
-                        }
-                      : undefined
-                  }
-                />
+      <div className="relative flex min-h-0 flex-1">
+        {appView === 'board' && (
+          <div className="absolute inset-0 z-30">
+            <BoardView />
+          </div>
+        )}
+        <div
+          className={'flex min-h-0 min-w-0 flex-1 ' + (appView === 'board' ? 'invisible' : '')}
+          aria-hidden={appView === 'board'}
+        >
+          <Sidebar />
+          <ActivityBar />
+          <div className="relative min-w-0 flex-1">
+            {showApps && (
+              <div className="absolute inset-0 z-20">
+                <AppsDashboard />
               </div>
-            )
-          })}
+            )}
+            {order.length === 0 && (
+              <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+                pick a workspace in the sidebar, or click + to add one
+              </div>
+            )}
+            {order.map((projectId) => {
+              const view = views[projectId]
+              if (!view) return null
+              const active = projectId === activeProjectId
+              return (
+                <div
+                  key={projectId}
+                  className={'absolute inset-0 ' + (active ? '' : 'invisible')}
+                  aria-hidden={!active}
+                >
+                  <ProjectView
+                    view={view}
+                    registerFocus={
+                      active
+                        ? (fn) => {
+                            focusInputRef.current = fn
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
       <UsageBar />

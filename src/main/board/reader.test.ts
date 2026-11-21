@@ -1,0 +1,260 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import type { BoardModel, BoardTicket, Workspace } from '../../shared/types'
+import { readBoard } from './reader'
+import { nodeFileReader } from './nodeFileReader'
+
+const roots: string[] = []
+
+afterEach(() => {
+  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true })
+})
+
+function fixture(files: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), 'board-'))
+  roots.push(root)
+  for (const [rel, content] of Object.entries(files)) {
+    const full = join(root, rel)
+    mkdirSync(dirname(full), { recursive: true })
+    writeFileSync(full, content)
+  }
+  return root
+}
+
+function workspace(path: string, over: Partial<Workspace> = {}): Workspace {
+  return {
+    id: over.id ?? path,
+    name: 'ws',
+    path,
+    createdAt: 0,
+    profileId: 'default',
+    repoGroupKey: over.repoGroupKey ?? `dir:${path}`,
+    repoName: over.repoName ?? 'repo',
+    worktreeTag: '',
+    ...over
+  }
+}
+
+function ticket(title: string, lines: string[]): string {
+  return [`# ${title}`, '', '**What to build:** something', '', ...lines, '', '- [ ] a box'].join('\n')
+}
+
+function tickets(model: BoardModel): BoardTicket[] {
+  return model.repoGroups.flatMap((g) => g.features.flatMap((f) => f.tickets))
+}
+
+function columns(model: BoardModel): Record<string, string> {
+  return Object.fromEntries(tickets(model).map((t) => [t.number, t.column]))
+}
+
+describe('board reader', () => {
+  it('puts a ticket with a bold resolved Status in Done', async () => {
+    const root = fixture({
+      '.scratch/progression-flow/spec.md': '# spec',
+      '.scratch/progression-flow/issues/01-progression-module.md': ticket(
+        '01: Progression module',
+        ['**Blocked by:** None (can start immediately)', '', '**Status:** resolved']
+      )
+    })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    expect(model.repoGroups).toHaveLength(1)
+    const [feature] = model.repoGroups[0].features
+    expect(feature.name).toBe('progression-flow')
+    expect(feature.tickets).toHaveLength(1)
+    expect(feature.tickets[0]).toMatchObject({
+      number: 1,
+      title: 'Progression module',
+      column: 'done',
+      status: 'resolved'
+    })
+  })
+
+  it('reads plain and bold Status lines alike, and a missing Status as Backlog', async () => {
+    const root = fixture({
+      '.scratch/villager-talk/issues/01-plain.md': '# 01: Plain\n\nStatus: needs-triage\n',
+      '.scratch/villager-talk/issues/02-bold-wontfix.md': ticket('02: Bold', ['**Status:** wontfix']),
+      '.scratch/villager-talk/issues/03-missing.md': ticket('03: Missing', []),
+      '.scratch/villager-talk/issues/04-plain-resolved.md': '# 04: Resolved\r\n\r\nstatus:   Resolved\r\n'
+    })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    expect(columns(model)).toEqual({ 1: 'backlog', 2: 'done', 3: 'backlog', 4: 'done' })
+    expect(tickets(model).map((t) => t.status)).toEqual(['needs-triage', 'wontfix', null, 'resolved'])
+  })
+
+  it('puts a ticket in Blocked when any listed blocker is not resolved, and treats None as no blockers', async () => {
+    const root = fixture({
+      '.scratch/equipment/issues/01-done.md': ticket('01: Done', ['**Status:** resolved']),
+      '.scratch/equipment/issues/02-open.md': ticket('02: Open', ['**Status:** ready-for-agent']),
+      '.scratch/equipment/issues/03-none.md': ticket('03: None', [
+        '**Blocked by:** None (can start immediately)',
+        '**Status:** ready-for-agent'
+      ]),
+      '.scratch/equipment/issues/04-one-open.md': ticket('04: One open', [
+        '**Blocked by:** 01, 02',
+        '**Status:** ready-for-agent'
+      ]),
+      '.scratch/equipment/issues/05-all-done.md': ticket('05: All done', [
+        'Blocked by: 01',
+        'Status: ready-for-agent'
+      ]),
+      '.scratch/equipment/issues/06-prose.md': ticket('06: Prose', [
+        "**Blocked by:** animation round 2's hero group (control feel, 12b swing feel) on main",
+        '**Status:** ready-for-agent'
+      ])
+    })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    expect(columns(model)).toMatchObject({ 3: 'backlog', 4: 'blocked', 5: 'backlog', 6: 'backlog' })
+    const blockedBy = Object.fromEntries(tickets(model).map((t) => [t.number, t.sightings[0].blockedBy]))
+    expect(blockedBy).toMatchObject({ 3: [], 4: [1, 2], 5: [1], 6: [] })
+  })
+
+  it('reads blocker numbers from ; lists and stops at the first item that names another feature', async () => {
+    const root = fixture({
+      '.scratch/realm/issues/04-open.md': ticket('04: Open', ['Status: ready-for-agent']),
+      '.scratch/realm/issues/07-done.md': ticket('07: Done', ['Status: resolved']),
+      '.scratch/realm/issues/08-groups.md': ticket('08: Groups', [
+        '**Blocked by:** 07 for group 1; 07 and 07 for group 2',
+        '**Status:** ready-for-agent'
+      ]),
+      '.scratch/realm/issues/09-cross.md': ticket('09: Cross', [
+        '**Blocked by:** 07; villager-talk group 1 (its tickets 04 and 05)',
+        '**Status:** ready_for_agent'
+      ])
+    })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    const byNumber = Object.fromEntries(tickets(model).map((t) => [t.number, t]))
+    expect(byNumber[8].sightings[0].blockedBy).toEqual([7, 7, 7])
+    expect(byNumber[9].sightings[0].blockedBy).toEqual([7])
+    expect(byNumber[9].status).toBe('ready_for_agent')
+    expect(columns(model)).toMatchObject({ 8: 'backlog', 9: 'backlog' })
+  })
+
+  it('counts a blocker resolved in any worktree copy as resolved', async () => {
+    const feature = '.scratch/combat/issues/'
+    const main = fixture({
+      [feature + '01-swing.md']: ticket('01: Swing', ['**Status:** ready-for-agent']),
+      [feature + '02-dodge.md']: ticket('02: Dodge', ['**Blocked by:** 01', '**Status:** ready-for-agent'])
+    })
+    const shard = fixture({
+      [feature + '01-swing.md']: ticket('01: Swing', ['**Status:** resolved']),
+      [feature + '02-dodge.md']: ticket('02: Dodge', ['**Blocked by:** 01', '**Status:** ready-for-agent'])
+    })
+    const key = 'git:c:/projects/fs/.git'
+    const model = await readBoard(
+      [
+        workspace(main, { id: 'main', repoGroupKey: key }),
+        workspace(shard, { id: 'shard', repoGroupKey: key, worktreeTag: 'shard' })
+      ],
+      nodeFileReader
+    )
+    expect(columns(model)).toEqual({ 1: 'done', 2: 'backlog' })
+  })
+
+  it('puts a claimed ticket, or one with its own progress file, in In progress', async () => {
+    const root = fixture({
+      '.scratch/workspace-hub/issues/01-claimed.md': ticket('01: Claimed', ['Status: claimed']),
+      '.scratch/workspace-hub/issues/02-noted.md': ticket('02: Noted', ['**Status:** ready-for-agent']),
+      '.scratch/workspace-hub/issues/02-noted.progress.md': 'Done: half.\nNext: rest.\nOpen reds: none.',
+      '.scratch/workspace-hub/issues/03-noted-blocked.md': ticket('03: Noted but blocked', [
+        '**Blocked by:** 04',
+        '**Status:** ready-for-agent'
+      ]),
+      '.scratch/workspace-hub/issues/03-noted-blocked.progress.md': 'Done: started.',
+      '.scratch/workspace-hub/issues/04-plain.md': ticket('04: Plain', ['**Status:** ready-for-agent'])
+    })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    expect(columns(model)).toEqual({ 1: 'in-progress', 2: 'in-progress', 3: 'blocked', 4: 'backlog' })
+    const noted = tickets(model).find((t) => t.number === 2)
+    expect(noted?.sightings[0].progressPath).toBe(
+      join(root, '.scratch/workspace-hub/issues/02-noted.progress.md')
+    )
+  })
+
+  it('merges worktree copies of one ticket into one card with the highest column', async () => {
+    const feature = '.scratch/combat/issues/'
+    const main = fixture({
+      [feature + '01-swing.md']: ticket('01: Swing', ['**Status:** ready-for-agent']),
+      [feature + '02-block.md']: ticket('02: Block', ['**Status:** resolved']),
+      [feature + '03-dodge.md']: ticket('03: Dodge', ['**Blocked by:** 01', '**Status:** ready-for-agent'])
+    })
+    const shard = fixture({
+      [feature + '01-swing.md']: ticket('01: Swing', ['**Status:** claimed']),
+      [feature + '02-block.md']: ticket('02: Block', ['**Status:** ready-for-agent']),
+      [feature + '03-dodge.md']: ticket('03: Dodge', ['**Blocked by:** 01', '**Status:** ready-for-agent']),
+      [feature + '04-parry.md']: ticket('04: Parry', ['**Status:** needs-triage'])
+    })
+    const other = fixture({
+      [feature + '01-swing.md']: ticket('01: Other repo swing', ['**Status:** needs-triage'])
+    })
+    const key = 'git:c:/projects/fs/.git'
+    const model = await readBoard(
+      [
+        workspace(main, { id: 'main', repoGroupKey: key, repoName: 'FantasySurvival' }),
+        workspace(shard, { id: 'shard-2', repoGroupKey: key, repoName: 'FantasySurvival', worktreeTag: 'shard-2' }),
+        workspace(other, { id: 'other', repoName: 'Agon' })
+      ],
+      nodeFileReader
+    )
+
+    expect(model.repoGroups.map((g) => g.repoName)).toEqual(['Agon', 'FantasySurvival'])
+    const fs = model.repoGroups[1]
+    expect(fs.features).toHaveLength(1)
+    expect(fs.features[0].sightings.map((s) => s.workspaceId)).toEqual(['main', 'shard-2'])
+
+    const cards = fs.features[0].tickets
+    expect(cards.map((t) => [t.number, t.column, t.status])).toEqual([
+      [1, 'in-progress', 'claimed'],
+      [2, 'done', 'resolved'],
+      [3, 'blocked', 'ready-for-agent'],
+      [4, 'backlog', 'needs-triage']
+    ])
+    expect(cards[0].sightings.map((s) => [s.workspaceId, s.column])).toEqual([
+      ['shard-2', 'in-progress'],
+      ['main', 'backlog']
+    ])
+    expect(cards[1].sightings.map((s) => s.workspaceId)).toEqual(['main', 'shard-2'])
+    expect(cards[1].sightings[0].filePath).toBe(join(main, feature, '02-block.md'))
+    expect(cards[3].sightings.map((s) => s.workspaceId)).toEqual(['shard-2'])
+
+    expect(tickets({ repoGroups: [model.repoGroups[0]] })).toMatchObject([
+      { number: 1, column: 'backlog', title: 'Other repo swing' }
+    ])
+  })
+
+  it('ignores files that are not tickets and records each feature copy’s spec and notes', async () => {
+    const root = fixture({
+      '.scratch/test-flow-parked-run-R.md': '**Status:** resolved',
+      '.scratch/controls-options/spec.md': '# spec',
+      '.scratch/controls-options/progress.md': '- 01 resolved',
+      '.scratch/controls-options/night-notes.md': 'Status: claimed',
+      '.scratch/controls-options/latency-after-04.json': '{}',
+      '.scratch/controls-options/issues/01-remap.md': ticket('01: Remap', ['Status: needs-triage']),
+      '.scratch/controls-options/issues/README.md': 'Status: claimed',
+      '.scratch/controls-options/issues/01-remap.txt': 'Status: claimed',
+      '.scratch/controls-options/issues/old/02-nested.md': 'Status: claimed',
+      '.scratch/controls-options/issues/03-orphan.progress.md': 'Done: nothing.',
+      '.scratch/camera-feel/night-notes.md': 'notes only'
+    })
+    const model = await readBoard([workspace(root, { id: 'w' })], nodeFileReader)
+    const features = model.repoGroups[0].features
+    expect(features.map((f) => f.name)).toEqual(['camera-feel', 'controls-options'])
+    expect(features[0].tickets).toEqual([])
+    expect(features[0].sightings).toEqual([{ workspaceId: 'w', specPath: null, progressPath: null }])
+    expect(features[1].tickets.map((t) => [t.number, t.column])).toEqual([[1, 'backlog']])
+    expect(features[1].sightings).toEqual([
+      {
+        workspaceId: 'w',
+        specPath: join(root, '.scratch/controls-options/spec.md'),
+        progressPath: join(root, '.scratch/controls-options/progress.md')
+      }
+    ])
+  })
+
+  it('returns no features for a workspace without a .scratch folder', async () => {
+    const root = fixture({ 'README.md': '# hi' })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    expect(model.repoGroups).toMatchObject([{ features: [] }])
+  })
+})
