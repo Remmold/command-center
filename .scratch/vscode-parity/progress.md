@@ -1,0 +1,1 @@
+- 01 resolved: control channel per session (initialize handshake kept + sent to renderer, Stop/Esc send interrupt, claude.control IPC, --setting-sources) — 5ad5bc2, 7b990ef
