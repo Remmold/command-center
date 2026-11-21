@@ -25,6 +25,9 @@ export function App() {
   const order = useProjectViewsStore((s) => s.order)
   const views = useProjectViewsStore((s) => s.views)
   const activeProjectId = useProjectViewsStore((s) => s.activeProjectId)
+  const idePanelsOpen = useProjectViewsStore((s) =>
+    s.activeProjectId ? (s.views[s.activeProjectId]?.idePanelsOpen ?? false) : false
+  )
   const recordResult = useUsageStore((s) => s.recordResult)
   const setRateLimit = useUsageStore((s) => s.setRateLimit)
   const addPermissionRequest = usePermissionsStore((s) => s.addRequest)
@@ -92,9 +95,13 @@ export function App() {
       state.closeClaudeSession(projectId, view.activeClaudeSessionId)
     },
     focusInput: () => focusInputRef.current?.(),
-    toggleBottomPanel: () => {
+    toggleIdePanels: () => {
       const projectId = useProjectViewsStore.getState().activeProjectId
-      if (projectId) useProjectViewsStore.getState().toggleBottomPanel(projectId)
+      if (projectId) useProjectViewsStore.getState().toggleIdePanels(projectId)
+    },
+    toggleShellDrawer: () => {
+      const projectId = useProjectViewsStore.getState().activeProjectId
+      if (projectId) useProjectViewsStore.getState().toggleShellDrawer(projectId)
     },
     switchTabIndex: (i) => {
       const state = useProjectViewsStore.getState()
@@ -120,7 +127,7 @@ export function App() {
           aria-hidden={appView === 'board'}
         >
           <Sidebar />
-          <ActivityBar />
+          {idePanelsOpen && <ActivityBar />}
           <div className="relative min-w-0 flex-1">
             {showApps && (
               <div className="absolute inset-0 z-20">

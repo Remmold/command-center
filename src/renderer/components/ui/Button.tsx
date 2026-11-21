@@ -13,16 +13,20 @@ interface Props {
   variant?: Variant
   tooltip?: string
   label?: string
+  pressed?: boolean
 }
 
-export function Button({ children, onClick, variant = 'primary', tooltip, label }: Props) {
+const PRESSED = 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700'
+
+export function Button({ children, onClick, variant = 'primary', tooltip, label, pressed }: Props) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={tooltip}
       aria-label={label}
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-400 ${VARIANTS[variant]}`}
+      aria-pressed={pressed}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-400 ${pressed ? PRESSED : VARIANTS[variant]}`}
     >
       {children}
     </button>

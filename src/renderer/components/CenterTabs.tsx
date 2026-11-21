@@ -9,6 +9,7 @@ import { getFileIcon } from './files/fileIcons'
 
 interface Props {
   view: ProjectView
+  chatOnly?: boolean
   registerFocus?: (fn: () => void) => void
 }
 
@@ -24,20 +25,25 @@ const DIFF_KIND_COLOR: Record<string, string> = {
   untracked: 'text-emerald-300'
 }
 
-export function CenterTabs({ view, registerFocus }: Props) {
+export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
   const setCenterView = useProjectViewsStore((s) => s.setCenterView)
   const setActiveFile = useProjectViewsStore((s) => s.setActiveFile)
   const closeFile = useProjectViewsStore((s) => s.closeFile)
   const setActiveDiff = useProjectViewsStore((s) => s.setActiveDiff)
   const closeDiff = useProjectViewsStore((s) => s.closeDiff)
 
-  const chatActive = view.centerView === 'chat'
-  const fileActive = view.centerView === 'file'
-  const diffActive = view.centerView === 'diff'
+  const chatActive = chatOnly || view.centerView === 'chat'
+  const fileActive = !chatOnly && view.centerView === 'file'
+  const diffActive = !chatOnly && view.centerView === 'diff'
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <div className="scrollbar-thin flex shrink-0 items-center overflow-x-auto border-b border-zinc-800 bg-zinc-950/60">
+      <div
+        className={
+          'scrollbar-thin flex shrink-0 items-center overflow-x-auto border-b border-zinc-800 bg-zinc-950/60 ' +
+          (chatOnly ? 'hidden' : '')
+        }
+      >
         <button
           onClick={() => setCenterView(view.projectId, 'chat')}
           className={

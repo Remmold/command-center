@@ -2,6 +2,14 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { PtyKind, Workspace } from '../../shared/types'
 import { useChatItemsStore } from './chatItemsStore'
+import {
+  LAYOUT_VERSION,
+  migrateLayout,
+  openShellTab,
+  persistableView,
+  toggleIdePanels,
+  type ShellOptions
+} from './projectViewLayout'
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku' | string
 export type PermissionMode =
@@ -30,6 +38,7 @@ export interface ShellTab {
   id: string
   label: string
   kind: PtyKind
+  env?: Record<string, string>
 }
 
 export interface OpenFile {
@@ -64,8 +73,8 @@ export interface ProjectView {
   openDiffs: OpenDiff[]
   activeDiffId: string | null
   centerView: CenterView
-  /** Per-project bottom-panel visibility (each project has its own terminals). */
-  bottomPanelOpen: boolean
+  idePanelsOpen: boolean
+  shellDrawerOpen: boolean
 }
 
 export type ActivityView = 'explorer' | 'sourceControl' | null
@@ -84,10 +93,9 @@ interface ProjectViewsState {
   closeProject: (projectId: string) => void
   setActive: (projectId: string) => void
 
-  /** Toggle bottom panel for a project; on first open with no shells, auto-create one. */
-  toggleBottomPanel: (projectId: string) => void
-  /** Set the open flag without spawning anything (used by panel-drag sync). */
-  setBottomPanelOpen: (projectId: string, open: boolean) => void
+  toggleIdePanels: (projectId: string) => void
+  toggleShellDrawer: (projectId: string) => void
+  setShellDrawerOpen: (projectId: string, open: boolean) => void
   setDefaultModel: (model: ClaudeModel) => void
   setDefaultPermissionMode: (mode: PermissionMode) => void
 
@@ -109,6 +117,7 @@ interface ProjectViewsState {
     model?: ClaudeModel
   ) => ClaudeChatSession | null
 
+  openShell: (projectId: string, options?: ShellOptions) => ShellTab | null
   addShellTab: (projectId: string, kind?: PtyKind) => ShellTab | null
   closeShellTab: (projectId: string, tabId: string) => void
   setActiveShellTab: (projectId: string, tabId: string) => void
@@ -135,12 +144,6 @@ function makeId(): string {
 
 function nextChatLabel(existing: ClaudeChatSession[]): string {
   return `chat ${existing.length + 1}`
-}
-
-function nextShellLabel(existing: ShellTab[], kind: PtyKind): string {
-  const base = kind === 'pwsh' || kind === 'powershell' ? 'pwsh' : kind
-  const sameKind = existing.filter((t) => t.kind === kind).length
-  return sameKind === 0 ? base : `${base} ${sameKind + 1}`
 }
 
 function findSessionByPane(state: ProjectViewsState, paneId: string): {
@@ -191,7 +194,8 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           openDiffs: [],
           activeDiffId: null,
           centerView: 'chat',
-          bottomPanelOpen: false
+          idePanelsOpen: false,
+          shellDrawerOpen: false
         }
         set((s) => ({
           views: { ...s.views, [project.id]: view },
@@ -222,40 +226,25 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
 
       setActive: (projectId) => set({ activeProjectId: projectId }),
 
-      toggleBottomPanel: (projectId) =>
+      toggleIdePanels: (projectId) =>
         set((s) => {
           const v = s.views[projectId]
           if (!v) return s
-          const willOpen = !v.bottomPanelOpen
-          // Auto-create a shell on first open when none exist (VS Code-style).
-          let shellTabs = v.shellTabs
-          let activeShellTabId = v.activeShellTabId
-          if (willOpen && shellTabs.length === 0) {
-            const tab: ShellTab = { id: makeId(), label: 'pwsh', kind: 'pwsh' }
-            shellTabs = [tab]
-            activeShellTabId = tab.id
-          }
-          return {
-            views: {
-              ...s.views,
-              [projectId]: {
-                ...v,
-                bottomPanelOpen: willOpen,
-                shellTabs,
-                activeShellTabId
-              }
-            }
-          }
+          const next = toggleIdePanels(v)
+          // The side panel choice is shared by all workspaces; never open the IDE onto an empty side.
+          const activityView = next.idePanelsOpen && s.activityView === null ? 'explorer' : s.activityView
+          return { views: { ...s.views, [projectId]: next }, activityView }
         }),
 
-      setBottomPanelOpen: (projectId, open) =>
-        set((s) => {
-          const v = s.views[projectId]
-          if (!v || v.bottomPanelOpen === open) return s
-          return {
-            views: { ...s.views, [projectId]: { ...v, bottomPanelOpen: open } }
-          }
-        }),
+      toggleShellDrawer: (projectId) => {
+        const v = get().views[projectId]
+        if (!v) return
+        if (v.shellTabs.length === 0) {
+          get().openShell(projectId)
+          return
+        }
+        get().setShellDrawerOpen(projectId, !v.shellDrawerOpen)
+      },
       setDefaultModel: (model) => set({ defaultModel: model }),
       setDefaultPermissionMode: (mode) => set({ defaultPermissionMode: mode }),
 
@@ -431,27 +420,26 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         return session
       },
 
-      addShellTab: (projectId, kind = 'pwsh') => {
-        const view = get().views[projectId]
-        if (!view) return null
-        const tab: ShellTab = {
-          id: makeId(),
-          label: nextShellLabel(view.shellTabs, kind),
-          kind
-        }
+      setShellDrawerOpen: (projectId, open) =>
         set((s) => {
           const v = s.views[projectId]
-          if (!v) return s
-          const nextView: ProjectView = {
-            ...v,
-            shellTabs: [...v.shellTabs, tab],
-            activeShellTabId: tab.id,
-            bottomPanelOpen: true
-          }
-          return { views: { ...s.views, [projectId]: nextView } }
+          if (!v || v.shellDrawerOpen === open) return s
+          return { views: { ...s.views, [projectId]: { ...v, shellDrawerOpen: open } } }
+        }),
+
+      openShell: (projectId, options) => {
+        const v = get().views[projectId]
+        if (!v) return null
+        const opened = openShellTab(v, {
+          id: makeId(),
+          kind: options?.kind ?? 'pwsh',
+          env: options?.env
         })
-        return tab
+        set((s) => ({ views: { ...s.views, [projectId]: opened } }))
+        return opened.shellTabs[opened.shellTabs.length - 1]
       },
+
+      addShellTab: (projectId, kind = 'pwsh') => get().openShell(projectId, { kind }),
 
       closeShellTab: (projectId, tabId) => {
         window.api.pty.kill(tabId)
@@ -467,8 +455,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
             ...v,
             shellTabs: remaining,
             activeShellTabId: nextActive,
-            // Auto-minimize the bottom panel once the last shell is gone.
-            bottomPanelOpen: remaining.length === 0 ? false : v.bottomPanelOpen
+            shellDrawerOpen: remaining.length === 0 ? false : v.shellDrawerOpen
           }
           return { views: { ...s.views, [projectId]: nextView } }
         })
@@ -665,11 +652,11 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
     {
       name: 'command-center.project-views',
       storage: createJSONStorage(() => localStorage),
-      version: 7,
+      version: LAYOUT_VERSION,
       migrate: (persisted: unknown, fromVersion: number) => {
         if (!persisted || typeof persisted !== 'object') return persisted as ProjectViewsState
         const state = persisted as {
-          views?: Record<string, ProjectView>
+          views?: Record<string, ProjectView & { bottomPanelOpen?: boolean }>
           bottomPanelOpen?: boolean
         }
         if (fromVersion < 3 && state.views) {
@@ -703,21 +690,12 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
             if (typeof v.activeDiffId === 'undefined') v.activeDiffId = null
           }
         }
+        migrateLayout(state, fromVersion)
         return persisted as ProjectViewsState
       },
       partialize: (state) => ({
         views: Object.fromEntries(
-          Object.entries(state.views).map(([id, v]) => [
-            id,
-            {
-              ...v,
-              openFiles: [],
-              activeFilePath: null,
-              openDiffs: [],
-              activeDiffId: null,
-              centerView: v.centerView === 'diff' ? 'chat' : (v.centerView ?? 'chat')
-            }
-          ])
+          Object.entries(state.views).map(([id, v]) => [id, persistableView(v)])
         ),
         order: state.order,
         activeProjectId: state.activeProjectId,

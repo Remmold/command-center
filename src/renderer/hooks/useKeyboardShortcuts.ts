@@ -1,12 +1,16 @@
 import { useEffect } from 'react'
 import type { AppView } from '../state/viewStore'
 
+export const IDE_PANELS_SHORTCUT = 'Ctrl+B'
+export const SHELL_DRAWER_SHORTCUT = 'Ctrl+`'
+
 export interface ShortcutHandlers {
   switchView?: (view: AppView) => void
   newChat?: () => void
   closeActiveChat?: () => void
   focusInput?: () => void
-  toggleBottomPanel?: () => void
+  toggleIdePanels?: () => void
+  toggleShellDrawer?: () => void
   switchTabIndex?: (index: number) => void
   loadPastSession?: () => void
   sendUsage?: () => void
@@ -48,9 +52,15 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
         handlers.focusInput()
         return
       }
-      if (e.key === 'b' && handlers.toggleBottomPanel) {
+      if (e.key === 'b' && handlers.toggleIdePanels) {
         e.preventDefault()
-        handlers.toggleBottomPanel()
+        handlers.toggleIdePanels()
+        return
+      }
+      // By position: on Nordic and German layouts the key left of 1 doesn't type a backtick.
+      if (e.code === 'Backquote' && handlers.toggleShellDrawer) {
+        e.preventDefault()
+        handlers.toggleShellDrawer()
         return
       }
       if (e.key === 'j' && handlers.nextWaiting) {

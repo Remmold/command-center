@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import type { SessionStatusEntry, Workspace } from '../../shared/types'
 import { needsYouQueue, nextWaiting } from '../../shared/needsYou'
 import { useAppsStore } from './appsStore'
-import { useProjectViewsStore, type ProjectView } from './projectViewsStore'
+import { chatOnScreen, type ShellOptions } from './projectViewLayout'
+import { useProjectViewsStore, type ProjectView, type ShellTab } from './projectViewsStore'
 import { useSessionStatusStore } from './sessionStatusStore'
 import { useViewStore } from './viewStore'
 
@@ -25,7 +26,7 @@ export function paneOnScreen(): string | null {
   if (useAppsStore.getState().showApps) return null
   const { views, activeProjectId } = useProjectViewsStore.getState()
   const view = activeProjectId ? views[activeProjectId] : undefined
-  if (!view || view.centerView !== 'chat') return null
+  if (!view || !chatOnScreen(view)) return null
   return view.activeClaudeSessionId
 }
 
@@ -60,6 +61,15 @@ export function openWorkspace(workspace: Workspace): void {
   useViewStore.getState().setView('sessions')
   useAppsStore.getState().setShowApps(false)
   useProjectViewsStore.getState().openProject(workspace)
+}
+
+/** Opens a new shell in the workspace's shell drawer, bringing the workspace on screen first. */
+export function openShell(
+  workspace: Workspace,
+  options?: ShellOptions
+): ShellTab | null {
+  openWorkspace(workspace)
+  return useProjectViewsStore.getState().openShell(workspace.id, options)
 }
 
 export interface QueuedSession extends HostedSessionRef {
