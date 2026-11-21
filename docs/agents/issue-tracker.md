@@ -28,3 +28,24 @@ Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
 - **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
 - **Claim**: set `Status: claimed` and save before any work.
 - **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`.
+
+## Ticket lifecycle
+
+Every ticket file has one status line near the top, `**Status:** <word>` (the bold is optional). An optional note follows an em dash: `**Status:** blocked — waiting on art`. The word is always one of:
+
+| Word | Meaning | Who sets it |
+| --- | --- | --- |
+| `needs-triage` | Not looked at yet | whoever files it |
+| `needs-info` | Waiting on the reporter | triage |
+| `ready-for-agent` | Fully specified; an agent can take it | to-tickets / triage |
+| `ready-for-human` | Needs Andreas | to-tickets / triage |
+| `in-progress` | An agent is working on it | the implementing agent, **before its first edit** |
+| `blocked` | Started but stuck; the note says why | the implementing agent |
+| `resolved` | Done and committed | the implementing agent, **after its commit** |
+| `wontfix` | Will not be done | Andreas |
+
+Rules:
+
+- Never write any other word (`done`, `complete`, `talking`, …), and never put free text before the word. Partial completion stays `in-progress` with a note (`**Status:** in-progress — groups 1 and 2 done`).
+- `**Blocked by:**` lists ticket numbers (`02, 02b`) or `None`. It is about dependencies between tickets; the `blocked` status is about a ticket that got stuck after it started.
+- When a ticket's status changes, append one line to the feature's `progress.md`: `- NN <word>: <what happened> — <commit>`.
