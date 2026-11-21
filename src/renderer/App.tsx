@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { TitleBar } from './components/TitleBar'
-import { DashboardView } from './components/DashboardView'
+import { DashboardView } from './components/dashboard/DashboardView'
 import { SettingsPage } from './components/settings/SettingsPage'
 import { WorkView } from './components/work/WorkView'
 import { useProjectViewsStore } from './state/projectViewsStore'

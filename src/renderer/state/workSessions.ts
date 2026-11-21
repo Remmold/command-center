@@ -53,17 +53,23 @@ function currentSources(): ListSources {
   }
 }
 
-export function useSessionGroups(): SessionGroup[] {
+/** Every session the list is built from, unfiltered. */
+export function useSessionSources(): Omit<SessionListInput, 'search'> {
   const views = useProjectViewsStore((s) => s.views)
   const byPane = useSessionStatusStore((s) => s.byPane)
   const observed = useObservedStore((s) => s.sessions)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const identities = useRepoIdentitiesStore((s) => s.identities)
-  const search = useWorkSearchStore((s) => s.search)
   return useMemo(
-    () => sessionList(listInput({ views, byPane, observed, workspaces, identities, search })),
-    [views, byPane, observed, workspaces, identities, search]
+    () => listInput({ views, byPane, observed, workspaces, identities, search: '' }),
+    [views, byPane, observed, workspaces, identities]
   )
+}
+
+export function useSessionGroups(): SessionGroup[] {
+  const sources = useSessionSources()
+  const search = useWorkSearchStore((s) => s.search)
+  return useMemo(() => sessionList({ ...sources, search }), [sources, search])
 }
 
 export interface ShownChats {

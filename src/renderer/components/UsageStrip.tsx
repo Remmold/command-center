@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
+import { useMinuteClock } from '../hooks/useMinuteClock'
 import { formatResetTime, formatTokens, totalTokens, useUsageStore } from '../state/usageStore'
 import { buildUsageStrip, type UsageBar } from '../state/usageModel'
 import { useProfilesStore } from '../state/profilesStore'
@@ -6,15 +7,6 @@ import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useViewStore } from '../state/viewStore'
 import { Meter } from './ui/Meter'
-
-function useMinuteClock(): number {
-  const [now, setNow] = useState(Date.now)
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-  return now
-}
 
 function useProfileOnScreen(): string | null {
   const view = useViewStore((s) => s.view)
