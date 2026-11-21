@@ -2,6 +2,7 @@ import { Menu, Tray, nativeImage, type BrowserWindow, type NativeImage } from 'e
 import type { AppView } from '../../shared/types'
 import { APP_TITLE, type TrayBadge } from '../attention/attention'
 import { iconPath } from '../util/paths'
+import { startWithWindowsState, type StartWithWindowsState } from './autostart'
 
 export interface TrayActions {
   open: () => void
@@ -10,11 +11,7 @@ export interface TrayActions {
   getWindow: () => BrowserWindow | null
 }
 
-export interface StartWithWindowsItem {
-  checked: boolean
-  enabled: boolean
-  /** Shown in the label when the item is disabled, e.g. why autostart isn't offered. */
-  reason?: string
+export interface StartWithWindowsItem extends StartWithWindowsState {
   onToggle?: (checked: boolean) => void
 }
 
@@ -36,11 +33,10 @@ function badgeImage(prefix: 'tray' | 'overlay', count: number): NativeImage {
 export function createAppTray(actions: TrayActions): AppTray {
   const plain = nativeImage.createFromPath(iconPath('tray.png'))
   const tray = new Tray(plain)
-  let startWithWindows: StartWithWindowsItem = {
-    checked: false,
-    enabled: false,
-    reason: 'installed app only'
-  }
+  let startWithWindows: StartWithWindowsItem = startWithWindowsState({
+    packaged: false,
+    launchesAtLogin: false
+  })
   let badge: TrayBadge = { count: 0, tooltip: APP_TITLE }
 
   const rebuildMenu = () => {

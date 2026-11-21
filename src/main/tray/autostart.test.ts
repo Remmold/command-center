@@ -3,17 +3,17 @@ import { loginItemSettings, startWithWindowsState, startsHidden } from './autost
 
 describe('startsHidden', () => {
   it('is true when launched at login with --hidden', () => {
-    expect(startsHidden(['C:\app\Command Center.exe', '--hidden'])).toBe(true)
+    expect(startsHidden(['C:/app/Command Center.exe', '--hidden'])).toBe(true)
   })
 
   it('is false for a normal launch', () => {
-    expect(startsHidden(['C:\app\Command Center.exe'])).toBe(false)
+    expect(startsHidden(['C:/app/Command Center.exe'])).toBe(false)
   })
 })
 
 describe('startWithWindowsState', () => {
   it('is disabled with a reason in a dev build, even if a login item exists', () => {
-    expect(startWithWindowsState({ packaged: false, openAtLogin: true })).toEqual({
+    expect(startWithWindowsState({ packaged: false, launchesAtLogin: true })).toEqual({
       checked: false,
       enabled: false,
       reason: 'installed app only'
@@ -21,14 +21,14 @@ describe('startWithWindowsState', () => {
   })
 
   it('is checked when the installed app has a login item', () => {
-    expect(startWithWindowsState({ packaged: true, openAtLogin: true })).toEqual({
+    expect(startWithWindowsState({ packaged: true, launchesAtLogin: true })).toEqual({
       checked: true,
       enabled: true
     })
   })
 
   it('is unchecked when the installed app has no login item', () => {
-    expect(startWithWindowsState({ packaged: true, openAtLogin: false })).toEqual({
+    expect(startWithWindowsState({ packaged: true, launchesAtLogin: false })).toEqual({
       checked: false,
       enabled: true
     })

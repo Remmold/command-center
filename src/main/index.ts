@@ -53,10 +53,14 @@ async function quitConfirmed(): Promise<boolean> {
 }
 
 function syncStartWithWindows(tray: AppTray): void {
-  const { args } = loginItemSettings(true)
-  const openAtLogin = app.isPackaged && app.getLoginItemSettings({ args }).openAtLogin
+  let launchesAtLogin = false
+  if (app.isPackaged) {
+    const current = app.getLoginItemSettings({ args: loginItemSettings(true).args })
+    // openAtLogin stays true when the entry is switched off in Task Manager's Startup apps.
+    launchesAtLogin = current.openAtLogin && current.executableWillLaunchAtLogin
+  }
   tray.setStartWithWindows({
-    ...startWithWindowsState({ packaged: app.isPackaged, openAtLogin }),
+    ...startWithWindowsState({ packaged: app.isPackaged, launchesAtLogin }),
     onToggle: (checked) => {
       app.setLoginItemSettings(loginItemSettings(checked))
       syncStartWithWindows(tray)

@@ -21,6 +21,7 @@ Package manager is pnpm (`pnpm install`).
 - `pnpm dev`: run the app with hot reload
 - `pnpm build`: production build into `out/`
 - `pnpm test`: Vitest once (`src/**/*.test.ts`, Node environment, no Electron)
+- `pnpm dist`: build the per-user NSIS installer into `release/` (`release/win-unpacked/` is the unpacked app)
 - `pnpm quick`: quick tier, typecheck + tests; non-zero on any failure. Run it every round.
 
 `node-pty` loads its prebuilt N-API binaries in Electron, so no rebuild is needed. Its install script must still run (allowed in `pnpm.onlyBuiltDependencies`): it copies `conpty.dll` into place.

@@ -19,5 +19,3 @@ win:
 nsis:
   oneClick: true
   perMachine: false
-  createDesktopShortcut: true
-  shortcutName: Command Center
