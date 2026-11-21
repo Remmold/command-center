@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// A stand-in `claude` for tests: speaks stream-json and the control protocol, replays a script.
 import { appendFileSync, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join, sep } from 'node:path'
@@ -26,10 +25,10 @@ const recorded = {
     .map((entry) => entry.line)
 }
 
-function recordedLine(match, nth = 0) {
-  const hits = recorded.turn.filter(match)
-  if (!hits[nth]) throw new Error('fake-claude: fixture line missing')
-  return clone(hits[nth])
+function recordedLine(match) {
+  const hit = recorded.turn.find(match)
+  if (!hit) throw new Error('fake-claude: fixture line missing')
+  return clone(hit)
 }
 
 const isStream = (type, extra = () => true) => (l) => l.type === 'stream_event' && l.event.type === type && extra(l.event)
@@ -73,14 +72,14 @@ const BOOLEAN_FLAGS = new Set([
 ])
 const DEFAULT_SCRIPT = { turns: [{ match: '', repeat: true, events: [{ type: 'text', text: 'Hello from the fake Claude.' }] }] }
 
-export function parseArgs(argv) {
+function parseArgs(argv) {
   const flags = {}
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (!arg.startsWith('-')) continue
     const eq = arg.indexOf('=')
     if (eq !== -1) flags[arg.slice(0, eq)] = arg.slice(eq + 1)
-    else if (BOOLEAN_FLAGS.has(arg) || i + 1 >= argv.length || argv[i + 1].startsWith('--')) flags[arg] = true
+    else if (BOOLEAN_FLAGS.has(arg) || i + 1 >= argv.length || argv[i + 1].startsWith('-')) flags[arg] = true
     else flags[arg] = argv[++i]
   }
   return flags
@@ -93,7 +92,6 @@ function loadScript(path) {
   return script
 }
 
-/** Fills `{cwd}` and `{sep}` in every string of a script event. */
 function fill(value) {
   if (typeof value === 'string') return value.replaceAll('{cwd}', process.cwd()).replaceAll('{sep}', sep)
   if (Array.isArray(value)) return value.map(fill)
@@ -124,7 +122,8 @@ class Fake {
     this.script = script
     this.logFile = logFile
     this.out = write
-    this.sessionId = this.flags['--resume'] || this.flags['--session-id'] || randomUUID()
+    const resume = [this.flags['--resume'], this.flags['--session-id']].find((v) => typeof v === 'string')
+    this.sessionId = resume ?? randomUUID()
     this.permissionMode = this.flags['--permission-mode'] || 'default'
     this.bypassAllowed =
       this.flags['--allow-dangerously-skip-permissions'] === true ||
@@ -265,7 +264,12 @@ class Fake {
       const text = this.queue.shift()
       const turn = new Turn(this, this.pickTurn(text))
       this.running = turn
-      await turn.run()
+      try {
+        await turn.run()
+      } catch (err) {
+        process.stderr.write(`fake-claude: ${err.message}
+`)
+      }
       this.running = null
     }
     if (this.stdinClosed) process.exit(0)
@@ -397,7 +401,7 @@ class Turn {
     this.startMessage(messageId)
     this.stream(clone(template.textBlockStart))
     let sent = ''
-    for (const piece of event.deltas ?? chunk(event.text)) {
+    for (const piece of event.deltas ?? chunk(event.text ?? '')) {
       await this.sleep(event.deltaDelayMs ?? this.script.deltaDelayMs)
       if (this.aborted) return
       const delta = clone(template.textDelta)
@@ -486,14 +490,18 @@ class Turn {
     })
   }
 
-  toolResult(toolUseId, content, isError, note) {
+  userMessage(content) {
     const line = clone(template.toolResult)
-    const block = { tool_use_id: toolUseId, type: 'tool_result', content }
-    if (isError) block.is_error = true
-    line.message.content = note ? [block, { type: 'text', text: note }] : [block]
+    line.message.content = content
     delete line.tool_use_result
     delete line.tool_result_meta
     this.emit(line)
+  }
+
+  toolResult(toolUseId, content, isError, note) {
+    const block = { tool_use_id: toolUseId, type: 'tool_result', content }
+    if (isError) block.is_error = true
+    this.userMessage(note ? [block, { type: 'text', text: note }] : [block])
   }
 
   endSuccess(text) {
@@ -506,13 +514,7 @@ class Turn {
   endInterrupted(pendingToolUseId, noteSent = false) {
     if (!noteSent) {
       if (pendingToolUseId) this.toolResult(pendingToolUseId, REJECTED, true, INTERRUPTED_TOOL)
-      else {
-        const line = clone(template.toolResult)
-        line.message.content = [{ type: 'text', text: INTERRUPTED }]
-        delete line.tool_use_result
-        delete line.tool_result_meta
-        this.emit(line)
-      }
+      else this.userMessage([{ type: 'text', text: INTERRUPTED }])
     }
     const result = clone(template.result)
     delete result.result
@@ -554,6 +556,7 @@ function main() {
   })
   process.stdin.on('end', () => {
     fake.stdinClosed = true
+    if (fake.running?.awaitingTool) fake.running.abort()
     if (!fake.running && fake.queue.length === 0) process.exit(0)
   })
 }

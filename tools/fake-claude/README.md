@@ -2,11 +2,11 @@
 
 A stand-in `claude` for tests. It speaks stream-json and the control protocol, replays a scripted conversation and logs what it receives. It costs no tokens and needs no login.
 
-Every line it writes is cloned from a recording of the real CLI in `src/main/claude/fixtures/`: `initialize-reply.json`, `get-usage-reply.json`, `error-reply.json`, `control-replies.jsonl` (control-only probe) and `turn-write-approval.jsonl` (one real Haiku turn with a Write approval).
+Every line it writes is cloned from a recording of the real CLI in `src/main/claude/fixtures/`: `initialize-reply.json`, `get-usage-reply.json`, `error-reply.json`, `control-replies.jsonl` (control-only probe) and `turn-write-approval.jsonl` (one real Haiku turn with a Write approval). The one exception is the interrupted result, built from the CLI's own result schema because no real interrupt mid-turn was recorded.
 
 ## Running it in the app
 
-Set `CC_CLAUDE_BIN` to the path of `fake-claude.mjs`. `locateClaude` then runs it with the app's own binary (`process.execPath`) and `ELECTRON_RUN_AS_NODE=1`, for chat sessions and the usage check alike. Normal use never sets it.
+Set `CC_CLAUDE_BIN` to the path of `fake-claude.mjs`. `locateClaude` then runs it with the app's own binary (`process.execPath`) and `ELECTRON_RUN_AS_NODE=1`, for hosted sessions and the usage check alike. Normal use never sets it. A relative path resolves against the app's working directory.
 
 With `CC_CLAUDE_BIN` set, the app's Default profile reads `CLAUDE_CONFIG_DIR` instead of `~/.claude`. Point it at a temp folder holding an empty `.credentials.json` so the usage check runs.
 

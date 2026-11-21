@@ -83,6 +83,10 @@ class Fake {
       .map((l) => JSON.parse(l))
   }
 
+  closeInput(): void {
+    this.child.stdin!.end()
+  }
+
   kill(): void {
     this.child.kill()
   }
@@ -341,6 +345,23 @@ describe('interrupt', () => {
     expect(cancel.request_id).toBe(ask.request_id)
     expect((await fake.next(isResult)).subtype).toBe('error_during_execution')
     expect(toolResults(fake).at(-1)).toEqual({ type: 'text', text: '[Request interrupted by user for tool use]' })
+  })
+})
+
+describe('robustness', () => {
+  it('exits when stdin closes during a pending approval', async () => {
+    const fake = start([], { turns: [{ match: '', events: [WRITE] }] })
+    fake.say('write hello')
+    await fake.next(isApproval)
+    fake.closeInput()
+    expect(await fake.exited).toBe(0)
+  })
+
+  it('keeps answering after a broken script turn', async () => {
+    const fake = start([], { turns: [{ match: 'bad', events: [{ type: 'nonsense' }] }] })
+    fake.say('bad')
+    fake.say('fine')
+    expect((await fake.next(isResult)).result).toBe('Hello from the fake Claude.')
   })
 })
 
