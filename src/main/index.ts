@@ -6,7 +6,8 @@ import { ensureHookScriptInstalled } from './permission/hookScript'
 import { sessionStatusTracker } from './sessions/tracker'
 import * as workspaces from './workspaces/store'
 import { startAttention } from './attention/service'
-import { createAppTray } from './tray/tray'
+import { loginItemSettings, startWithWindowsState, startsHidden } from './tray/autostart'
+import { createAppTray, type AppTray } from './tray/tray'
 import { iconPath } from './util/paths'
 import {
   allowWindowClose,
@@ -51,6 +52,18 @@ async function quitConfirmed(): Promise<boolean> {
   return true
 }
 
+function syncStartWithWindows(tray: AppTray): void {
+  const { args } = loginItemSettings(true)
+  const openAtLogin = app.isPackaged && app.getLoginItemSettings({ args }).openAtLogin
+  tray.setStartWithWindows({
+    ...startWithWindowsState({ packaged: app.isPackaged, openAtLogin }),
+    onToggle: (checked) => {
+      app.setLoginItemSettings(loginItemSettings(checked))
+      syncStartWithWindows(tray)
+    }
+  })
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -74,7 +87,7 @@ if (!app.requestSingleInstanceLock()) {
       console.error('[permission] failed to start', err)
     }
     registerIpc()
-    const win = createMainWindow()
+    const win = createMainWindow({ show: !startsHidden(process.argv) })
 
     const tray = createAppTray({
       open: () => showMainWindow(),
@@ -83,6 +96,7 @@ if (!app.requestSingleInstanceLock()) {
       getWindow: getMainWindow
     })
     win.on('show', tray.refreshOverlay)
+    syncStartWithWindows(tray)
 
     const stopAttention = startAttention({
       tracker: sessionStatusTracker,

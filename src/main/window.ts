@@ -17,8 +17,9 @@ export function getMainWindow(): BrowserWindow | null {
   return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
 }
 
-export function createMainWindow(): BrowserWindow {
+export function createMainWindow(options: { show?: boolean } = {}): BrowserWindow {
   const win = new BrowserWindow({
+    show: options.show ?? true,
     width: 1400,
     height: 900,
     backgroundColor: '#18181b',

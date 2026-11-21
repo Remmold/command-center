@@ -1,0 +1,23 @@
+appId: com.commandcenter.app
+productName: Command Center
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: resources/icons
+    to: icons
+asarUnpack:
+  - node_modules/node-pty/**
+npmRebuild: false
+nodeGypRebuild: false
+win:
+  target: nsis
+  icon: resources/icons/icon.ico
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  shortcutName: Command Center
