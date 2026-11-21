@@ -15,10 +15,15 @@ function normalisePath(path: string): string {
   return path.replace(/[\\/]+/g, '/').replace(/\/$/, '').toLowerCase()
 }
 
+/** The workspace whose folder the session runs in. */
+export function workspaceAt<W extends Pick<Workspace, 'path'>>(cwd: string, workspaces: readonly W[]): W | undefined {
+  const key = normalisePath(cwd)
+  return workspaces.find((w) => normalisePath(w.path) === key)
+}
+
 /** The workspace whose folder the session runs in, else the session's own folder name. */
 export function workspaceNameFor(cwd: string, workspaces: readonly NamedPath[]): string {
-  const key = normalisePath(cwd)
-  const match = workspaces.find((w) => normalisePath(w.path) === key)
+  const match = workspaceAt(cwd, workspaces)
   if (match) return match.name
   return cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd
 }

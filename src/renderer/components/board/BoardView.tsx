@@ -12,7 +12,7 @@ import {
 } from '../../state/boardLayout'
 import { useBoardStore } from '../../state/boardStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
-import { RepoIcon } from '../RepoIcon'
+import { RepoIcon, RepoName } from '../RepoIcon'
 import { Chip, ChipBar, ChipRow } from '../ui/Chip'
 import { Collapsible } from '../ui/Collapsible'
 import { ColumnGridHeader, ColumnGridList, ColumnGridRow } from '../ui/ColumnGrid'
@@ -122,7 +122,7 @@ function BoardFilters({ model, filter, workspaces }: FiltersProps) {
             onClick={() => filterRepoGroup(filter.repoGroupKey === g.repoGroupKey ? null : g.repoGroupKey)}
           >
             <RepoIcon repoGroupKey={g.repoGroupKey} repoName={g.repoName} size="sm" />
-            {g.repoName}
+            <RepoName repoGroupKey={g.repoGroupKey} repoName={g.repoName} />
           </Chip>
         ))}
       </ChipRow>

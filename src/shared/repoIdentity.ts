@@ -1,0 +1,117 @@
+import { repoGroupHue } from './repoGroups'
+
+export const BUILTIN_ICON_NAMES = [
+  'rocket',
+  'gamepad-2',
+  'code',
+  'terminal',
+  'database',
+  'server',
+  'cloud',
+  'globe',
+  'bot',
+  'brain',
+  'cpu',
+  'wrench',
+  'hammer',
+  'package',
+  'boxes',
+  'layers',
+  'puzzle',
+  'zap',
+  'flame',
+  'leaf',
+  'tree-pine',
+  'mountain',
+  'sun',
+  'moon',
+  'star',
+  'heart',
+  'shield',
+  'key',
+  'message-square',
+  'music',
+  'image',
+  'book-open',
+  'graduation-cap',
+  'shopping-cart',
+  'chart-bar',
+  'swords',
+  'map',
+  'compass',
+  'flask-conical',
+  'palette'
+] as const
+
+export type BuiltinIconName = (typeof BUILTIN_ICON_NAMES)[number]
+
+export const REPO_ACCENTS = {
+  red: '#dc2626',
+  orange: '#ea580c',
+  amber: '#d97706',
+  lime: '#65a30d',
+  green: '#16a34a',
+  teal: '#0d9488',
+  sky: '#0284c7',
+  blue: '#2563eb',
+  violet: '#7c3aed',
+  pink: '#db2777',
+  slate: '#475569'
+} as const
+
+export type RepoAccent = keyof typeof REPO_ACCENTS
+
+export function isBuiltinIconName(x: unknown): x is BuiltinIconName {
+  return (BUILTIN_ICON_NAMES as readonly unknown[]).includes(x)
+}
+
+export function isRepoAccent(x: unknown): x is RepoAccent {
+  return typeof x === 'string' && Object.hasOwn(REPO_ACCENTS, x)
+}
+
+export type RepoIconChoice =
+  | { kind: 'builtin'; name: BuiltinIconName; accent: RepoAccent }
+  /** `file` is a name inside the app's repo-icons folder. */
+  | { kind: 'image'; file: string }
+
+export interface RepoIdentity {
+  displayName?: string
+  icon?: RepoIconChoice
+}
+
+/** Keyed by repo group key. */
+export type RepoIdentities = Record<string, RepoIdentity>
+
+/** What the renderer gets: a custom image arrives as a data URL, since the page can't read userData files. */
+export interface RepoIdentityView extends RepoIdentity {
+  imageUrl?: string
+}
+
+export type RepoIdentityViews = Record<string, RepoIdentityView>
+
+export type ChooseImageResult = { ok: true; identities: RepoIdentityViews } | { ok: false; error: string }
+
+export type BuiltinIconChoice = Extract<RepoIconChoice, { kind: 'builtin' }>
+
+export type RepoIconSpec =
+  | { kind: 'letter'; letter: string; hue: number }
+  | { kind: 'builtin'; name: BuiltinIconName; color: string }
+  | { kind: 'image'; src: string }
+
+export interface RepoIconInput {
+  repoGroupKey: string
+  repoName: string
+  identity?: RepoIdentityView
+}
+
+export function repoDisplayName(repoName: string, identity: RepoIdentity | undefined): string {
+  return identity?.displayName?.trim() || repoName
+}
+
+export function resolveRepoIcon({ repoGroupKey, repoName, identity }: RepoIconInput): RepoIconSpec {
+  const icon = identity?.icon
+  if (icon?.kind === 'builtin') return { kind: 'builtin', name: icon.name, color: REPO_ACCENTS[icon.accent] }
+  if (icon?.kind === 'image' && identity?.imageUrl) return { kind: 'image', src: identity.imageUrl }
+  const letter = repoDisplayName(repoName, identity).trim().charAt(0).toUpperCase() || '?'
+  return { kind: 'letter', letter, hue: repoGroupHue(repoGroupKey) }
+}

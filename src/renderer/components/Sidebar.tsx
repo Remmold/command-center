@@ -4,7 +4,8 @@ import { OBSERVED_STATUS_LABEL, type Workspace } from '../../shared/types'
 import { groupByRepo, type RepoGroupView } from '../../shared/repoGroups'
 import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
-import { RepoIcon } from './RepoIcon'
+import { RepoIcon, RepoName } from './RepoIcon'
+import { RepoIdentityEditor } from './RepoIdentityEditor'
 import { StatusDot } from './ui/StatusDot'
 import { NeedsYouQueue } from './NeedsYouQueue'
 import { ProfilePicker } from './ProfilePicker'
@@ -64,9 +65,12 @@ export function Sidebar() {
 function RepoGroupItem({ group }: { group: RepoGroupView }) {
   return (
     <li className="pb-1">
-      <div className="flex items-center gap-2 px-3 py-1.5" title={group.repoName}>
+      <div className="group flex items-center gap-2 py-1.5 pl-3 pr-2" title={group.repoName}>
         <RepoIcon repoGroupKey={group.repoGroupKey} repoName={group.repoName} />
-        <span className="truncate text-xs font-semibold text-zinc-300">{group.repoName}</span>
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-zinc-300">
+          <RepoName repoGroupKey={group.repoGroupKey} repoName={group.repoName} />
+        </span>
+        <RepoIdentityEditor group={group} />
       </div>
       <ul>
         {group.workspaces.map((w) => (
@@ -137,6 +141,7 @@ function ObservedRows({ workspace }: { workspace: Workspace }) {
           tooltip={`${o.title} · ${OBSERVED_STATUS_LABEL[o.status]} · in VS Code (read-only)`}
         >
           <StatusDot status={o.status} />
+          <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
           <ListRowText primary={o.title} />
           <Badge>in VS Code</Badge>
         </ListRow>

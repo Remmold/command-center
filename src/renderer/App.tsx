@@ -16,6 +16,7 @@ import { useSessionStatusStore } from './state/sessionStatusStore'
 import { jumpToNextWaiting } from './state/sessionNavigation'
 import { useReportScreenFocus } from './hooks/useReportScreenFocus'
 import { useMainNavigation } from './hooks/useMainNavigation'
+import { useNotificationIcons } from './hooks/useNotificationIcons'
 import type { ClaudeResultEvent } from '../shared/types'
 import { useObservedStore } from './state/observedStore'
 import { ObservedChatView } from './components/chat/ObservedChatView'
@@ -57,6 +58,7 @@ export function App() {
 
   useReportScreenFocus()
   useMainNavigation()
+  useNotificationIcons()
 
   useEffect(() => {
     const unsub = window.api.permission.onRequest((request) => {

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Folder, FolderPlus, FolderSearch, LayoutGrid, X } from 'lucide-react'
+import { RepoIcon } from './RepoIcon'
+import { Badge } from './ui/Badge'
 import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useAppsStore } from '../state/appsStore'
@@ -69,6 +71,7 @@ export function ProjectTabs() {
           const view = views[projectId]
           if (!view) return null
           const active = projectId === activeProjectId
+          const workspace = workspaces.find((w) => w.id === projectId)
           return (
             <div
               key={projectId}
@@ -80,11 +83,12 @@ export function ProjectTabs() {
                   : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200')
               }
             >
-              <Folder
-                size={13}
-                strokeWidth={1.75}
-                className={active ? 'text-blue-400' : 'text-zinc-500'}
-              />
+              {workspace ? (
+                <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
+              ) : (
+                <Folder size={13} strokeWidth={1.75} className={active ? 'text-blue-400' : 'text-zinc-500'} />
+              )}
+              {workspace?.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
               <span className="truncate" title={view.projectPath}>
                 {view.projectName}
               </span>

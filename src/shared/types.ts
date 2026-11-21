@@ -1,3 +1,4 @@
+import type { BuiltinIconChoice, ChooseImageResult, RepoIdentityViews } from './repoIdentity'
 import type { ChatItem } from './chatItems'
 export const DEFAULT_PROFILE_ID = 'default'
 
@@ -227,6 +228,16 @@ export interface RendererApi {
     add: () => Promise<Workspace | null>
     remove: (id: string) => Promise<void>
     setProfile: (id: string, profileId: string) => Promise<Workspace | null>
+  }
+  repoIdentities: {
+    list: () => Promise<RepoIdentityViews>
+    setDisplayName: (repoGroupKey: string, name: string) => Promise<RepoIdentityViews>
+    /** undefined goes back to the letter. */
+    setIcon: (repoGroupKey: string, icon: BuiltinIconChoice | undefined) => Promise<RepoIdentityViews>
+    /** Opens a file dialog; null when cancelled. */
+    chooseImage: (repoGroupKey: string) => Promise<ChooseImageResult | null>
+    /** Hands main the icon drawn as a PNG data URL, for notifications. */
+    setRendered: (repoGroupKey: string, pngDataUrl: string) => void
   }
   profiles: {
     list: () => Promise<AccountProfile[]>

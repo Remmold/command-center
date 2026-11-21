@@ -3,6 +3,7 @@ import { SquareTerminal } from 'lucide-react'
 import type { BoardColumn, BoardFeature, BoardModel, BoardTicket, Workspace } from '../../../shared/types'
 import { COLUMNS, refOf, worktreeLabel, type FoundTicket, type TicketRef } from '../../state/boardLayout'
 import { openWorkspace } from '../../state/sessionNavigation'
+import { RepoIcon, RepoName } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { CardMeta, CardTitle } from '../ui/Card'
@@ -52,8 +53,9 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose }: Pr
       title={
         <>
           <CardMeta>
+            <RepoIcon repoGroupKey={group.repoGroupKey} repoName={group.repoName} size="sm" />
             <span className="truncate">
-              {group.repoName} / {feature.name}
+              <RepoName repoGroupKey={group.repoGroupKey} repoName={group.repoName} /> / {feature.name}
             </span>
           </CardMeta>
           <CardTitle prefix={ticket.number}>{ticket.title}</CardTitle>

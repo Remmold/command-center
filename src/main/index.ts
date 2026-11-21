@@ -6,6 +6,7 @@ import { ensureHookScriptInstalled } from './permission/hookScript'
 import { sessionStatusTracker } from './sessions/tracker'
 import * as workspaces from './workspaces/store'
 import { startAttention } from './attention/service'
+import { createRepoIdentityService } from './repoIdentity/service'
 import { loginItemSettings, startWithWindowsState, startsHidden } from './tray/autostart'
 import { createAppTray, type AppTray } from './tray/tray'
 import { iconPath } from './util/paths'
@@ -90,7 +91,8 @@ if (!app.requestSingleInstanceLock()) {
     } catch (err) {
       console.error('[permission] failed to start', err)
     }
-    registerIpc()
+    const repoIdentities = createRepoIdentityService(app.getPath('userData'), iconPath('icon.png'), workspaces.list)
+    registerIpc({ repoIdentities })
     const win = createMainWindow({ show: !startsHidden(process.argv) })
 
     const tray = createAppTray({
@@ -108,7 +110,7 @@ if (!app.requestSingleInstanceLock()) {
       onscreen,
       setBadge: tray.setBadge,
       openSession: showSession,
-      notificationIcon: iconPath('icon.png')
+      notificationIcon: repoIdentities.notificationIcon
     })
 
     app.on('will-quit', () => {

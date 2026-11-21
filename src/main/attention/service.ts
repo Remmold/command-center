@@ -9,7 +9,8 @@ export interface AttentionDeps {
   onscreen: () => Onscreen
   setBadge: (badge: TrayBadge) => void
   openSession: (paneId: string) => void
-  notificationIcon: string
+  /** Path of the image to show for a session running in `cwd`. */
+  notificationIcon: (cwd: string) => Promise<string>
 }
 
 const KEPT_NOTIFICATIONS = 20
@@ -32,7 +33,8 @@ export function startAttention(deps: AttentionDeps): () => void {
     if (!Notification.isSupported()) return
     const workspaces = await deps.listWorkspaces().catch(() => [])
     const { title, body } = notificationText(entry, workspaces)
-    const n = new Notification({ title, body, icon: deps.notificationIcon })
+    const icon = await deps.notificationIcon(entry.cwd).catch(() => undefined)
+    const n = new Notification({ title, body, icon })
     live.add(n)
     n.on('click', () => {
       live.delete(n)

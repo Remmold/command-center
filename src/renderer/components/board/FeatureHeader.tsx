@@ -1,5 +1,6 @@
 import type { BoardFeature, FeatureState } from '../../../shared/types'
 import { RepoIcon } from '../RepoIcon'
+import { useRepoDisplayName } from '../../state/repoIdentitiesStore'
 import { Badge } from '../ui/Badge'
 import { HeaderRow } from '../ui/HeaderRow'
 import { ProgressBar } from '../ui/ProgressBar'
@@ -18,10 +19,11 @@ interface Props {
 export function FeatureHeader({ repoGroupKey, repoName, feature }: Props) {
   const badge = STATE_BADGE[feature.state]
   const { done, total, lastNote } = feature.progress
+  const displayName = useRepoDisplayName(repoGroupKey, repoName)
   return (
     <HeaderRow
       icon={<RepoIcon repoGroupKey={repoGroupKey} repoName={repoName} size="sm" />}
-      subtitle={repoName}
+      subtitle={displayName}
       title={feature.name}
       note={lastNote}
     >

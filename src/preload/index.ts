@@ -31,6 +31,14 @@ const api: RendererApi = {
     setProfile: (id: string, profileId: string): Promise<Workspace | null> =>
       ipcRenderer.invoke(IPC.WORKSPACES_SET_PROFILE, id, profileId)
   },
+  repoIdentities: {
+    list: () => ipcRenderer.invoke(IPC.REPO_IDENTITIES_LIST),
+    setDisplayName: (repoGroupKey, name) => ipcRenderer.invoke(IPC.REPO_IDENTITIES_SET_NAME, repoGroupKey, name),
+    setIcon: (repoGroupKey, icon) => ipcRenderer.invoke(IPC.REPO_IDENTITIES_SET_ICON, repoGroupKey, icon),
+    chooseImage: (repoGroupKey) => ipcRenderer.invoke(IPC.REPO_IDENTITIES_CHOOSE_IMAGE, repoGroupKey),
+    setRendered: (repoGroupKey, pngDataUrl) =>
+      ipcRenderer.send(IPC.REPO_IDENTITIES_SET_RENDERED, repoGroupKey, pngDataUrl)
+  },
   profiles: {
     list: (): Promise<AccountProfile[]> => ipcRenderer.invoke(IPC.PROFILES_LIST),
     create: (name: string): Promise<AccountProfile> => ipcRenderer.invoke(IPC.PROFILES_CREATE, name),

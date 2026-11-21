@@ -23,10 +23,15 @@ import {
 import { sessionStatusTracker } from './sessions/tracker'
 import { setScreenFocus } from './sessions/screenFocus'
 import { DEFAULT_PROFILE_ID, type ScreenFocus } from '../shared/types'
+import type { RepoIdentityService } from './repoIdentity/service'
 
 let unsubscribers: Array<() => void> = []
 
-export function registerIpc(): void {
+interface IpcDeps {
+  repoIdentities: RepoIdentityService
+}
+
+export function registerIpc({ repoIdentities }: IpcDeps): void {
   const board = new BoardService(workspaces.list, (model) => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send(IPC.BOARD_CHANGED, model)
@@ -93,6 +98,26 @@ export function registerIpc(): void {
     const updated = await workspaces.setProfile(id, profileId)
     void observed.workspacesChanged()
     return updated
+  })
+
+  ipcMain.handle(IPC.REPO_IDENTITIES_LIST, () => repoIdentities.list())
+  ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, (_e, key: string, name: string) =>
+    repoIdentities.setDisplayName(key, name)
+  )
+  ipcMain.handle(IPC.REPO_IDENTITIES_SET_ICON, (_e, key: string, icon: unknown) => repoIdentities.setIcon(key, icon))
+  ipcMain.handle(IPC.REPO_IDENTITIES_CHOOSE_IMAGE, async (event, key: string) => {
+    const options: Electron.OpenDialogOptions = {
+      title: 'Choose a repo icon',
+      properties: ['openFile'],
+      filters: [{ name: 'PNG or SVG image', extensions: ['png', 'svg'] }]
+    }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (result.canceled || result.filePaths.length === 0) return null
+    return repoIdentities.importImage(key, result.filePaths[0])
+  })
+  ipcMain.on(IPC.REPO_IDENTITIES_SET_RENDERED, (_e, key: string, dataUrl: string) => {
+    repoIdentities.setRendered(key, dataUrl).catch((err) => console.error('[repo icons] could not keep drawn icon', err))
   })
 
   ipcMain.handle(IPC.PROFILES_LIST, () => profiles.list())

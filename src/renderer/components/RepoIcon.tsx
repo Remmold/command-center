@@ -1,4 +1,6 @@
-import { repoGroupHue } from '../../shared/repoGroups'
+import { resolveRepoIcon, type RepoIconSpec } from '../../shared/repoIdentity'
+import { useRepoDisplayName, useRepoIdentity } from '../state/repoIdentitiesStore'
+import { BUILTIN_ICONS } from './repoIconSet'
 
 interface Props {
   repoGroupKey: string
@@ -7,19 +9,42 @@ interface Props {
 }
 
 const SIZES = {
-  sm: 'h-4 w-4 text-[9px]',
-  md: 'h-5 w-5 text-[11px]'
+  sm: { box: 'h-4 w-4 text-[9px]', glyph: 11 },
+  md: { box: 'h-5 w-5 text-[11px]', glyph: 13 }
 } as const
 
+export function letterColor(hue: number): string {
+  return `hsl(${hue}, 55%, 40%)`
+}
+
 export function RepoIcon({ repoGroupKey, repoName, size = 'md' }: Props) {
-  const letter = repoName.trim().charAt(0).toUpperCase() || '?'
+  const identity = useRepoIdentity(repoGroupKey)
+  return <RepoIconView spec={resolveRepoIcon({ repoGroupKey, repoName, identity })} size={size} />
+}
+
+/** The repo group's display name as text. */
+export function RepoName({ repoGroupKey, repoName }: { repoGroupKey: string; repoName: string }) {
+  return <>{useRepoDisplayName(repoGroupKey, repoName)}</>
+}
+
+export function RepoIconView({ spec, size = 'md' }: { spec: RepoIconSpec; size?: 'sm' | 'md' }) {
+  const { box, glyph } = SIZES[size]
+  const frame = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded font-semibold text-white ${box}`
+  if (spec.kind === 'image') {
+    // An <img>, never inline markup, so a custom SVG can't run script.
+    return <img aria-hidden alt="" src={spec.src} draggable={false} className={`${frame} object-contain`} />
+  }
+  if (spec.kind === 'builtin') {
+    const Icon = BUILTIN_ICONS[spec.name]
+    return (
+      <span aria-hidden className={frame} style={{ backgroundColor: spec.color }}>
+        <Icon size={glyph} strokeWidth={2.25} />
+      </span>
+    )
+  }
   return (
-    <span
-      aria-hidden
-      className={`inline-flex shrink-0 items-center justify-center rounded font-semibold text-white ${SIZES[size]}`}
-      style={{ backgroundColor: `hsl(${repoGroupHue(repoGroupKey)} 55% 40%)` }}
-    >
-      {letter}
+    <span aria-hidden className={frame} style={{ backgroundColor: letterColor(spec.hue) }}>
+      {spec.letter}
     </span>
   )
 }
