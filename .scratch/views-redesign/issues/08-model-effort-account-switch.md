@@ -4,7 +4,7 @@
 
 **Blocked by:** 07
 
-**Status:** ready-for-agent
+**Status:** wontfix — replaced by .scratch/vscode-parity (live switching over control requests, like the VS Code extension)
 
 - [ ] **Model** dropdown: Opus, Sonnet, Haiku (the CLI aliases `opus`, `sonnet`, `haiku`), plus "Custom…" to type an exact model id. It shows the chat's current model.
 - [ ] **Effort** dropdown: CLI default, low, medium, high, xhigh, max. "CLI default" passes no `--effort`; any other choice passes `--effort <level>`. It shows the chat's current effort. Each session stores `effort` next to `model`, persisted; existing sessions migrate to "CLI default".
