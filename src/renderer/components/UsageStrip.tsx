@@ -20,7 +20,7 @@ function useProfileOnScreen(): string | null {
   const view = useViewStore((s) => s.view)
   const activeProjectId = useProjectViewsStore((s) => s.activeProjectId)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
-  if (view !== 'sessions' || !activeProjectId) return null
+  if (view !== 'work' || !activeProjectId) return null
   return workspaces.find((w) => w.id === activeProjectId)?.profileId ?? null
 }
 

@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import type { SessionStatusEntry, Workspace } from '../../shared/types'
 import { needsYouQueue, nextWaiting } from '../../shared/needsYou'
-import { useAppsStore } from './appsStore'
 import { chatOnScreen, type ShellOptions } from './projectViewLayout'
 import { useProjectViewsStore, type ProjectView, type ShellTab } from './projectViewsStore'
 import { useSessionStatusStore } from './sessionStatusStore'
@@ -22,8 +21,8 @@ export function hostedSessions(views: Record<string, ProjectView>): HostedSessio
 }
 
 export function paneOnScreen(): string | null {
-  if (useViewStore.getState().view !== 'sessions') return null
-  if (useAppsStore.getState().showApps) return null
+  const screen = useViewStore.getState()
+  if (screen.view !== 'work' || screen.settings !== null) return null
   const { views, activeProjectId } = useProjectViewsStore.getState()
   const view = activeProjectId ? views[activeProjectId] : undefined
   if (!view || !chatOnScreen(view)) return null
@@ -47,8 +46,7 @@ export function openSession(paneId: string): boolean {
   const views = useProjectViewsStore.getState()
   const target = hostedSessions(views.views).find((s) => s.paneId === paneId)
   if (!target) return false
-  useViewStore.getState().setView('sessions')
-  useAppsStore.getState().setShowApps(false)
+  useViewStore.getState().setView('work')
   views.setActive(target.projectId)
   views.setActiveClaudeSession(target.projectId, paneId)
   views.setCenterView(target.projectId, 'chat')
@@ -56,10 +54,9 @@ export function openSession(paneId: string): boolean {
   return true
 }
 
-/** Switches to Sessions on a workspace, opening it like a sidebar click when it has no view yet. */
+/** Switches to Work on a workspace, opening it like a sidebar click when it has no view yet. */
 export function openWorkspace(workspace: Workspace): void {
-  useViewStore.getState().setView('sessions')
-  useAppsStore.getState().setShowApps(false)
+  useViewStore.getState().setView('work')
   useProjectViewsStore.getState().openProject(workspace)
 }
 

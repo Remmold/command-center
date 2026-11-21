@@ -16,8 +16,14 @@ function currentProfile(profiles: AccountProfile[], workspace: Workspace): Accou
   return profiles.find((p) => p.id === workspace.profileId) ?? profiles.find((p) => p.id === DEFAULT_PROFILE_ID)
 }
 
-/** The account profile button on a workspace's sidebar row, with its picker. */
-export function ProfilePicker({ workspace }: { workspace: Workspace }) {
+interface Props {
+  workspace: Workspace
+  /** Shows the profile's name beside the icon, always visible. */
+  labelled?: boolean
+}
+
+/** The account profile button on a workspace's row, with its picker. */
+export function ProfilePicker({ workspace, labelled = false }: Props) {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null)
   const [open, setOpen] = useState(false)
   const profiles = useProfilesStore((s) => s.profiles)
@@ -42,11 +48,13 @@ export function ProfilePicker({ workspace }: { workspace: Workspace }) {
         aria-label={`account profile for ${workspace.name}`}
         title={`account profile: ${current?.name ?? 'Default'}`}
         className={
-          'rounded p-0.5 text-muted hover:bg-list-hover hover:text-fg ' +
-          (onDefault && !open ? 'opacity-0 group-hover:opacity-100' : '')
+          'inline-flex shrink-0 items-center gap-1.5 rounded text-muted hover:bg-list-hover hover:text-fg ' +
+          (labelled ? 'px-2 py-1 text-xs ' : 'p-0.5 ') +
+          (onDefault && !open && !labelled ? 'opacity-0 group-hover:opacity-100' : '')
         }
       >
         <UserRound size={11} strokeWidth={2.25} />
+        {labelled && (current?.name ?? 'Default')}
       </button>
       <Popover open={open} onClose={close} anchor={anchor} label="account profile">
         <ProfileList workspace={workspace} profiles={profiles} onDone={close} />

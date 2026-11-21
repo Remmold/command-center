@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ChevronDown,
   Loader2,
   Play,
   Plus,
@@ -11,6 +10,8 @@ import {
   Trash2
 } from 'lucide-react'
 import { useAppsStore } from '../state/appsStore'
+import { Button } from './ui/Button'
+import { Page, PageBody, PageHeader, PageNote } from './ui/Page'
 import type { ManagedApp, ManagedAppInput } from '../../shared/types'
 
 function StatusDot({ running, busy }: { running: boolean; busy: boolean }): JSX.Element {
@@ -186,7 +187,6 @@ export function AppsDashboard(): JSX.Element {
   const apps = useAppsStore((s) => s.apps)
   const refresh = useAppsStore((s) => s.refresh)
   const load = useAppsStore((s) => s.load)
-  const setShowApps = useAppsStore((s) => s.setShowApps)
   const [adding, setAdding] = useState(false)
 
   useEffect(() => {
@@ -198,46 +198,28 @@ export function AppsDashboard(): JSX.Element {
   const sorted = useMemo(() => [...apps].sort((a, b) => a.name.localeCompare(b.name)), [apps])
 
   return (
-    <div className="flex h-full flex-col bg-editor">
-      <div className="flex items-center justify-between border-b border-subtle px-5 py-3">
-        <div>
-          <h1 className="text-sm font-semibold text-fg">Apps</h1>
-          <p className="text-[11px] text-muted">Launch and monitor your projects. Status is by listening port.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => void refresh()}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted hover:bg-list-hover hover:text-fg"
-          >
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button
-            onClick={() => setAdding((v) => !v)}
-            className="flex items-center gap-1.5 rounded-md bg-list-selected px-2.5 py-1.5 text-xs text-fg hover:bg-strong"
-          >
-            <Plus size={14} /> Add app
-          </button>
-          <button
-            onClick={() => setShowApps(false)}
-            className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-muted hover:bg-list-hover hover:text-fg"
-            title="back to workspaces"
-          >
-            <ChevronDown size={14} /> Close
-          </button>
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-3 overflow-auto p-5">
+    <Page label="Apps">
+      <PageHeader
+        title="Apps"
+        description="Launch and monitor your projects. Status is by listening port."
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => void refresh()}>
+              <RefreshCw size={12} /> Refresh
+            </Button>
+            <Button pressed={adding} onClick={() => setAdding((v) => !v)}>
+              <Plus size={12} /> Add app
+            </Button>
+          </>
+        }
+      />
+      <PageBody>
         {adding && <AddAppForm onDone={() => setAdding(false)} />}
-        {sorted.length === 0 && !adding && (
-          <div className="py-16 text-center text-sm text-muted">
-            No apps yet — click “Add app”.
-          </div>
-        )}
+        {sorted.length === 0 && !adding && <PageNote>No apps yet. Click Add app.</PageNote>}
         {sorted.map((app) => (
           <AppCard key={app.id} app={app} />
         ))}
-      </div>
-    </div>
+      </PageBody>
+    </Page>
   )
 }

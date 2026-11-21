@@ -20,7 +20,7 @@ import { Button } from '../ui/Button'
 import { Column, ColumnRow } from '../ui/Column'
 import { DrawerHost, DrawerMain } from '../ui/Drawer'
 import { HeaderRow } from '../ui/HeaderRow'
-import { overlayOpen } from '../ui/overlay'
+import { isTyping, overlayOpen } from '../ui/overlay'
 import { ProgressBar } from '../ui/ProgressBar'
 import { ScrollStack } from '../ui/ScrollStack'
 import { EmptyHint } from '../ui/Section'
@@ -30,10 +30,6 @@ import { NotAddedLine } from './NotAddedLine'
 import { NowBuildingStrip } from './NowBuildingStrip'
 import { cardAnchorId, SpecOnlyCard, TicketCard } from './TicketCard'
 import { TicketDrawer } from './TicketDrawer'
-
-function isTyping(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-}
 
 export function BoardView() {
   const model = useBoardStore((s) => s.model)

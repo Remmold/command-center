@@ -44,6 +44,9 @@ module.exports = {
           quiet: theme('status-quiet')
         }
       },
+      fontSize: {
+        sm: ['13px', '20px']
+      },
       fontFamily: {
         sans: 'var(--cc-font-ui)',
         mono: 'var(--cc-font-mono)'

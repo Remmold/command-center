@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { ActivityBar } from './components/ActivityBar'
-import { ProjectTabs } from './components/ProjectTabs'
+import { TitleBar } from './components/TitleBar'
+import { DashboardView } from './components/DashboardView'
+import { SettingsPage } from './components/settings/SettingsPage'
 import { Sidebar } from './components/Sidebar'
 import { ProjectView } from './components/ProjectView'
-import { AppsDashboard } from './components/AppsDashboard'
 import { useProjectViewsStore } from './state/projectViewsStore'
 import { useAppsStore } from './state/appsStore'
 import { useUsageStore, type RateLimitInfo } from './state/usageStore'
@@ -35,8 +36,8 @@ export function App() {
   const recordResult = useUsageStore((s) => s.recordResult)
   const setRateLimit = useUsageStore((s) => s.setRateLimit)
   const addPermissionRequest = usePermissionsStore((s) => s.addRequest)
-  const showApps = useAppsStore((s) => s.showApps)
   const appView = useViewStore((s) => s.view)
+  const settingsSection = useViewStore((s) => s.settings)
   const initApps = useAppsStore((s) => s.init)
   const initSessionStatus = useSessionStatusStore((s) => s.init)
   const initObserved = useObservedStore((s) => s.init)
@@ -92,6 +93,7 @@ export function App() {
 
   useKeyboardShortcuts({
     switchView: (next) => useViewStore.getState().setView(next),
+    openSettings: () => useViewStore.getState().openSettings(),
     nextWaiting: jumpToNextWaiting,
     newChat: () => {
       const projectId = useProjectViewsStore.getState().activeProjectId
@@ -127,26 +129,26 @@ export function App() {
   })
 
   return (
-    <div className="flex h-full flex-col">
-      <ProjectTabs />
+    <div className="relative flex h-full flex-col">
+      <TitleBar />
       <div className="relative flex min-h-0 flex-1">
+        {appView === 'dashboard' && (
+          <div className="absolute inset-0 z-30">
+            <DashboardView />
+          </div>
+        )}
         {appView === 'board' && (
           <div className="absolute inset-0 z-30">
             <BoardView />
           </div>
         )}
         <div
-          className={'flex min-h-0 min-w-0 flex-1 ' + (appView === 'board' ? 'invisible' : '')}
-          aria-hidden={appView === 'board'}
+          className={'flex min-h-0 min-w-0 flex-1 ' + (appView === 'work' ? '' : 'invisible')}
+          aria-hidden={appView !== 'work'}
         >
           <Sidebar />
           {idePanelsOpen && <ActivityBar />}
           <div className="relative min-w-0 flex-1">
-            {showApps && (
-              <div className="absolute inset-0 z-20">
-                <AppsDashboard />
-              </div>
-            )}
             {observedOpen && (
               <div className="absolute inset-0 z-10">
                 <ObservedChatView />
@@ -183,6 +185,11 @@ export function App() {
           </div>
         </div>
       </div>
+      {settingsSection && (
+        <div className="absolute inset-0 z-40">
+          <SettingsPage section={settingsSection} />
+        </div>
+      )}
     </div>
   )
 }

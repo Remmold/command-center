@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Folder, FolderPlus, FolderSearch, LayoutGrid, X } from 'lucide-react'
+import { Folder, FolderPlus, FolderSearch, X } from 'lucide-react'
 import { RepoIcon } from './RepoIcon'
 import { Badge } from './ui/Badge'
 import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
-import { useAppsStore } from '../state/appsStore'
-import { useViewStore, type AppView } from '../state/viewStore'
-import { SegmentedControl } from './ui/SegmentedControl'
-import { UsageStrip } from './UsageStrip'
 
 export function ProjectTabs() {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
@@ -21,12 +17,6 @@ export function ProjectTabs() {
   const openProject = useProjectViewsStore((s) => s.openProject)
   const closeProject = useProjectViewsStore((s) => s.closeProject)
   const setActive = useProjectViewsStore((s) => s.setActive)
-
-  const showApps = useAppsStore((s) => s.showApps)
-  const setShowApps = useAppsStore((s) => s.setShowApps)
-
-  const view = useViewStore((s) => s.view)
-  const setView = useViewStore((s) => s.setView)
 
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -49,18 +39,7 @@ export function ProjectTabs() {
   }
 
   return (
-    <div className="relative flex h-10 shrink-0 items-center border-b border-subtle bg-titlebar">
-      <div className="shrink-0 border-r border-subtle px-2">
-        <SegmentedControl<AppView>
-          label="view"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: 'sessions', label: 'Sessions', title: 'Sessions (Ctrl+1)' },
-            { value: 'board', label: 'Board', title: 'Board (Ctrl+2)' }
-          ]}
-        />
-      </div>
+    <div className="relative flex h-full min-w-0 flex-1 items-center">
       <div className="flex h-full min-w-0 flex-1 items-center overflow-x-auto">
         {order.length === 0 && (
           <span className="px-3 text-xs text-muted">
@@ -107,20 +86,6 @@ export function ProjectTabs() {
           )
         })}
       </div>
-      <UsageStrip />
-      <button
-        onClick={() => setShowApps(!showApps)}
-        className={
-          'flex h-full items-center gap-1.5 border-l border-subtle px-3 text-xs ' +
-          (showApps
-            ? 'bg-editor text-accent'
-            : 'text-muted hover:bg-list-hover hover:text-fg')
-        }
-        title="apps — launch & monitor"
-      >
-        <LayoutGrid size={14} strokeWidth={2} />
-        <span>Apps</span>
-      </button>
       <div className="relative">
         <button
           onClick={() => setMenuOpen((o) => !o)}

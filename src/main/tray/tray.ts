@@ -44,7 +44,8 @@ export function createAppTray(actions: TrayActions): AppTray {
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: 'Open', click: actions.open },
-        { label: 'Sessions', click: () => actions.showView('sessions') },
+        { label: 'Dashboard', click: () => actions.showView('dashboard') },
+        { label: 'Work', click: () => actions.showView('work') },
         { label: 'Board', click: () => actions.showView('board') },
         { type: 'separator' },
         {
