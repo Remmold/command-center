@@ -284,6 +284,92 @@ describe('board reader', () => {
     ])
   })
 
+  it('keeps two different ticket files sharing a number as two cards, and merges copies by file name', async () => {
+    const issues = '.scratch/animation-round2/issues/'
+    const main = fixture({
+      [issues + '09-hero-idle.md']: ticket('09: Hero idle', ['**Status:** resolved']),
+      [issues + '09-enemy-walk.md']: ticket('09: Enemy walk', ['**Status:** ready-for-agent']),
+      [issues + '10-after.md']: ticket('10: After', ['**Blocked by:** 09', '**Status:** ready-for-agent'])
+    })
+    const shard = fixture({
+      [issues + '09-Hero-Idle.md']: ticket('09: Hero idle', ['**Status:** claimed']),
+      [issues + '09-enemy-walk.md']: ticket('09: Enemy walk', ['**Status:** claimed'])
+    })
+    const key = 'git:c:/projects/fs/.git'
+    const model = await readBoard(
+      [
+        workspace(main, { id: 'main', repoGroupKey: key }),
+        workspace(shard, { id: 'shard', repoGroupKey: key, worktreeTag: 'shard' })
+      ],
+      nodeFileReader
+    )
+    const cards = tickets(model)
+    expect(cards.map((t) => [t.number, t.fileName, t.column, t.sightings.map((s) => s.workspaceId)])).toEqual([
+      ['09', '09-enemy-walk.md', 'in-progress', ['shard', 'main']],
+      ['09', '09-hero-idle.md', 'done', ['main', 'shard']],
+      ['10', '10-after.md', 'blocked', ['main']]
+    ])
+  })
+
+  it('reports a feature’s progress as done out of total plus the last non-empty line of its notes', async () => {
+    const root = fixture({
+      '.scratch/combat/spec.md': '# spec',
+      '.scratch/combat/progress.md': '- 01 resolved: swing\r\n- 02 claimed: dodge, half done\r\n\r\n   \r\n',
+      '.scratch/combat/issues/01-swing.md': ticket('01: Swing', ['**Status:** resolved']),
+      '.scratch/combat/issues/02-dodge.md': ticket('02: Dodge', ['**Status:** claimed']),
+      '.scratch/combat/issues/03-parry.md': ticket('03: Parry', ['**Status:** wontfix']),
+      '.scratch/combat/issues/04-feint.md': ticket('04: Feint', [])
+    })
+    const [feature] = (await readBoard([workspace(root)], nodeFileReader)).repoGroups[0].features
+    expect(feature.state).toBe('active')
+    expect(feature.progress).toEqual({ done: 2, total: 4, lastNote: '- 02 claimed: dodge, half done' })
+  })
+
+  it('marks a feature whose tickets are all done as finished', async () => {
+    const root = fixture({
+      '.scratch/old-flow/spec.md': '# spec',
+      '.scratch/old-flow/issues/01-a.md': ticket('01: A', ['**Status:** resolved']),
+      '.scratch/old-flow/issues/02-b.md': ticket('02: B', ['Status: wontfix'])
+    })
+    const [feature] = (await readBoard([workspace(root)], nodeFileReader)).repoGroups[0].features
+    expect(feature.state).toBe('finished')
+    expect(feature.progress).toEqual({ done: 2, total: 2, lastNote: null })
+  })
+
+  it('marks a feature with a spec and no tickets as spec only, and one with neither as empty', async () => {
+    const root = fixture({
+      '.scratch/new-idea/spec.md': '# spec',
+      '.scratch/new-idea/issues/README.md': 'not a ticket',
+      '.scratch/scraps/night-notes.md': 'notes only'
+    })
+    const features = (await readBoard([workspace(root)], nodeFileReader)).repoGroups[0].features
+    expect(features.map((f) => [f.name, f.state, f.progress.total])).toEqual([
+      ['new-idea', 'spec-only', 0],
+      ['scraps', 'empty', 0]
+    ])
+  })
+
+  it('takes the longest worktree copy of progress.md for the last note', async () => {
+    const dir = '.scratch/combat/'
+    const main = fixture({
+      [dir + 'progress.md']: '- 01 resolved',
+      [dir + 'issues/01-swing.md']: ticket('01: Swing', ['**Status:** resolved']),
+      [dir + 'issues/02-dodge.md']: ticket('02: Dodge', ['**Status:** ready-for-agent'])
+    })
+    const shard = fixture({
+      [dir + 'progress.md']: '- 01 resolved\n- 02 resolved in the shard',
+      [dir + 'issues/02-dodge.md']: ticket('02: Dodge', ['**Status:** resolved'])
+    })
+    const key = 'git:c:/projects/fs/.git'
+    const model = await readBoard(
+      [workspace(main, { id: 'main', repoGroupKey: key }), workspace(shard, { id: 'shard', repoGroupKey: key })],
+      nodeFileReader
+    )
+    const [feature] = model.repoGroups[0].features
+    expect(feature.progress).toEqual({ done: 2, total: 2, lastNote: '- 02 resolved in the shard' })
+    expect(feature.state).toBe('finished')
+  })
+
   it('returns no features for a workspace without a .scratch folder', async () => {
     const root = fixture({ 'README.md': '# hi' })
     const model = await readBoard([workspace(root)], nodeFileReader)

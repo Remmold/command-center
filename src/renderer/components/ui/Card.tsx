@@ -1,10 +1,33 @@
 import type { ReactNode } from 'react'
 
-export function Card({ children, tooltip }: { children: ReactNode; tooltip?: string }) {
+interface CardProps {
+  children: ReactNode
+  tooltip?: string
+  onClick?: () => void
+  selected?: boolean
+}
+
+const BASE = 'flex flex-col gap-1.5 rounded-md border bg-zinc-900 p-2.5 text-left'
+
+export function Card({ children, tooltip, onClick, selected = false }: CardProps) {
+  const border = selected ? 'border-zinc-400' : 'border-zinc-800'
+  if (!onClick) {
+    return (
+      <div title={tooltip} className={`${BASE} ${border}`}>
+        {children}
+      </div>
+    )
+  }
   return (
-    <div title={tooltip} className="flex flex-col gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 p-2.5">
+    <button
+      type="button"
+      title={tooltip}
+      onClick={onClick}
+      aria-pressed={selected}
+      className={`${BASE} ${border} w-full min-w-0 hover:border-zinc-600 focus-visible:border-zinc-400 focus-visible:outline-none`}
+    >
       {children}
-    </div>
+    </button>
   )
 }
 

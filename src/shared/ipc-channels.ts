@@ -4,6 +4,7 @@ export const IPC = {
   WORKSPACES_REMOVE: 'workspaces:remove',
   BOARD_GET: 'board:get',
   BOARD_CHANGED: 'board:changed',
+  BOARD_READ_FILE: 'board:readFile',
   PTY_SPAWN: 'pty:spawn',
   PTY_WRITE: 'pty:write',
   PTY_RESIZE: 'pty:resize',

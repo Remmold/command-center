@@ -216,6 +216,8 @@ export interface RendererApi {
   board: {
     get: () => Promise<BoardModel>
     onChanged: (cb: (model: BoardModel) => void) => () => void
+    /** Reads a ticket, ticket notes, spec or progress file named in the current model; null for any other path. */
+    readFile: (path: string) => Promise<string | null>
   }
   apps: {
     list: () => Promise<ManagedApp[]>
@@ -309,6 +311,8 @@ export type TicketNumber = string
 /** One card: every worktree copy of one ticket, merged. */
 export interface BoardTicket {
   number: TicketNumber
+  /** Lower-cased ticket file name; copies merge on it, so two files sharing a number stay two cards. */
+  fileName: string
   title: string
   column: BoardColumn
   status: string | null
@@ -322,8 +326,19 @@ export interface FeatureSighting {
   progressPath: string | null
 }
 
+export type FeatureState = 'active' | 'finished' | 'spec-only' | 'empty'
+
+export interface FeatureProgress {
+  done: number
+  total: number
+  /** Last non-empty line of the fullest worktree copy of progress.md. */
+  lastNote: string | null
+}
+
 export interface BoardFeature {
   name: string
+  state: FeatureState
+  progress: FeatureProgress
   tickets: BoardTicket[]
   sightings: FeatureSighting[]
 }

@@ -32,3 +32,12 @@ export function ListRowText({ primary, secondary }: { primary: string; secondary
 export function ListRowMeta({ children }: { children: ReactNode }) {
   return <span className="shrink-0 text-[10px] tabular-nums text-zinc-500">{children}</span>
 }
+
+/** A non-clickable row: text plus trailing actions. */
+export function ListItem({ children, tooltip }: { children: ReactNode; tooltip?: string }) {
+  return (
+    <li title={tooltip} className="flex w-full min-w-0 items-center gap-2 py-0.5 text-xs text-zinc-300">
+      {children}
+    </li>
+  )
+}

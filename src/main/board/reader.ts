@@ -5,7 +5,9 @@ import type {
   BoardModel,
   BoardRepoGroup,
   BoardTicket,
+  FeatureProgress,
   FeatureSighting,
+  FeatureState,
   TicketNumber,
   TicketSighting,
   Workspace
@@ -30,6 +32,7 @@ const PROGRESS_SUFFIX = '.progress.md'
 
 interface ParsedTicket {
   number: TicketNumber
+  fileName: string
   title: string
   status: string | null
   blockedBy: TicketNumber[]
@@ -39,6 +42,7 @@ interface ParsedTicket {
 
 interface FeatureCopy {
   sighting: FeatureSighting
+  noteLines: string[]
   tickets: ParsedTicket[]
 }
 
@@ -113,6 +117,7 @@ async function readTickets(issuesDir: string, files: BoardFileReader): Promise<P
     const progressName = name.slice(0, -'.md'.length) + PROGRESS_SUFFIX
     tickets.push({
       number: toTicketNumber(match[1]),
+      fileName: name.toLowerCase(),
       title: parseTitle(markdown, match[2]),
       status: parseStatus(markdown),
       blockedBy: parseBlockedBy(markdown),
@@ -131,25 +136,51 @@ async function readFeatureCopies(workspace: Workspace, files: BoardFileReader): 
     const dir = join(scratch, entry.name)
     const ownFiles = new Set((await listFileNames(dir, files)).map((n) => n.toLowerCase()))
     const pathIfPresent = (name: string): string | null => (ownFiles.has(name) ? join(dir, name) : null)
+    const progressPath = pathIfPresent('progress.md')
+    const notes = progressPath ? await files.readFile(progressPath) : null
     copies.set(entry.name, {
       sighting: {
         workspaceId: workspace.id,
         specPath: pathIfPresent('spec.md'),
-        progressPath: pathIfPresent('progress.md')
+        progressPath
       },
+      noteLines: (notes ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== ''),
       tickets: await readTickets(join(dir, 'issues'), files)
     })
   }
   return copies
 }
 
-/** A blocker counts as resolved once any worktree copy of it is done. */
-function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
-  const resolved = new Set<TicketNumber>()
+/** A number is resolved once every ticket file carrying it is done in at least one worktree copy. */
+function resolvedNumbers(copies: FeatureCopy[]): Set<TicketNumber> {
+  const doneByFile = new Map<string, { number: TicketNumber; done: boolean }>()
   for (const copy of copies) {
-    for (const t of copy.tickets) if (isDone(t.status)) resolved.add(t.number)
+    for (const t of copy.tickets) {
+      const prev = doneByFile.get(t.fileName)
+      doneByFile.set(t.fileName, { number: t.number, done: (prev?.done ?? false) || isDone(t.status) })
+    }
   }
-  const cards = new Map<TicketNumber, BoardTicket>()
+  const open = new Set([...doneByFile.values()].filter((f) => !f.done).map((f) => f.number))
+  return new Set([...doneByFile.values()].map((f) => f.number).filter((n) => !open.has(n)))
+}
+
+function progressOf(tickets: BoardTicket[], copies: FeatureCopy[]): FeatureProgress {
+  const fullest = copies.reduce<string[]>((best, c) => (c.noteLines.length > best.length ? c.noteLines : best), [])
+  return {
+    done: tickets.filter((t) => t.column === 'done').length,
+    total: tickets.length,
+    lastNote: fullest.at(-1) ?? null
+  }
+}
+
+function stateOf(progress: FeatureProgress, copies: FeatureCopy[]): FeatureState {
+  if (progress.total > 0) return progress.done === progress.total ? 'finished' : 'active'
+  return copies.some((c) => c.sighting.specPath !== null) ? 'spec-only' : 'empty'
+}
+
+function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
+  const resolved = resolvedNumbers(copies)
+  const cards = new Map<string, BoardTicket>()
   for (const copy of copies) {
     for (const t of copy.tickets) {
       const sighting: TicketSighting = {
@@ -160,9 +191,16 @@ function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
         filePath: t.filePath,
         progressPath: t.progressPath
       }
-      const card = cards.get(t.number)
+      const card = cards.get(t.fileName)
       if (!card) {
-        cards.set(t.number, { number: t.number, title: t.title, column: sighting.column, status: t.status, sightings: [sighting] })
+        cards.set(t.fileName, {
+          number: t.number,
+          fileName: t.fileName,
+          title: t.title,
+          column: sighting.column,
+          status: t.status,
+          sightings: [sighting]
+        })
         continue
       }
       card.sightings.push(sighting)
@@ -173,9 +211,12 @@ function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
       }
     }
   }
-  const tickets = [...cards.values()].sort((a, b) => compareTicketNumbers(a.number, b.number))
+  const tickets = [...cards.values()].sort(
+    (a, b) => compareTicketNumbers(a.number, b.number) || a.fileName.localeCompare(b.fileName)
+  )
   for (const card of tickets) card.sightings.sort((a, b) => COLUMN_RANK[b.column] - COLUMN_RANK[a.column])
-  return { name, tickets, sightings: copies.map((c) => c.sighting) }
+  const progress = progressOf(tickets, copies)
+  return { name, state: stateOf(progress, copies), progress, tickets, sightings: copies.map((c) => c.sighting) }
 }
 
 export async function readBoard(workspaces: Workspace[], files: BoardFileReader): Promise<BoardModel> {

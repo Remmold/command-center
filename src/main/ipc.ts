@@ -39,6 +39,7 @@ export function registerIpc(): void {
     await firstRead
     return board.current()
   })
+  ipcMain.handle(IPC.BOARD_READ_FILE, (_e, path: string) => board.readFile(path))
   unsubscribers.push(() => board.stop())
 
   ipcMain.handle(IPC.WORKSPACES_LIST, () => workspaces.list())

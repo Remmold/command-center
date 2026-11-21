@@ -31,7 +31,8 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, model: BoardModel) => cb(model)
       ipcRenderer.on(IPC.BOARD_CHANGED, handler)
       return () => ipcRenderer.off(IPC.BOARD_CHANGED, handler)
-    }
+    },
+    readFile: (path: string): Promise<string | null> => ipcRenderer.invoke(IPC.BOARD_READ_FILE, path)
   },
   apps: {
     list: (): Promise<ManagedApp[]> => ipcRenderer.invoke(IPC.APPS_LIST),

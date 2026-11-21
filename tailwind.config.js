@@ -4,6 +4,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        progress: '#10b981',
         status: {
           running: '#38bdf8',
           approval: '#f59e0b',

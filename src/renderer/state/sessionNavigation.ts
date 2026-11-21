@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { SessionStatusEntry } from '../../shared/types'
+import type { SessionStatusEntry, Workspace } from '../../shared/types'
 import { needsYouQueue, nextWaiting } from '../../shared/needsYou'
 import { useAppsStore } from './appsStore'
 import { useProjectViewsStore, type ProjectView } from './projectViewsStore'
@@ -53,6 +53,13 @@ export function openSession(paneId: string): boolean {
   views.setCenterView(target.projectId, 'chat')
   useFocusRequestStore.getState().requestFocus(paneId)
   return true
+}
+
+/** Switches to Sessions on a workspace, opening it like a sidebar click when it has no view yet. */
+export function openWorkspace(workspace: Workspace): void {
+  useViewStore.getState().setView('sessions')
+  useAppsStore.getState().setShowApps(false)
+  useProjectViewsStore.getState().openProject(workspace)
 }
 
 export interface QueuedSession extends HostedSessionRef {

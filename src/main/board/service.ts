@@ -22,6 +22,28 @@ function tryWatch(path: string, recursive: boolean, onChange: (file: string | nu
   }
 }
 
+function knownPaths(model: BoardModel): Set<string> {
+  const paths = new Set<string>()
+  const add = (p: string | null): void => {
+    if (p) paths.add(p)
+  }
+  for (const group of model.repoGroups) {
+    for (const feature of group.features) {
+      for (const s of feature.sightings) {
+        add(s.specPath)
+        add(s.progressPath)
+      }
+      for (const t of feature.tickets) {
+        for (const s of t.sightings) {
+          add(s.filePath)
+          add(s.progressPath)
+        }
+      }
+    }
+  }
+  return paths
+}
+
 function closeWatch(w: WorkspaceWatch): void {
   w.root?.close()
   w.scratch?.close()
@@ -42,6 +64,11 @@ export class BoardService {
 
   current(): BoardModel {
     return this.model
+  }
+
+  readFile(path: string): Promise<string | null> {
+    if (!knownPaths(this.model).has(path)) return Promise.resolve(null)
+    return nodeFileReader.readFile(path)
   }
 
   /** Call after any workspace is added or removed. */
