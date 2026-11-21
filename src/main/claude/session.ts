@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { locateClaude } from '../pty/claude-locator'
 import { CONFIG_DIR_VAR } from '../../shared/profiles'
-import type { ClaudeStartOptions, SessionInit } from '../../shared/types'
+import { THINKING_BUDGET, type ClaudeStartOptions, type SessionInit } from '../../shared/types'
 import { childEnv } from '../util/childEnv'
 import { ControlChannel, type ControlPayload, type IncomingHandler } from './controlChannel'
 import { parseInitialize } from './initialize'
@@ -30,7 +30,7 @@ export class ClaudeSession {
   private readonly handshake: Promise<void>
 
   constructor(options: ClaudeSessionOptions) {
-    const { paneId, cwd, model, resumeSessionId, permissionMode, profileEnv = {} } = options
+    const { paneId, cwd, model, effort, thinking, resumeSessionId, permissionMode, allowBypass, profileEnv = {} } = options
     this.paneId = paneId
     this.cwd = cwd
     const launch = locateClaude()
@@ -47,20 +47,23 @@ export class ClaudeSession {
       '--setting-sources',
       'user,project,local'
     ]
-    if (model) {
-      args.push('--model', model)
-    }
+    if (model) args.push('--model', model)
+    if (effort) args.push('--effort', effort)
+    if (thinking === false) args.push('--thinking=disabled')
+    else args.push('--max-thinking-tokens', String(THINKING_BUDGET))
     if (resumeSessionId) {
       args.push('--resume', resumeSessionId)
     }
     if (permissionMode) args.push('--permission-mode', permissionMode)
-    // The CLI refuses a later switch back to bypass unless the launch allowed it.
-    if (permissionMode === 'bypassPermissions') args.push('--allow-dangerously-skip-permissions')
+    // The CLI refuses a later switch to bypass unless the launch allowed it.
+    if (allowBypass || permissionMode === 'bypassPermissions') args.push('--allow-dangerously-skip-permissions')
 
     console.log('[claude] spawn', {
       paneId,
       cwd,
       model,
+      effort,
+      thinking,
       resume: resumeSessionId,
       permissionMode,
       configDir: profileEnv[CONFIG_DIR_VAR] ?? 'default',

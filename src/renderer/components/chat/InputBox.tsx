@@ -12,6 +12,7 @@ interface Props {
   slashCommands?: string[]
   cwd?: string
   registerFocus?: (focusFn: () => void) => void
+  footerStart?: ReactNode
   footerEnd?: ReactNode
   onShiftTab?: () => void
 }
@@ -118,6 +119,7 @@ export function InputBox({
   slashCommands,
   cwd,
   registerFocus,
+  footerStart,
   footerEnd,
   onShiftTab
 }: Props) {
@@ -391,7 +393,7 @@ export function InputBox({
             className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none read-only:opacity-50"
           />
           <div className="flex items-end justify-between gap-2">
-            <div className="flex items-center gap-1">
+            <div className="flex min-w-0 items-center gap-1">
               <button
                 onClick={handleAttachClick}
                 className="rounded p-1.5 text-muted hover:bg-list-hover hover:text-fg"
@@ -400,7 +402,8 @@ export function InputBox({
               >
                 <Paperclip size={14} strokeWidth={2} />
               </button>
-              <span className="text-[10px] text-faint">
+              {footerStart}
+              <span className="min-w-0 truncate text-[10px] text-faint">
                 enter to send · shift+enter newline · / commands · @ files ·{' '}
                 <ImageIcon
                   size={10}
@@ -410,7 +413,7 @@ export function InputBox({
                 paste images
               </span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               {footerEnd}
               {disabled && onInterrupt ? (
                 <button

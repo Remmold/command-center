@@ -83,6 +83,8 @@ export interface ClaudeEventEnvelope {
 /** A model the CLI offers, from its `initialize` reply. */
 export interface CliModel {
   value: string
+  /** The full model id an alias such as `default` or `opus` stands for. */
+  resolvedModel: string
   displayName: string
   description: string
   supportsEffort: boolean
@@ -121,13 +123,36 @@ export type ControlResult =
   | { ok: true; response: Record<string, unknown> }
   | { ok: false; error: string }
 
+/** The extension's thinking budget when extended thinking is on. */
+export const THINKING_BUDGET = 31999
+
 export interface ClaudeStartOptions {
   paneId: string
   cwd: string
   model?: string
+  effort?: string
+  /** Extended thinking; on unless false. */
+  thinking?: boolean
   resumeSessionId?: string
   permissionMode?: string
+  /** Launches with `--allow-dangerously-skip-permissions`, so Bypass can be switched to later. */
+  allowBypass?: boolean
 }
+
+/** The model keys of the user `settings.json` that new sessions start with. */
+export interface ModelDefaults {
+  model?: string
+  /** Saved effort per full model id, as the CLI keeps it under `modelSettings`. */
+  effortByModel: Record<string, string>
+}
+
+/** A change to the saved defaults; `model: null` removes the key, so the CLI picks its own default. */
+export interface ModelDefaultsPatch {
+  model?: string | null
+  effort?: { resolvedModel: string; level: string }
+}
+
+export type SaveDefaultsResult = { ok: true } | { ok: false; error: string }
 
 export type ClaudeEvent =
   | ClaudeSystemEvent
@@ -347,6 +372,9 @@ export interface RendererApi {
     start: (options: ClaudeStartOptions) => Promise<SpawnResult>
     control: (paneId: string, subtype: string, fields?: Record<string, unknown>) => Promise<ControlResult>
     getInit: (paneId: string) => Promise<SessionInit | null>
+    /** The model and effort new sessions start with, from the user `settings.json`. */
+    readDefaults: () => Promise<ModelDefaults>
+    saveDefaults: (patch: ModelDefaultsPatch) => Promise<SaveDefaultsResult>
     onInit: (cb: (envelope: SessionInitEnvelope) => void) => () => void
     send: (paneId: string, text: string, images?: ImageAttachment[]) => void
     interrupt: (paneId: string) => void

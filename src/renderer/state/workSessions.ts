@@ -1,8 +1,11 @@
 import { useMemo } from 'react'
 import { create } from 'zustand'
-import type { SessionStatusEntry } from '../../shared/types'
+import type { CliModel, ModelDefaults, SessionInit, SessionStatusEntry } from '../../shared/types'
+import { currentChoice, paneModels, sessionTag } from './modelPicker'
+import { useModelStore, type AppliedModel } from './modelStore'
+import { useSessionInitStore } from './sessionInitStore'
 import { useObservedStore } from './observedStore'
-import { useProjectViewsStore, type ProjectView } from './projectViewsStore'
+import { useProjectViewsStore, type ClaudeChatSession, type ProjectView } from './projectViewsStore'
 import { useRepoIdentitiesStore } from './repoIdentitiesStore'
 import { halfShowing, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
 import { useChatPairStore } from './chatPairStore'
@@ -21,14 +24,34 @@ export const useWorkSearchStore = create<WorkSearchState>((set) => ({
   setSearch: (search) => set({ search })
 }))
 
+interface ModelSources {
+  inits: Record<string, SessionInit>
+  cachedModels: CliModel[]
+  defaults: ModelDefaults
+  applied: Record<string, AppliedModel>
+}
+
+/** None until there is a model list or a pick to name. */
+function modelTagOf(c: ClaudeChatSession, m: ModelSources): string | undefined {
+  const models = paneModels(m.inits[c.id]?.models, m.cachedModels)
+  const choice = currentChoice({ models, defaults: m.defaults, session: c, applied: m.applied[c.id] })
+  if (models.length === 0 && choice.selection === undefined) return undefined
+  return sessionTag(choice.pill)
+}
+
 /** A hosted session's most recent activity is when its status last changed. */
-function hostedInputs(views: Record<string, ProjectView>, byPane: Record<string, SessionStatusEntry>): HostedSessionInput[] {
+function hostedInputs(
+  views: Record<string, ProjectView>,
+  byPane: Record<string, SessionStatusEntry>,
+  models: ModelSources
+): HostedSessionInput[] {
   return Object.values(views).flatMap((v) =>
     v.claudeSessions.map((c) => ({
       paneId: c.id,
       workspaceId: v.projectId,
       title: c.title,
-      lastActivityAt: byPane[c.id]?.since ?? 0
+      lastActivityAt: byPane[c.id]?.since ?? 0,
+      modelTag: modelTagOf(c, models)
     }))
   )
 }
@@ -36,15 +59,22 @@ function hostedInputs(views: Record<string, ProjectView>, byPane: Record<string,
 interface ListSources extends Omit<SessionListInput, 'hosted' | 'statuses'> {
   views: Record<string, ProjectView>
   byPane: Record<string, SessionStatusEntry>
+  models: ModelSources
 }
 
-function listInput({ views, byPane, ...rest }: ListSources): SessionListInput {
-  return { hosted: hostedInputs(views, byPane), statuses: Object.values(byPane), ...rest }
+function listInput({ views, byPane, models, ...rest }: ListSources): SessionListInput {
+  return { hosted: hostedInputs(views, byPane, models), statuses: Object.values(byPane), ...rest }
+}
+
+function currentModelSources(): ModelSources {
+  const { cachedModels, defaults, applied } = useModelStore.getState()
+  return { inits: useSessionInitStore.getState().byPane, cachedModels, defaults, applied }
 }
 
 function currentSources(): ListSources {
   return {
     views: useProjectViewsStore.getState().views,
+    models: currentModelSources(),
     byPane: useSessionStatusStore.getState().byPane,
     observed: useObservedStore.getState().sessions,
     workspaces: useWorkspacesStore.getState().workspaces,
@@ -60,9 +90,22 @@ export function useSessionSources(): Omit<SessionListInput, 'search'> {
   const observed = useObservedStore((s) => s.sessions)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const identities = useRepoIdentitiesStore((s) => s.identities)
+  const inits = useSessionInitStore((s) => s.byPane)
+  const cachedModels = useModelStore((s) => s.cachedModels)
+  const defaults = useModelStore((s) => s.defaults)
+  const applied = useModelStore((s) => s.applied)
   return useMemo(
-    () => listInput({ views, byPane, observed, workspaces, identities, search: '' }),
-    [views, byPane, observed, workspaces, identities]
+    () =>
+      listInput({
+        views,
+        byPane,
+        models: { inits, cachedModels, defaults, applied },
+        observed,
+        workspaces,
+        identities,
+        search: ''
+      }),
+    [views, byPane, inits, cachedModels, defaults, applied, observed, workspaces, identities]
   )
 }
 

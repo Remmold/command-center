@@ -8,6 +8,7 @@ describe('parseInitialize', () => {
     expect(init.models).toHaveLength(13)
     expect(init.models[0]).toEqual({
       value: 'default',
+      resolvedModel: 'claude-opus-5-5',
       displayName: 'Default (recommended)',
       description: 'Opus 5.5 · Best for everyday, complex tasks',
       supportsEffort: true,
@@ -26,7 +27,7 @@ describe('parseInitialize', () => {
 
   it('falls back to empty values when the reply lacks them', () => {
     expect(parseInitialize({ models: [{ value: 'x' }, 'junk'] })).toEqual({
-      models: [{ value: 'x', displayName: 'x', description: '', supportsEffort: false, supportedEffortLevels: [], supportsAutoMode: false }],
+      models: [{ value: 'x', resolvedModel: 'x', displayName: 'x', description: '', supportsEffort: false, supportedEffortLevels: [], supportsAutoMode: false }],
       account: null,
       commands: [],
       permissionMode: 'default'

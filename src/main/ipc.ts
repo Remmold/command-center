@@ -1,6 +1,6 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import { promises as fs } from 'node:fs'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
@@ -18,6 +18,7 @@ import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import { approvalBroker } from './claude/approvals'
+import { readModelDefaults, saveModelDefaults } from './claude/userSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
 import { setScreenFocus } from './sessions/screenFocus'
@@ -25,6 +26,7 @@ import {
   DEFAULT_PROFILE_ID,
   type AddWorkspaceResult,
   type ClaudeStartOptions,
+  type ModelDefaultsPatch,
   type ScreenFocus,
   type SessionInitEnvelope
 } from '../shared/types'
@@ -247,6 +249,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       claudeManager.control(paneId, subtype, fields)
   )
   ipcMain.handle(IPC.CLAUDE_GET_INIT, (_e, paneId: string) => claudeManager.initOf(paneId))
+  // Every profile's settings.json is a hard link to Default's, so Default's file is the one to change.
+  const userSettingsFile = (): string => join(profiles.defaultConfigDir(), 'settings.json')
+  ipcMain.handle(IPC.CLAUDE_READ_DEFAULTS, () => readModelDefaults(userSettingsFile()))
+  ipcMain.handle(IPC.CLAUDE_SAVE_DEFAULTS, (_e, patch: ModelDefaultsPatch) => saveModelDefaults(userSettingsFile(), patch))
   ipcMain.on(
     IPC.CLAUDE_SEND,
     (

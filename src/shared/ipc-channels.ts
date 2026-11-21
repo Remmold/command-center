@@ -34,6 +34,8 @@ export const IPC = {
   CLAUDE_CONTROL: 'claude:control',
   CLAUDE_INIT: 'claude:init',
   CLAUDE_GET_INIT: 'claude:getInit',
+  CLAUDE_READ_DEFAULTS: 'claude:readDefaults',
+  CLAUDE_SAVE_DEFAULTS: 'claude:saveDefaults',
   CLAUDE_LIST_LOCAL_SESSIONS: 'claude:listLocalSessions',
   SESSION_STATUS_LIST: 'sessionStatus:list',
   SESSION_STATUS_CHANGED: 'sessionStatus:changed',

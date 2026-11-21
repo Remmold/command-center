@@ -24,6 +24,8 @@ import type {
   Workspace,
   ControlResult,
   SessionInit,
+  ModelDefaults,
+  SaveDefaultsResult,
   SessionInitEnvelope
 } from '../shared/types'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from '../shared/approval'
@@ -119,6 +121,8 @@ const api: RendererApi = {
     control: (paneId, subtype, fields): Promise<ControlResult> =>
       ipcRenderer.invoke(IPC.CLAUDE_CONTROL, paneId, subtype, fields),
     getInit: (paneId): Promise<SessionInit | null> => ipcRenderer.invoke(IPC.CLAUDE_GET_INIT, paneId),
+    readDefaults: (): Promise<ModelDefaults> => ipcRenderer.invoke(IPC.CLAUDE_READ_DEFAULTS),
+    saveDefaults: (patch): Promise<SaveDefaultsResult> => ipcRenderer.invoke(IPC.CLAUDE_SAVE_DEFAULTS, patch),
     onInit: (cb) => {
       const handler = (_e: IpcRendererEvent, envelope: SessionInitEnvelope) => cb(envelope)
       ipcRenderer.on(IPC.CLAUDE_INIT, handler)

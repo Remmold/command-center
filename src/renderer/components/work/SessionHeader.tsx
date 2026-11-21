@@ -137,7 +137,6 @@ function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSes
   }
 
   const newChat = (model: ClaudeModel) => {
-    store.getState().setDefaultModel(model)
     const created = store.getState().addClaudeSession(view.projectId, { model })
     if (created) openSession(created.id)
   }

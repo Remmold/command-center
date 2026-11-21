@@ -54,7 +54,7 @@ export function Popover({ open, onClose, anchor, label, align = 'start', side = 
       aria-label={label}
       style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: PANEL_WIDTH }}
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-50 flex flex-col gap-2 rounded border border-strong bg-widget py-2 text-xs text-fg shadow-lg"
+      className="fixed z-50 flex max-h-[80vh] flex-col gap-2 overflow-y-auto rounded border border-strong bg-widget py-2 text-xs text-fg shadow-lg"
     >
       {children}
     </div>,
@@ -90,4 +90,8 @@ export function PopoverMenu({ label, children }: { label: string; children: Reac
       {children}
     </div>
   )
+}
+
+export function PopoverDivider() {
+  return <div role="separator" className="border-t border-subtle" />
 }

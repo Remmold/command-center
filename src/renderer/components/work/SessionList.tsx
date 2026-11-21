@@ -14,7 +14,7 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { ListGroup } from '../ui/ListGroup'
-import { ListRow, ListRowText } from '../ui/ListRow'
+import { ListRow, ListRowLabel, ListRowText } from '../ui/ListRow'
 import { MenuItem } from '../ui/MenuItem'
 import { Popover, PopoverMenu } from '../ui/Popover'
 import { SearchField } from '../ui/SearchField'
@@ -148,6 +148,7 @@ function SessionListRow({ row, active, onRename }: { row: SessionRow; active: bo
       <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
       {workspace.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
       <ListRowText primary={row.title} />
+      {row.kind === 'hosted' && row.modelTag && <ListRowLabel tone="secondary">{row.modelTag}</ListRowLabel>}
       <StatusDot status={row.status} />
     </ListRow>
   )

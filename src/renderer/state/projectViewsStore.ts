@@ -11,13 +11,18 @@ import {
   type ShellOptions
 } from './projectViewLayout'
 import { migratePermissionModes, type PermissionMode, type SavedModes } from './permissionModes'
+import { migrateModelChoices, type SavedModelChoices } from './modelPicker'
 import { NEW_SESSION_TITLE, migratedTitle, titleAfterPrompt, titleAfterRename, type SessionTitle } from './sessionTitle'
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku' | string
 
 export interface ClaudeChatSession extends SessionTitle {
   id: string
-  model: ClaudeModel
+  /** The session's own model pick; unset follows the user settings.json default. */
+  model?: ClaudeModel
+  /** The session's own effort pick; unset follows the saved or CLI default. */
+  effort?: string
+  thinking: boolean
   permissionMode: PermissionMode
   /** session_id reported by claude in stream-json events; used for --resume */
   claudeSessionId?: string
@@ -72,7 +77,6 @@ interface ProjectViewsState {
   views: Record<string, ProjectView>
   order: string[]
   activeProjectId: string | null
-  defaultModel: ClaudeModel
   defaultPermissionMode: PermissionMode
   /** Currently visible side activity (file tree etc.). null = nothing visible. */
   activityView: ActivityView
@@ -86,7 +90,6 @@ interface ProjectViewsState {
   toggleIdePanels: (projectId: string) => void
   toggleShellDrawer: (projectId: string) => void
   setShellDrawerOpen: (projectId: string, open: boolean) => void
-  setDefaultModel: (model: ClaudeModel) => void
   setDefaultPermissionMode: (mode: PermissionMode) => void
 
   addClaudeSession: (
@@ -98,6 +101,10 @@ interface ProjectViewsState {
   setClaudeSessionId: (paneId: string, claudeSessionId: string) => void
   clearClaudeSessionId: (paneId: string) => void
   setSessionPermissionMode: (paneId: string, mode: PermissionMode) => void
+  /** A new model drops the effort pick; the CLI applies the new model's own default. */
+  setSessionModel: (paneId: string, model: ClaudeModel) => void
+  setSessionEffort: (paneId: string, effort: string) => void
+  setSessionThinking: (paneId: string, thinking: boolean) => void
   renameSession: (paneId: string, name: string) => void
   /** Names a session from its first prompt. */
   notePrompt: (paneId: string, text: string) => void
@@ -160,6 +167,16 @@ function retitle(set: SetState, paneId: string, change: (t: SessionTitle) => Ses
   })
 }
 
+function updateSession(set: SetState, paneId: string, change: Partial<ClaudeChatSession>): void {
+  set((s) => {
+    const found = findSessionByPane(s, paneId)
+    if (!found) return s
+    const view = s.views[found.projectId]
+    const claudeSessions = view.claudeSessions.map((c) => (c.id === paneId ? { ...c, ...change } : c))
+    return { views: { ...s.views, [found.projectId]: { ...view, claudeSessions } } }
+  })
+}
+
 /** What ChatView appends to a sent prompt that carried images; never part of a title. */
 const IMAGES_NOTE = /\n\n_\[\d+ images? attached\]_$/
 
@@ -182,7 +199,6 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
       views: {},
       order: [],
       activeProjectId: null,
-      defaultModel: 'sonnet',
       defaultPermissionMode: 'acceptEdits',
       activityView: 'explorer',
       setActivityView: (view) => set({ activityView: view }),
@@ -196,7 +212,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         const firstSession: ClaudeChatSession | null =
           options?.firstSession === false
             ? null
-            : { id: makeId(), title: NEW_SESSION_TITLE, model: get().defaultModel, permissionMode: get().defaultPermissionMode }
+            : { id: makeId(), title: NEW_SESSION_TITLE, thinking: true, permissionMode: get().defaultPermissionMode }
         const view: ProjectView = {
           projectId: project.id,
           projectName: project.name,
@@ -261,7 +277,6 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         }
         get().setShellDrawerOpen(projectId, !v.shellDrawerOpen)
       },
-      setDefaultModel: (model) => set({ defaultModel: model }),
       setDefaultPermissionMode: (mode) => set({ defaultPermissionMode: mode }),
 
       addClaudeSession: (projectId, options) => {
@@ -270,7 +285,8 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         const session: ClaudeChatSession = {
           id: makeId(),
           title: NEW_SESSION_TITLE,
-          model: options?.model ?? get().defaultModel,
+          model: options?.model,
+          thinking: true,
           permissionMode: options?.permissionMode ?? get().defaultPermissionMode
         }
         set((s) => {
@@ -348,21 +364,10 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           }
         }),
 
-      setSessionPermissionMode: (paneId, mode) =>
-        set((s) => {
-          const found = findSessionByPane(s, paneId)
-          if (!found) return s
-          const view = s.views[found.projectId]
-          const nextSessions = view.claudeSessions.map((c) =>
-            c.id === paneId ? { ...c, permissionMode: mode } : c
-          )
-          return {
-            views: {
-              ...s.views,
-              [found.projectId]: { ...view, claudeSessions: nextSessions }
-            }
-          }
-        }),
+      setSessionPermissionMode: (paneId, mode) => updateSession(set, paneId, { permissionMode: mode }),
+      setSessionModel: (paneId, model) => updateSession(set, paneId, { model, effort: undefined }),
+      setSessionEffort: (paneId, effort) => updateSession(set, paneId, { effort }),
+      setSessionThinking: (paneId, thinking) => updateSession(set, paneId, { thinking }),
 
       renameSession: (paneId, name) => retitle(set, paneId, (t) => titleAfterRename(t, name)),
 
@@ -377,6 +382,8 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           id: makeId(),
           title: NEW_SESSION_TITLE,
           model: source.model,
+          effort: source.effort,
+          thinking: source.thinking,
           permissionMode: source.permissionMode
           // intentionally no claudeSessionId — start fresh
         }
@@ -403,7 +410,8 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         const session: ClaudeChatSession = {
           id: makeId(),
           title: migratedTitle(firstPrompt ? [firstPrompt] : []),
-          model: model ?? get().defaultModel,
+          model,
+          thinking: true,
           permissionMode: get().defaultPermissionMode,
           claudeSessionId
         }
@@ -697,6 +705,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         migrateLayout(state, fromVersion)
         if (fromVersion < 9 && state.views) migrateTitles(state.views)
         if (fromVersion < 10) migratePermissionModes(state as SavedModes)
+        if (fromVersion < 11) migrateModelChoices(state as SavedModelChoices)
         return persisted as ProjectViewsState
       },
       partialize: (state) => ({
@@ -705,7 +714,6 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         ),
         order: state.order,
         activeProjectId: state.activeProjectId,
-        defaultModel: state.defaultModel,
         defaultPermissionMode: state.defaultPermissionMode,
         activityView: state.activityView
       })

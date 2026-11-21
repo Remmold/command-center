@@ -19,6 +19,7 @@ function toModel(raw: Raw): CliModel | null {
     : []
   return {
     value,
+    resolvedModel: text(raw.resolvedModel) ?? value,
     displayName: text(raw.displayName) ?? value,
     description: text(raw.description) ?? '',
     supportsEffort: raw.supportsEffort === true,

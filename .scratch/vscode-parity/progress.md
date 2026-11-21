@@ -1,2 +1,3 @@
 - 01 resolved: control channel per session (initialize handshake kept + sent to renderer, Stop/Esc send interrupt, claude.control IPC, --setting-sources) — 5ad5bc2, 7b990ef
 - 02 resolved: approvals over stdio (can_use_tool) with the extension's prompt, footer mode picker + Shift+Tab, hook/server removed, Interrupted wording — cce767c
+- 03 resolved: model pill + effort + thinking live, defaults in user settings.json (effort under modelSettings), row model tag, allow-bypass setting

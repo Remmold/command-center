@@ -20,6 +20,13 @@ import { availableModes, isPermissionMode, migrateMode, nextMode, type Permissio
 import type { ApprovalRequest } from '../../../shared/approval'
 import { useFocusRequestStore } from '../../state/sessionNavigation'
 import { useSessionInit } from '../../state/sessionInitStore'
+import { useModelStore } from '../../state/modelStore'
+import { useModelChoice } from '../../state/useModelChoice'
+import { DEFAULT_MODEL, effortLabel, launchChoice, versionedName } from '../../state/modelPicker'
+import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
+import { ModelPicker } from './ModelPicker'
+import { Brain } from 'lucide-react'
+import { THINKING_BUDGET } from '../../../shared/types'
 import type {
   ClaudeAssistantEvent,
   ClaudeEvent,
@@ -31,6 +38,7 @@ import type {
 } from '../../../shared/types'
 
 const EMPTY_ITEMS: ChatItem[] = []
+const NOT_RUNNING = 'claude process is not running'
 const EMPTY_REQUESTS: ApprovalRequest[] = []
 
 /** The extension saves these as the default for new sessions when the user picks them. */
@@ -40,6 +48,8 @@ interface Props {
   paneId: string
   cwd: string
   model?: string
+  effort?: string
+  thinking?: boolean
   resumeSessionId?: string
   permissionMode?: string
   registerFocus?: (fn: () => void) => void
@@ -75,6 +85,8 @@ export function ChatView({
   paneId,
   cwd,
   model,
+  effort,
+  thinking = true,
   resumeSessionId,
   permissionMode,
   registerFocus
@@ -97,23 +109,64 @@ export function ChatView({
   const paneRef = useRef<HTMLDivElement | null>(null)
   const focusRequest = useFocusRequestStore((s) => (s.request?.paneId === paneId ? s.request.nonce : null))
   const launchedModeRef = useRef<string | undefined>(undefined)
+  const launchedBypassRef = useRef<boolean | null>(null)
   const interruptedRef = useRef(false)
+  const allowBypassSetting = useGeneralSettingsStore((s) => s.allowDangerouslySkipPermissions)
+  const choice = useModelChoice(paneId, { model, effort })
   const mode = migrateMode(permissionMode)
-  const modelInfo =
-    sessionInit?.models.find((m) => m.value === (model ?? 'default')) ?? sessionInit?.models.find((m) => m.value === 'default')
-  const autoAvailable = modelInfo?.supportsAutoMode === true
+  const autoAvailable = choice.entry?.supportsAutoMode === true
+  // A running process can switch to bypass only if it was launched allowing it.
+  const bypassAllowed = processRunning ? launchedBypassRef.current === true : allowBypassSetting
   const modes = availableModes({
     current: mode,
     autoAvailable,
-    bypassAvailable: launchedModeRef.current === 'bypassPermissions' || mode === 'bypassPermissions'
+    bypassAvailable: bypassAllowed || launchedModeRef.current === 'bypassPermissions' || mode === 'bypassPermissions'
   })
+
+  const note = (text: string): void => appendItems(paneId, [{ kind: 'system', id: crypto.randomUUID(), text }])
+
+  /** False when the running process refused the change; a pane without a process always takes it. */
+  const applyFlags = async (settings: Record<string, unknown>): Promise<boolean> => {
+    const res = await window.api.claude.control(paneId, 'apply_flag_settings', { settings })
+    if (res.ok) await useModelStore.getState().refreshApplied(paneId)
+    else if (res.error !== NOT_RUNNING) setError(res.error)
+    return res.ok || res.error === NOT_RUNNING
+  }
+
+  const pickModel = async (value: string): Promise<void> => {
+    const setting = value === DEFAULT_MODEL ? null : value
+    if (!(await applyFlags({ model: setting }))) return
+    useProjectViewsStore.getState().setSessionModel(paneId, value)
+    const picked = choice.models.find((m) => m.value === value)
+    note(`Set model to ${picked ? versionedName(picked) : value}`)
+    await useModelStore.getState().saveDefaults({ model: setting })
+  }
+
+  const pickEffort = async (level: string): Promise<void> => {
+    if (!(await applyFlags({ effortLevel: level }))) return
+    useProjectViewsStore.getState().setSessionEffort(paneId, level)
+    note(`Set effort to ${effortLabel(level)}`)
+    const resolvedModel = useModelStore.getState().applied[paneId]?.model ?? choice.entry?.resolvedModel
+    if (resolvedModel) await useModelStore.getState().saveDefaults({ effort: { resolvedModel, level } })
+  }
+
+  const toggleThinking = async (): Promise<void> => {
+    const on = !thinking
+    const res = await window.api.claude.control(paneId, 'set_max_thinking_tokens', { max_thinking_tokens: on ? THINKING_BUDGET : 0 })
+    if (!res.ok && res.error !== NOT_RUNNING) {
+      setError(res.error)
+      return
+    }
+    useProjectViewsStore.getState().setSessionThinking(paneId, on)
+    note(on ? 'Thinking on' : 'Thinking off')
+  }
 
   const setMode = async (next: PermissionMode): Promise<boolean> => {
     const store = useProjectViewsStore.getState()
     const previous = mode
     store.setSessionPermissionMode(paneId, next)
     const res = await window.api.claude.control(paneId, 'set_permission_mode', { mode: next })
-    if (res.ok || res.error === 'claude process is not running') return true
+    if (res.ok || res.error === NOT_RUNNING) return true
     store.setSessionPermissionMode(paneId, previous)
     setError(res.error)
     return false
@@ -313,7 +366,18 @@ export function ChatView({
     if (processRunning) return true
     setError(null)
     launchedModeRef.current = mode
-    const res = await window.api.claude.start({ paneId, cwd, model, resumeSessionId, permissionMode: mode })
+    launchedBypassRef.current = allowBypassSetting
+    const { defaults } = useModelStore.getState()
+    const flags = launchChoice({ models: choice.models, defaults, selection: model, effort })
+    const res = await window.api.claude.start({
+      paneId,
+      cwd,
+      ...flags,
+      thinking,
+      resumeSessionId,
+      permissionMode: mode,
+      allowBypass: allowBypassSetting
+    })
     if (!res.ok) {
       setError(res.error ?? 'failed to start claude')
       if (resumeSessionId) useProjectViewsStore.getState().clearClaudeSessionId(paneId)
@@ -399,7 +463,31 @@ export function ChatView({
         slashCommands={knownSlashCommands}
         cwd={cwd}
         registerFocus={registerInputFocus}
-        footerEnd={<PermissionModePicker mode={mode} modes={modes} onSelect={(m) => void pickMode(m)} />}
+        footerStart={
+          <>
+            <ModelPicker
+              models={choice.models}
+              current={choice.selection}
+              pill={choice.pill}
+              effort={choice.effort}
+              levels={choice.levels}
+              onSelectModel={(m) => void pickModel(m)}
+              onSelectEffort={(l) => void pickEffort(l)}
+            />
+            <Button variant="ghost" pressed={thinking} onClick={() => void toggleThinking()} tooltip="Toggle extended thinking mode">
+              <Brain size={13} strokeWidth={2} />
+              Thinking
+            </Button>
+          </>
+        }
+        footerEnd={
+          <PermissionModePicker
+            mode={mode}
+            modes={modes}
+            onSelect={(m) => void pickMode(m)}
+            effort={{ level: choice.effort, levels: choice.levels, onSelect: (l) => void pickEffort(l) }}
+          />
+        }
         onShiftTab={() => void pickMode(nextMode(modes, mode))}
       />
     </div>
