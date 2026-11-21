@@ -1,7 +1,7 @@
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import { locateShell, type ShellKind } from './shell-locator'
-import { CONFIG_DIR_VAR } from '../../shared/profiles'
+import { childEnv } from '../util/childEnv'
 
 export type PtyKind = ShellKind
 
@@ -10,19 +10,6 @@ export interface SpawnResult {
   error?: string
 }
 
-function sanitizedEnv(extras: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const [k, v] of Object.entries(process.env)) {
-    if (v === undefined) continue
-    if (k === 'ELECTRON_RUN_AS_NODE') continue
-    if (k === 'ELECTRON_NO_ATTACH_CONSOLE') continue
-    if (k === CONFIG_DIR_VAR) continue
-    out[k] = v
-  }
-  out.TERM = 'xterm-256color'
-  out.COLORTERM = 'truecolor'
-  return { ...out, ...extras }
-}
 
 type DataCallback = (paneId: string, data: string) => void
 type ExitCallback = (paneId: string, exitCode: number, signal: number | undefined) => void
@@ -43,7 +30,7 @@ class PtyManager {
     } catch (err) {
       return { ok: false, error: (err as Error).message }
     }
-    const env = sanitizedEnv(extraEnv)
+    const env = childEnv(process.env, extraEnv)
     console.log('[pty] spawn', {
       paneId,
       kind,

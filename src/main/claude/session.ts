@@ -9,21 +9,8 @@ import {
 } from '../permission/hookScript'
 import { permissionServer } from '../permission/server'
 import { CONFIG_DIR_VAR } from '../../shared/profiles'
+import { childEnv } from '../util/childEnv'
 
-function sanitizedEnv(extras: Record<string, string> = {}): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const [k, v] of Object.entries(process.env)) {
-    if (v === undefined) continue
-    if (k === 'ELECTRON_RUN_AS_NODE') continue
-    if (k === 'ELECTRON_NO_ATTACH_CONSOLE') continue
-    if (k === CONFIG_DIR_VAR) continue
-    out[k] = v
-  }
-  out.TERM = 'xterm-256color'
-  out.COLORTERM = 'truecolor'
-  for (const [k, v] of Object.entries(extras)) out[k] = v
-  return out
-}
 
 function hookScriptPath(): string {
   return join(app.getPath('userData'), 'permission-hook.cjs')
@@ -107,7 +94,7 @@ export class ClaudeSession {
     this.child = spawn(launch.command, args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: sanitizedEnv(extraEnv),
+      env: childEnv(process.env, extraEnv),
       shell: false,
       windowsHide: true
     })
