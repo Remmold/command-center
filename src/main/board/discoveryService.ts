@@ -7,7 +7,7 @@ import { readScanRoots, writeScanRoots } from './scanRoots'
 const RESCAN_MS = 5 * 60 * 1000
 
 export class DiscoveryService {
-  private model: DiscoveryModel = { scanRoots: [], repos: [], scannedAt: null, scanMs: null }
+  private model: DiscoveryModel = { scanRoots: [], repos: [], scannedAt: null, scanMs: null, error: null }
   private running: Promise<DiscoveryModel> | null = null
   private again = false
   private timer: NodeJS.Timeout | null = null
@@ -64,10 +64,11 @@ export class DiscoveryService {
         files: nodeFileReader,
         commonDirOf: getCommonDir
       })
-      this.model = { scanRoots, repos, scannedAt: Date.now(), scanMs: Date.now() - started }
-      this.push(this.model)
+      this.model = { scanRoots, repos, scannedAt: Date.now(), scanMs: Date.now() - started, error: null }
     } catch (err) {
       console.error('[board] discovery failed', err)
+      this.model = { ...this.model, error: err instanceof Error ? err.message : String(err) }
     }
+    this.push(this.model)
   }
 }

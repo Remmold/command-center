@@ -93,7 +93,7 @@ export function list(): Promise<Workspace[]> {
 export function add(path: string): Promise<Workspace> {
   return serial(async () => {
     const saved = await readAll()
-    const existing = saved.find((p) => p.path === path)
+    const existing = saved.find((p) => samePath(p.path, path))
     if (existing) return toWorkspace(existing)
     const workspace = await toWorkspace({
       id: randomUUID(),

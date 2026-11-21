@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { FolderSearch, X } from 'lucide-react'
+import type { DiscoveryModel } from '../../../shared/types'
 import { useBoardStore } from '../../state/boardStore'
 import { Button } from '../ui/Button'
 import { DrawerList } from '../ui/Drawer'
@@ -9,7 +10,8 @@ import { Popover, PopoverActions, PopoverNote, PopoverSection } from '../ui/Popo
 import { SectionLabel } from '../ui/SectionLabel'
 import { TextField } from '../ui/TextField'
 
-function lastScan(scannedAt: number | null, scanMs: number | null): string {
+function lastScan({ scannedAt, scanMs, error }: DiscoveryModel): string {
+  if (error !== null) return `Last scan failed: ${error}`
   if (scannedAt === null) return 'Not scanned yet.'
   return `Last scan ${new Date(scannedAt).toLocaleTimeString()}, took ${scanMs ?? 0} ms. Rescans on board open and every 5 minutes.`
 }
@@ -49,7 +51,7 @@ export function ScanRootsButton() {
             placeholder="Add a folder, e.g. C:\projects"
             onSubmit={(root) => save([...discovery.scanRoots, root])}
           />
-          <PopoverNote>{lastScan(discovery.scannedAt, discovery.scanMs)}</PopoverNote>
+          <PopoverNote>{lastScan(discovery)}</PopoverNote>
           <PopoverActions>
             <Button variant="ghost" onClick={rescan}>
               Rescan now

@@ -22,7 +22,7 @@ interface BoardState {
 
 export const useBoardStore = create<BoardState>((set, get) => ({
   model: { repoGroups: [] },
-  discovery: { scanRoots: [], repos: [], scannedAt: null, scanMs: null },
+  discovery: { scanRoots: [], repos: [], scannedAt: null, scanMs: null, error: null },
   initialized: false,
   filter: { repoGroupKey: null, workspaceId: null },
   selected: null,

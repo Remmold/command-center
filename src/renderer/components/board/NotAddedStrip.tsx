@@ -48,7 +48,7 @@ function RepoRows({ repo, onAdd }: { repo: DiscoveredRepo; onAdd: (path: string)
     <>
       <ListItem tooltip={repo.main?.path}>
         <RepoIcon repoGroupKey={repo.repoGroupKey} repoName={repo.repoName} size="sm" />
-        <ListRowText primary={repo.repoName} secondary={repo.main ? undefined : 'main checkout added'} />
+        <ListRowText primary={repo.repoName} secondary={repo.mainAdded ? 'main checkout added' : undefined} />
         {repo.main && <ListRowMeta>{counts(repo.main)}</ListRowMeta>}
         {repo.main && <AddButton path={repo.main.path} onAdd={onAdd} />}
       </ListItem>

@@ -23,7 +23,8 @@ export async function readScanRoots(): Promise<string[]> {
 }
 
 export async function writeScanRoots(roots: string[]): Promise<string[]> {
-  const clean = [...new Set(roots.map((r) => r.trim()).filter((r) => r !== ''))]
+  const byKey = new Map(roots.map((r) => r.trim()).filter((r) => r !== '').map((r) => [r.toLowerCase(), r]))
+  const clean = [...byKey.values()]
   const file = settingsFile()
   await fs.mkdir(dirname(file), { recursive: true })
   const tmp = `${file}.tmp`

@@ -18,6 +18,11 @@ function pathKey(p: string): string {
   return resolve(p).replace(/[\\/]+$/, '').toLowerCase()
 }
 
+/** A bare repo's common dir has no main checkout. */
+function isMainCheckout(commonDir: string): boolean {
+  return basename(commonDir).toLowerCase() === '.git'
+}
+
 function skipped(name: string): boolean {
   return name.startsWith('.') || SKIPPED.has(name.toLowerCase())
 }
@@ -34,20 +39,16 @@ async function hasFeature(repo: string, files: BoardFileReader): Promise<boolean
 
 /** Git repo folders up to MAX_DEPTH below each root that hold at least one feature; never looks inside a repo except its .scratch. */
 async function findRepoFolders(roots: string[], files: BoardFileReader): Promise<string[]> {
-  const found: string[] = []
-  const visit = async (dir: string, depth: number): Promise<void> => {
+  const visit = async (dir: string, depth: number): Promise<string[]> => {
     const entries = await files.listDir(dir).catch(() => [])
-    if (entries.some((e) => e.name === '.git')) {
-      if (await hasFeature(dir, files)) found.push(dir)
-      return
-    }
-    if (depth === MAX_DEPTH) return
-    await Promise.all(
+    if (entries.some((e) => e.name === '.git')) return (await hasFeature(dir, files)) ? [dir] : []
+    if (depth === MAX_DEPTH) return []
+    const below = await Promise.all(
       entries.filter((e) => e.isDirectory && !skipped(e.name)).map((e) => visit(join(dir, e.name), depth + 1))
     )
+    return below.flat()
   }
-  await Promise.all(roots.map((root) => visit(root, 0)))
-  return found
+  return (await Promise.all(roots.map((root) => visit(root, 0)))).flat()
 }
 
 async function countsOf(path: string, files: BoardFileReader): Promise<Pick<DiscoveredFolder, 'featureCount' | 'openTicketCount'>> {
@@ -71,7 +72,9 @@ async function countsOf(path: string, files: BoardFileReader): Promise<Pick<Disc
 /** Main checkouts and worktrees that have tickets but aren't added yet, grouped by repo. */
 export async function discoverRepos(roots: string[], added: Workspace[], deps: DiscoveryDeps): Promise<DiscoveredRepo[]> {
   const addedKeys = new Set(added.map((w) => pathKey(w.path)))
-  const folders = (await findRepoFolders(roots, deps.files)).filter((p) => !addedKeys.has(pathKey(p)))
+  const unique = new Map<string, string>()
+  for (const p of await findRepoFolders(roots, deps.files)) if (!unique.has(pathKey(p))) unique.set(pathKey(p), p)
+  const folders = [...unique].filter(([key]) => !addedKeys.has(key)).map(([, p]) => p)
   const repos = new Map<string, DiscoveredRepo>()
   const located = await Promise.all(
     folders.map(async (path) => {
@@ -86,6 +89,7 @@ export async function discoverRepos(roots: string[], added: Workspace[], deps: D
       repoGroupKey: group.repoGroupKey,
       repoName: group.repoName,
       main: null,
+      mainAdded: isMainCheckout(folder.commonDir) && addedKeys.has(pathKey(dirname(folder.commonDir))),
       worktrees: []
     }
     repos.set(group.repoGroupKey, repo)
@@ -95,7 +99,7 @@ export async function discoverRepos(roots: string[], added: Workspace[], deps: D
       featureCount: folder.featureCount,
       openTicketCount: folder.openTicketCount
     }
-    const isMain = basename(folder.commonDir).toLowerCase() === '.git' && pathKey(dirname(folder.commonDir)) === pathKey(folder.path)
+    const isMain = isMainCheckout(folder.commonDir) && pathKey(dirname(folder.commonDir)) === pathKey(folder.path)
     if (isMain) repo.main = { ...entry, worktreeTag: '' }
     else repo.worktrees.push(entry)
   }

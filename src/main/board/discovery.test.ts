@@ -77,6 +77,7 @@ describe('repo discovery', () => {
         repoGroupKey: `git:${join(root, 'personal/alpha/.git').replace(/\\/g, '/').toLowerCase()}`,
         repoName: 'alpha',
         main: { path: join(root, 'personal/alpha'), worktreeTag: '', featureCount: 2, openTicketCount: 1 },
+        mainAdded: false,
         worktrees: []
       }
     ])
@@ -139,7 +140,9 @@ describe('repo discovery', () => {
     ])
 
     const mainAdded = await discoverRepos([root], [added(main.toUpperCase() + '\\')], deps())
-    expect(mainAdded.map((r) => [r.main, r.worktrees.map((w) => w.worktreeTag)])).toEqual([[null, ['shard-1', 'shard-2']]])
+    expect(mainAdded.map((r) => [r.main, r.mainAdded, r.worktrees.map((w) => w.worktreeTag)])).toEqual([
+      [null, true, ['shard-1', 'shard-2']]
+    ])
 
     const allAdded = await discoverRepos(
       [root],
@@ -147,6 +150,25 @@ describe('repo discovery', () => {
       deps()
     )
     expect(allAdded).toEqual([])
+  })
+
+  it('offers worktrees of a repo whose main checkout has no tickets, without calling it added', async () => {
+    const root = tree({
+      'Game/.git/HEAD': 'ref',
+      'Game/src/x.ts': '',
+      'Game-wt-1/.scratch/f/spec.md': '# spec'
+    })
+    writeFileSync(join(root, 'Game-wt-1', '.git'), `gitdir: ${join(root, 'Game')}`)
+    const repos = await discoverRepos([root], [], deps())
+    expect(repos.map((r) => [r.repoName, r.main, r.mainAdded, r.worktrees.map((w) => w.worktreeTag)])).toEqual([
+      ['Game', null, false, ['wt-1']]
+    ])
+  })
+
+  it('lists a folder once when scan roots overlap or differ only by case', async () => {
+    const root = tree({ 'group/repo/.git/HEAD': 'ref', 'group/repo/.scratch/f/spec.md': '# spec' })
+    const repos = await discoverRepos([root, join(root, 'group'), root.toUpperCase()], [], deps())
+    expect(repos.map((r) => r.main?.path)).toEqual([join(root, 'group/repo')])
   })
 
   it('reads a missing scan root as nothing found', async () => {

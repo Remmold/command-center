@@ -5,7 +5,7 @@ import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Card, CardMeta, CardNote, CardTitle } from '../ui/Card'
 import { StatusDot } from '../ui/StatusDot'
-import { TicketStatusBadge } from './TicketStatusBadge'
+import { statusText, TicketStatusBadge } from './TicketStatusBadge'
 
 interface SeenIn {
   workspaceId: string
@@ -38,9 +38,9 @@ export function TicketCard({ repoGroupKey, repoName, featureName, ticket, worksp
         {status && <StatusDot status={status} />}
       </CardMeta>
       <CardTitle prefix={ticket.number}>{ticket.title}</CardTitle>
-      {ticket.statusNote && <CardNote>{ticket.statusNote}</CardNote>}
+      {statusText(ticket) && <CardNote>{statusText(ticket)}</CardNote>}
       <CardMeta>
-        <TicketStatusBadge status={ticket} />
+        <TicketStatusBadge ticket={ticket} />
         {seenIn(ticket, workspaces).map(({ workspaceId, tag }) => (
           <Badge key={workspaceId}>{tag}</Badge>
         ))}

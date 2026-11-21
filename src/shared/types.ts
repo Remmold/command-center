@@ -438,6 +438,7 @@ export interface DiscoveredRepo {
   repoName: string
   /** Null when the main checkout is added already or holds no tickets. */
   main: DiscoveredFolder | null
+  mainAdded: boolean
   worktrees: DiscoveredFolder[]
 }
 
@@ -447,6 +448,8 @@ export interface DiscoveryModel {
   /** Epoch ms of the last finished scan; null before the first one. */
   scannedAt: number | null
   scanMs: number | null
+  /** Why the last scan failed; null when it worked. */
+  error: string | null
 }
 
 export type ObservedStatus = 'live' | 'quiet'
