@@ -275,14 +275,17 @@ export interface TicketSighting {
   column: BoardColumn
   /** Lower-cased first word of the Status line; null when the ticket has none. */
   status: string | null
-  blockedBy: number[]
+  blockedBy: TicketNumber[]
   filePath: string
   progressPath: string | null
 }
 
+/** At least two digits plus an optional lower-case letter suffix: "02", "02b", "112". */
+export type TicketNumber = string
+
 /** One card: every worktree copy of one ticket, merged. */
 export interface BoardTicket {
-  number: number
+  number: TicketNumber
   title: string
   column: BoardColumn
   status: string | null

@@ -1,3 +1,3 @@
-Done: reader (9 fixture tests) + watcher + IPC board:get/board:changed + Sessions | Board title-bar toggle + four-column BoardView; review fixes applied; build + quick 22/22 green; app boots.
-Next: decide where Ctrl+1..9 chat-tab switching goes so Ctrl+1/Ctrl+2 can switch views, then wire it and set Status: resolved.
+Done: ticket 03 resolved; reader 11 fixture tests (letter-suffix numbers 02b, Status blocked -> Blocked), Ctrl+1/Ctrl+2 switch views, chat tabs on Alt+1..9; build + quick 24/24 green; app boots.
+Next: ticket 04 builds progress bar, finished strip, spec-only, filters and drawer on BoardModel.
 Open reds: none.

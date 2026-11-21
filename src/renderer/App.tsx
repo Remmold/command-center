@@ -65,6 +65,7 @@ export function App() {
   }, [recordResult, setRateLimit])
 
   useKeyboardShortcuts({
+    switchView: (next) => useViewStore.getState().setView(next),
     newChat: () => {
       const projectId = useProjectViewsStore.getState().activeProjectId
       if (!projectId) return

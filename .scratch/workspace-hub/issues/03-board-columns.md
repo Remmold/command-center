@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] A pure board reader takes (list of workspaces, file reader) and returns the board model; a watcher on each workspace's `.scratch/` triggers a debounced re-read and pushes the model to the renderer
 - [x] A feature is one `.scratch/<name>/` folder. Its tickets are `issues/NN-*.md`. Its notes are `progress.md`. A ticket's own notes are `issues/NN-*.progress.md`. Other files are ignored.

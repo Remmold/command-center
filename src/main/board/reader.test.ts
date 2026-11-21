@@ -64,7 +64,7 @@ describe('board reader', () => {
     expect(feature.name).toBe('progression-flow')
     expect(feature.tickets).toHaveLength(1)
     expect(feature.tickets[0]).toMatchObject({
-      number: 1,
+      number: '01',
       title: 'Progression module',
       column: 'done',
       status: 'resolved'
@@ -79,7 +79,7 @@ describe('board reader', () => {
       '.scratch/villager-talk/issues/04-plain-resolved.md': '# 04: Resolved\r\n\r\nstatus:   Resolved\r\n'
     })
     const model = await readBoard([workspace(root)], nodeFileReader)
-    expect(columns(model)).toEqual({ 1: 'backlog', 2: 'done', 3: 'backlog', 4: 'done' })
+    expect(columns(model)).toEqual({ '01': 'backlog', '02': 'done', '03': 'backlog', '04': 'done' })
     expect(tickets(model).map((t) => t.status)).toEqual(['needs-triage', 'wontfix', null, 'resolved'])
   })
 
@@ -105,9 +105,9 @@ describe('board reader', () => {
       ])
     })
     const model = await readBoard([workspace(root)], nodeFileReader)
-    expect(columns(model)).toMatchObject({ 3: 'backlog', 4: 'blocked', 5: 'backlog', 6: 'backlog' })
+    expect(columns(model)).toMatchObject({ '03': 'backlog', '04': 'blocked', '05': 'backlog', '06': 'backlog' })
     const blockedBy = Object.fromEntries(tickets(model).map((t) => [t.number, t.sightings[0].blockedBy]))
-    expect(blockedBy).toMatchObject({ 3: [], 4: [1, 2], 5: [1], 6: [] })
+    expect(blockedBy).toMatchObject({ '03': [], '04': ['01', '02'], '05': ['01'], '06': [] })
   })
 
   it('reads blocker numbers from ; lists and stops at the first item that names another feature', async () => {
@@ -125,10 +125,10 @@ describe('board reader', () => {
     })
     const model = await readBoard([workspace(root)], nodeFileReader)
     const byNumber = Object.fromEntries(tickets(model).map((t) => [t.number, t]))
-    expect(byNumber[8].sightings[0].blockedBy).toEqual([7, 7, 7])
-    expect(byNumber[9].sightings[0].blockedBy).toEqual([7])
-    expect(byNumber[9].status).toBe('ready_for_agent')
-    expect(columns(model)).toMatchObject({ 8: 'backlog', 9: 'backlog' })
+    expect(byNumber['08'].sightings[0].blockedBy).toEqual(['07', '07', '07'])
+    expect(byNumber['09'].sightings[0].blockedBy).toEqual(['07'])
+    expect(byNumber['09'].status).toBe('ready_for_agent')
+    expect(columns(model)).toMatchObject({ '08': 'backlog', '09': 'backlog' })
   })
 
   it('counts a blocker resolved in any worktree copy as resolved', async () => {
@@ -149,7 +149,39 @@ describe('board reader', () => {
       ],
       nodeFileReader
     )
-    expect(columns(model)).toEqual({ 1: 'done', 2: 'backlog' })
+    expect(columns(model)).toEqual({ '01': 'done', '02': 'backlog' })
+  })
+
+  it('reads a letter suffix as part of the ticket number, in blockers and progress files too', async () => {
+    const issues = '.scratch/equipment/issues/'
+    const root = fixture({
+      [issues + '03-next.md']: ticket('03: Next', ['**Status:** ready-for-agent']),
+      [issues + '02b-no-regressions.md']: ticket('02b: No regressions', ['**Status:** ready-for-agent']),
+      [issues + '02b-no-regressions.progress.md']: 'Done: half.',
+      [issues + '02-base.md']: ticket('02: Base', ['**Status:** resolved']),
+      [issues + '12b-swing-feel.md']: ticket('12b: Swing feel', ['**Status:** resolved']),
+      [issues + '13-after-b.md']: ticket('13: After 02b', ['**Blocked by:** 02, 02b', '**Status:** ready-for-agent']),
+      [issues + '14-after-12b.md']: ticket('14: After 12b', ['**Blocked by:** 12b', '**Status:** ready-for-agent'])
+    })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    const all = tickets(model)
+    expect(all.map((t) => t.number)).toEqual(['02', '02b', '03', '12b', '13', '14'])
+    expect(all[1]).toMatchObject({ title: 'No regressions', column: 'in-progress' })
+    expect(all[1].sightings[0].progressPath).toBe(join(root, issues, '02b-no-regressions.progress.md'))
+    expect(all[4].sightings[0].blockedBy).toEqual(['02', '02b'])
+    expect(columns(model)).toMatchObject({ '13': 'blocked', '14': 'backlog' })
+  })
+
+  it('puts a ticket whose Status starts with blocked in Blocked', async () => {
+    const root = fixture({
+      '.scratch/art/issues/01-art.md': ticket('01: Art', ['**Status:** blocked — waiting on art']),
+      '.scratch/art/issues/02-plain.md': ticket('02: Plain', ['Status: Blocked']),
+      '.scratch/art/issues/03-noted.md': ticket('03: Noted', ['Status: blocked']),
+      '.scratch/art/issues/03-noted.progress.md': 'Done: started.'
+    })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    expect(columns(model)).toEqual({ '01': 'blocked', '02': 'blocked', '03': 'blocked' })
+    expect(tickets(model)[0].status).toBe('blocked')
   })
 
   it('puts a claimed ticket, or one with its own progress file, in In progress', async () => {
@@ -165,8 +197,8 @@ describe('board reader', () => {
       '.scratch/workspace-hub/issues/04-plain.md': ticket('04: Plain', ['**Status:** ready-for-agent'])
     })
     const model = await readBoard([workspace(root)], nodeFileReader)
-    expect(columns(model)).toEqual({ 1: 'in-progress', 2: 'in-progress', 3: 'blocked', 4: 'backlog' })
-    const noted = tickets(model).find((t) => t.number === 2)
+    expect(columns(model)).toEqual({ '01': 'in-progress', '02': 'in-progress', '03': 'blocked', '04': 'backlog' })
+    const noted = tickets(model).find((t) => t.number === '02')
     expect(noted?.sightings[0].progressPath).toBe(
       join(root, '.scratch/workspace-hub/issues/02-noted.progress.md')
     )
@@ -205,10 +237,10 @@ describe('board reader', () => {
 
     const cards = fs.features[0].tickets
     expect(cards.map((t) => [t.number, t.column, t.status])).toEqual([
-      [1, 'in-progress', 'claimed'],
-      [2, 'done', 'resolved'],
-      [3, 'blocked', 'ready-for-agent'],
-      [4, 'backlog', 'needs-triage']
+      ['01', 'in-progress', 'claimed'],
+      ['02', 'done', 'resolved'],
+      ['03', 'blocked', 'ready-for-agent'],
+      ['04', 'backlog', 'needs-triage']
     ])
     expect(cards[0].sightings.map((s) => [s.workspaceId, s.column])).toEqual([
       ['shard-2', 'in-progress'],
@@ -219,7 +251,7 @@ describe('board reader', () => {
     expect(cards[3].sightings.map((s) => s.workspaceId)).toEqual(['shard-2'])
 
     expect(tickets({ repoGroups: [model.repoGroups[0]] })).toMatchObject([
-      { number: 1, column: 'backlog', title: 'Other repo swing' }
+      { number: '01', column: 'backlog', title: 'Other repo swing' }
     ])
   })
 
@@ -242,7 +274,7 @@ describe('board reader', () => {
     expect(features.map((f) => f.name)).toEqual(['camera-feel', 'controls-options'])
     expect(features[0].tickets).toEqual([])
     expect(features[0].sightings).toEqual([{ workspaceId: 'w', specPath: null, progressPath: null }])
-    expect(features[1].tickets.map((t) => [t.number, t.column])).toEqual([[1, 'backlog']])
+    expect(features[1].tickets.map((t) => [t.number, t.column])).toEqual([['01', 'backlog']])
     expect(features[1].sightings).toEqual([
       {
         workspaceId: 'w',

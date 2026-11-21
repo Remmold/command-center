@@ -80,14 +80,13 @@ export function BoardView() {
 
 function TicketCard({ placed, tags }: { placed: PlacedTicket; tags: SeenIn[] }) {
   const { ticket } = placed
-  const number = String(ticket.number).padStart(2, '0')
   return (
     <Card tooltip={ticket.sightings[0]?.filePath}>
       <CardMeta>
         <RepoIcon repoGroupKey={placed.repoGroupKey} repoName={placed.repoName} size="sm" />
         <span className="truncate">{placed.featureName}</span>
       </CardMeta>
-      <CardTitle prefix={number}>{ticket.title}</CardTitle>
+      <CardTitle prefix={ticket.number}>{ticket.title}</CardTitle>
       <CardMeta>
         <Badge>{ticket.status ?? 'no status'}</Badge>
         {tags.map(({ workspaceId, tag }) => (

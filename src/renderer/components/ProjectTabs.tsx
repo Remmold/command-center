@@ -53,8 +53,8 @@ export function ProjectTabs() {
           value={view}
           onChange={setView}
           options={[
-            { value: 'sessions', label: 'Sessions' },
-            { value: 'board', label: 'Board' }
+            { value: 'sessions', label: 'Sessions', title: 'Sessions (Ctrl+1)' },
+            { value: 'board', label: 'Board', title: 'Board (Ctrl+2)' }
           ]}
         />
       </div>

@@ -6,6 +6,7 @@ import type {
   BoardRepoGroup,
   BoardTicket,
   FeatureSighting,
+  TicketNumber,
   TicketSighting,
   Workspace
 } from '../../shared/types'
@@ -24,14 +25,14 @@ export interface BoardFileReader {
 
 const DONE_STATUSES = new Set(['resolved', 'wontfix'])
 const COLUMN_RANK: Record<BoardColumn, number> = { backlog: 0, blocked: 1, 'in-progress': 2, done: 3 }
-const TICKET_FILE = /^(\d+)-(.+)\.md$/i
+const TICKET_FILE = /^(\d+[a-z]?)-(.+)\.md$/i
 const PROGRESS_SUFFIX = '.progress.md'
 
 interface ParsedTicket {
-  number: number
+  number: TicketNumber
   title: string
   status: string | null
-  blockedBy: number[]
+  blockedBy: TicketNumber[]
   filePath: string
   progressPath: string | null
 }
@@ -39,6 +40,15 @@ interface ParsedTicket {
 interface FeatureCopy {
   sighting: FeatureSighting
   tickets: ParsedTicket[]
+}
+
+function toTicketNumber(raw: string): TicketNumber {
+  const [, digits, suffix] = /^(\d+)([a-z]?)$/i.exec(raw) ?? ['', raw, '']
+  return String(Number(digits)).padStart(2, '0') + suffix.toLowerCase()
+}
+
+function compareTicketNumbers(a: TicketNumber, b: TicketNumber): number {
+  return parseInt(a, 10) - parseInt(b, 10) || a.localeCompare(b)
 }
 
 function field(markdown: string, name: string): string | null {
@@ -58,18 +68,18 @@ function parseStatus(markdown: string): string | null {
 function parseTitle(markdown: string, fallback: string): string {
   const heading = markdown.match(/^#\s+(.+)$/m)?.[1]
   if (!heading) return fallback
-  return heading.replace(/^\d+\s*[:.-]\s*/, '').trim()
+  return heading.replace(/^\d+[a-z]?\s*[:.-]\s*/i, '').trim()
 }
 
 /** Reads leading items that start with a ticket number; the first other item (prose, another feature's name) ends the list. */
-function parseBlockedBy(markdown: string): number[] {
+function parseBlockedBy(markdown: string): TicketNumber[] {
   const value = field(markdown, 'blocked by')
   if (!value || /^none\b/i.test(value)) return []
-  const numbers: number[] = []
+  const numbers: TicketNumber[] = []
   for (const item of value.split(/[,;]|\band\b/i)) {
-    const match = /^\s*#?(\d+)(?![\w'])/.exec(item)
+    const match = /^\s*#?(\d+[a-z]?)(?![\w'])/i.exec(item)
     if (!match) break
-    numbers.push(Number(match[1]))
+    numbers.push(toTicketNumber(match[1]))
   }
   return numbers
 }
@@ -78,9 +88,9 @@ function isDone(status: string | null): boolean {
   return status !== null && DONE_STATUSES.has(status)
 }
 
-function columnOf(ticket: ParsedTicket, resolved: Set<number>): BoardColumn {
+function columnOf(ticket: ParsedTicket, resolved: Set<TicketNumber>): BoardColumn {
   if (isDone(ticket.status)) return 'done'
-  if (ticket.blockedBy.some((n) => !resolved.has(n))) return 'blocked'
+  if (ticket.status === 'blocked' || ticket.blockedBy.some((n) => !resolved.has(n))) return 'blocked'
   if (ticket.status === 'claimed' || ticket.progressPath !== null) return 'in-progress'
   return 'backlog'
 }
@@ -102,7 +112,7 @@ async function readTickets(issuesDir: string, files: BoardFileReader): Promise<P
     if (markdown === null) continue
     const progressName = name.slice(0, -'.md'.length) + PROGRESS_SUFFIX
     tickets.push({
-      number: Number(match[1]),
+      number: toTicketNumber(match[1]),
       title: parseTitle(markdown, match[2]),
       status: parseStatus(markdown),
       blockedBy: parseBlockedBy(markdown),
@@ -135,11 +145,11 @@ async function readFeatureCopies(workspace: Workspace, files: BoardFileReader): 
 
 /** A blocker counts as resolved once any worktree copy of it is done. */
 function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
-  const resolved = new Set<number>()
+  const resolved = new Set<TicketNumber>()
   for (const copy of copies) {
     for (const t of copy.tickets) if (isDone(t.status)) resolved.add(t.number)
   }
-  const cards = new Map<number, BoardTicket>()
+  const cards = new Map<TicketNumber, BoardTicket>()
   for (const copy of copies) {
     for (const t of copy.tickets) {
       const sighting: TicketSighting = {
@@ -163,7 +173,7 @@ function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
       }
     }
   }
-  const tickets = [...cards.values()].sort((a, b) => a.number - b.number)
+  const tickets = [...cards.values()].sort((a, b) => compareTicketNumbers(a.number, b.number))
   for (const card of tickets) card.sightings.sort((a, b) => COLUMN_RANK[b.column] - COLUMN_RANK[a.column])
   return { name, tickets, sightings: copies.map((c) => c.sighting) }
 }
