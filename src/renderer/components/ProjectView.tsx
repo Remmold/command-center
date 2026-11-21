@@ -79,7 +79,7 @@ export function ProjectView({ view, registerFocus }: Props) {
                   <SourceControlPanel cwd={view.projectPath} projectId={view.projectId} />
                 )}
               </Panel>
-              <Separator className="w-px bg-zinc-800 hover:w-1 hover:bg-zinc-700" />
+              <Separator className="w-px bg-subtle hover:w-1 hover:bg-focus" />
             </>
           )}
           <Panel id="main" defaultSize={sidePanelOpen ? '80%' : '100%'} minSize="40%">
@@ -95,7 +95,7 @@ export function ProjectView({ view, registerFocus }: Props) {
                 <>
                   <Separator
                     className={
-                      'h-1 bg-zinc-900 transition-colors hover:bg-blue-500/50 active:bg-blue-500/70 ' +
+                      'h-1 bg-sidebar transition-colors hover:bg-focus/50 active:bg-focus/70 ' +
                       (drawerOpen ? '' : 'hidden')
                     }
                   />
@@ -116,7 +116,7 @@ export function ProjectView({ view, registerFocus }: Props) {
           </Panel>
         </Group>
       </div>
-      <footer className="flex shrink-0 items-center justify-between border-t border-zinc-800 bg-zinc-950 px-3 py-0.5 text-[11px] text-zinc-500">
+      <footer className="flex shrink-0 items-center justify-between border-t border-subtle bg-editor px-3 py-0.5 text-[11px] text-muted">
         <span className="flex items-center gap-3">
           <span>
             {view.openFiles.length} file{view.openFiles.length === 1 ? '' : 's'}

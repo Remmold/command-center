@@ -52,7 +52,7 @@ export function UsageStrip() {
 
   if (bars.length === 0) return null
   return (
-    <ul aria-label="usage per account profile" className="flex h-full shrink-0 items-center gap-1 border-l border-zinc-800 px-2">
+    <ul aria-label="usage per account profile" className="flex h-full shrink-0 items-center gap-1 border-l border-subtle px-2">
       {bars.map((bar) => (
         <UsageStripItem key={bar.profileId} bar={bar} />
       ))}
@@ -70,7 +70,7 @@ function UsageStripItem({ bar }: { bar: UsageBar }) {
       title={describe(bar)}
       className={
         'flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] ' +
-        (bar.highlighted ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500')
+        (bar.highlighted ? 'bg-list-selected text-fg' : 'text-muted')
       }
     >
       <span className="max-w-[6rem] truncate">{bar.name}</span>

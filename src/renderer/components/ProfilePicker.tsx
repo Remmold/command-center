@@ -42,7 +42,7 @@ export function ProfilePicker({ workspace }: { workspace: Workspace }) {
         aria-label={`account profile for ${workspace.name}`}
         title={`account profile: ${current?.name ?? 'Default'}`}
         className={
-          'rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 ' +
+          'rounded p-0.5 text-muted hover:bg-list-hover hover:text-fg ' +
           (onDefault && !open ? 'opacity-0 group-hover:opacity-100' : '')
         }
       >

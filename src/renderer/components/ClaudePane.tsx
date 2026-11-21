@@ -81,19 +81,19 @@ function MenuItem({ icon: Icon, label, description, onClick, danger, disabled }:
       className={
         'flex w-full items-start gap-2.5 px-3 py-2 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ' +
         (danger
-          ? 'text-zinc-300 hover:bg-red-950/40 hover:text-red-300'
-          : 'text-zinc-200 hover:bg-zinc-900')
+          ? 'text-fg hover:bg-red-950/40 hover:text-red-300'
+          : 'text-fg hover:bg-list-hover')
       }
     >
       <Icon
         size={14}
         strokeWidth={1.75}
-        className={`mt-0.5 shrink-0 ${danger ? 'text-red-400' : 'text-zinc-400'}`}
+        className={`mt-0.5 shrink-0 ${danger ? 'text-red-400' : 'text-muted'}`}
       />
       <div className="min-w-0">
         <div className="font-medium">{label}</div>
         {description && (
-          <div className="text-[10px] text-zinc-500">{description}</div>
+          <div className="text-[10px] text-muted">{description}</div>
         )}
       </div>
     </button>
@@ -219,19 +219,19 @@ export function ClaudePane({ view, registerFocus }: Props) {
           }
         />
       )}
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950 px-3 py-2">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-subtle bg-editor px-3 py-2">
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium text-zinc-100">
+          <div className="truncate text-[13px] font-medium text-fg">
             {view.projectName}
           </div>
-          <div className="truncate text-[10px] text-zinc-500">{view.projectPath}</div>
+          <div className="truncate text-[10px] text-muted">{view.projectPath}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {activeSession && permIcon && (
             <div className="relative">
               <button
                 onClick={() => setPermPickerOpen((o) => !o)}
-                className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-zinc-700 hover:bg-zinc-900"
+                className="flex items-center gap-1.5 rounded-md border border-subtle bg-sidebar/60 px-2.5 py-1 text-[11px] text-fg hover:border-strong hover:bg-list-hover"
                 title={PERMISSION_HINT[activeSession.permissionMode]}
               >
                 <permIcon.Icon size={13} strokeWidth={2} className={permIcon.color} />
@@ -239,10 +239,10 @@ export function ClaudePane({ view, registerFocus }: Props) {
               </button>
               {permPickerOpen && (
                 <div
-                  className="absolute right-0 top-full z-20 mt-1 w-64 rounded-md border border-zinc-800 bg-zinc-950 shadow-xl"
+                  className="absolute right-0 top-full z-20 mt-1 w-64 rounded-md border border-subtle bg-widget shadow-xl"
                   onMouseLeave={() => setPermPickerOpen(false)}
                 >
-                  <div className="border-b border-zinc-800 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                  <div className="border-b border-subtle px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted">
                     permission mode
                   </div>
                   {PERMISSION_MODES.map((m) => {
@@ -253,17 +253,17 @@ export function ClaudePane({ view, registerFocus }: Props) {
                         key={m}
                         onClick={() => handleChangePermission(m)}
                         className={
-                          'flex w-full items-start gap-2.5 px-3 py-2 text-left text-xs hover:bg-zinc-900 ' +
-                          (isActive ? 'bg-zinc-900/60 text-zinc-100' : 'text-zinc-300')
+                          'flex w-full items-start gap-2.5 px-3 py-2 text-left text-xs hover:bg-list-hover ' +
+                          (isActive ? 'bg-sidebar/60 text-fg' : 'text-fg')
                         }
                       >
                         <mi.Icon size={14} strokeWidth={2} className={`mt-0.5 shrink-0 ${mi.color}`} />
                         <div className="min-w-0">
                           <div className="font-medium">{PERMISSION_LABEL[m]}</div>
-                          <div className="text-[10px] text-zinc-500">{PERMISSION_HINT[m]}</div>
+                          <div className="text-[10px] text-muted">{PERMISSION_HINT[m]}</div>
                         </div>
                         {isActive && (
-                          <span className="ml-auto text-[10px] text-zinc-500">active</span>
+                          <span className="ml-auto text-[10px] text-muted">active</span>
                         )}
                       </button>
                     )
@@ -276,14 +276,14 @@ export function ClaudePane({ view, registerFocus }: Props) {
           <div className="relative" ref={moreMenuRef}>
             <button
               onClick={() => setMoreMenuOpen((o) => !o)}
-              className="rounded-md border border-zinc-800 bg-zinc-900/60 p-1.5 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900"
+              className="rounded-md border border-subtle bg-sidebar/60 p-1.5 text-fg hover:border-strong hover:bg-list-hover"
               title="more actions"
             >
               <MoreHorizontal size={14} strokeWidth={2} />
             </button>
             {moreMenuOpen && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-md border border-zinc-800 bg-zinc-950 shadow-xl">
-                <div className="border-b border-zinc-800 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-md border border-subtle bg-widget shadow-xl">
+                <div className="border-b border-subtle px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted">
                   this chat
                 </div>
                 <MenuItem
@@ -313,7 +313,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
                   onClick={handleUsageHint}
                   disabled={!activeSession}
                 />
-                <div className="border-t border-zinc-800" />
+                <div className="border-t border-subtle" />
                 <MenuItem
                   icon={Trash2}
                   label="clear chat"
@@ -328,10 +328,10 @@ export function ClaudePane({ view, registerFocus }: Props) {
         </div>
       </header>
 
-      <div className="flex shrink-0 items-center border-b border-zinc-800 bg-zinc-950/60">
+      <div className="flex shrink-0 items-center border-b border-subtle bg-sidebar">
         <div className="flex min-w-0 flex-1 items-center overflow-x-auto">
           {view.claudeSessions.length === 0 && (
-            <span className="px-3 py-1.5 text-xs text-zinc-500">no chats</span>
+            <span className="px-3 py-1.5 text-xs text-muted">no chats</span>
           )}
           {view.claudeSessions.map((sess) => {
             const active = sess.id === view.activeClaudeSessionId
@@ -340,8 +340,8 @@ export function ClaudePane({ view, registerFocus }: Props) {
               <div
                 key={sess.id}
                 className={
-                  'group flex items-center gap-1.5 border-r border-zinc-800 px-3 py-1.5 text-xs ' +
-                  (active ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900')
+                  'group flex items-center gap-1.5 border-r border-subtle px-3 py-1.5 text-xs ' +
+                  (active ? 'bg-editor text-fg' : 'text-muted hover:bg-list-hover')
                 }
               >
                 <PaneStatusDot paneId={sess.id} />
@@ -359,7 +359,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
                         setRenameValue('')
                       }
                     }}
-                    className="w-24 rounded bg-zinc-800 px-1 text-xs text-zinc-100 focus:outline-none"
+                    className="w-24 rounded bg-list-selected px-1 text-xs text-fg focus:outline-none"
                   />
                 ) : (
                   <button
@@ -374,7 +374,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
                 <span
                   className={
                     'rounded px-1.5 py-0.5 text-[10px] ' +
-                    (MODEL_COLOR[sess.model] ?? 'bg-zinc-800 text-zinc-400')
+                    (MODEL_COLOR[sess.model] ?? 'bg-list-selected text-muted')
                   }
                 >
                   {sess.model}
@@ -390,7 +390,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
                     e.stopPropagation()
                     closeClaudeSession(view.projectId, sess.id)
                   }}
-                  className="rounded px-0.5 text-zinc-500 opacity-0 hover:text-red-400 group-hover:opacity-100"
+                  className="rounded px-0.5 text-muted opacity-0 hover:text-red-400 group-hover:opacity-100"
                   aria-label={`close ${sess.label}`}
                 >
                   ✕
@@ -402,7 +402,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
         <div className="relative">
           <button
             onClick={() => setPickerOpen((o) => !o)}
-            className="flex items-center gap-1.5 border-l border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+            className="flex items-center gap-1.5 border-l border-subtle px-3 py-1.5 text-xs text-muted hover:bg-list-hover hover:text-fg"
             aria-label="new chat"
             title={`new chat with ${defaultModel}`}
           >
@@ -411,7 +411,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
             <span
               className={
                 'rounded px-1.5 py-0.5 text-[10px] ' +
-                (MODEL_COLOR[defaultModel] ?? 'bg-zinc-800 text-zinc-400')
+                (MODEL_COLOR[defaultModel] ?? 'bg-list-selected text-muted')
               }
             >
               {defaultModel}
@@ -419,7 +419,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
           </button>
           {pickerOpen && (
             <div
-              className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-zinc-800 bg-zinc-950 shadow-xl"
+              className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-subtle bg-widget shadow-xl"
               onMouseLeave={() => setPickerOpen(false)}
             >
               {MODEL_OPTIONS.map((m) => (
@@ -430,8 +430,8 @@ export function ClaudePane({ view, registerFocus }: Props) {
                     handleNewChat(m)
                   }}
                   className={
-                    'flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-zinc-900 ' +
-                    (m === defaultModel ? 'text-zinc-100' : 'text-zinc-400')
+                    'flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-list-hover ' +
+                    (m === defaultModel ? 'text-fg' : 'text-muted')
                   }
                 >
                   <span>{m}</span>
@@ -447,7 +447,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 bg-zinc-950">
+      <div className="relative min-h-0 flex-1 bg-editor">
         {view.claudeSessions.map((sess) => {
           const active = sess.id === view.activeClaudeSessionId
           return (
@@ -468,7 +468,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
           )
         })}
         {view.claudeSessions.length === 0 && (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-600">
+          <div className="flex h-full items-center justify-center text-sm text-faint">
             click + new chat to start
           </div>
         )}

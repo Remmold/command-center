@@ -98,47 +98,47 @@ export function SourceControlPanel({ cwd, projectId }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-zinc-950">
-      <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+    <div className="flex h-full min-h-0 flex-col bg-editor">
+      <header className="flex shrink-0 items-center justify-between border-b border-subtle px-3 py-2">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">
           source control
         </span>
         <button
           onClick={refresh}
-          className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+          className="rounded p-1 text-muted hover:bg-list-hover hover:text-fg"
           title="refresh"
         >
           <RefreshCw size={12} strokeWidth={2.5} className={loading ? 'animate-spin' : ''} />
         </button>
       </header>
-      <div className="shrink-0 border-b border-zinc-800 px-3 py-1.5">
-        <div className="flex items-center gap-1.5 text-[11px] text-zinc-300">
+      <div className="shrink-0 border-b border-subtle px-3 py-1.5">
+        <div className="flex items-center gap-1.5 text-[11px] text-fg">
           <GitBranch size={12} strokeWidth={2} className="text-blue-400" />
           {status?.isRepo ? (
             <span className="font-medium">{status.branch || 'detached'}</span>
           ) : (
-            <span className="italic text-zinc-500">not a git repo</span>
+            <span className="italic text-muted">not a git repo</span>
           )}
           {status?.isRepo && (
-            <span className="ml-auto text-zinc-500">
+            <span className="ml-auto text-muted">
               {totalCount} change{totalCount === 1 ? '' : 's'}
             </span>
           )}
         </div>
       </div>
       {status?.isRepo && totalCount > 0 && (
-        <div className="shrink-0 border-b border-zinc-800 px-2 py-1.5">
+        <div className="shrink-0 border-b border-subtle px-2 py-1.5">
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="filter changes…"
-            className="w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-700 focus:outline-none"
+            className="w-full rounded border border-strong bg-input px-2 py-1 text-xs text-fg placeholder:text-faint focus:border-focus focus:outline-none"
           />
         </div>
       )}
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto py-1">
         {!status && loading && (
-          <div className="px-3 py-2 text-xs italic text-zinc-500">loading…</div>
+          <div className="px-3 py-2 text-xs italic text-muted">loading…</div>
         )}
         {status?.error && (
           <div className="m-2 rounded border border-red-900 bg-red-950/30 px-2 py-1 text-xs text-red-300">
@@ -146,7 +146,7 @@ export function SourceControlPanel({ cwd, projectId }: Props) {
           </div>
         )}
         {status && !status.error && totalCount === 0 && (
-          <div className="px-3 py-2 text-xs italic text-zinc-600">no changes</div>
+          <div className="px-3 py-2 text-xs italic text-faint">no changes</div>
         )}
         <Section title="staged" rows={filteredStaged} onClick={handleClick} />
         <Section title="changes" rows={filteredUnstaged} onClick={handleClick} />
@@ -179,9 +179,9 @@ function Section({ title, rows, onClick }: SectionProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+      <div className="flex items-center justify-between px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-widest text-muted">
         <span>
-          {title} <span className="ml-1 text-zinc-600">{rows.length}</span>
+          {title} <span className="ml-1 text-faint">{rows.length}</span>
         </span>
       </div>
       {visible.map((row) => {
@@ -192,15 +192,15 @@ function Section({ title, rows, onClick }: SectionProps) {
           : row.staged
             ? row.file.staged
             : row.file.unstaged
-        const status = STATUS_LABEL[code] ?? { label: code, color: 'text-zinc-400' }
+        const status = STATUS_LABEL[code] ?? { label: code, color: 'text-muted' }
         return (
           <button
             key={`${row.staged ? 's' : row.isUntracked ? 'u' : 'w'}:${row.file.path}`}
             onClick={() => onClick(row)}
-            className="group flex w-full items-center gap-1.5 px-3 py-[3px] pr-2 text-left text-[12px] leading-tight text-zinc-300 transition-colors hover:bg-zinc-900"
+            className="group flex w-full items-center gap-1.5 px-3 py-[3px] pr-2 text-left text-[12px] leading-tight text-fg transition-colors hover:bg-list-hover"
             title={row.file.path}
           >
-            <ChevronRight size={11} strokeWidth={2.25} className="shrink-0 text-zinc-600" />
+            <ChevronRight size={11} strokeWidth={2.25} className="shrink-0 text-faint" />
             <Icon size={12} strokeWidth={1.75} className={`shrink-0 ${color}`} />
             <span className="min-w-0 flex-1 truncate">{name}</span>
             <span className={`shrink-0 font-mono text-[10px] ${status.color}`}>
@@ -212,10 +212,10 @@ function Section({ title, rows, onClick }: SectionProps) {
       {truncated && (
         <button
           onClick={() => setShowAll(true)}
-          className="flex w-full items-center justify-center gap-1 px-3 py-2 text-[11px] text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
+          className="flex w-full items-center justify-center gap-1 px-3 py-2 text-[11px] text-muted hover:bg-list-hover hover:text-fg"
         >
           show all {rows.length}
-          <span className="text-zinc-700">
+          <span className="text-faint">
             (+{rows.length - DEFAULT_VISIBLE_PER_SECTION} hidden)
           </span>
         </button>

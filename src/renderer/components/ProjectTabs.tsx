@@ -49,8 +49,8 @@ export function ProjectTabs() {
   }
 
   return (
-    <div className="relative flex h-10 shrink-0 items-center border-b border-zinc-800 bg-zinc-950">
-      <div className="shrink-0 border-r border-zinc-800 px-2">
+    <div className="relative flex h-10 shrink-0 items-center border-b border-subtle bg-titlebar">
+      <div className="shrink-0 border-r border-subtle px-2">
         <SegmentedControl<AppView>
           label="view"
           value={view}
@@ -63,7 +63,7 @@ export function ProjectTabs() {
       </div>
       <div className="flex h-full min-w-0 flex-1 items-center overflow-x-auto">
         {order.length === 0 && (
-          <span className="px-3 text-xs text-zinc-500">
+          <span className="px-3 text-xs text-muted">
             no workspaces open · click + to open one
           </span>
         )}
@@ -77,16 +77,16 @@ export function ProjectTabs() {
               key={projectId}
               onClick={() => setActive(projectId)}
               className={
-                'group flex h-full cursor-pointer items-center gap-2 border-r border-zinc-800 px-3 text-xs transition-colors ' +
+                'group flex h-full cursor-pointer items-center gap-2 border-r border-subtle px-3 text-xs transition-colors ' +
                 (active
-                  ? 'bg-zinc-900 text-zinc-100'
-                  : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200')
+                  ? 'bg-editor text-fg'
+                  : 'text-muted hover:bg-list-hover hover:text-fg')
               }
             >
               {workspace ? (
                 <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
               ) : (
-                <Folder size={13} strokeWidth={1.75} className={active ? 'text-blue-400' : 'text-zinc-500'} />
+                <Folder size={13} strokeWidth={1.75} className={active ? 'text-blue-400' : 'text-muted'} />
               )}
               {workspace?.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
               <span className="truncate" title={view.projectPath}>
@@ -97,7 +97,7 @@ export function ProjectTabs() {
                   e.stopPropagation()
                   closeProject(projectId)
                 }}
-                className="rounded p-0.5 text-zinc-500 opacity-0 hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+                className="rounded p-0.5 text-muted opacity-0 hover:bg-list-hover hover:text-red-400 group-hover:opacity-100"
                 aria-label={`close ${view.projectName}`}
                 title="close workspace"
               >
@@ -111,10 +111,10 @@ export function ProjectTabs() {
       <button
         onClick={() => setShowApps(!showApps)}
         className={
-          'flex h-full items-center gap-1.5 border-l border-zinc-800 px-3 text-xs ' +
+          'flex h-full items-center gap-1.5 border-l border-subtle px-3 text-xs ' +
           (showApps
-            ? 'bg-zinc-900 text-blue-400'
-            : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100')
+            ? 'bg-editor text-accent'
+            : 'text-muted hover:bg-list-hover hover:text-fg')
         }
         title="apps — launch & monitor"
       >
@@ -124,40 +124,40 @@ export function ProjectTabs() {
       <div className="relative">
         <button
           onClick={() => setMenuOpen((o) => !o)}
-          className="flex h-full items-center gap-1 px-3 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+          className="flex h-full items-center gap-1 px-3 text-xs text-muted hover:bg-list-hover hover:text-fg"
           title="open a workspace"
         >
           <FolderPlus size={14} strokeWidth={2} />
         </button>
         {menuOpen && (
           <div
-            className="absolute right-0 top-full z-30 mt-1 w-72 rounded-md border border-zinc-800 bg-zinc-950 shadow-xl"
+            className="absolute right-0 top-full z-30 mt-1 w-72 rounded-md border border-subtle bg-widget shadow-xl"
             onMouseLeave={() => setMenuOpen(false)}
           >
-            <div className="border-b border-zinc-800 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+            <div className="border-b border-subtle px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted">
               recent
             </div>
             {closedWorkspaces.length === 0 && (
-              <div className="px-3 py-2 text-xs italic text-zinc-500">
+              <div className="px-3 py-2 text-xs italic text-muted">
                 all saved workspaces are open
               </div>
             )}
             {closedWorkspaces.map((p) => (
               <div
                 key={p.id}
-                className="group flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-zinc-900"
+                className="group flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-list-hover"
               >
-                <Folder size={13} strokeWidth={1.75} className="shrink-0 text-zinc-500" />
+                <Folder size={13} strokeWidth={1.75} className="shrink-0 text-muted" />
                 <button
                   onClick={() => handleOpenSaved(p.id)}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <div className="truncate text-zinc-100">{p.name}</div>
-                  <div className="truncate text-[10px] text-zinc-500">{p.path}</div>
+                  <div className="truncate text-fg">{p.name}</div>
+                  <div className="truncate text-[10px] text-muted">{p.path}</div>
                 </button>
                 <button
                   onClick={() => removeWorkspace(p.id)}
-                  className="rounded p-0.5 text-zinc-500 opacity-0 hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+                  className="rounded p-0.5 text-muted opacity-0 hover:bg-list-hover hover:text-red-400 group-hover:opacity-100"
                   title="forget this workspace"
                 >
                   <X size={11} strokeWidth={2.25} />
@@ -166,7 +166,7 @@ export function ProjectTabs() {
             ))}
             <button
               onClick={handleAddNew}
-              className="flex w-full items-center gap-2 border-t border-zinc-800 px-3 py-2 text-left text-xs text-zinc-100 hover:bg-zinc-900"
+              className="flex w-full items-center gap-2 border-t border-subtle px-3 py-2 text-left text-xs text-fg hover:bg-list-hover"
             >
               <FolderSearch size={14} strokeWidth={1.75} className="text-blue-400" />
               <span>browse for new workspace…</span>

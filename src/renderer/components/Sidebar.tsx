@@ -35,14 +35,14 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950">
-      <div className="flex h-8 shrink-0 items-center justify-between border-b border-zinc-800 px-3">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-subtle bg-sidebar">
+      <div className="flex h-8 shrink-0 items-center justify-between border-b border-subtle px-3">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">
           workspaces
         </span>
         <button
           onClick={handleAdd}
-          className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+          className="rounded p-1 text-muted hover:bg-list-hover hover:text-fg"
           title="add a workspace"
           aria-label="add a workspace"
         >
@@ -52,7 +52,7 @@ export function Sidebar() {
       <NeedsYouQueue />
       <ul className="scrollbar-thin flex-1 overflow-y-auto py-1">
         {groups.length === 0 && (
-          <li className="px-3 py-4 text-xs text-zinc-500">no workspaces yet</li>
+          <li className="px-3 py-4 text-xs text-muted">no workspaces yet</li>
         )}
         {groups.map((group) => (
           <RepoGroupItem key={group.repoGroupKey} group={group} />
@@ -67,7 +67,7 @@ function RepoGroupItem({ group }: { group: RepoGroupView }) {
     <li className="pb-1">
       <div className="group flex items-center gap-2 py-1.5 pl-3 pr-2" title={group.repoName}>
         <RepoIcon repoGroupKey={group.repoGroupKey} repoName={group.repoName} />
-        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-zinc-300">
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-fg">
           <RepoName repoGroupKey={group.repoGroupKey} repoName={group.repoName} />
         </span>
         <RepoIdentityEditor group={group} />
@@ -103,7 +103,7 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
       title={workspace.path}
       className={
         'group flex cursor-pointer items-center gap-2 py-1 pl-6 pr-2 text-xs ' +
-        (active ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200')
+        (active ? 'bg-list-selected text-fg' : 'text-muted hover:bg-list-hover hover:text-fg')
       }
     >
       <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
@@ -116,7 +116,7 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
           closeProject(workspace.id)
           void removeWorkspace(workspace.id)
         }}
-        className="rounded p-0.5 text-zinc-500 opacity-0 hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+        className="rounded p-0.5 text-muted opacity-0 hover:bg-list-hover hover:text-red-400 group-hover:opacity-100"
         aria-label={`forget ${workspace.name}`}
         title="forget this workspace"
       >

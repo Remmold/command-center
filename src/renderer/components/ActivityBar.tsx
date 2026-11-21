@@ -33,7 +33,7 @@ export function ActivityBar() {
   const setActivityView = useProjectViewsStore((s) => s.setActivityView)
 
   return (
-    <aside className="flex h-full w-11 shrink-0 flex-col items-center justify-between border-r border-zinc-800 bg-zinc-950 py-2">
+    <aside className="flex h-full w-11 shrink-0 flex-col items-center justify-between border-r border-subtle bg-sidebar py-2">
       <div className="flex flex-col items-center gap-1">
         {ITEMS.map((item) => {
           const active = item.id === activityView
@@ -44,14 +44,14 @@ export function ActivityBar() {
               className={
                 'group relative flex h-10 w-10 items-center justify-center rounded-md transition-colors ' +
                 (active
-                  ? 'text-zinc-100'
-                  : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200')
+                  ? 'text-fg'
+                  : 'text-muted hover:bg-list-hover hover:text-fg')
               }
               title={item.label}
               aria-label={item.label}
             >
               {active && (
-                <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r bg-blue-400" />
+                <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-r bg-accent" />
               )}
               <item.Icon size={20} strokeWidth={1.75} />
             </button>
@@ -61,7 +61,7 @@ export function ActivityBar() {
           <button
             key={`disabled-${i}`}
             disabled
-            className="flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-md text-zinc-700"
+            className="flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-md text-faint"
             title={item.label}
             aria-label={item.label}
           >
@@ -74,7 +74,7 @@ export function ActivityBar() {
           <button
             key={`footer-${i}`}
             disabled
-            className="flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-md text-zinc-700"
+            className="flex h-10 w-10 cursor-not-allowed items-center justify-center rounded-md text-faint"
             title={item.label}
             aria-label={item.label}
           >

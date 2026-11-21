@@ -14,7 +14,7 @@ import { useAppsStore } from '../state/appsStore'
 import type { ManagedApp, ManagedAppInput } from '../../shared/types'
 
 function StatusDot({ running, busy }: { running: boolean; busy: boolean }): JSX.Element {
-  const color = busy ? 'bg-amber-400' : running ? 'bg-emerald-400' : 'bg-zinc-600'
+  const color = busy ? 'bg-amber-400' : running ? 'bg-emerald-400' : 'bg-status-idle'
   return <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
 }
 
@@ -32,28 +32,28 @@ function AppCard({ app }: { app: ManagedApp }): JSX.Element {
   const busy = status?.busy ?? false
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50">
+    <div className="rounded-lg border border-subtle bg-sidebar/50">
       <div className="flex items-center gap-3 px-4 py-3">
         <StatusDot running={running} busy={busy} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-zinc-100">{app.name}</span>
+            <span className="truncate text-sm font-medium text-fg">{app.name}</span>
             {app.ports.map((p) => (
               <span
                 key={p}
-                className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                className="rounded bg-list-selected px-1.5 py-0.5 text-[10px] text-muted"
               >
                 :{p}
               </span>
             ))}
           </div>
-          <div className="truncate text-[11px] text-zinc-500" title={app.cwd}>
+          <div className="truncate text-[11px] text-muted" title={app.cwd}>
             {app.cwd}
           </div>
         </div>
 
         {app.updateCommand && (
-          <label className="flex items-center gap-1.5 text-[11px] text-zinc-400" title={app.updateCommand}>
+          <label className="flex items-center gap-1.5 text-[11px] text-muted" title={app.updateCommand}>
             <input
               type="checkbox"
               checked={update}
@@ -90,7 +90,7 @@ function AppCard({ app }: { app: ManagedApp }): JSX.Element {
       </div>
 
       {showLog && (
-        <pre className="max-h-56 overflow-auto border-t border-zinc-800 bg-zinc-950 px-4 py-2 text-[11px] leading-relaxed text-zinc-400">
+        <pre className="max-h-56 overflow-auto border-t border-subtle bg-editor px-4 py-2 text-[11px] leading-relaxed text-muted">
           {output || '(no output yet)'}
         </pre>
       )}
@@ -116,10 +116,10 @@ function IconButton({
   const tone = accent
     ? 'text-emerald-400 hover:bg-emerald-400/10'
     : danger
-      ? 'text-zinc-300 hover:bg-red-500/10 hover:text-red-400'
+      ? 'text-fg hover:bg-red-500/10 hover:text-red-400'
       : active
-        ? 'bg-zinc-800 text-zinc-100'
-        : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+        ? 'bg-list-selected text-fg'
+        : 'text-muted hover:bg-list-hover hover:text-fg'
   return (
     <button onClick={onClick} title={title} className={`rounded-md p-1.5 ${tone}`}>
       {children}
@@ -154,10 +154,10 @@ function AddAppForm({ onDone }: { onDone: () => void }): JSX.Element {
     onDone()
   }
 
-  const field = 'w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 outline-none focus:border-blue-500'
+  const field = 'w-full rounded border border-strong bg-input px-2 py-1 text-xs text-fg outline-none focus:border-focus'
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+    <div className="flex flex-col gap-2 rounded-lg border border-subtle bg-sidebar/50 p-4">
       <input className={field} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
       <input className={field} placeholder="Working dir (c:\projects\...)" value={cwd} onChange={(e) => setCwd(e.target.value)} />
       <div className="flex gap-2">
@@ -167,13 +167,13 @@ function AddAppForm({ onDone }: { onDone: () => void }): JSX.Element {
       <input className={field} placeholder="Args" value={argsText} onChange={(e) => setArgsText(e.target.value)} />
       <input className={field} placeholder="Update command (optional)" value={updateCommand} onChange={(e) => setUpdateCommand(e.target.value)} />
       <div className="flex justify-end gap-2">
-        <button onClick={onDone} className="rounded px-3 py-1 text-xs text-zinc-400 hover:text-zinc-100">
+        <button onClick={onDone} className="rounded px-3 py-1 text-xs text-muted hover:text-fg">
           cancel
         </button>
         <button
           onClick={() => void submit()}
           disabled={!valid}
-          className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-500 disabled:opacity-40"
+          className="rounded bg-accent px-3 py-1 text-xs text-accent-fg hover:bg-accent-hover disabled:opacity-40"
         >
           add app
         </button>
@@ -198,28 +198,28 @@ export function AppsDashboard(): JSX.Element {
   const sorted = useMemo(() => [...apps].sort((a, b) => a.name.localeCompare(b.name)), [apps])
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
+    <div className="flex h-full flex-col bg-editor">
+      <div className="flex items-center justify-between border-b border-subtle px-5 py-3">
         <div>
-          <h1 className="text-sm font-semibold text-zinc-100">Apps</h1>
-          <p className="text-[11px] text-zinc-500">Launch and monitor your projects. Status is by listening port.</p>
+          <h1 className="text-sm font-semibold text-fg">Apps</h1>
+          <p className="text-[11px] text-muted">Launch and monitor your projects. Status is by listening port.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => void refresh()}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted hover:bg-list-hover hover:text-fg"
           >
             <RefreshCw size={14} /> Refresh
           </button>
           <button
             onClick={() => setAdding((v) => !v)}
-            className="flex items-center gap-1.5 rounded-md bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-100 hover:bg-zinc-700"
+            className="flex items-center gap-1.5 rounded-md bg-list-selected px-2.5 py-1.5 text-xs text-fg hover:bg-strong"
           >
             <Plus size={14} /> Add app
           </button>
           <button
             onClick={() => setShowApps(false)}
-            className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+            className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-muted hover:bg-list-hover hover:text-fg"
             title="back to workspaces"
           >
             <ChevronDown size={14} /> Close
@@ -230,7 +230,7 @@ export function AppsDashboard(): JSX.Element {
       <div className="flex flex-1 flex-col gap-3 overflow-auto p-5">
         {adding && <AddAppForm onDone={() => setAdding(false)} />}
         {sorted.length === 0 && !adding && (
-          <div className="py-16 text-center text-sm text-zinc-500">
+          <div className="py-16 text-center text-sm text-muted">
             No apps yet — click “Add app”.
           </div>
         )}

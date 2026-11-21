@@ -31,7 +31,7 @@ const SHELL_LABEL: Record<string, string> = {
 const SHELL_COLOR: Record<string, string> = {
   pwsh: 'text-blue-400',
   powershell: 'text-blue-400',
-  cmd: 'text-zinc-400',
+  cmd: 'text-muted',
   bash: 'text-emerald-400'
 }
 
@@ -65,60 +65,60 @@ export function ShellTabs({ view }: Props) {
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-zinc-950">
+    <section className="flex h-full min-h-0 flex-col bg-editor">
       {/* top bar — title + actions */}
-      <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3 py-1.5">
+      <header className="flex shrink-0 items-center justify-between border-b border-subtle bg-editor px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2 text-xs">
           {activeTab ? (
             <>
               <Terminal
                 size={12}
                 strokeWidth={2}
-                className={SHELL_COLOR[activeTab.kind] ?? 'text-zinc-400'}
+                className={SHELL_COLOR[activeTab.kind] ?? 'text-muted'}
               />
-              <span className="truncate text-zinc-200">{activeTab.label}</span>
-              <span className="text-[10px] text-zinc-500">
+              <span className="truncate text-fg">{activeTab.label}</span>
+              <span className="text-[10px] text-muted">
                 {SHELL_LABEL[activeTab.kind] ?? activeTab.kind}
               </span>
             </>
           ) : (
-            <span className="text-zinc-500 italic">no shells</span>
+            <span className="text-muted italic">no shells</span>
           )}
         </div>
         <div className="flex items-center gap-0.5">
           <div className="relative flex items-center">
             <button
               onClick={handleAddDefault}
-              className="flex items-center gap-1 rounded-l px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+              className="flex items-center gap-1 rounded-l px-2 py-1 text-xs text-muted hover:bg-list-hover hover:text-fg"
               title="new pwsh terminal"
             >
               <Plus size={13} strokeWidth={2} />
             </button>
             <button
               onClick={() => setPickerOpen((o) => !o)}
-              className="rounded-r px-1 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+              className="rounded-r px-1 py-1 text-muted hover:bg-list-hover hover:text-fg"
               title="pick shell type"
             >
               <ChevronDown size={11} strokeWidth={2} />
             </button>
             {pickerOpen && (
               <div
-                className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-zinc-800 bg-zinc-950 shadow-xl"
+                className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-subtle bg-widget shadow-xl"
                 onMouseLeave={() => setPickerOpen(false)}
               >
-                <div className="border-b border-zinc-800 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                <div className="border-b border-subtle px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted">
                   new terminal
                 </div>
                 {SHELL_OPTIONS.map((opt) => (
                   <button
                     key={opt.kind}
                     onClick={() => handleAddSpecific(opt.kind)}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-zinc-200 hover:bg-zinc-900"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-fg hover:bg-list-hover"
                   >
                     <Terminal
                       size={12}
                       strokeWidth={2}
-                      className={SHELL_COLOR[opt.kind] ?? 'text-zinc-400'}
+                      className={SHELL_COLOR[opt.kind] ?? 'text-muted'}
                     />
                     {opt.label}
                   </button>
@@ -132,7 +132,7 @@ export function ShellTabs({ view }: Props) {
                 // "split" — just spawn another tab of the same kind
                 addShellTab(view.projectId, activeTab.kind)
               }}
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+              className="rounded p-1 text-muted hover:bg-list-hover hover:text-fg"
               title="split (new terminal of same type)"
             >
               <SplitSquareVertical size={13} strokeWidth={2} />
@@ -141,7 +141,7 @@ export function ShellTabs({ view }: Props) {
           {view.shellTabs.length > 0 && (
             <button
               onClick={handleKillAll}
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-red-400"
+              className="rounded p-1 text-muted hover:bg-list-hover hover:text-red-400"
               title="kill all shells"
             >
               <Trash2 size={13} strokeWidth={2} />
@@ -170,14 +170,14 @@ export function ShellTabs({ view }: Props) {
             )
           })}
           {view.shellTabs.length === 0 && (
-            <div className="flex h-full items-center justify-center text-xs text-zinc-600">
+            <div className="flex h-full items-center justify-center text-xs text-faint">
               click + to spawn a terminal
             </div>
           )}
         </div>
 
         {showSidebar && (
-          <aside className="scrollbar-thin w-48 shrink-0 overflow-y-auto border-l border-zinc-800 bg-zinc-950">
+          <aside className="scrollbar-thin w-48 shrink-0 overflow-y-auto border-l border-subtle bg-sidebar">
             {view.shellTabs.map((tab) => {
               const active = tab.id === view.activeShellTabId
               return (
@@ -187,15 +187,15 @@ export function ShellTabs({ view }: Props) {
                   className={
                     'group relative flex cursor-pointer items-center gap-2 border-l-2 px-3 py-1.5 text-xs ' +
                     (active
-                      ? 'border-blue-500 bg-zinc-900 text-zinc-100'
-                      : 'border-transparent text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200')
+                      ? 'border-accent bg-list-selected text-fg'
+                      : 'border-transparent text-muted hover:bg-list-hover hover:text-fg')
                   }
                   title={tab.kind}
                 >
                   <Terminal
                     size={12}
                     strokeWidth={2}
-                    className={`shrink-0 ${SHELL_COLOR[tab.kind] ?? 'text-zinc-400'}`}
+                    className={`shrink-0 ${SHELL_COLOR[tab.kind] ?? 'text-muted'}`}
                   />
                   <span className="min-w-0 flex-1 truncate">{tab.label}</span>
                   <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -204,7 +204,7 @@ export function ShellTabs({ view }: Props) {
                         e.stopPropagation()
                         addShellTab(view.projectId, tab.kind)
                       }}
-                      className="rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+                      className="rounded p-0.5 text-muted hover:bg-list-hover hover:text-fg"
                       title="split (new terminal of same type)"
                       aria-label="split"
                     >
@@ -215,7 +215,7 @@ export function ShellTabs({ view }: Props) {
                         e.stopPropagation()
                         closeShellTab(view.projectId, tab.id)
                       }}
-                      className="rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+                      className="rounded p-0.5 text-muted hover:bg-list-hover hover:text-red-400"
                       title="shut down terminal"
                       aria-label={`shut down ${tab.label}`}
                     >

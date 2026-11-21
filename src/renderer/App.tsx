@@ -153,7 +153,7 @@ export function App() {
               </div>
             )}
             {order.length === 0 && (
-              <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+              <div className="flex h-full items-center justify-center text-sm text-muted">
                 pick a workspace in the sidebar, or click + to add one
               </div>
             )}

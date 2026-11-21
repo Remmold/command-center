@@ -44,17 +44,17 @@ export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
     <section className="flex h-full min-h-0 flex-col">
       <div
         className={
-          'scrollbar-thin flex shrink-0 items-center overflow-x-auto border-b border-zinc-800 bg-zinc-950/60 ' +
+          'scrollbar-thin flex shrink-0 items-center overflow-x-auto border-b border-subtle bg-sidebar ' +
           (chatOnly ? 'hidden' : '')
         }
       >
         <button
           onClick={() => setCenterView(view.projectId, 'chat')}
           className={
-            'flex shrink-0 items-center gap-1.5 border-r border-zinc-800 px-3 py-1.5 text-xs ' +
+            'flex shrink-0 items-center gap-1.5 border-r border-subtle px-3 py-1.5 text-xs ' +
             (chatActive
-              ? 'bg-zinc-900 text-zinc-100'
-              : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200')
+              ? 'bg-editor text-fg'
+              : 'text-muted hover:bg-list-hover hover:text-fg')
           }
           title="claude chat"
         >
@@ -74,10 +74,10 @@ export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
             <div
               key={file.path}
               className={
-                'group flex shrink-0 items-center gap-1.5 border-r border-zinc-800 px-3 py-1.5 text-xs ' +
+                'group flex shrink-0 items-center gap-1.5 border-r border-subtle px-3 py-1.5 text-xs ' +
                 (active
-                  ? 'bg-zinc-900 text-zinc-100'
-                  : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200')
+                  ? 'bg-editor text-fg'
+                  : 'text-muted hover:bg-list-hover hover:text-fg')
               }
             >
               <Icon size={13} strokeWidth={1.75} className={`shrink-0 ${color}`} />
@@ -97,7 +97,7 @@ export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
                   e.stopPropagation()
                   closeFile(view.projectId, file.path)
                 }}
-                className="rounded p-0.5 text-zinc-500 opacity-0 hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+                className="rounded p-0.5 text-muted opacity-0 hover:bg-list-hover hover:text-red-400 group-hover:opacity-100"
                 aria-label={`close ${file.path}`}
               >
                 <X size={11} strokeWidth={2.25} />
@@ -112,10 +112,10 @@ export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
             <div
               key={diff.id}
               className={
-                'group flex shrink-0 items-center gap-1.5 border-r border-zinc-800 px-3 py-1.5 text-xs ' +
+                'group flex shrink-0 items-center gap-1.5 border-r border-subtle px-3 py-1.5 text-xs ' +
                 (active
-                  ? 'bg-zinc-900 text-zinc-100'
-                  : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200')
+                  ? 'bg-editor text-fg'
+                  : 'text-muted hover:bg-list-hover hover:text-fg')
               }
             >
               <GitCompare size={13} strokeWidth={1.75} className="shrink-0 text-emerald-400" />
@@ -139,7 +139,7 @@ export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
                   e.stopPropagation()
                   closeDiff(view.projectId, diff.id)
                 }}
-                className="rounded p-0.5 text-zinc-500 opacity-0 hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+                className="rounded p-0.5 text-muted opacity-0 hover:bg-list-hover hover:text-red-400 group-hover:opacity-100"
                 aria-label={`close diff for ${diff.path}`}
               >
                 <X size={11} strokeWidth={2.25} />
@@ -148,7 +148,7 @@ export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
           )
         })}
       </div>
-      <div className="relative min-h-0 flex-1 bg-zinc-950">
+      <div className="relative min-h-0 flex-1 bg-editor">
         <div className={'absolute inset-0 ' + (chatActive ? '' : 'invisible')}>
           <ClaudePane view={view} registerFocus={chatActive ? registerFocus : undefined} />
         </div>
