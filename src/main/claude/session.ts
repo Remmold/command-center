@@ -7,7 +7,7 @@ import { hookCommandFor } from '../permission/hookScript'
 import { hookSettings, permissionLaunch } from '../permission/launch'
 import { permissionServer } from '../permission/server'
 import { CONFIG_DIR_VAR } from '../../shared/profiles'
-import type { SessionInit } from '../../shared/types'
+import type { ClaudeStartOptions, SessionInit } from '../../shared/types'
 import { childEnv } from '../util/childEnv'
 import { ControlChannel, type ControlPayload, type IncomingHandler } from './controlChannel'
 import { parseInitialize } from './initialize'
@@ -27,12 +27,7 @@ export type EventCallback = (paneId: string, event: unknown) => void
 export type ExitCallback = (paneId: string, code: number | null) => void
 export type InitCallback = (paneId: string, init: SessionInit) => void
 
-export interface ClaudeSessionOptions {
-  paneId: string
-  cwd: string
-  model?: string
-  resumeSessionId?: string
-  permissionMode?: string
+export interface ClaudeSessionOptions extends ClaudeStartOptions {
   profileEnv?: Record<string, string>
   onEvent: EventCallback
   onExit: ExitCallback
@@ -178,13 +173,11 @@ export class ClaudeSession {
     void this.handshake.then(() => this.writeLine(line))
   }
 
-  /** Sends a control request; rejects on an error reply, a 20 s timeout or process exit. */
   request(subtype: string, fields: ControlPayload = {}): Promise<ControlPayload> {
     if (!this.alive) return Promise.reject(new Error('claude process is not running'))
     return this.control.request(subtype, fields)
   }
 
-  /** Handles requests the CLI sends to the app, such as `can_use_tool`. */
   setIncomingHandler(handler: IncomingHandler | null): void {
     this.control.setIncomingHandler(handler)
   }

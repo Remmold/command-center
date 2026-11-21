@@ -1,3 +1,3 @@
-- Done: control channel + initialize handshake + interrupt over the channel + IPC (claude.control / getInit / onInit); build, pnpm quick (33 files, 291 tests) green; real CLI and in-app checks pass.
-- Next: code review, then commit.
+- Done: control channel, initialize handshake, interrupt over the channel, IPC (claude.control / getInit / onInit), review fixes; build + pnpm quick (33 files, 291 tests) green; real-CLI and in-app checks pass.
+- Next: ticket 02 wires claudeManager.setIncomingHandlerFactory for can_use_tool.
 - Open reds: none.

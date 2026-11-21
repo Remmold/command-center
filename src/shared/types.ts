@@ -357,7 +357,6 @@ export interface RendererApi {
   }
   claude: {
     start: (options: ClaudeStartOptions) => Promise<SpawnResult>
-    /** Sends a control request to the pane's CLI and resolves with its reply. */
     control: (paneId: string, subtype: string, fields?: Record<string, unknown>) => Promise<ControlResult>
     getInit: (paneId: string) => Promise<SessionInit | null>
     onInit: (cb: (envelope: SessionInitEnvelope) => void) => () => void

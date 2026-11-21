@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 export type ControlPayload = Record<string, unknown>
 
-export const CONTROL_TIMEOUT_MS = 20_000
+const CONTROL_TIMEOUT_MS = 20_000
 
 /** A request the CLI sends to the host, e.g. `can_use_tool`. */
 export interface IncomingControlRequest {
@@ -16,7 +16,6 @@ export type IncomingHandler = (request: IncomingControlRequest) => Promise<Contr
 export interface ControlChannelOptions {
   write: (line: string) => void
   newId?: () => string
-  timeoutMs?: number
 }
 
 interface Pending {
@@ -24,21 +23,19 @@ interface Pending {
   reject: (err: Error) => void
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export class ControlChannel {
   private readonly write: (line: string) => void
   private readonly newId: () => string
-  private readonly timeoutMs: number
   private readonly pending = new Map<string, Pending>()
   private incoming: IncomingHandler | null = null
 
   constructor(options: ControlChannelOptions) {
     this.write = options.write
     this.newId = options.newId ?? randomUUID
-    this.timeoutMs = options.timeoutMs ?? CONTROL_TIMEOUT_MS
   }
 
   request(subtype: string, fields: ControlPayload = {}): Promise<ControlPayload> {
@@ -46,8 +43,8 @@ export class ControlChannel {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (!this.pending.delete(requestId)) return
-        reject(new Error(`control request ${subtype} timed out after ${this.timeoutMs} ms`))
-      }, this.timeoutMs)
+        reject(new Error(`control request ${subtype} timed out after ${CONTROL_TIMEOUT_MS} ms`))
+      }, CONTROL_TIMEOUT_MS)
       this.pending.set(requestId, {
         resolve: (payload) => {
           clearTimeout(timer)

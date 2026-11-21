@@ -300,6 +300,9 @@ export function ChatView({
     await ensureStarted()
   }
 
+  const knownSlashCommands =
+    slashCommands.length > 0 ? slashCommands : (sessionInit?.commands.map((c) => c.name) ?? [])
+
   const showIdleBanner =
     items.length > 0 &&
     !processRunning &&
@@ -350,9 +353,7 @@ export function ChatView({
         disabled={turnActive}
         onSend={handleSend}
         onInterrupt={handleInterrupt}
-        slashCommands={
-          slashCommands.length > 0 ? slashCommands : (sessionInit?.commands.map((c) => c.name) ?? [])
-        }
+        slashCommands={knownSlashCommands}
         cwd={cwd}
         registerFocus={registerInputFocus}
       />

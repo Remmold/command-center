@@ -261,6 +261,7 @@ export function InputBox({
   }
 
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (disabled) return
     const items = e.clipboardData?.items
     if (!items) return
     const imageFiles: File[] = []

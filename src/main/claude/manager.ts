@@ -1,4 +1,9 @@
-import { DEFAULT_PROFILE_ID, type ControlResult, type SessionInit } from '../../shared/types'
+import {
+  DEFAULT_PROFILE_ID,
+  type ClaudeStartOptions,
+  type ControlResult,
+  type SessionInit
+} from '../../shared/types'
 import { ClaudeSession } from './session'
 import type { ControlPayload, IncomingHandler } from './controlChannel'
 import { permissionServer } from '../permission/server'
@@ -9,12 +14,7 @@ type SpawnCallback = (paneId: string, cwd: string) => void
 type SendCallback = (paneId: string) => void
 type InitCallback = (paneId: string, init: SessionInit) => void
 
-export interface StartOptions {
-  paneId: string
-  cwd: string
-  model?: string
-  resumeSessionId?: string
-  permissionMode?: string
+export interface StartOptions extends ClaudeStartOptions {
   profileEnv?: Record<string, string>
   profileId?: string
 }

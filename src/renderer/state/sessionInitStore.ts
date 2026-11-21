@@ -3,7 +3,6 @@ import { create } from 'zustand'
 import type { SessionInit } from '../../shared/types'
 
 interface SessionInitState {
-  /** Each hosted session's latest `initialize` reply: models, account, commands, permission mode. */
   byPane: Record<string, SessionInit>
   initialized: boolean
   init: () => void
