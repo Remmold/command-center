@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] Spawn with `--permission-prompt-tool=stdio`; drop `--settings` with the hook, the hook script install, `permissionLaunch`'s hook env and the localhost permission server; keep the legacy hook cleanup on app start (removeLegacyHook)
 - [x] An incoming `can_use_tool` request shows the approval prompt: the tool and its full input (command in full for shell tools), then numbered choices exactly as the extension: **1 Yes**; **2 Yes, allow … for this session / this project (just you) / this project (shared) / all projects**, one entry per permission suggestion the CLI sends (wording per the research doc section 5); **3 No** with a "Tell Claude what to do instead" text box. Keys 1/2/3 pick, Enter submits the feedback, Esc denies
