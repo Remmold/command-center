@@ -158,7 +158,7 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
                     />
                   )}
                   <div className="min-h-0 flex-1">
-                    <ObservedChatView />
+                    <ObservedChatView cwd={observedWorkspace?.path} />
                   </div>
                 </Layer>
               )}

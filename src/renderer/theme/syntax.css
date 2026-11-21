@@ -1,0 +1,74 @@
+/* highlight.js token classes in VS Code Dark+ colours. */
+.hljs {
+  color: rgb(var(--cc-fg));
+  background: transparent;
+}
+
+.hljs-keyword,
+.hljs-literal,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-tag,
+.hljs-meta .hljs-keyword {
+  color: rgb(var(--cc-syntax-keyword));
+}
+
+.hljs-meta {
+  color: rgb(var(--cc-syntax-meta));
+}
+
+.hljs-string,
+.hljs-meta .hljs-string,
+.hljs-symbol,
+.hljs-template-tag,
+.hljs-addition {
+  color: rgb(var(--cc-syntax-string));
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: rgb(var(--cc-syntax-comment));
+}
+
+.hljs-title.function_,
+.hljs-title.function_.invoke__,
+.hljs-section {
+  color: rgb(var(--cc-syntax-function));
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-type,
+.hljs-built_in,
+.hljs-class .hljs-title {
+  color: rgb(var(--cc-syntax-type));
+}
+
+.hljs-number {
+  color: rgb(var(--cc-syntax-number));
+}
+
+.hljs-variable,
+.hljs-params,
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-template-variable,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id {
+  color: rgb(var(--cc-syntax-variable));
+}
+
+.hljs-regexp,
+.hljs-deletion {
+  color: rgb(var(--cc-syntax-regexp));
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 600;
+}

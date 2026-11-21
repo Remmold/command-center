@@ -5,7 +5,7 @@ import { Pane } from '../ui/Pane'
 import { MessageList } from './MessageList'
 
 /** The read-only transcript of the observed session being followed. */
-export function ObservedChatView() {
+export function ObservedChatView({ cwd }: { cwd: string | undefined }) {
   const viewing = useObservedStore((s) => s.viewing)
   const items = useObservedStore((s) => s.items)
   const shortened = useObservedStore((s) => s.shortened)
@@ -15,7 +15,7 @@ export function ObservedChatView() {
 
   return (
     <Pane label="observed session">
-      <MessageList items={items}>
+      <MessageList items={items} cwd={cwd}>
         {loading && <EmptyHint>reading transcript…</EmptyHint>}
         {error && <EmptyHint>could not open this session: {error}</EmptyHint>}
         {shortened && <EmptyHint>showing the latest {OBSERVED_INITIAL_ITEMS} entries; earlier ones are in VS Code</EmptyHint>}

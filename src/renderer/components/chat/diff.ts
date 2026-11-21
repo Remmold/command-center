@@ -49,10 +49,3 @@ export function trimContext(segments: DiffSegment[], contextLines = 2): DiffSegm
   }
   return out
 }
-
-export function shortPath(p: string): string {
-  // C:\projects\personal\foo\src\main\index.ts -> foo/src/main/index.ts
-  const parts = p.split(/[\\/]/).filter(Boolean)
-  if (parts.length <= 3) return parts.join('/')
-  return '…/' + parts.slice(-3).join('/')
-}

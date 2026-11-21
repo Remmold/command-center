@@ -1,6 +1,7 @@
 import { useState, type Ref } from 'react'
 import { CheckCircle2, Lock, ShieldCheck, X } from 'lucide-react'
 import type { PermissionRequest } from '../../../shared/types'
+import { Button } from '../ui/Button'
 
 interface Props {
   request: PermissionRequest
@@ -45,56 +46,50 @@ export function PermissionPrompt({ request, onResolve, primaryActionRef }: Props
   }
 
   return (
-    <div className="rounded-md border border-amber-700/50 bg-amber-950/20 p-3">
+    <div className="rounded-md border border-warning bg-widget p-3">
       <div className="flex items-start gap-2">
-        <Lock size={14} className="mt-0.5 shrink-0 text-amber-400" />
+        <Lock size={14} className="mt-0.5 shrink-0 text-warning" />
         <div className="min-w-0 flex-1">
-          <div className="text-xs text-fg">
-            <span className="font-medium text-amber-300">{request.toolName}</span>{' '}
+          <div className="text-[13px] text-fg">
+            <span className="font-semibold">{request.toolName}</span>{' '}
             <span className="text-muted">{hint}</span>
           </div>
           {summary && (
-            <pre className="mt-1 overflow-x-auto rounded bg-black/40 px-2 py-1 text-[11px] text-fg">
+            <pre className="mt-1.5 overflow-x-auto rounded border border-subtle bg-editor px-2.5 py-1.5 font-mono text-[12px] text-fg">
               {summary}
             </pre>
           )}
           <button
+            type="button"
             onClick={() => setShowRaw((s) => !s)}
-            className="mt-1 text-[10px] text-muted hover:text-fg"
+            className="mt-1 text-[11px] text-link hover:underline"
           >
             {showRaw ? 'hide' : 'show'} full input
           </button>
           {showRaw && (
-            <pre className="mt-1 max-h-40 overflow-auto rounded bg-black/40 px-2 py-1 text-[10px] text-fg">
+            <pre className="mt-1 max-h-40 overflow-auto rounded border border-subtle bg-editor px-2.5 py-1.5 font-mono text-[11px] text-fg">
               {JSON.stringify(request.toolInput, null, 2)}
             </pre>
           )}
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          ref={primaryActionRef}
-          onClick={() => respond('approve')}
-          className="flex items-center gap-1 rounded bg-emerald-700 px-3 py-1 text-xs text-emerald-50 hover:bg-emerald-600"
-        >
+        <Button ref={primaryActionRef} onClick={() => respond('approve')}>
           <CheckCircle2 size={12} strokeWidth={2.25} />
           allow once
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="secondary"
           onClick={() => respond('approve', true)}
-          className="flex items-center gap-1 rounded bg-emerald-900 px-3 py-1 text-xs text-emerald-100 hover:bg-emerald-800"
-          title={`auto-allow ${request.toolName} for the rest of this chat session`}
+          tooltip={`auto-allow ${request.toolName} for the rest of this chat session`}
         >
           <ShieldCheck size={12} strokeWidth={2.25} />
           allow for session
-        </button>
-        <button
-          onClick={() => respond('block')}
-          className="flex items-center gap-1 rounded bg-list-selected px-3 py-1 text-xs text-fg hover:bg-red-950 hover:text-red-300"
-        >
+        </Button>
+        <Button variant="secondary" onClick={() => respond('block')}>
           <X size={12} strokeWidth={2.25} />
           deny
-        </button>
+        </Button>
       </div>
     </div>
   )

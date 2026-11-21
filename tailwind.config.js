@@ -25,6 +25,14 @@ module.exports = {
         'list-hover': theme('list-hover'),
         'list-selected': theme('list-selected'),
         input: theme('input'),
+        error: theme('error'),
+        warning: theme('warning'),
+        success: theme('success'),
+        link: theme('link'),
+        code: {
+          DEFAULT: theme('code'),
+          fg: theme('code-fg')
+        },
         diff: {
           inserted: 'rgb(var(--cc-diff-inserted))',
           removed: 'rgb(var(--cc-diff-removed))'

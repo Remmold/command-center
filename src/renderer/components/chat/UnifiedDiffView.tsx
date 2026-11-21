@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Button } from '../ui/Button'
 
 interface Props {
   text: string
@@ -24,15 +25,15 @@ function classifyLine(line: string): { row: string; bg: string } {
     return { row: 'text-fg font-semibold', bg: '' }
   }
   if (line.startsWith('@@')) {
-    return { row: 'text-sky-400', bg: 'bg-sidebar/40' }
+    return { row: 'text-link', bg: 'bg-sidebar' }
   }
   if (line.startsWith('+')) {
-    return { row: 'text-emerald-300', bg: 'bg-emerald-950/40' }
+    return { row: 'text-fg', bg: 'bg-diff-inserted' }
   }
   if (line.startsWith('-')) {
-    return { row: 'text-red-300', bg: 'bg-red-950/40' }
+    return { row: 'text-fg', bg: 'bg-diff-removed' }
   }
-  return { row: 'text-muted', bg: '' }
+  return { row: 'text-fg', bg: '' }
 }
 
 export function UnifiedDiffView({ text, className, maxLines = DEFAULT_MAX }: Props) {
@@ -49,13 +50,13 @@ export function UnifiedDiffView({ text, className, maxLines = DEFAULT_MAX }: Pro
   return (
     <div
       className={
-        'overflow-x-auto font-mono text-[11.5px] leading-relaxed ' + (className ?? '')
+        'overflow-x-auto font-mono text-[12px] leading-[18px] ' + (className ?? '')
       }
     >
       {visibleLines.map((line, i) => {
         const c = classifyLine(line)
         return (
-          <div key={i} className={`${c.row} ${c.bg}`}>
+          <div key={i} className={`min-w-max px-2 ${c.row} ${c.bg}`}>
             <span className="whitespace-pre">{line || ' '}</span>
           </div>
         )
@@ -66,12 +67,9 @@ export function UnifiedDiffView({ text, className, maxLines = DEFAULT_MAX }: Pro
             Diff truncated at {maxLines} lines —{' '}
             <span className="text-fg">{allLines.length - maxLines}</span> more hidden
           </span>
-          <button
-            onClick={() => setExpanded(true)}
-            className="rounded bg-list-selected px-2 py-0.5 text-fg hover:bg-strong"
-          >
+          <Button variant="secondary" onClick={() => setExpanded(true)}>
             show all
-          </button>
+          </Button>
         </div>
       )}
     </div>

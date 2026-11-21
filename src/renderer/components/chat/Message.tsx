@@ -1,63 +1,40 @@
-import { useState } from 'react'
 import { Markdown } from '../ui/Markdown'
-import {
-  AlertCircle,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  CircleDollarSign,
-  CodeXml,
-  FileEdit,
-  FilePlus,
-  FileSearch,
-  Globe,
-  HardDriveDownload,
-  Hash,
-  Notebook,
-  Search,
-  Terminal as TerminalIcon,
-  Wrench,
-  type LucideIcon
-} from 'lucide-react'
 import type { ContentBlock } from '../../../shared/types'
 import type { ChatItem, ToolResultItem, ResultItem } from './types'
-import { computeUnifiedDiff, shortPath, trimContext } from './diff'
+import { computeUnifiedDiff, trimContext, type DiffSegment } from './diff'
 import { UnifiedDiffView, isUnifiedDiff } from './UnifiedDiffView'
+import { DiffLines } from './DiffLines'
+import { ToolCallRow, ToolCallSection, ToolCallText, type ToolCallStatus } from './ToolCallRow'
+import { toolCallTitle } from './toolCall'
+import { useToolContext } from './toolContext'
 
-interface MessageProps {
-  item: ChatItem
-}
-
-export function Message({ item }: MessageProps) {
+export function Message({ item }: { item: ChatItem }) {
   switch (item.kind) {
     case 'user':
-      return <UserBubble text={item.text} />
+      return <UserPrompt text={item.text} />
     case 'assistant':
-      return <AssistantBubble content={item.content} />
+      return <AssistantMessage content={item.content} />
     case 'tool_result':
-      return <ToolResultBubble item={item} />
+      return <LooseToolResult item={item} />
     case 'result':
-      return <ResultFooter item={item} />
+      return <TurnFooter item={item} />
     case 'system':
       return <SystemNote text={item.text} />
   }
 }
 
-function UserBubble({ text }: { text: string }) {
+function UserPrompt({ text }: { text: string }) {
   return (
-    <div className="flex justify-end">
-      <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-list-selected px-4 py-2.5 text-[13px] leading-relaxed text-fg">
-        {text}
-      </div>
+    <div className="whitespace-pre-wrap break-words rounded-md border border-strong bg-input px-3 py-2 text-[13px] leading-relaxed text-fg">
+      {text}
     </div>
   )
 }
 
-function AssistantBubble({ content }: { content: ContentBlock[] }) {
+function AssistantMessage({ content }: { content: ContentBlock[] }) {
   if (content.length === 0) return null
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {content.map((block, i) => (
         <ContentBlockView key={i} block={block} />
       ))}
@@ -66,90 +43,16 @@ function AssistantBubble({ content }: { content: ContentBlock[] }) {
 }
 
 function ContentBlockView({ block }: { block: ContentBlock }) {
-  if (block.type === 'text') {
-    return <Markdown text={(block as { text: string }).text} />
-  }
-  if (block.type === 'tool_use') {
-    return <ToolUseCard block={block as { name: string; input: unknown; id: string }} />
-  }
+  if (block.type === 'text') return <Markdown text={(block as { text: string }).text} />
+  if (block.type === 'tool_use') return <ToolCall block={block as ToolUse} />
   return null
 }
 
-// ---------- Tool use cards ----------
 
-interface ToolMeta {
-  Icon: LucideIcon
-  accent: string // tailwind border-* class for the left rail
-  iconColor: string
-  label: string
-}
-
-const TOOL_META: Record<string, ToolMeta> = {
-  Bash: { Icon: TerminalIcon, accent: 'border-emerald-500/60', iconColor: 'text-emerald-400', label: 'Run command' },
-  Edit: { Icon: FileEdit, accent: 'border-amber-500/60', iconColor: 'text-amber-400', label: 'Edit file' },
-  Write: { Icon: FilePlus, accent: 'border-amber-500/60', iconColor: 'text-amber-400', label: 'Write file' },
-  Read: { Icon: FileSearch, accent: 'border-blue-500/60', iconColor: 'text-blue-400', label: 'Read file' },
-  Glob: { Icon: Hash, accent: 'border-blue-500/60', iconColor: 'text-blue-400', label: 'Find files' },
-  Grep: { Icon: Search, accent: 'border-blue-500/60', iconColor: 'text-blue-400', label: 'Search text' },
-  WebFetch: { Icon: Globe, accent: 'border-cyan-500/60', iconColor: 'text-cyan-400', label: 'Fetch URL' },
-  WebSearch: { Icon: Globe, accent: 'border-cyan-500/60', iconColor: 'text-cyan-400', label: 'Web search' },
-  NotebookEdit: { Icon: Notebook, accent: 'border-amber-500/60', iconColor: 'text-amber-400', label: 'Edit notebook' }
-}
-
-function toolMeta(name: string): ToolMeta {
-  return (
-    TOOL_META[name] ?? {
-      Icon: Wrench,
-      accent: 'border-strong',
-      iconColor: 'text-muted',
-      label: name
-    }
-  )
-}
-
-function ToolUseCard({ block }: { block: { name: string; input: unknown; id: string } }) {
-  if (block.name === 'Edit' && isEditInput(block.input)) {
-    return <EditDiffCard input={block.input} />
-  }
-  if (block.name === 'Write' && isWriteInput(block.input)) {
-    return <WriteFileCard input={block.input} />
-  }
-  return <GenericToolUseCard block={block} />
-}
-
-function GenericToolUseCard({ block }: { block: { name: string; input: unknown; id: string } }) {
-  const [open, setOpen] = useState(false)
-  const meta = toolMeta(block.name)
-  const summary = summarizeToolInput(block.name, block.input)
-  return (
-    <div
-      className={`rounded-md border-l-2 ${meta.accent} border-y border-r border-subtle bg-sidebar/40`}
-    >
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-list-hover"
-      >
-        <meta.Icon size={15} strokeWidth={1.75} className={`mt-0.5 shrink-0 ${meta.iconColor}`} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-[12px]">
-            <span className="font-medium text-fg">{meta.label}</span>
-            <span className="text-[10px] text-muted">{block.name}</span>
-          </div>
-          {summary && (
-            <div className="mt-0.5 truncate font-mono text-[11.5px] text-muted">{summary}</div>
-          )}
-        </div>
-        <span className="mt-0.5 shrink-0 text-faint">
-          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        </span>
-      </button>
-      {open && (
-        <pre className="overflow-x-auto border-t border-subtle bg-black/40 px-4 py-2.5 text-[11px] text-fg">
-          {JSON.stringify(block.input, null, 2)}
-        </pre>
-      )}
-    </div>
-  )
+interface ToolUse {
+  id: string
+  name: string
+  input: unknown
 }
 
 interface EditInput {
@@ -167,11 +70,7 @@ interface WriteInput {
 function isEditInput(input: unknown): input is EditInput {
   if (!input || typeof input !== 'object') return false
   const o = input as Record<string, unknown>
-  return (
-    typeof o.file_path === 'string' &&
-    typeof o.old_string === 'string' &&
-    typeof o.new_string === 'string'
-  )
+  return typeof o.file_path === 'string' && typeof o.old_string === 'string' && typeof o.new_string === 'string'
 }
 
 function isWriteInput(input: unknown): input is WriteInput {
@@ -180,221 +79,108 @@ function isWriteInput(input: unknown): input is WriteInput {
   return typeof o.file_path === 'string' && typeof o.content === 'string'
 }
 
-function EditDiffCard({ input }: { input: EditInput }) {
-  const [open, setOpen] = useState(true)
-  const segments = trimContext(computeUnifiedDiff(input.old_string, input.new_string))
-  const adds = segments.reduce(
-    (n, s) => n + (s.kind === 'add' ? countLines(s.text) : 0),
-    0
-  )
-  const dels = segments.reduce(
-    (n, s) => n + (s.kind === 'remove' ? countLines(s.text) : 0),
-    0
-  )
+function statusOf(result: ToolResultItem | undefined): ToolCallStatus {
+  if (!result) return 'pending'
+  return result.isError ? 'error' : 'ok'
+}
+
+function ToolCall({ block }: { block: ToolUse }) {
+  const { pairs, cwd } = useToolContext()
+  const result = pairs.resultFor.get(block.id)
+  const { name, target } = toolCallTitle(block.name, block.input, cwd)
+  const status = statusOf(result)
+
+  if (block.name === 'Edit' && isEditInput(block.input)) {
+    const segments = trimContext(computeUnifiedDiff(block.input.old_string, block.input.new_string))
+    return (
+      <ToolCallRow name={name} target={target} status={status} meta={<DiffCounts adds={countSegmentLines(segments, 'add')} dels={countSegmentLines(segments, 'remove')} replaceAll={block.input.replace_all} />} defaultOpen>
+        <ToolCallSection label="diff">
+          <DiffLines segments={segments} />
+        </ToolCallSection>
+        {result?.isError && <ResultSection result={result} />}
+      </ToolCallRow>
+    )
+  }
+
+  if (block.name === 'Write' && isWriteInput(block.input)) {
+    return (
+      <ToolCallRow name={name} target={target} status={status} meta={<DiffCounts adds={countLines(block.input.content)} />}>
+        <ToolCallSection label="in">
+          <ToolCallText>{block.input.content}</ToolCallText>
+        </ToolCallSection>
+        {result && <ResultSection result={result} />}
+      </ToolCallRow>
+    )
+  }
+
+  const resultText = result ? stringifyToolResult(result.content) : ''
+  const showsDiff = !!result && !result.isError && isUnifiedDiff(resultText)
   return (
-    <div className="rounded-md border-l-2 border-amber-500/60 border-y border-r border-subtle bg-sidebar/40">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-list-hover"
-      >
-        <FileEdit size={15} strokeWidth={1.75} className="shrink-0 text-amber-400" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-[12px]">
-            <span className="font-medium text-fg">Edit</span>
-            <span className="truncate font-mono text-[11.5px] text-muted">
-              {shortPath(input.file_path)}
-            </span>
-            {input.replace_all && (
-              <span className="rounded bg-list-selected px-1.5 py-0.5 text-[10px] text-muted">
-                replace_all
-              </span>
-            )}
-          </div>
-        </div>
-        <span className="shrink-0 text-[11px]">
-          <span className="text-emerald-400">+{adds}</span>
-          <span className="text-faint mx-1">/</span>
-          <span className="text-red-400">-{dels}</span>
-        </span>
-        <span className="shrink-0 text-faint">
-          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        </span>
-      </button>
-      {open && (
-        <div className="border-t border-subtle bg-black/50">
-          <DiffView segments={segments} />
-        </div>
+    <ToolCallRow name={name} target={target} status={status} defaultOpen={showsDiff}>
+      <ToolCallSection label="in">
+        <ToolCallText>{inputText(block.input)}</ToolCallText>
+      </ToolCallSection>
+      {result && <ResultSection result={result} />}
+    </ToolCallRow>
+  )
+}
+
+function ResultSection({ result }: { result: ToolResultItem }) {
+  const text = stringifyToolResult(result.content)
+  const tone = result.isError ? 'error' : 'normal'
+  return (
+    <ToolCallSection label="out" tone={tone}>
+      {!result.isError && isUnifiedDiff(text) ? (
+        <UnifiedDiffView text={text} className="py-1" />
+      ) : (
+        <ToolCallText>{text || '(no output)'}</ToolCallText>
       )}
-    </div>
+    </ToolCallSection>
   )
 }
 
-function WriteFileCard({ input }: { input: WriteInput }) {
-  const [open, setOpen] = useState(false)
-  const lineCount = countLines(input.content)
-  return (
-    <div className="rounded-md border-l-2 border-amber-500/60 border-y border-r border-subtle bg-sidebar/40">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-list-hover"
-      >
-        <FilePlus size={15} strokeWidth={1.75} className="shrink-0 text-amber-400" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-[12px]">
-            <span className="font-medium text-fg">Write</span>
-            <span className="truncate font-mono text-[11.5px] text-muted">
-              {shortPath(input.file_path)}
-            </span>
-          </div>
-        </div>
-        <span className="shrink-0 text-[11px] text-emerald-400">+{lineCount}</span>
-        <span className="shrink-0 text-faint">
-          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        </span>
-      </button>
-      {open && (
-        <pre className="overflow-x-auto border-t border-subtle bg-black/50 px-4 py-3 text-[11.5px] text-fg">
-          {input.content}
-        </pre>
-      )}
-    </div>
-  )
-}
-
-function DiffView({
-  segments
-}: {
-  segments: { kind: 'add' | 'remove' | 'context'; text: string }[]
-}) {
-  return (
-    <div className="overflow-x-auto font-mono text-[11.5px] leading-relaxed">
-      {segments.map((seg, i) => {
-        const lines = seg.text.split('\n')
-        if (lines[lines.length - 1] === '') lines.pop()
-        const bg =
-          seg.kind === 'add'
-            ? 'bg-emerald-950/40'
-            : seg.kind === 'remove'
-              ? 'bg-red-950/40'
-              : ''
-        const prefix = seg.kind === 'add' ? '+' : seg.kind === 'remove' ? '-' : ' '
-        const textColor =
-          seg.kind === 'add'
-            ? 'text-emerald-300'
-            : seg.kind === 'remove'
-              ? 'text-red-300'
-              : 'text-muted'
-        return (
-          <div key={i} className={bg}>
-            {lines.map((line, j) => (
-              <div key={j} className={`flex ${textColor}`}>
-                <span className="w-5 shrink-0 select-none text-faint">{prefix}</span>
-                <span className="whitespace-pre">{line}</span>
-              </div>
-            ))}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ---------- Tool result ----------
-
-function ToolResultBubble({ item }: { item: ToolResultItem }) {
+/** A result whose call is not in the chat, e.g. cut off by a shortened transcript. */
+function LooseToolResult({ item }: { item: ToolResultItem }) {
+  const { pairs } = useToolContext()
+  if (pairs.isPaired(item)) return null
   const text = stringifyToolResult(item.content)
-  const looksLikeDiff = !item.isError && isUnifiedDiff(text)
-  const [open, setOpen] = useState(looksLikeDiff)
-  const preview = toolResultPreview(item.content)
-  const Icon = item.isError ? AlertCircle : CheckCircle2
-  const accent = item.isError ? 'border-red-500/60' : 'border-emerald-500/60'
-  const iconColor = item.isError ? 'text-red-400' : 'text-emerald-400'
-  const label = item.isError ? 'Tool error' : looksLikeDiff ? 'Git diff' : 'Tool result'
   return (
-    <div
-      className={`rounded-md border-l-2 ${accent} border-y border-r border-subtle bg-sidebar/30`}
-    >
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-start gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-list-hover"
-      >
-        <Icon size={14} strokeWidth={2} className={`mt-0.5 shrink-0 ${iconColor}`} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-[11px]">
-            <span className={item.isError ? 'text-red-300' : 'text-emerald-300'}>{label}</span>
-            <span className="truncate text-muted">{preview}</span>
-          </div>
-        </div>
-        <span className="mt-0.5 shrink-0 text-faint">
-          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        </span>
-      </button>
-      {open && (
-        <div className="border-t border-subtle bg-black/40">
-          {looksLikeDiff ? (
-            <UnifiedDiffView text={text} className="px-4 py-2.5" />
-          ) : (
-            <pre className="overflow-x-auto whitespace-pre-wrap px-4 py-2.5 text-[11.5px] text-fg">
-              {text}
-            </pre>
-          )}
-        </div>
-      )}
-    </div>
+    <ToolCallRow name="Result" target={oneLine(text)} status={statusOf(item)} defaultOpen={!item.isError && isUnifiedDiff(text)}>
+      <ResultSection result={item} />
+    </ToolCallRow>
   )
 }
 
-// ---------- Result footer ----------
-
-function ResultFooter({ item }: { item: ResultItem }) {
-  const cost = item.costUsd !== undefined ? `$${item.costUsd.toFixed(4)}` : null
-  const dur = item.durationMs !== undefined ? `${(item.durationMs / 1000).toFixed(1)}s` : null
+function DiffCounts({ adds, dels, replaceAll }: { adds: number; dels?: number; replaceAll?: boolean }) {
   return (
-    <div className="flex items-center gap-3 px-2 text-[10.5px] text-muted">
-      <CodeXml
-        size={12}
-        strokeWidth={1.75}
-        className={item.isError ? 'text-red-400' : 'text-muted'}
-      />
-      <span className={item.isError ? 'text-red-400' : 'text-muted'}>
-        {item.isError ? 'turn error' : 'turn complete'}
-      </span>
-      {dur && (
-        <span className="flex items-center gap-1">
-          <Clock size={11} strokeWidth={1.75} /> {dur}
-        </span>
-      )}
-      {cost && (
-        <span className="flex items-center gap-1">
-          <CircleDollarSign size={11} strokeWidth={1.75} /> {cost}
-        </span>
-      )}
-      {item.numTurns !== undefined && (
-        <span className="flex items-center gap-1">
-          <HardDriveDownload size={11} strokeWidth={1.75} />
-          {item.numTurns} turn{item.numTurns === 1 ? '' : 's'}
-        </span>
-      )}
-    </div>
+    <span className="flex items-center gap-1.5 font-mono text-[11px]">
+      {replaceAll && <span className="text-faint">replace all</span>}
+      <span className="text-success">+{adds}</span>
+      {dels !== undefined && <span className="text-error">-{dels}</span>}
+    </span>
   )
+}
+
+
+function TurnFooter({ item }: { item: ResultItem }) {
+  const parts = [item.isError ? 'turn error' : 'turn complete']
+  if (item.durationMs !== undefined) parts.push(`${(item.durationMs / 1000).toFixed(1)}s`)
+  if (item.costUsd !== undefined) parts.push(`$${item.costUsd.toFixed(4)}`)
+  if (item.numTurns !== undefined) parts.push(`${item.numTurns} turn${item.numTurns === 1 ? '' : 's'}`)
+  return <div className={`px-1.5 text-[11px] ${item.isError ? 'text-error' : 'text-faint'}`}>{parts.join(' · ')}</div>
 }
 
 function SystemNote({ text }: { text: string }) {
-  return <div className="px-2 text-[10.5px] italic text-muted">{text}</div>
+  return <div className="px-1.5 text-[11px] text-faint">{text}</div>
 }
 
-// ---------- helpers ----------
 
-function summarizeToolInput(name: string, input: unknown): string {
-  if (!input || typeof input !== 'object') return ''
-  const obj = input as Record<string, unknown>
-  if (name === 'Bash' && typeof obj.command === 'string') return obj.command
-  if (name === 'Read' && typeof obj.file_path === 'string') return shortPath(obj.file_path)
-  if (name === 'Write' && typeof obj.file_path === 'string') return shortPath(obj.file_path)
-  if (name === 'Edit' && typeof obj.file_path === 'string') return shortPath(obj.file_path)
-  if (name === 'Glob' && typeof obj.pattern === 'string') return obj.pattern
-  if (name === 'Grep' && typeof obj.pattern === 'string') return obj.pattern
-  return ''
+function inputText(input: unknown): string {
+  if (input && typeof input === 'object') {
+    const command = (input as Record<string, unknown>).command
+    if (typeof command === 'string') return command
+  }
+  return JSON.stringify(input, null, 2) ?? ''
 }
 
 function stringifyToolResult(content: unknown): string {
@@ -407,13 +193,16 @@ function stringifyToolResult(content: unknown): string {
       })
       .join('\n')
   }
-  return JSON.stringify(content, null, 2)
+  return JSON.stringify(content, null, 2) ?? ''
 }
 
-function toolResultPreview(content: unknown): string {
-  const s = stringifyToolResult(content)
-  const oneline = s.replace(/\s+/g, ' ').trim()
-  return oneline.length > 140 ? oneline.slice(0, 140) + '…' : oneline
+function oneLine(text: string): string {
+  const s = text.replace(/\s+/g, ' ').trim()
+  return s.length > 140 ? s.slice(0, 140) + '…' : s
+}
+
+function countSegmentLines(segments: DiffSegment[], kind: 'add' | 'remove'): number {
+  return segments.reduce((n, s) => n + (s.kind === kind ? countLines(s.text) : 0), 0)
 }
 
 function countLines(text: string): number {

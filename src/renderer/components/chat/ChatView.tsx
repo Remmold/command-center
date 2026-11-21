@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Message } from './Message'
+import { ChatItems } from './ChatItems'
+import { MessageColumn } from './MessageColumn'
+import { ChatBanner } from './ChatBanner'
+import { Button } from '../ui/Button'
 import type {
   AssistantMessageItem,
   ChatItem,
@@ -303,53 +306,42 @@ export function ChatView({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-        {error && (
-          <div className="rounded-md border border-red-900 bg-red-950/30 px-3 py-2 text-sm text-red-300">
-            {error}
-            <button
-              onClick={() => setError(null)}
-              className="ml-2 rounded bg-red-900 px-2 py-0.5 text-xs hover:bg-red-800"
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
+        <MessageColumn className="space-y-3">
+          {error && (
+            <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
+              {error}
+            </ChatBanner>
+          )}
+          {items.length === 0 && !error && !processRunning && !inProgress && (
+            <div className="py-10 text-center text-sm text-faint">starting claude…</div>
+          )}
+          {showIdleBanner && (
+            <ChatBanner
+              action={
+                <Button variant="secondary" onClick={handleResume}>
+                  {resumeSessionId ? 'resume now' : 'start'}
+                </Button>
+              }
             >
-              dismiss
-            </button>
-          </div>
-        )}
-        {items.length === 0 && !error && !processRunning && !inProgress && (
-          <div className="flex h-full items-center justify-center text-sm text-faint">
-            starting claude…
-          </div>
-        )}
-        {showIdleBanner && (
-          <div className="flex items-center justify-between rounded-md border border-subtle bg-sidebar/50 px-3 py-2 text-xs text-muted">
-            <span>
               {resumeSessionId
                 ? 'paused — sending will resume this session'
                 : 'idle — sending will start a new claude process'}
-            </span>
-            <button
-              onClick={handleResume}
-              className="rounded bg-list-selected px-2 py-1 text-xs text-fg hover:bg-strong"
-            >
-              {resumeSessionId ? 'resume now' : 'start'}
-            </button>
-          </div>
-        )}
-        {items.map((item) => (
-          <Message key={item.id} item={item} />
-        ))}
-        {inProgress && <Message item={inProgress} />}
-        {pendingPermissions.map((req, i) => (
-          <PermissionPrompt
-            key={req.requestId}
-            request={req}
-            primaryActionRef={i === 0 ? firstPromptRef : undefined}
-            onResolve={() => resolvePermission(req.requestId)}
-          />
-        ))}
-        {turnActive && !inProgress && pendingPermissions.length === 0 && (
-          <div className="text-xs italic text-muted">claude is thinking…</div>
-        )}
+            </ChatBanner>
+          )}
+          <ChatItems items={items} cwd={cwd} streaming={inProgress} />
+          {pendingPermissions.map((req, i) => (
+            <PermissionPrompt
+              key={req.requestId}
+              request={req}
+              primaryActionRef={i === 0 ? firstPromptRef : undefined}
+              onResolve={() => resolvePermission(req.requestId)}
+            />
+          ))}
+          {turnActive && !inProgress && pendingPermissions.length === 0 && (
+            <div className="px-1.5 text-xs text-faint">claude is thinking…</div>
+          )}
+        </MessageColumn>
       </div>
       <InputBox
         disabled={turnActive}
