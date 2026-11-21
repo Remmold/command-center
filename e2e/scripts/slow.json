@@ -1,0 +1,13 @@
+{
+  "turns": [
+    {
+      "match": "",
+      "repeat": true,
+      "events": [
+        { "type": "text", "text": "Starting a long job." },
+        { "type": "wait", "ms": 60000 },
+        { "type": "text", "text": "The long job finished." }
+      ]
+    }
+  ]
+}

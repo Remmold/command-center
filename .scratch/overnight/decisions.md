@@ -51,3 +51,8 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: honour `CLAUDE_CONFIG_DIR` always, like the CLI; rejected because a session's own `CLAUDE_CONFIG_DIR` could leak into a `pnpm dev` started from it.
 17. **The fake's interrupted result is built from the CLI's own result schema, not recorded.** The recording's interrupt arrived before the turn started, so the CLI answered `still_queued: []` and ran the turn. The shape (`subtype: error_during_execution`, `is_error: true`, `errors: []`, no `result`) comes from the schema inside the CLI binary; the "[Request interrupted by user]" note comes from the app's existing interrupt handling.
     - Real tokens spent: 2 Haiku prompts (the approval turn and the one meant to be interrupted).
+18. **`pnpm e2e` always builds first** (`electron-vite build`, about 6 s), instead of checking whether `out/` is stale.
+    - Why: a staleness check can miss a changed file and test an old app; the build is cheap next to the suite.
+    - Alternative: compare `out/` and `src/` timestamps and skip the build.
+19. **Each smoke test also gets its own temp home** (`USERPROFILE`/`HOME`), on top of the temp user data, workspace and `CLAUDE_CONFIG_DIR`. Tests run one at a time; the whole suite takes about 12 s, so running them in parallel isn't worth the risk.
+20. **`pnpm e2e` is documented in `CLAUDE.md` as part of the full check before a merge or release**, without the term "Ship mode", which comes from your personal instructions and not the team's.

@@ -1,2 +1,2 @@
 - 01 fake-claude: resolved (fake CLI, locator wiring, recorded fixtures; app verified on the fake)
-- 02 electron-smoke-suite: ready-for-agent
+- 02 electron-smoke-suite: in-progress (suite green, review pending)

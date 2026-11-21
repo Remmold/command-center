@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Playwright (`@playwright/test` with `_electron`) as a dev dependency; `pnpm e2e` builds if needed and runs the suite; not part of `pnpm quick`; documented in CLAUDE.md as part of Ship mode
 - [ ] Each test is isolated (own temp dirs), launches the app, and closes it and its process tree afterwards
