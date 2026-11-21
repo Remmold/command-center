@@ -12,5 +12,6 @@
 - [ ] Thinking toggle in the footer: on sends `set_max_thinking_tokens` 31999, off sends 0 (field name per the research doc); default on; stored per session
 - [ ] Before a session has spawned (no initialize reply yet), the pill shows the stored default and a cached model list from the last initialize of any session
 - [ ] Work list rows show a muted `model · effort` tag (model display name short form, effort omitted when unset)
+- [ ] Settings → General gets the extension's "Allow dangerously skip permissions" toggle (its `allowDangerouslySkipPermissions` setting, off by default; label and description per the extension). When on, sessions spawn with `--allow-dangerously-skip-permissions`, so Bypass permissions appears in the mode picker and Shift+Tab cycle; when off, Bypass stays hidden as today
 - [ ] Tests (pure): models → picker options, pill text, the settings.json merge, the row tag
 - [ ] Real-CLI check in a temp workspace: switch model and effort mid-session, the next reply's `system/init`-reported or result-reported model matches, history kept
