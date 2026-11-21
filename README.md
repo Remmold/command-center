@@ -8,15 +8,15 @@ Each open project gets its own pane with an embedded `claude` CLI session (real 
 
 ## Prerequisites
 
-- **Node.js 20+**
+- **Node.js 20+** and **pnpm 10**
 - **Claude Code CLI** on PATH (`claude` or `claude.cmd`). See https://docs.claude.com/en/docs/claude-code for install.
-- **Windows:** Visual Studio Build Tools (Desktop development with C++) and Python 3 are required to build the `node-pty` native module (added in Phase C). Skip until then.
+- **Windows:** nothing extra. `node-pty` ships prebuilt binaries that load in Electron as-is; Visual Studio Build Tools are only needed to build it from source.
 
 ## Run (dev)
 
 ```sh
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 This opens the Electron window with hot reload for the renderer.
@@ -24,8 +24,8 @@ This opens the Electron window with hot reload for the renderer.
 ## Build
 
 ```sh
-npm run build
-npm start
+pnpm build
+pnpm start
 ```
 
 ## Layout
