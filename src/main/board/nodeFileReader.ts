@@ -20,5 +20,13 @@ export const nodeFileReader: BoardFileReader = {
       if (MISSING.has((err as NodeJS.ErrnoException).code ?? '')) return null
       throw err
     }
+  },
+  async modifiedAt(path: string): Promise<number | null> {
+    try {
+      return (await fs.stat(path)).mtimeMs
+    } catch (err) {
+      if (MISSING.has((err as NodeJS.ErrnoException).code ?? '')) return null
+      throw err
+    }
   }
 }

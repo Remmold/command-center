@@ -24,8 +24,9 @@ function feature(name: string, tickets: BoardTicket[], state?: FeatureState): Bo
     name,
     state: state ?? (tickets.length === 0 ? 'spec-only' : done === tickets.length ? 'finished' : 'active'),
     progress: { done, total: tickets.length, lastNote: `${name} note` },
+    lastActivity: null,
     tickets,
-    sightings: [{ workspaceId: 'ws', specPath: null, progressPath: null }]
+    sightings: [{ workspaceId: 'ws', specPath: null, progressPath: null, lastActivity: null }]
   }
 }
 

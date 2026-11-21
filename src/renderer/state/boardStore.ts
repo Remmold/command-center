@@ -15,6 +15,7 @@ interface BoardState {
   /** Share of the board's width the reading panel takes. */
   panelShare: number
   collapsedLanes: string[]
+  nowBuildingOpen: boolean
   selected: TicketRef | null
   init: () => void
   rescan: () => void
@@ -23,6 +24,7 @@ interface BoardState {
   setGroupBy: (groupBy: GroupBy) => void
   toggleShowFinished: () => void
   toggleLane: (laneKey: string) => void
+  toggleNowBuilding: () => void
   setPanelShare: (share: number) => void
   select: (ticket: TicketRef | null) => void
 }
@@ -38,6 +40,7 @@ export const useBoardStore = create<BoardState>()(
       showFinished: false,
       panelShare: 0.5,
       collapsedLanes: [],
+      nowBuildingOpen: true,
       selected: null,
       init: () => {
         if (get().initialized) return
@@ -68,6 +71,7 @@ export const useBoardStore = create<BoardState>()(
             ? s.collapsedLanes.filter((k) => k !== laneKey)
             : [...s.collapsedLanes, laneKey]
         })),
+      toggleNowBuilding: () => set((s) => ({ nowBuildingOpen: !s.nowBuildingOpen })),
       setPanelShare: (panelShare) => set({ panelShare }),
       select: (selected) => set({ selected })
     }),
@@ -75,7 +79,13 @@ export const useBoardStore = create<BoardState>()(
       name: 'command-center.board',
       storage: createJSONStorage(() => localStorage),
       version: 1,
-      partialize: (s) => ({ filter: s.filter, groupBy: s.groupBy, showFinished: s.showFinished, panelShare: s.panelShare })
+      partialize: (s) => ({
+        filter: s.filter,
+        groupBy: s.groupBy,
+        showFinished: s.showFinished,
+        panelShare: s.panelShare,
+        nowBuildingOpen: s.nowBuildingOpen
+      })
     }
   )
 )

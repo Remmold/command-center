@@ -395,6 +395,8 @@ export interface FeatureSighting {
   workspaceId: string
   specPath: string | null
   progressPath: string | null
+  /** Newest modification time (epoch ms) of this copy's spec, progress notes, tickets and ticket notes. */
+  lastActivity: number | null
 }
 
 export type FeatureState = 'active' | 'finished' | 'spec-only' | 'empty'
@@ -410,6 +412,8 @@ export interface BoardFeature {
   name: string
   state: FeatureState
   progress: FeatureProgress
+  /** Newest lastActivity across the feature's worktree copies. */
+  lastActivity: number | null
   tickets: BoardTicket[]
   sightings: FeatureSighting[]
 }

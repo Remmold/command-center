@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { create } from 'zustand'
 import type { SessionStatus, SessionStatusEntry } from '../../shared/types'
 import { mostUrgentStatus } from '../../shared/needsYou'
@@ -50,4 +51,17 @@ export function useWorkspacesStatus(workspaceIds: readonly string[]): SessionSta
 
 export function useWorkspaceStatus(workspaceId: string): SessionStatus | null {
   return useWorkspacesStatus([workspaceId])
+}
+
+/** Statuses of each workspace's hosted sessions, by workspace id. */
+export function useStatusesByWorkspace(): Record<string, SessionStatus[]> {
+  const views = useProjectViewsStore((s) => s.views)
+  const byPane = useSessionStatusStore((s) => s.byPane)
+  return useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(views).map(([id, view]) => [id, view.claudeSessions.map((c) => byPane[c.id]?.status ?? 'idle')])
+      ),
+    [views, byPane]
+  )
 }

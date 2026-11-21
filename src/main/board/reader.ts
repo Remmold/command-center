@@ -24,6 +24,8 @@ export interface DirEntry {
 export interface BoardFileReader {
   listDir(path: string): Promise<DirEntry[]>
   readFile(path: string): Promise<string | null>
+  /** Modification time in epoch ms. */
+  modifiedAt(path: string): Promise<number | null>
 }
 
 const COLUMN_OF_WORD: Record<string, BoardColumn> = {
@@ -156,6 +158,15 @@ async function readTickets(issuesDir: string, files: BoardFileReader): Promise<P
   return tickets
 }
 
+function newest(times: Array<number | null>): number | null {
+  return times.reduce<number | null>((best, t) => (t !== null && (best === null || t > best) ? t : best), null)
+}
+
+async function newestChange(paths: Array<string | null>, files: BoardFileReader): Promise<number | null> {
+  const present = paths.filter((p): p is string => p !== null)
+  return newest(await Promise.all(present.map((p) => files.modifiedAt(p))))
+}
+
 async function readFeatureCopies(workspace: Workspace, files: BoardFileReader): Promise<Map<string, FeatureCopy>> {
   const scratch = join(workspace.path, '.scratch')
   const copies = new Map<string, FeatureCopy>()
@@ -164,16 +175,20 @@ async function readFeatureCopies(workspace: Workspace, files: BoardFileReader): 
     const dir = join(scratch, entry.name)
     const ownFiles = new Set((await listFileNames(dir, files)).map((n) => n.toLowerCase()))
     const pathIfPresent = (name: string): string | null => (ownFiles.has(name) ? join(dir, name) : null)
+    const specPath = pathIfPresent('spec.md')
     const progressPath = pathIfPresent('progress.md')
     const notes = progressPath ? await files.readFile(progressPath) : null
+    const tickets = await readTickets(join(dir, 'issues'), files)
+    const featureFiles = [specPath, progressPath, ...tickets.flatMap((t) => [t.filePath, t.progressPath])]
     copies.set(entry.name, {
       sighting: {
         workspaceId: workspace.id,
-        specPath: pathIfPresent('spec.md'),
-        progressPath
+        specPath,
+        progressPath,
+        lastActivity: await newestChange(featureFiles, files)
       },
       noteLines: (notes ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== ''),
-      tickets: await readTickets(join(dir, 'issues'), files)
+      tickets
     })
   }
   return copies
@@ -244,7 +259,15 @@ function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
   )
   for (const card of tickets) card.sightings.sort((a, b) => COLUMN_RANK[b.column] - COLUMN_RANK[a.column])
   const progress = progressOf(tickets, copies)
-  return { name, state: stateOf(progress, copies), progress, tickets, sightings: copies.map((c) => c.sighting) }
+  const sightings = copies.map((c) => c.sighting)
+  return {
+    name,
+    state: stateOf(progress, copies),
+    progress,
+    lastActivity: newest(sightings.map((s) => s.lastActivity)),
+    tickets,
+    sightings
+  }
 }
 
 export async function readBoard(workspaces: Workspace[], files: BoardFileReader): Promise<BoardModel> {

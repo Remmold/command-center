@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -273,13 +273,14 @@ describe('board reader', () => {
     const features = model.repoGroups[0].features
     expect(features.map((f) => f.name)).toEqual(['camera-feel', 'controls-options'])
     expect(features[0].tickets).toEqual([])
-    expect(features[0].sightings).toEqual([{ workspaceId: 'w', specPath: null, progressPath: null }])
+    expect(features[0].sightings).toEqual([{ workspaceId: 'w', specPath: null, progressPath: null, lastActivity: null }])
     expect(features[1].tickets.map((t) => [t.number, t.column])).toEqual([['01', 'backlog']])
     expect(features[1].sightings).toEqual([
       {
         workspaceId: 'w',
         specPath: join(root, '.scratch/controls-options/spec.md'),
-        progressPath: join(root, '.scratch/controls-options/progress.md')
+        progressPath: join(root, '.scratch/controls-options/progress.md'),
+        lastActivity: expect.any(Number)
       }
     ])
   })
@@ -368,6 +369,46 @@ describe('board reader', () => {
     const [feature] = model.repoGroups[0].features
     expect(feature.progress).toEqual({ done: 2, total: 2, lastNote: '- 02 resolved in the shard' })
     expect(feature.state).toBe('finished')
+  })
+
+  it('records each feature copy’s newest file change and the feature’s newest across worktree copies', async () => {
+    const dir = '.scratch/combat/'
+    const main = fixture({
+      [dir + 'spec.md']: '# spec',
+      [dir + 'progress.md']: '- notes',
+      [dir + 'issues/01-swing.md']: ticket('01: Swing', ['**Status:** resolved']),
+      [dir + 'issues/notes.txt']: 'not a ticket'
+    })
+    const shard = fixture({
+      [dir + 'spec.md']: '# spec',
+      [dir + 'issues/01-swing.md']: ticket('01: Swing', ['**Status:** in-progress']),
+      [dir + 'issues/01-swing.progress.md']: 'working'
+    })
+    const at = (root: string, rel: string, ms: number): void => utimesSync(join(root, rel), ms / 1000, ms / 1000)
+    at(main, dir + 'spec.md', 1_000_000)
+    at(main, dir + 'progress.md', 3_000_000)
+    at(main, dir + 'issues/01-swing.md', 2_000_000)
+    at(main, dir + 'issues/notes.txt', 9_000_000)
+    at(shard, dir + 'spec.md', 1_000_000)
+    at(shard, dir + 'issues/01-swing.md', 4_000_000)
+    at(shard, dir + 'issues/01-swing.progress.md', 5_000_000)
+    const key = 'git:c:/projects/fs/.git'
+    const model = await readBoard(
+      [workspace(main, { id: 'main', repoGroupKey: key }), workspace(shard, { id: 'shard', repoGroupKey: key })],
+      nodeFileReader
+    )
+    const [feature] = model.repoGroups[0].features
+    expect(feature.sightings.map((s) => [s.workspaceId, s.lastActivity])).toEqual([
+      ['main', 3_000_000],
+      ['shard', 5_000_000]
+    ])
+    expect(feature.lastActivity).toBe(5_000_000)
+  })
+
+  it('gives a feature folder with no feature files no activity time', async () => {
+    const root = fixture({ '.scratch/loose/readme.txt': 'hi' })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    expect(model.repoGroups[0].features[0]).toMatchObject({ lastActivity: null, sightings: [{ lastActivity: null }] })
   })
 
   it('returns no features for a workspace without a .scratch folder', async () => {

@@ -27,6 +27,7 @@ import { EmptyHint } from '../ui/Section'
 import { Swimlane } from '../ui/Swimlane'
 import { BoardToolbar } from './BoardToolbar'
 import { NotAddedLine } from './NotAddedLine'
+import { NowBuildingStrip } from './NowBuildingStrip'
 import { cardAnchorId, SpecOnlyCard, TicketCard } from './TicketCard'
 import { TicketDrawer } from './TicketDrawer'
 
@@ -79,6 +80,7 @@ export function BoardView() {
   return (
     <DrawerHost>
       <DrawerMain>
+        <NowBuildingStrip />
         <NotAddedLine />
         <BoardToolbar model={model} />
         {model.repoGroups.length === 0 ? <EmptyHint>No tickets yet. Add a workspace that has a .scratch folder.</EmptyHint> : lanes}

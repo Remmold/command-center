@@ -53,7 +53,7 @@ export interface BoardViewOptions {
   showFinished: boolean
 }
 
-function featureKey(repoGroupKey: string, featureName: string): string {
+export function featureKey(repoGroupKey: string, featureName: string): string {
   return `${repoGroupKey}/${featureName}`
 }
 

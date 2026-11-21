@@ -35,6 +35,23 @@ export function ListRowText({ primary, secondary }: { primary: string; secondary
   )
 }
 
+export function ListRowLabel({ children, tooltip, tone = 'primary' }: { children: ReactNode; tooltip?: string; tone?: 'primary' | 'secondary' }) {
+  const look = tone === 'primary' ? 'font-medium text-zinc-200' : 'text-zinc-400'
+  return (
+    <span title={tooltip} className={`max-w-[16rem] shrink-0 truncate ${look}`}>
+      {children}
+    </span>
+  )
+}
+
+export function ListRowNote({ children }: { children: string | null }) {
+  return (
+    <span title={children ?? undefined} className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
+      {children}
+    </span>
+  )
+}
+
 export function ListRowMeta({ children }: { children: ReactNode }) {
   return <span className="shrink-0 text-[10px] tabular-nums text-zinc-500">{children}</span>
 }
