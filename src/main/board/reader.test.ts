@@ -405,6 +405,20 @@ describe('board reader', () => {
     expect(feature.lastActivity).toBe(5_000_000)
   })
 
+  it('takes the last note from the most recently edited progress.md across worktree copies', async () => {
+    const dir = '.scratch/combat/'
+    const main = fixture({ [dir + 'progress.md']: '- 01 resolved: a\n- 02 resolved: b\n- 03 resolved: c' })
+    const shard = fixture({ [dir + 'progress.md']: '- 04 in-progress: newest' })
+    utimesSync(join(main, dir + 'progress.md'), 1_000, 1_000)
+    utimesSync(join(shard, dir + 'progress.md'), 2_000, 2_000)
+    const key = 'git:c:/projects/fs/.git'
+    const model = await readBoard(
+      [workspace(main, { id: 'main', repoGroupKey: key }), workspace(shard, { id: 'shard', repoGroupKey: key })],
+      nodeFileReader
+    )
+    expect(model.repoGroups[0].features[0].progress.lastNote).toBe('- 04 in-progress: newest')
+  })
+
   it('gives a feature folder with no feature files no activity time', async () => {
     const root = fixture({ '.scratch/loose/readme.txt': 'hi' })
     const model = await readBoard([workspace(root)], nodeFileReader)

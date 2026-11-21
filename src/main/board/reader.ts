@@ -62,6 +62,7 @@ interface ParsedTicket {
 interface FeatureCopy {
   sighting: FeatureSighting
   noteLines: string[]
+  notesChangedAt: number | null
   tickets: ParsedTicket[]
 }
 
@@ -188,6 +189,7 @@ async function readFeatureCopies(workspace: Workspace, files: BoardFileReader): 
         lastActivity: await newestChange(featureFiles, files)
       },
       noteLines: (notes ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== ''),
+      notesChangedAt: await newestChange([progressPath], files),
       tickets
     })
   }
@@ -208,11 +210,17 @@ function resolvedNumbers(copies: FeatureCopy[]): Set<TicketNumber> {
 }
 
 function progressOf(tickets: BoardTicket[], copies: FeatureCopy[]): FeatureProgress {
-  const fullest = copies.reduce<string[]>((best, c) => (c.noteLines.length > best.length ? c.noteLines : best), [])
+  const latest = copies
+    .filter((c) => c.noteLines.length > 0)
+    .reduce<FeatureCopy | null>((best, c) => {
+      if (!best) return c
+      const byTime = (c.notesChangedAt ?? 0) - (best.notesChangedAt ?? 0)
+      return byTime > 0 || (byTime === 0 && c.noteLines.length > best.noteLines.length) ? c : best
+    }, null)
   return {
     done: tickets.filter((t) => t.column === 'done').length,
     total: tickets.length,
-    lastNote: fullest.at(-1) ?? null
+    lastNote: latest?.noteLines.at(-1) ?? null
   }
 }
 
