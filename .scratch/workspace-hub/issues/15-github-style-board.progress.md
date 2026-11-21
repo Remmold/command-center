@@ -1,0 +1,3 @@
+- done: board as four columns + toolbar (repo/feature/search/group-by), finished hiding, slim Not added line + Review dialog (merged counts), resizable reading panel with up/down/Esc, persisted view; 158/158; booted on real data (FS 35/48/218, darkfall 1/53), 355 cards render in ~30-40 ms, no virtualization — 0d8366c, eed2ac1
+- next: Lane 2 look check by Andreas; spec.md Renderer bullet (line 130) still describes the old chips/Finished strip
+- open reds: none
