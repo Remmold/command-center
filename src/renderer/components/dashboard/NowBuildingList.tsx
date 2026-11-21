@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { timeAgo, type NowBuilding, type NowBuildingRow } from '../../state/nowBuilding'
+import { plainNote } from '../../state/plainNote'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -55,7 +56,7 @@ function FeatureRow({ row, now, onOpen }: { row: NowBuildingRow; now: number; on
         </ListRowLabel>
       )}
       {row.status && <StatusTag status={row.status} />}
-      <ListRowNote>{lastNote}</ListRowNote>
+      <ListRowNote>{lastNote && plainNote(lastNote)}</ListRowNote>
       {row.lastActivity !== null && <ListRowMeta>{timeAgo(row.lastActivity, now)}</ListRowMeta>}
     </ListRow>
   )
