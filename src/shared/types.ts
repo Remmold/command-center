@@ -1,0 +1,256 @@
+export interface Project {
+  id: string
+  name: string
+  path: string
+  createdAt: number
+}
+
+export type PtyKind = 'pwsh' | 'powershell' | 'cmd' | 'bash'
+
+export interface SpawnResult {
+  ok: boolean
+  error?: string
+}
+
+export interface PtyDataEvent {
+  paneId: string
+  data: string
+}
+
+export interface PtyExitEvent {
+  paneId: string
+  exitCode: number
+  signal: number | null
+}
+
+// Claude stream-json events. Only the fields we care about — the JSON
+// payloads from `claude --output-format stream-json` are large and we
+// pass them through as `unknown` and narrow at the call site.
+export interface ClaudeEventEnvelope {
+  paneId: string
+  event: ClaudeEvent
+}
+
+export type ClaudeEvent =
+  | ClaudeSystemEvent
+  | ClaudeAssistantEvent
+  | ClaudeUserEvent
+  | ClaudeResultEvent
+  | ClaudeStreamEvent
+  | { type: string; [key: string]: unknown }
+
+export interface ClaudeSystemEvent {
+  type: 'system'
+  subtype: string
+  session_id?: string
+  cwd?: string
+  model?: string
+  [key: string]: unknown
+}
+
+export interface ClaudeAssistantEvent {
+  type: 'assistant'
+  message: {
+    id: string
+    role: 'assistant'
+    content: ContentBlock[]
+    model?: string
+    usage?: unknown
+  }
+  parent_tool_use_id?: string | null
+  session_id?: string
+  uuid?: string
+}
+
+export interface ClaudeUserEvent {
+  type: 'user'
+  message: {
+    role: 'user'
+    content: ContentBlock[]
+  }
+}
+
+export interface ClaudeResultEvent {
+  type: 'result'
+  subtype: string
+  is_error: boolean
+  duration_ms?: number
+  num_turns?: number
+  result?: string
+  stop_reason?: string
+  total_cost_usd?: number
+  session_id?: string
+}
+
+// Partial streaming events from --include-partial-messages
+export interface ClaudeStreamEvent {
+  type: 'stream_event'
+  event: unknown
+  parent_tool_use_id?: string | null
+  session_id?: string
+}
+
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: unknown }
+  | { type: 'tool_result'; tool_use_id: string; content: unknown; is_error?: boolean }
+  | { type: string; [key: string]: unknown }
+
+export interface ClaudeExitEnvelope {
+  paneId: string
+  exitCode: number | null
+}
+
+export interface ImageAttachment {
+  media_type: string
+  data: string
+}
+
+export interface PermissionRequest {
+  requestId: string
+  paneId: string
+  toolName: string
+  toolInput: unknown
+  sessionId?: string
+}
+
+export interface PermissionResponse {
+  decision: 'approve' | 'block'
+  reason?: string
+  modifiedInput?: unknown
+}
+
+export interface GitFile {
+  path: string
+  staged: string
+  unstaged: string
+}
+
+export interface GitStatusResult {
+  ok: boolean
+  isRepo: boolean
+  branch?: string
+  files: GitFile[]
+  error?: string
+}
+
+export interface GitDiffResult {
+  ok: boolean
+  text?: string
+  error?: string
+}
+
+export interface LocalSessionInfo {
+  sessionId: string
+  modifiedAt: number
+  preview: string
+  messageCount: number
+}
+
+// A machine-wide app/server the command center can launch and monitor.
+export interface ManagedApp {
+  id: string
+  name: string
+  cwd: string
+  command: string
+  args: string[]
+  ports: number[] // for status (running if any is listening) and stop (kill holders)
+  updateCommand?: string // run before launch when 'update' is requested (e.g. 'git pull')
+}
+
+export type ManagedAppInput = Omit<ManagedApp, 'id'>
+
+export interface AppStatus {
+  id: string
+  running: boolean
+  busy: boolean
+}
+
+export interface AppActionResult {
+  ok: boolean
+  error?: string
+}
+
+export interface AppOutputEvent {
+  id: string
+  data: string
+}
+
+export interface AppExitEvent {
+  id: string
+  exitCode: number | null
+}
+
+export interface RendererApi {
+  projects: {
+    list: () => Promise<Project[]>
+    add: () => Promise<Project | null>
+    remove: (id: string) => Promise<void>
+  }
+  apps: {
+    list: () => Promise<ManagedApp[]>
+    add: (app: ManagedAppInput) => Promise<ManagedApp>
+    remove: (id: string) => Promise<void>
+    start: (id: string, update?: boolean) => Promise<AppActionResult>
+    stop: (id: string) => Promise<AppActionResult>
+    status: () => Promise<AppStatus[]>
+    onOutput: (cb: (event: AppOutputEvent) => void) => () => void
+    onExit: (cb: (event: AppExitEvent) => void) => () => void
+  }
+  pty: {
+    spawn: (paneId: string, kind: PtyKind, cwd: string) => Promise<SpawnResult>
+    write: (paneId: string, data: string) => void
+    resize: (paneId: string, cols: number, rows: number) => void
+    kill: (paneId: string) => void
+    onData: (cb: (event: PtyDataEvent) => void) => () => void
+    onExit: (cb: (event: PtyExitEvent) => void) => () => void
+  }
+  files: {
+    list: (cwd: string) => Promise<string[]>
+    saveAs: (
+      suggestedName: string,
+      content: string
+    ) => Promise<{ saved: boolean; path?: string }>
+    read: (
+      cwd: string,
+      relativePath: string
+    ) => Promise<{ ok: boolean; content?: string; binary?: boolean; size?: number; error?: string }>
+    write: (
+      cwd: string,
+      relativePath: string,
+      content: string
+    ) => Promise<{ ok: boolean; error?: string }>
+  }
+  claude: {
+    start: (
+      paneId: string,
+      cwd: string,
+      model?: string,
+      resumeSessionId?: string,
+      permissionMode?: string
+    ) => Promise<SpawnResult>
+    send: (paneId: string, text: string, images?: ImageAttachment[]) => void
+    interrupt: (paneId: string) => void
+    stop: (paneId: string) => void
+    onEvent: (cb: (envelope: ClaudeEventEnvelope) => void) => () => void
+    onExit: (cb: (envelope: ClaudeExitEnvelope) => void) => () => void
+    listLocalSessions: (cwd: string) => Promise<LocalSessionInfo[]>
+  }
+  permission: {
+    onRequest: (cb: (request: PermissionRequest) => void) => () => void
+    respond: (
+      requestId: string,
+      response: PermissionResponse,
+      allowForSession?: boolean
+    ) => void
+  }
+  git: {
+    status: (cwd: string) => Promise<GitStatusResult>
+    diff: (
+      cwd: string,
+      path: string,
+      staged: boolean,
+      untracked?: boolean
+    ) => Promise<GitDiffResult>
+  }
+}
