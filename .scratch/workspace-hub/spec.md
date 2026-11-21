@@ -36,7 +36,7 @@ Each workspace uses an **account profile**, a named Claude login of its own. Eve
 12. As Andreas, I want a sidebar listing every workspace, with worktrees nested under their repo group, so that FantasySurvival and its shards read as one family.
 13. As Andreas, I want the repo group detected automatically from git, so that I don't maintain the grouping by hand.
 14. As Andreas, I want each workspace row to show its account profile and the status of its sessions, so that the sidebar is my overview.
-15. As Andreas, I want the existing chat, file tree, editor, git pane, shells and apps dashboard kept as they are, so that I lose nothing I use today.
+15. As Andreas, I want the Sessions view to be chat-first: the chat fills the workspace area, the file tree, editor and git pane are hidden behind one toggle (closed by default), shells open only on demand, and the apps dashboard and in-chat diff cards stay, so that the conversation is the focus and nothing is lost.
 16. As Andreas, I want VS Code sessions active in the last 30 minutes in my workspaces shown as observed sessions (read-only, marked "in VS Code"), so that I can see all my work while I move over.
 17. As Andreas, I want an observed session to show Live or Quiet and render its conversation as it updates, so that I can follow it without switching windows.
 18. As Andreas, I want observed sessions that go quiet for over 30 minutes to drop off the live list, so that it stays short.
@@ -127,6 +127,7 @@ Each workspace uses an **account profile**, a named Claude login of its own. Eve
 - **Renderer.** A top-level view switch (Sessions | Board) in the title bar, with Ctrl+1 / Ctrl+2. Chat tab switching moves from Ctrl+1..9 to Alt+1..9 to free them. The Sessions sidebar is grouped by repo group. A Needs you queue panel has a "next waiting" shortcut. The Board view has repo group / workspace filter chips, a Finished features strip, and a ticket drawer with rendered markdown and Open session. A usage strip has one bar per profile.
 - **Tray and lifecycle (main).** Single-instance lock: a second launch focuses the first. Closing the window hides it. The tray menu has Open, Sessions, Board, Start with Windows ✓ and Quit, and Quit confirms when any session is Running. Start with Windows uses Electron's login-item setting with a "hidden" argument, so the app starts in the tray. The checkbox reflects the real login-item state.
 - **Packaging.** electron-builder, NSIS, per-user install, no admin. The tray icon and app icon live in the build resources. Autostart is only offered in the installed build; in dev the checkbox is disabled and says why.
+- **Chat-first layout.** The workspace area shows the chat full width. A single toggle (button + shortcut) slides in the IDE panels (file tree, editor, git pane) as they are today; it is closed by default and remembered per workspace. The bottom shell strip is gone; a shell opens as a tab or drawer on request, and the account login (ticket 08) opens one the same way. The apps dashboard and in-chat diff cards are unchanged. Nothing is deleted.
 - **Docs.** `docs/BACKLOG.md` is marked as replaced by this revamp. The README describes the two views, profiles and tray.
 
 ## Testing Decisions

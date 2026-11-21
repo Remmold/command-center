@@ -2,7 +2,7 @@
 
 **What to build:** the app lives in the system tray. Closing the window hides it while sessions keep running, and a badge and tooltip show the waiting sessions. Windows notifications fire when a session needs Andreas.
 
-**Blocked by:** 03, 05
+**Blocked by:** 03, 05, 13
 
 **Status:** ready-for-agent
 

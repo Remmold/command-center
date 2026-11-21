@@ -2,7 +2,7 @@
 
 **What to build:** the docs describe the revamped app.
 
-**Blocked by:** 04, 07, 09, 10, 11
+**Blocked by:** 04, 07, 09, 10, 11, 13
 
 **Status:** ready-for-agent
 
