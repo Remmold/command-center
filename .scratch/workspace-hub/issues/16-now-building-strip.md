@@ -4,7 +4,7 @@
 
 **Blocked by:** 15
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] The board model carries, per feature, its **last activity time**: the newest modification time of its `spec.md`, `progress.md`, ticket files and ticket `.progress.md` files, across every worktree copy. The board reader gets it through the injected file reader (a stat call); the reader still never writes.
 - [x] A feature is **active** when any of these holds: (a) any of its tickets is in the In progress column; (b) its last activity is within the last 24 hours; (c) a hosted session in one of its workspaces is Running, and this feature is that workspace's most recently active feature. A finished feature (every ticket done) counts as active only through (b), and its row shows "finished".
