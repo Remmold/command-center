@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shortcutFor, type KeyChord } from './shortcutMap'
+import { shortcutApplies, shortcutFor, type KeyChord } from './shortcutMap'
 
 const ctrl = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: true, metaKey: false, altKey: false })
 const alt = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: false, metaKey: false, altKey: true })
@@ -20,9 +20,9 @@ describe('keyboard shortcuts', () => {
     expect(shortcutFor(ctrl(';', 'Comma'))).toEqual({ name: 'openSettings' })
   })
 
-  it('Alt+1..9 pick a tab by position', () => {
-    expect(shortcutFor(alt('1', 'Digit1'))).toEqual({ name: 'switchTabIndex', index: 0 })
-    expect(shortcutFor(alt('9', 'Digit9'))).toEqual({ name: 'switchTabIndex', index: 8 })
+  it('Alt+1..9 pick a session list row by position', () => {
+    expect(shortcutFor(alt('1', 'Digit1'))).toEqual({ name: 'selectRow', index: 0 })
+    expect(shortcutFor(alt('9', 'Digit9'))).toEqual({ name: 'selectRow', index: 8 })
   })
 
   it('AltGr (Ctrl+Alt) with a digit is typing, not a shortcut', () => {
@@ -54,6 +54,24 @@ describe('keyboard shortcuts', () => {
     const names = chords.map((c) => JSON.stringify(shortcutFor(c)))
     expect(new Set(names).size).toBe(chords.length)
     expect(names).not.toContain('null')
+  })
+
+  describe('outside Work', () => {
+    const workOnly = [ctrl('t', 'KeyT'), ctrl('w', 'KeyW'), ctrl('k', 'KeyK'), ctrl('b', 'KeyB'), ctrl('`', 'Backquote'), alt('1', 'Digit1')]
+    const everywhere = [ctrl('1', 'Digit1'), ctrl('2', 'Digit2'), ctrl(',', 'Comma'), ctrl('j', 'KeyJ')]
+    const applies = (c: KeyChord, screen: Parameters<typeof shortcutApplies>[1]) => shortcutApplies(shortcutFor(c)!, screen)
+
+    it('leaves the chat, row, IDE and shell shortcuts to Work', () => {
+      for (const view of ['dashboard', 'board'] as const) {
+        expect(workOnly.map((c) => applies(c, { view, settingsOpen: false }))).toEqual(workOnly.map(() => false))
+      }
+      expect(workOnly.map((c) => applies(c, { view: 'work', settingsOpen: true }))).toEqual(workOnly.map(() => false))
+      expect(workOnly.map((c) => applies(c, { view: 'work', settingsOpen: false }))).toEqual(workOnly.map(() => true))
+    })
+
+    it('keeps view switching, Settings and Ctrl+J everywhere', () => {
+      expect(everywhere.map((c) => applies(c, { view: 'board', settingsOpen: true }))).toEqual(everywhere.map(() => true))
+    })
   })
 
   it('ignores unmodified keys', () => {

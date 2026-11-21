@@ -49,10 +49,6 @@ export function useWorkspacesStatus(workspaceIds: readonly string[]): SessionSta
   })
 }
 
-export function useWorkspaceStatus(workspaceId: string): SessionStatus | null {
-  return useWorkspacesStatus([workspaceId])
-}
-
 /** Statuses of each workspace's hosted sessions, by workspace id. */
 export function useStatusesByWorkspace(): Record<string, SessionStatus[]> {
   const views = useProjectViewsStore((s) => s.views)

@@ -278,6 +278,7 @@ export function ChatView({
     appendItems(paneId, [
       { kind: 'user', id: crypto.randomUUID(), text: userText } as ChatItem
     ])
+    useProjectViewsStore.getState().notePrompt(paneId, text)
     const ok = await ensureStarted()
     if (!ok) return
     setTurnActive(true)

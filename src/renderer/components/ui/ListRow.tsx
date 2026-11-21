@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 interface Props {
   children: ReactNode
   onClick: () => void
+  onDoubleClick?: () => void
   tooltip?: string
   nested?: boolean
   active?: boolean
@@ -11,11 +12,12 @@ interface Props {
 const IDLE = 'text-fg hover:bg-list-hover focus-visible:bg-list-hover'
 const ACTIVE = 'bg-list-selected text-fg'
 
-export function ListRow({ children, onClick, tooltip, nested = false, active = false }: Props) {
+export function ListRow({ children, onClick, onDoubleClick, tooltip, nested = false, active = false }: Props) {
   return (
     <li>
       <button
         onClick={onClick}
+        onDoubleClick={onDoubleClick}
         title={tooltip}
         aria-current={active || undefined}
         className={`flex w-full min-w-0 items-center gap-2 py-1 text-left text-xs focus-visible:outline-none ${nested ? 'pl-9 pr-2' : 'px-3'} ${active ? ACTIVE : IDLE}`}

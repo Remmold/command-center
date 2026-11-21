@@ -5,24 +5,26 @@ import { chatOnScreen, type ShellOptions } from './projectViewLayout'
 import { useProjectViewsStore, type ProjectView, type ShellTab } from './projectViewsStore'
 import { useSessionStatusStore } from './sessionStatusStore'
 import { useViewStore } from './viewStore'
+import { useObservedStore } from './observedStore'
 
 export const NEXT_WAITING_SHORTCUT = 'Ctrl+J'
 
 export interface HostedSessionRef {
   paneId: string
   projectId: string
-  label: string
+  title: string
 }
 
 export function hostedSessions(views: Record<string, ProjectView>): HostedSessionRef[] {
   return Object.values(views).flatMap((v) =>
-    v.claudeSessions.map((c) => ({ paneId: c.id, projectId: v.projectId, label: c.label }))
+    v.claudeSessions.map((c) => ({ paneId: c.id, projectId: v.projectId, title: c.title }))
   )
 }
 
 export function paneOnScreen(): string | null {
   const screen = useViewStore.getState()
   if (screen.view !== 'work' || screen.settings !== null) return null
+  if (useObservedStore.getState().viewing) return null
   const { views, activeProjectId } = useProjectViewsStore.getState()
   const view = activeProjectId ? views[activeProjectId] : undefined
   if (!view || !chatOnScreen(view)) return null
@@ -42,15 +44,17 @@ export const useFocusRequestStore = create<FocusRequestState>((set, get) => ({
   clear: () => set({ request: null })
 }))
 
-export function openSession(paneId: string): boolean {
+/** Brings a hosted session's chat on screen in Work; `focus: false` leaves keyboard focus where it is. */
+export function openSession(paneId: string, { focus = true }: { focus?: boolean } = {}): boolean {
   const views = useProjectViewsStore.getState()
   const target = hostedSessions(views.views).find((s) => s.paneId === paneId)
   if (!target) return false
   useViewStore.getState().setView('work')
+  useObservedStore.getState().close()
   views.setActive(target.projectId)
   views.setActiveClaudeSession(target.projectId, paneId)
   views.setCenterView(target.projectId, 'chat')
-  useFocusRequestStore.getState().requestFocus(paneId)
+  if (focus) useFocusRequestStore.getState().requestFocus(paneId)
   return true
 }
 

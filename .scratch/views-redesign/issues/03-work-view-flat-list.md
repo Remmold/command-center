@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Session list model (pure): takes hosted sessions (from the existing per-workspace session state), their statuses, observed sessions, workspaces and repo identities. Returns grouped, ordered rows: groups Needs you → Running → Idle → In VS Code, most recent activity first within each group, filtered by search over title, repo name and worktree tag. Waiting rows inside Needs you keep the queue order (longest wait first).
 - [ ] Session titles: each hosted session stores a `title`. It is set from its first user prompt (first line, whitespace collapsed, cut to 60 characters with "…") unless renamed, and a rename is kept. Before any prompt the title is "New session". Persisted with the session. Double-click a row to rename.

@@ -1,10 +1,8 @@
-import { useEffect, useRef } from 'react'
-import { ActivityBar } from './components/ActivityBar'
+import { useCallback, useEffect, useRef } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { DashboardView } from './components/DashboardView'
 import { SettingsPage } from './components/settings/SettingsPage'
-import { Sidebar } from './components/Sidebar'
-import { ProjectView } from './components/ProjectView'
+import { WorkView } from './components/work/WorkView'
 import { useProjectViewsStore } from './state/projectViewsStore'
 import { useAppsStore } from './state/appsStore'
 import { useUsageStore, type RateLimitInfo } from './state/usageStore'
@@ -14,25 +12,21 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
-import { jumpToNextWaiting } from './state/sessionNavigation'
+import { jumpToNextWaiting, openSession, paneOnScreen } from './state/sessionNavigation'
+import { openRowAt } from './state/workSessions'
+import { useWorkspacesStore } from './state/workspacesStore'
+import { useProfilesStore } from './state/profilesStore'
 import { useReportScreenFocus } from './hooks/useReportScreenFocus'
 import { useMainNavigation } from './hooks/useMainNavigation'
 import { useNotificationIcons } from './hooks/useNotificationIcons'
 import type { ClaudeResultEvent } from '../shared/types'
 import { useObservedStore } from './state/observedStore'
-import { ObservedChatView } from './components/chat/ObservedChatView'
 
 interface RawResultUsage {
   modelUsage?: Record<string, RawModelUsage>
 }
 
 export function App() {
-  const order = useProjectViewsStore((s) => s.order)
-  const views = useProjectViewsStore((s) => s.views)
-  const activeProjectId = useProjectViewsStore((s) => s.activeProjectId)
-  const idePanelsOpen = useProjectViewsStore((s) =>
-    s.activeProjectId ? (s.views[s.activeProjectId]?.idePanelsOpen ?? false) : false
-  )
   const recordResult = useUsageStore((s) => s.recordResult)
   const setRateLimit = useUsageStore((s) => s.setRateLimit)
   const addPermissionRequest = usePermissionsStore((s) => s.addRequest)
@@ -41,9 +35,18 @@ export function App() {
   const initApps = useAppsStore((s) => s.init)
   const initSessionStatus = useSessionStatusStore((s) => s.init)
   const initObserved = useObservedStore((s) => s.init)
-  const observedOpen = useObservedStore((s) => s.viewing !== null && s.viewing.workspaceId === activeProjectId)
+  const loadWorkspaces = useWorkspacesStore((s) => s.load)
+  const loadProfiles = useProfilesStore((s) => s.load)
 
   const focusInputRef = useRef<() => void>()
+  const registerFocus = useCallback((fn: () => void) => {
+    focusInputRef.current = fn
+  }, [])
+
+  useEffect(() => {
+    void loadWorkspaces()
+    void loadProfiles()
+  }, [loadWorkspaces, loadProfiles])
 
   useEffect(() => {
     initApps()
@@ -98,34 +101,24 @@ export function App() {
     newChat: () => {
       const projectId = useProjectViewsStore.getState().activeProjectId
       if (!projectId) return
-      useProjectViewsStore.getState().addClaudeSession(projectId)
-      useProjectViewsStore.getState().setCenterView(projectId, 'chat')
+      const created = useProjectViewsStore.getState().addClaudeSession(projectId)
+      if (created) openSession(created.id)
     },
     closeActiveChat: () => {
-      const state = useProjectViewsStore.getState()
-      const projectId = state.activeProjectId
-      if (!projectId) return
-      const view = state.views[projectId]
-      if (!view?.activeClaudeSessionId) return
-      state.closeClaudeSession(projectId, view.activeClaudeSessionId)
+      const target = paneOnScreen()
+      const projectId = useProjectViewsStore.getState().activeProjectId
+      if (target && projectId) useProjectViewsStore.getState().closeClaudeSession(projectId, target)
     },
     focusInput: () => focusInputRef.current?.(),
     toggleIdePanels: () => {
-      const projectId = useProjectViewsStore.getState().activeProjectId
+      const projectId = openHostedWorkspace()
       if (projectId) useProjectViewsStore.getState().toggleIdePanels(projectId)
     },
     toggleShellDrawer: () => {
-      const projectId = useProjectViewsStore.getState().activeProjectId
+      const projectId = openHostedWorkspace()
       if (projectId) useProjectViewsStore.getState().toggleShellDrawer(projectId)
     },
-    switchTabIndex: (i) => {
-      const state = useProjectViewsStore.getState()
-      const projectId = state.activeProjectId
-      if (!projectId) return
-      const view = state.views[projectId]
-      const target = view?.claudeSessions[i]
-      if (target) state.setActiveClaudeSession(projectId, target.id)
-    }
+    selectRow: openRowAt
   })
 
   return (
@@ -143,46 +136,10 @@ export function App() {
           </div>
         )}
         <div
-          className={'flex min-h-0 min-w-0 flex-1 ' + (appView === 'work' ? '' : 'invisible')}
+          className={'min-h-0 min-w-0 flex-1 ' + (appView === 'work' ? '' : 'invisible')}
           aria-hidden={appView !== 'work'}
         >
-          <Sidebar />
-          {idePanelsOpen && <ActivityBar />}
-          <div className="relative min-w-0 flex-1">
-            {observedOpen && (
-              <div className="absolute inset-0 z-10">
-                <ObservedChatView />
-              </div>
-            )}
-            {order.length === 0 && (
-              <div className="flex h-full items-center justify-center text-sm text-muted">
-                pick a workspace in the sidebar, or click + to add one
-              </div>
-            )}
-            {order.map((projectId) => {
-              const view = views[projectId]
-              if (!view) return null
-              const active = projectId === activeProjectId
-              return (
-                <div
-                  key={projectId}
-                  className={'absolute inset-0 ' + (active ? '' : 'invisible')}
-                  aria-hidden={!active}
-                >
-                  <ProjectView
-                    view={view}
-                    registerFocus={
-                      active
-                        ? (fn) => {
-                            focusInputRef.current = fn
-                          }
-                        : undefined
-                    }
-                  />
-                </div>
-              )
-            })}
-          </div>
+          <WorkView registerFocus={registerFocus} />
         </div>
       </div>
       {settingsSection && (
@@ -192,4 +149,10 @@ export function App() {
       )}
     </div>
   )
+}
+
+/** The workspace of the hosted session on screen; none while an observed session is open. */
+function openHostedWorkspace(): string | null {
+  if (useObservedStore.getState().viewing) return null
+  return useProjectViewsStore.getState().activeProjectId
 }

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { AppView } from '../state/viewStore'
-import { shortcutFor, type ShortcutAction } from './shortcutMap'
+import { useViewStore } from '../state/viewStore'
+import { shortcutApplies, shortcutFor, type ShortcutAction } from './shortcutMap'
 
 export const IDE_PANELS_SHORTCUT = 'Ctrl+B'
 export const SHELL_DRAWER_SHORTCUT = 'Ctrl+`'
@@ -14,7 +15,7 @@ export interface ShortcutHandlers {
   focusInput?: () => void
   toggleIdePanels?: () => void
   toggleShellDrawer?: () => void
-  switchTabIndex?: (index: number) => void
+  selectRow?: (index: number) => void
   loadPastSession?: () => void
   nextWaiting?: () => void
 }
@@ -25,9 +26,9 @@ function run(action: ShortcutAction, handlers: ShortcutHandlers): boolean {
     case 'switchView':
       handlers.switchView?.(action.view)
       return !!handlers.switchView
-    case 'switchTabIndex':
-      handlers.switchTabIndex?.(action.index)
-      return !!handlers.switchTabIndex
+    case 'selectRow':
+      handlers.selectRow?.(action.index)
+      return !!handlers.selectRow
     default: {
       const handler = handlers[action.name]
       handler?.()
@@ -40,7 +41,9 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const action = shortcutFor(e)
-      if (action && run(action, handlers)) e.preventDefault()
+      if (!action) return
+      const { view, settings } = useViewStore.getState()
+      if (shortcutApplies(action, { view, settingsOpen: settings !== null }) && run(action, handlers)) e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

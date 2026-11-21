@@ -79,7 +79,8 @@ export const useObservedStore = create<ObservedState>((set, get) => ({
   },
 
   open: async (workspace, sessionId) => {
-    useProjectViewsStore.getState().openProject(workspace)
+    const views = useProjectViewsStore.getState()
+    if (views.views[workspace.id]) views.setActive(workspace.id)
     const viewing = { workspaceId: workspace.id, sessionId }
     set({ viewing, items: [], shortened: false, loading: true, error: null })
     const res = await window.api.observed.open(workspace.id, sessionId)
@@ -94,11 +95,3 @@ export const useObservedStore = create<ObservedState>((set, get) => ({
     set({ viewing: null, items: [], shortened: false, loading: false, error: null })
   }
 }))
-
-const NO_SESSIONS: ObservedSession[] = []
-
-export function useObservedSessions(workspaceId: string): ObservedSession[] {
-  const sessions = useObservedStore((s) => s.sessions)
-  const mine = sessions.filter((o) => o.workspaceId === workspaceId)
-  return mine.length > 0 ? mine : NO_SESSIONS
-}

@@ -2,7 +2,6 @@ import { Settings } from 'lucide-react'
 import { SETTINGS_SHORTCUT } from '../hooks/useKeyboardShortcuts'
 import { APP_VIEWS } from '../../shared/views'
 import { useViewStore, type AppView } from '../state/viewStore'
-import { ProjectTabs } from './ProjectTabs'
 import { SegmentedControl } from './ui/SegmentedControl'
 import { TitleBarButton } from './ui/TitleBarButton'
 import { UsageStrip } from './UsageStrip'
@@ -27,7 +26,7 @@ export function TitleBar() {
       <div className="shrink-0 border-r border-subtle px-2">
         <SegmentedControl<AppView> label="view" value={view} onChange={setView} options={VIEW_OPTIONS} />
       </div>
-      {view === 'work' ? <ProjectTabs /> : <span className="flex-1" />}
+      <span className="flex-1" />
       <UsageStrip />
       <TitleBarButton label="Settings" tooltip={`Settings (${SETTINGS_SHORTCUT})`} pressed={settingsOpen} onClick={() => (settingsOpen ? closeSettings() : openSettings())}>
         <Settings size={14} strokeWidth={2} />
