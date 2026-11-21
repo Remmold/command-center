@@ -3,12 +3,15 @@ import { join } from 'node:path'
 import { registerIpc } from './ipc'
 import { permissionServer } from './permission/server'
 import { ensureHookScriptInstalled } from './permission/hookScript'
+import { removeLegacyHook } from './permission/launch'
 import { sessionStatusTracker } from './sessions/tracker'
 import * as workspaces from './workspaces/store'
 import { startAttention } from './attention/service'
 import { createRepoIdentityService } from './repoIdentity/service'
-import { loginItemSettings, startWithWindowsState, startsHidden } from './tray/autostart'
-import { createAppTray, type AppTray } from './tray/tray'
+import { startsHidden } from './tray/autostart'
+import { createStartWithWindowsControl } from './tray/startWithWindows'
+import { createAppTray } from './tray/tray'
+import type { StartWithWindowsState } from '../shared/types'
 import { iconPath } from './util/paths'
 import {
   allowWindowClose,
@@ -53,22 +56,6 @@ async function quitConfirmed(): Promise<boolean> {
   return true
 }
 
-function syncStartWithWindows(tray: AppTray): void {
-  let launchesAtLogin = false
-  if (app.isPackaged) {
-    const current = app.getLoginItemSettings({ args: loginItemSettings(true).args })
-    // openAtLogin stays true when the entry is switched off in Task Manager's Startup apps.
-    launchesAtLogin = current.openAtLogin && current.executableWillLaunchAtLogin
-  }
-  tray.setStartWithWindows({
-    ...startWithWindowsState({ packaged: app.isPackaged, launchesAtLogin }),
-    onToggle: (checked) => {
-      app.setLoginItemSettings(loginItemSettings(checked))
-      syncStartWithWindows(tray)
-    }
-  })
-}
-
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -91,8 +78,13 @@ if (!app.requestSingleInstanceLock()) {
     } catch (err) {
       console.error('[permission] failed to start', err)
     }
+    void workspaces
+      .list()
+      .then((all) => Promise.all(all.map((w) => removeLegacyHook(w.path).then((changed) => changed && console.log('[permission] removed legacy hook from', w.path)))))
+      .catch((err) => console.error('[permission] legacy hook cleanup failed', err))
     const repoIdentities = createRepoIdentityService(app.getPath('userData'), iconPath('icon.png'), workspaces.list)
-    registerIpc({ repoIdentities })
+    const startWithWindows = createStartWithWindowsControl()
+    registerIpc({ repoIdentities, startWithWindows })
     const win = createMainWindow({ show: !startsHidden(process.argv) })
 
     const tray = createAppTray({
@@ -102,7 +94,10 @@ if (!app.requestSingleInstanceLock()) {
       getWindow: getMainWindow
     })
     win.on('show', tray.refreshOverlay)
-    syncStartWithWindows(tray)
+    const showStartWithWindows = (state: StartWithWindowsState): void =>
+      tray.setStartWithWindows({ ...state, onToggle: startWithWindows.set })
+    showStartWithWindows(startWithWindows.get())
+    startWithWindows.onChanged(showStartWithWindows)
 
     const stopAttention = startAttention({
       tracker: sessionStatusTracker,

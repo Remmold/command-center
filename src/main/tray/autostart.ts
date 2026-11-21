@@ -1,3 +1,5 @@
+import type { StartWithWindowsState } from '../../shared/types'
+
 /** Passed by the login item so a Windows-login launch starts in the tray. */
 export const HIDDEN_ARG = '--hidden'
 
@@ -5,12 +7,7 @@ export function startsHidden(argv: readonly string[]): boolean {
   return argv.includes(HIDDEN_ARG)
 }
 
-export interface StartWithWindowsState {
-  checked: boolean
-  enabled: boolean
-  /** Shown in the label when the item is disabled, e.g. why autostart isn't offered. */
-  reason?: string
-}
+export type { StartWithWindowsState }
 
 /** Dev builds would register the bare electron.exe, so autostart is installed-app only. */
 export function startWithWindowsState(input: {

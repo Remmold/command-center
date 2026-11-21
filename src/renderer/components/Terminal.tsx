@@ -3,6 +3,7 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { PtyKind } from '../../shared/types'
+import { monoFont, xtermTheme } from '../theme/theme'
 
 interface Props {
   paneId: string
@@ -21,15 +22,11 @@ export function Terminal({ paneId, kind, cwd, env }: Props) {
     if (!container) return
 
     const term = new XTerm({
-      fontFamily: '"Cascadia Code", Consolas, "JetBrains Mono", monospace',
+      fontFamily: monoFont(),
       fontSize: 13,
       cursorBlink: true,
       allowProposedApi: true,
-      theme: {
-        background: '#0a0a0a',
-        foreground: '#e4e4e7',
-        cursor: '#e4e4e7'
-      }
+      theme: xtermTheme()
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
@@ -98,5 +95,5 @@ export function Terminal({ paneId, kind, cwd, env }: Props) {
     }
   }, [paneId, kind, cwd])
 
-  return <div ref={containerRef} className="h-full w-full bg-black" />
+  return <div ref={containerRef} className="h-full w-full bg-editor" />
 }

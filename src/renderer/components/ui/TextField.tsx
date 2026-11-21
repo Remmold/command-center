@@ -1,18 +1,22 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 interface Props {
   label: string
   placeholder?: string
   initialValue?: string
   autoFocus?: boolean
+  /** Leaving the field submits it (or cancels when empty), like renaming in VS Code. */
+  submitOnBlur?: boolean
   /** Called with the trimmed text on Enter; empty text is ignored. */
   onSubmit: (value: string) => void
   onCancel?: () => void
 }
 
 /** A one-line input that submits on Enter and cancels on Escape. */
-export function TextField({ label, placeholder, initialValue = '', autoFocus, onSubmit, onCancel }: Props) {
+export function TextField({ label, placeholder, initialValue = '', autoFocus, submitOnBlur, onSubmit, onCancel }: Props) {
   const [value, setValue] = useState(initialValue)
+  // Enter and Escape unmount the field in most callers; the blur that follows must not act again.
+  const settled = useRef(false)
   return (
     <input
       aria-label={label}
@@ -20,16 +24,29 @@ export function TextField({ label, placeholder, initialValue = '', autoFocus, on
       autoFocus={autoFocus}
       value={value}
       onChange={(e) => setValue(e.target.value)}
+      onFocus={submitOnBlur ? (e) => e.target.select() : undefined}
+      onBlur={
+        submitOnBlur
+          ? () => {
+              if (settled.current) return
+              settled.current = true
+              if (value.trim()) onSubmit(value.trim())
+              else onCancel?.()
+            }
+          : undefined
+      }
       onKeyDown={(e) => {
         if (e.key === 'Enter' && value.trim()) {
+          settled.current = true
           onSubmit(value.trim())
           setValue('')
         } else if (e.key === 'Escape' && onCancel) {
           e.stopPropagation()
+          settled.current = true
           onCancel()
         }
       }}
-      className="w-full min-w-0 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
+      className="w-full min-w-0 rounded border border-strong bg-input px-2 py-1 text-xs text-fg placeholder:text-faint focus:border-focus focus:outline-none"
     />
   )
 }

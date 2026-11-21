@@ -13,7 +13,7 @@ interface Props<T extends string> {
 
 export function SegmentedControl<T extends string>({ options, value, onChange, label }: Props<T>) {
   return (
-    <div role="tablist" aria-label={label} className="flex items-center gap-0.5 rounded-md bg-zinc-900 p-0.5">
+    <div role="tablist" aria-label={label} className="flex items-center gap-0.5 rounded-md bg-sidebar p-0.5">
       {options.map((o) => {
         const selected = o.value === value
         return (
@@ -25,7 +25,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
             onClick={() => onChange(o.value)}
             className={
               'rounded px-2.5 py-1 text-xs transition-colors ' +
-              (selected ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200')
+              (selected ? 'bg-list-selected text-fg' : 'text-muted hover:text-fg')
             }
           >
             {o.label}

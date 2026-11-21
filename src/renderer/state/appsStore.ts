@@ -7,9 +7,7 @@ interface AppsState {
   apps: ManagedApp[]
   status: Record<string, AppStatus>
   output: Record<string, string>
-  showApps: boolean
   initialized: boolean
-  setShowApps: (v: boolean) => void
   init: () => void
   load: () => Promise<void>
   refresh: () => Promise<void>
@@ -25,9 +23,7 @@ export const useAppsStore = create<AppsState>((set, get) => ({
   apps: [],
   status: {},
   output: {},
-  showApps: false,
   initialized: false,
-  setShowApps: (v) => set({ showApps: v }),
   init: () => {
     if (get().initialized) return
     set({ initialized: true })

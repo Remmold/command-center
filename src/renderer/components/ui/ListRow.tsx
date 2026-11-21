@@ -1,27 +1,41 @@
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 
 interface Props {
   children: ReactNode
-  onClick: () => void
+  onClick: (e: MouseEvent) => void
+  onDoubleClick?: () => void
+  onContextMenu?: (e: MouseEvent) => void
   tooltip?: string
   nested?: boolean
   active?: boolean
+  /** Shown over the row's right end while it is hovered or holds focus, unless pinned. */
+  actions?: ReactNode
+  actionsPinned?: boolean
 }
 
-const IDLE = 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100 focus-visible:bg-zinc-900'
-const ACTIVE = 'bg-zinc-800 text-zinc-100'
+const IDLE = 'text-fg hover:bg-list-hover focus-visible:bg-list-hover'
+const ACTIVE = 'bg-list-selected text-fg'
 
-export function ListRow({ children, onClick, tooltip, nested = false, active = false }: Props) {
+export function ListRow({ children, onClick, onDoubleClick, onContextMenu, tooltip, nested = false, active = false, actions, actionsPinned = false }: Props) {
   return (
-    <li>
+    <li className="group relative">
       <button
         onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        onContextMenu={onContextMenu}
         title={tooltip}
         aria-current={active || undefined}
         className={`flex w-full min-w-0 items-center gap-2 py-1 text-left text-xs focus-visible:outline-none ${nested ? 'pl-9 pr-2' : 'px-3'} ${active ? ACTIVE : IDLE}`}
       >
         {children}
       </button>
+      {actions && (
+        <span
+          className={`absolute inset-y-0 right-1 flex items-center ${active ? 'bg-list-selected' : 'bg-list-hover'} ${actionsPinned ? '' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'}`}
+        >
+          {actions}
+        </span>
+      )}
     </li>
   )
 }
@@ -30,13 +44,13 @@ export function ListRowText({ primary, secondary }: { primary: string; secondary
   return (
     <span className="min-w-0 flex-1 truncate">
       {primary}
-      {secondary && <span className="text-zinc-500"> · {secondary}</span>}
+      {secondary && <span className="text-muted"> · {secondary}</span>}
     </span>
   )
 }
 
 export function ListRowLabel({ children, tooltip, tone = 'primary' }: { children: ReactNode; tooltip?: string; tone?: 'primary' | 'secondary' }) {
-  const look = tone === 'primary' ? 'font-medium text-zinc-200' : 'text-zinc-400'
+  const look = tone === 'primary' ? 'font-medium text-fg' : 'text-muted'
   return (
     <span title={tooltip} className={`max-w-[16rem] shrink-0 truncate ${look}`}>
       {children}
@@ -46,20 +60,20 @@ export function ListRowLabel({ children, tooltip, tone = 'primary' }: { children
 
 export function ListRowNote({ children }: { children: string | null }) {
   return (
-    <span title={children ?? undefined} className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
+    <span title={children ?? undefined} className="min-w-0 flex-1 truncate text-[11px] text-muted">
       {children}
     </span>
   )
 }
 
 export function ListRowMeta({ children }: { children: ReactNode }) {
-  return <span className="shrink-0 text-[10px] tabular-nums text-zinc-500">{children}</span>
+  return <span className="shrink-0 text-[10px] tabular-nums text-muted">{children}</span>
 }
 
 /** A non-clickable row: text plus trailing actions. */
 export function ListItem({ children, tooltip, nested = false }: { children: ReactNode; tooltip?: string; nested?: boolean }) {
   return (
-    <li title={tooltip} className={`flex w-full min-w-0 items-center gap-2 py-0.5 text-xs text-zinc-300 ${nested ? 'pl-6' : ''}`}>
+    <li title={tooltip} className={`flex w-full min-w-0 items-center gap-2 py-0.5 text-xs text-fg ${nested ? 'pl-6' : ''}`}>
       {children}
     </li>
   )

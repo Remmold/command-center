@@ -10,6 +10,7 @@ import {
   toggleIdePanels,
   type ShellOptions
 } from './projectViewLayout'
+import { NEW_SESSION_TITLE, migratedTitle, titleAfterPrompt, titleAfterRename, type SessionTitle } from './sessionTitle'
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku' | string
 export type PermissionMode =
@@ -25,9 +26,8 @@ export const PERMISSION_MODES: PermissionMode[] = [
   'plan'
 ]
 
-export interface ClaudeChatSession {
+export interface ClaudeChatSession extends SessionTitle {
   id: string
-  label: string
   model: ClaudeModel
   permissionMode: PermissionMode
   /** session_id reported by claude in stream-json events; used for --resume */
@@ -89,7 +89,8 @@ interface ProjectViewsState {
   activityView: ActivityView
   setActivityView: (view: ActivityView) => void
 
-  openProject: (workspace: Workspace) => void
+  /** Without `firstSession: false` a new view starts with one fresh session. */
+  openProject: (workspace: Workspace, options?: { firstSession?: boolean }) => void
   closeProject: (projectId: string) => void
   setActive: (projectId: string) => void
 
@@ -108,12 +109,14 @@ interface ProjectViewsState {
   setClaudeSessionId: (paneId: string, claudeSessionId: string) => void
   clearClaudeSessionId: (paneId: string) => void
   setSessionPermissionMode: (paneId: string, mode: PermissionMode) => void
-  setSessionLabel: (paneId: string, label: string) => void
+  renameSession: (paneId: string, name: string) => void
+  /** Names a session from its first prompt. */
+  notePrompt: (paneId: string, text: string) => void
   duplicateSession: (projectId: string, sessionId: string) => ClaudeChatSession | null
   loadSessionFromLocal: (
     projectId: string,
     claudeSessionId: string,
-    label?: string,
+    firstPrompt?: string,
     model?: ClaudeModel
   ) => ClaudeChatSession | null
 
@@ -142,10 +145,6 @@ function makeId(): string {
   return crypto.randomUUID()
 }
 
-function nextChatLabel(existing: ClaudeChatSession[]): string {
-  return `chat ${existing.length + 1}`
-}
-
 function findSessionByPane(state: ProjectViewsState, paneId: string): {
   projectId: string
   session: ClaudeChatSession
@@ -156,6 +155,36 @@ function findSessionByPane(state: ProjectViewsState, paneId: string): {
     if (session) return { projectId, session }
   }
   return null
+}
+
+type SetState = (fn: (s: ProjectViewsState) => Partial<ProjectViewsState> | ProjectViewsState) => void
+
+function retitle(set: SetState, paneId: string, change: (t: SessionTitle) => SessionTitle): void {
+  set((s) => {
+    const found = findSessionByPane(s, paneId)
+    if (!found) return s
+    const { title, titleRenamed } = change(found.session)
+    if (title === found.session.title && titleRenamed === found.session.titleRenamed) return s
+    const view = s.views[found.projectId]
+    const claudeSessions = view.claudeSessions.map((c) => (c.id === paneId ? { ...c, title, titleRenamed } : c))
+    return { views: { ...s.views, [found.projectId]: { ...view, claudeSessions } } }
+  })
+}
+
+/** What ChatView appends to a sent prompt that carried images; never part of a title. */
+const IMAGES_NOTE = /\n\n_\[\d+ images? attached\]_$/
+
+/** Titles for sessions saved before they had one, from the user messages already in their chat. */
+function migrateTitles(views: Record<string, { claudeSessions: unknown[] }>): void {
+  const items = useChatItemsStore.getState().items
+  for (const v of Object.values(views)) {
+    v.claudeSessions = v.claudeSessions.map((raw) => {
+      const { label: _label, ...c } = raw as ClaudeChatSession & { label?: string }
+      if (typeof c.title === 'string') return c
+      const prompts = (items[c.id] ?? []).flatMap((i) => (i.kind === 'user' ? [i.text.replace(IMAGES_NOTE, '')] : []))
+      return { ...c, title: migratedTitle(prompts) }
+    })
+  }
 }
 
 export const useProjectViewsStore = create<ProjectViewsState>()(
@@ -169,24 +198,22 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
       activityView: 'explorer',
       setActivityView: (view) => set({ activityView: view }),
 
-      openProject: (project) => {
+      openProject: (project, options) => {
         const existing = get().views[project.id]
         if (existing) {
           set({ activeProjectId: project.id })
           return
         }
-        const firstSession: ClaudeChatSession = {
-          id: makeId(),
-          label: 'chat 1',
-          model: get().defaultModel,
-          permissionMode: get().defaultPermissionMode
-        }
+        const firstSession: ClaudeChatSession | null =
+          options?.firstSession === false
+            ? null
+            : { id: makeId(), title: NEW_SESSION_TITLE, model: get().defaultModel, permissionMode: get().defaultPermissionMode }
         const view: ProjectView = {
           projectId: project.id,
           projectName: project.name,
           projectPath: project.path,
-          claudeSessions: [firstSession],
-          activeClaudeSessionId: firstSession.id,
+          claudeSessions: firstSession ? [firstSession] : [],
+          activeClaudeSessionId: firstSession?.id ?? null,
           shellTabs: [],
           activeShellTabId: null,
           openFiles: [],
@@ -253,7 +280,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         if (!view) return null
         const session: ClaudeChatSession = {
           id: makeId(),
-          label: nextChatLabel(view.claudeSessions),
+          title: NEW_SESSION_TITLE,
           model: options?.model ?? get().defaultModel,
           permissionMode: options?.permissionMode ?? get().defaultPermissionMode
         }
@@ -348,21 +375,9 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           }
         }),
 
-      setSessionLabel: (paneId, label) =>
-        set((s) => {
-          const found = findSessionByPane(s, paneId)
-          if (!found) return s
-          const view = s.views[found.projectId]
-          const nextSessions = view.claudeSessions.map((c) =>
-            c.id === paneId ? { ...c, label } : c
-          )
-          return {
-            views: {
-              ...s.views,
-              [found.projectId]: { ...view, claudeSessions: nextSessions }
-            }
-          }
-        }),
+      renameSession: (paneId, name) => retitle(set, paneId, (t) => titleAfterRename(t, name)),
+
+      notePrompt: (paneId, text) => retitle(set, paneId, (t) => titleAfterPrompt(t, text)),
 
       duplicateSession: (projectId, sessionId) => {
         const view = get().views[projectId]
@@ -371,7 +386,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         if (!source) return null
         const dup: ClaudeChatSession = {
           id: makeId(),
-          label: source.label + ' copy',
+          title: NEW_SESSION_TITLE,
           model: source.model,
           permissionMode: source.permissionMode
           // intentionally no claudeSessionId — start fresh
@@ -393,12 +408,12 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         return dup
       },
 
-      loadSessionFromLocal: (projectId, claudeSessionId, label, model) => {
+      loadSessionFromLocal: (projectId, claudeSessionId, firstPrompt, model) => {
         const view = get().views[projectId]
         if (!view) return null
         const session: ClaudeChatSession = {
           id: makeId(),
-          label: label ?? `loaded ${claudeSessionId.slice(0, 6)}`,
+          title: migratedTitle(firstPrompt ? [firstPrompt] : []),
           model: model ?? get().defaultModel,
           permissionMode: get().defaultPermissionMode,
           claudeSessionId
@@ -691,6 +706,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           }
         }
         migrateLayout(state, fromVersion)
+        if (fromVersion < 9 && state.views) migrateTitles(state.views)
         return persisted as ProjectViewsState
       },
       partialize: (state) => ({

@@ -56,11 +56,11 @@ const EXT: Record<string, FileIconDescriptor> = {
   toml: { icon: Braces, color: 'text-rose-400' },
   xml: { icon: Braces, color: 'text-orange-400' },
   // Markdown / docs
-  md: { icon: FileText, color: 'text-zinc-300' },
-  markdown: { icon: FileText, color: 'text-zinc-300' },
-  txt: { icon: FileText, color: 'text-zinc-400' },
-  log: { icon: FileText, color: 'text-zinc-500' },
-  rst: { icon: FileText, color: 'text-zinc-300' },
+  md: { icon: FileText, color: 'text-fg' },
+  markdown: { icon: FileText, color: 'text-fg' },
+  txt: { icon: FileText, color: 'text-muted' },
+  log: { icon: FileText, color: 'text-muted' },
+  rst: { icon: FileText, color: 'text-fg' },
   // Systems languages
   go: { icon: FileCode2, color: 'text-cyan-400' },
   rs: { icon: FileCode2, color: 'text-orange-500' },
@@ -104,13 +104,13 @@ const EXT: Record<string, FileIconDescriptor> = {
   mov: { icon: FileVideo, color: 'text-rose-300' },
   webm: { icon: FileVideo, color: 'text-rose-300' },
   // Archives
-  zip: { icon: FileArchive, color: 'text-zinc-400' },
-  tar: { icon: FileArchive, color: 'text-zinc-400' },
-  gz: { icon: FileArchive, color: 'text-zinc-400' },
-  '7z': { icon: FileArchive, color: 'text-zinc-400' },
-  rar: { icon: FileArchive, color: 'text-zinc-400' },
+  zip: { icon: FileArchive, color: 'text-muted' },
+  tar: { icon: FileArchive, color: 'text-muted' },
+  gz: { icon: FileArchive, color: 'text-muted' },
+  '7z': { icon: FileArchive, color: 'text-muted' },
+  rar: { icon: FileArchive, color: 'text-muted' },
   // Lock / env
-  lock: { icon: FileLock, color: 'text-zinc-500' },
+  lock: { icon: FileLock, color: 'text-muted' },
   env: { icon: FileLock, color: 'text-yellow-500' },
   // Spreadsheets
   csv: { icon: FileSpreadsheet, color: 'text-emerald-400' },
@@ -118,31 +118,31 @@ const EXT: Record<string, FileIconDescriptor> = {
   xlsx: { icon: FileSpreadsheet, color: 'text-emerald-500' },
   // Database
   sql: { icon: FileType, color: 'text-blue-400' },
-  db: { icon: FileType, color: 'text-zinc-400' },
-  sqlite: { icon: FileType, color: 'text-zinc-400' }
+  db: { icon: FileType, color: 'text-muted' },
+  sqlite: { icon: FileType, color: 'text-muted' }
 }
 
 // Special filenames take precedence over extension
 const SPECIAL: Record<string, FileIconDescriptor> = {
-  '.gitignore': { icon: GitBranch, color: 'text-zinc-500' },
-  '.gitattributes': { icon: GitBranch, color: 'text-zinc-500' },
-  '.gitkeep': { icon: GitBranch, color: 'text-zinc-500' },
-  '.gitmodules': { icon: GitBranch, color: 'text-zinc-500' },
-  '.editorconfig': { icon: Settings, color: 'text-zinc-500' },
-  '.prettierrc': { icon: Settings, color: 'text-zinc-400' },
+  '.gitignore': { icon: GitBranch, color: 'text-muted' },
+  '.gitattributes': { icon: GitBranch, color: 'text-muted' },
+  '.gitkeep': { icon: GitBranch, color: 'text-muted' },
+  '.gitmodules': { icon: GitBranch, color: 'text-muted' },
+  '.editorconfig': { icon: Settings, color: 'text-muted' },
+  '.prettierrc': { icon: Settings, color: 'text-muted' },
   '.eslintrc': { icon: Settings, color: 'text-violet-400' },
   '.npmrc': { icon: Settings, color: 'text-red-400' },
   '.env': { icon: FileLock, color: 'text-yellow-500' },
   'package.json': { icon: FileJson, color: 'text-red-400' },
-  'package-lock.json': { icon: FileLock, color: 'text-zinc-500' },
+  'package-lock.json': { icon: FileLock, color: 'text-muted' },
   'tsconfig.json': { icon: FileJson, color: 'text-sky-400' },
   'readme.md': { icon: FileText, color: 'text-blue-300' },
   'license': { icon: FileText, color: 'text-yellow-400' },
   'dockerfile': { icon: FileCode2, color: 'text-cyan-400' },
-  'makefile': { icon: FileCode2, color: 'text-zinc-300' }
+  'makefile': { icon: FileCode2, color: 'text-fg' }
 }
 
-const DEFAULT_FILE: FileIconDescriptor = { icon: FileIcon, color: 'text-zinc-500' }
+const DEFAULT_FILE: FileIconDescriptor = { icon: FileIcon, color: 'text-muted' }
 
 export function getFileIcon(filename: string): FileIconDescriptor {
   const lower = filename.toLowerCase()

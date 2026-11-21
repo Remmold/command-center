@@ -46,25 +46,25 @@ export function DiffPane({ view }: Props) {
 
   if (!active) {
     return (
-      <section className="flex h-full items-center justify-center text-sm text-zinc-600">
+      <section className="flex h-full items-center justify-center text-sm text-faint">
         no diff open
       </section>
     )
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-zinc-950">
-      <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-3 py-1.5">
+    <section className="flex h-full min-h-0 flex-col bg-editor">
+      <header className="flex shrink-0 items-center justify-between border-b border-subtle px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2 text-xs">
-          <span className="truncate font-medium text-zinc-100">{basename(active.path)}</span>
+          <span className="truncate font-medium text-fg">{basename(active.path)}</span>
           <span className={`shrink-0 ${KIND_COLOR[active.kind]} text-[10px] uppercase tracking-wide`}>
             {KIND_LABEL[active.kind]}
           </span>
-          <span className="truncate text-[10px] text-zinc-500">{active.path}</span>
+          <span className="truncate text-[10px] text-muted">{active.path}</span>
         </div>
         <button
           onClick={handleRefresh}
-          className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+          className="rounded p-1 text-muted hover:bg-list-hover hover:text-fg"
           title="refresh diff"
         >
           <RefreshCw size={12} strokeWidth={2.5} className={refreshing ? 'animate-spin' : ''} />
@@ -72,7 +72,7 @@ export function DiffPane({ view }: Props) {
       </header>
       <div className="scrollbar-thin min-h-0 flex-1 overflow-auto bg-black/40 px-3 py-2">
         {active.diffText.trim() === '' ? (
-          <div className="text-xs italic text-zinc-500">no changes</div>
+          <div className="text-xs italic text-muted">no changes</div>
         ) : (
           <UnifiedDiffView text={active.diffText} />
         )}

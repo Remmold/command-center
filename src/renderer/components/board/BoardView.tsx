@@ -20,20 +20,16 @@ import { Button } from '../ui/Button'
 import { Column, ColumnRow } from '../ui/Column'
 import { DrawerHost, DrawerMain } from '../ui/Drawer'
 import { HeaderRow } from '../ui/HeaderRow'
-import { overlayOpen } from '../ui/overlay'
+import { isTyping, overlayOpen } from '../ui/overlay'
 import { ProgressBar } from '../ui/ProgressBar'
 import { ScrollStack } from '../ui/ScrollStack'
 import { EmptyHint } from '../ui/Section'
 import { Swimlane } from '../ui/Swimlane'
 import { BoardToolbar } from './BoardToolbar'
 import { NotAddedLine } from './NotAddedLine'
-import { NowBuildingStrip } from './NowBuildingStrip'
 import { cardAnchorId, SpecOnlyCard, TicketCard } from './TicketCard'
 import { TicketDrawer } from './TicketDrawer'
-
-function isTyping(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-}
+import { plainNote } from '../../state/plainNote'
 
 export function BoardView() {
   const model = useBoardStore((s) => s.model)
@@ -80,7 +76,6 @@ export function BoardView() {
   return (
     <DrawerHost>
       <DrawerMain>
-        <NowBuildingStrip />
         <NotAddedLine />
         <BoardToolbar model={model} />
         {model.repoGroups.length === 0 ? <EmptyHint>No tickets yet. Add a workspace that has a .scratch folder.</EmptyHint> : lanes}
@@ -142,7 +137,7 @@ function LaneTitle({ header }: { header: LaneHeader }) {
       icon={<RepoIcon repoGroupKey={header.repoGroupKey} repoName={header.repoName} size="sm" />}
       subtitle={header.featureName ? displayName : undefined}
       title={title}
-      note={lastNote}
+      note={lastNote === null ? null : plainNote(lastNote)}
     >
       {total > 0 && <ProgressBar value={done} max={total} label={`${title}: ${done} of ${total} done`} />}
     </HeaderRow>

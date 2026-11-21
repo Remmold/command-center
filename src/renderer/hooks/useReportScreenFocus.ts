@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
-import { useAppsStore } from '../state/appsStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useViewStore } from '../state/viewStore'
 import { paneOnScreen } from '../state/sessionNavigation'
+import { useObservedStore } from '../state/observedStore'
 
 export function useReportScreenFocus(): void {
   useEffect(() => {
@@ -17,8 +17,8 @@ export function useReportScreenFocus(): void {
     report()
     const unsubs = [
       useViewStore.subscribe(report),
-      useAppsStore.subscribe(report),
-      useProjectViewsStore.subscribe(report)
+      useProjectViewsStore.subscribe(report),
+      useObservedStore.subscribe(report)
     ]
     document.addEventListener('visibilitychange', report)
     return () => {

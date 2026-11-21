@@ -1,5 +1,7 @@
 import type { BuiltinIconChoice, ChooseImageResult, RepoIdentityViews } from './repoIdentity'
 import type { ChatItem } from './chatItems'
+import type { AppView } from './views'
+export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
 
 export interface Workspace {
@@ -36,7 +38,12 @@ export interface SessionStatusEntry {
   since: number
 }
 
-export type AppView = 'sessions' | 'board'
+export interface StartWithWindowsState {
+  checked: boolean
+  enabled: boolean
+  /** Shown beside the control when it is disabled, e.g. why autostart isn't offered. */
+  reason?: string
+}
 
 /** What the renderer has on screen, reported to main for notifications. */
 export interface ScreenFocus {
@@ -337,6 +344,11 @@ export interface RendererApi {
     list: () => Promise<SessionStatusEntry[]>
     onChanged: (cb: (entry: SessionStatusEntry) => void) => () => void
     reportScreenFocus: (focus: ScreenFocus) => void
+  }
+  startWithWindows: {
+    get: () => Promise<StartWithWindowsState>
+    set: (checked: boolean) => Promise<StartWithWindowsState>
+    onChanged: (cb: (state: StartWithWindowsState) => void) => () => void
   }
   /** Requests from main (tray menu, notification clicks) to bring something on screen. */
   navigation: {

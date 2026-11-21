@@ -1,0 +1,287 @@
+import { useEffect, useRef } from 'react'
+import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels'
+import { halfShowing, type HalfIndex } from '../../state/chatPair'
+import { useChatPairStore } from '../../state/chatPairStore'
+import { useObservedStore } from '../../state/observedStore'
+import { chatOnScreen } from '../../state/projectViewLayout'
+import { useProjectViewsStore, type ProjectView } from '../../state/projectViewsStore'
+import { focusChatHalf } from '../../state/sessionNavigation'
+import { useShownChats } from '../../state/workSessions'
+import { useWorkspacesStore } from '../../state/workspacesStore'
+import { ActivityBar } from '../ActivityBar'
+import { ChatView } from '../chat/ChatView'
+import { ObservedChatView } from '../chat/ObservedChatView'
+import { DiffPane } from '../DiffPane'
+import { EditorPane } from '../files/EditorPane'
+import { FileTree } from '../files/FileTree'
+import { ShellTabs } from '../ShellTabs'
+import { SourceControlPanel } from '../SourceControlPanel'
+import { EmptyState } from '../ui/EmptyState'
+import { EditorTabs } from './EditorTabs'
+import { EmptyHalfHeader, HostedSessionHeader, ObservedSessionHeader, type HalfPlace } from './SessionHeader'
+import { SessionList } from './SessionList'
+
+const DRAWER_OPEN_THRESHOLD_PCT = 1
+
+type Slot = 'full' | 'left' | 'right'
+
+const SLOT: Record<Slot, string> = {
+  full: 'inset-0',
+  left: 'inset-y-0 left-0 w-1/2',
+  right: 'inset-y-0 right-0 w-1/2 border-l border-subtle'
+}
+
+interface LayerProps {
+  slot: Slot | null
+  /** Called on any click or focus inside, so the half it shows becomes the focused one. */
+  onActivate?: () => void
+  children: React.ReactNode
+}
+
+/** Kept mounted but out of sight while `slot` is null, so processes, terminals and scroll positions survive. */
+function Layer({ slot, onActivate, children }: LayerProps) {
+  return (
+    <div
+      className={'absolute flex flex-col ' + (slot ? SLOT[slot] : 'inset-0 invisible')}
+      aria-hidden={!slot}
+      onMouseDownCapture={onActivate}
+      onFocusCapture={onActivate}
+    >
+      {children}
+    </div>
+  )
+}
+
+export function WorkView({ registerFocus }: { registerFocus: (fn: () => void) => void }) {
+  return (
+    <Group orientation="horizontal" id="work" className="h-full">
+      <Panel id="session-list" defaultSize="300px" minSize="180px" maxSize="50%">
+        <SessionList />
+      </Panel>
+      <Separator className="w-px bg-subtle hover:w-1 hover:bg-focus" />
+      <Panel id="work-main" minSize="40%">
+        <WorkMain registerFocus={registerFocus} />
+      </Panel>
+    </Group>
+  )
+}
+
+function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }) {
+  const pair = useChatPairStore((s) => s.pair)
+  const { halves, focused } = useShownChats()
+  const views = useProjectViewsStore((s) => s.views)
+  const order = useProjectViewsStore((s) => s.order)
+  const workspaces = useWorkspacesStore((s) => s.workspaces)
+  const observedSessions = useObservedStore((s) => s.sessions)
+
+  const split = halves.length === 2
+  const slotOf = (half: HalfIndex | null): Slot | null => (half === null ? null : split ? (half === 0 ? 'left' : 'right') : 'full')
+  const placeOf = (half: HalfIndex): HalfPlace => ({ half, split, focused: half === focused })
+  const workspaceOf = (id: string) => workspaces.find((w) => w.id === id)
+
+  const focusedChat = halves[focused]
+  const toolsView = focusedChat?.kind === 'hosted' ? views[focusedChat.workspaceId] : undefined
+  const ideOpen = toolsView?.idePanelsOpen ?? false
+  const observedHalf = halves.findIndex((h) => h?.kind === 'observed') as HalfIndex | -1
+  const observed = observedHalf === -1 ? null : halves[observedHalf]
+  const observedWorkspace = observed ? workspaceOf(observed.workspaceId) : undefined
+  const focusedSession = focusedChat?.kind === 'hosted' ? toolsView?.claudeSessions.find((c) => c.id === focusedChat.paneId) : undefined
+  const toolsWorkspace = toolsView ? workspaceOf(toolsView.projectId) : undefined
+  // A file or diff takes the focused chat's place; its header stays.
+  const editorHeader = toolsView && focusedSession && toolsWorkspace && (
+    <HostedSessionHeader workspace={toolsWorkspace} view={toolsView} session={focusedSession} place={placeOf(focused)} />
+  )
+
+  return (
+    <div className="relative flex h-full min-w-0 flex-col bg-editor">
+      <div className="flex min-h-0 flex-1">
+        {ideOpen && <ActivityBar />}
+        <div className="min-w-0 flex-1">
+          <WorkspaceTools view={toolsView}>
+            {toolsView && ideOpen && <EditorTabs view={toolsView} />}
+            <div className="relative min-h-0 flex-1">
+              {order.map((id) => {
+                const view = views[id]
+                if (!view) return null
+                const workspace = workspaceOf(id)
+                return view.claudeSessions.map((c) => {
+                  const half = halfShowing(pair, { kind: 'hosted', paneId: c.id })
+                  const editing = half === focused && view === toolsView && !chatOnScreen(view)
+                  return (
+                    <Layer key={c.id} slot={editing ? null : slotOf(half)} onActivate={half === null ? undefined : () => focusChatHalf(half)}>
+                      {half !== null && workspace && (
+                        <HostedSessionHeader workspace={workspace} view={view} session={c} place={placeOf(half)} />
+                      )}
+                      <div className="min-h-0 flex-1">
+                        <ChatView
+                          paneId={c.id}
+                          cwd={view.projectPath}
+                          model={c.model}
+                          resumeSessionId={c.claudeSessionId}
+                          permissionMode={c.permissionMode}
+                          registerFocus={half === focused ? registerFocus : undefined}
+                        />
+                      </div>
+                    </Layer>
+                  )
+                })
+              })}
+              {order.map((id) => {
+                const view = views[id]
+                if (!view) return null
+                const editing = view === toolsView && view.idePanelsOpen
+                const fileShown = editing && view.centerView === 'file'
+                const diffShown = editing && view.centerView === 'diff'
+                return [
+                  <Layer key={`file-${id}`} slot={fileShown ? slotOf(focused) : null}>
+                    {fileShown && editorHeader}
+                    <div className="min-h-0 flex-1">
+                      <EditorPane view={view} />
+                    </div>
+                  </Layer>,
+                  <Layer key={`diff-${id}`} slot={diffShown ? slotOf(focused) : null}>
+                    {diffShown && editorHeader}
+                    <div className="min-h-0 flex-1">
+                      <DiffPane view={view} />
+                    </div>
+                  </Layer>
+                ]
+              })}
+              {observed?.kind === 'observed' && observedHalf !== -1 && (
+                <Layer slot={slotOf(observedHalf)} onActivate={() => focusChatHalf(observedHalf)}>
+                  {observedWorkspace && (
+                    <ObservedSessionHeader
+                      workspace={observedWorkspace}
+                      session={observedSessions.find((o) => o.workspaceId === observed.workspaceId && o.sessionId === observed.sessionId)}
+                      sessionId={observed.sessionId}
+                      place={placeOf(observedHalf)}
+                    />
+                  )}
+                  <div className="min-h-0 flex-1">
+                    <ObservedChatView cwd={observedWorkspace?.path} />
+                  </div>
+                </Layer>
+              )}
+              {split &&
+                halves.map((h, i) => {
+                  const half = i as HalfIndex
+                  return h ? null : (
+                    <Layer key={`empty-${half}`} slot={slotOf(half)} onActivate={() => focusChatHalf(half)}>
+                      <EmptyHalfHeader place={placeOf(half)} />
+                      <div className="min-h-0 flex-1">
+                        <EmptyState>Click a session in the list to open it here.</EmptyState>
+                      </div>
+                    </Layer>
+                  )
+                })}
+              {!split && !halves[0] && <EmptyState>Pick a session in the list, or start one with + New session (Ctrl+T).</EmptyState>}
+            </div>
+          </WorkspaceTools>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** The open workspace's file tree / source control on the left and its shell drawer below. */
+function WorkspaceTools({ view, children }: { view: ProjectView | undefined; children: React.ReactNode }) {
+  const activityView = useProjectViewsStore((s) => s.activityView)
+  const views = useProjectViewsStore((s) => s.views)
+  const order = useProjectViewsStore((s) => s.order)
+  const setShellDrawerOpen = useProjectViewsStore((s) => s.setShellDrawerOpen)
+  const openFile = useProjectViewsStore((s) => s.openFile)
+  const drawerRef = useRef<PanelImperativeHandle>(null)
+
+  const sidePanelOpen = !!view?.idePanelsOpen && activityView !== null
+  const drawerOpen = !!view && view.shellDrawerOpen && view.shellTabs.length > 0
+  const anyShells = order.some((id) => (views[id]?.shellTabs.length ?? 0) > 0)
+
+  const drawerRegistered = useRef(false)
+
+  // The drawer collapses instead of unmounting so every workspace's terminals keep their scrollback.
+  useEffect(() => {
+    const panel = drawerRef.current
+    // A panel's imperative API throws until its group has registered it; a new panel starts at defaultSize anyway.
+    if (!panel || !drawerRegistered.current) {
+      drawerRegistered.current = !!panel
+      return
+    }
+    if (drawerOpen && panel.isCollapsed()) panel.expand()
+    if (!drawerOpen && !panel.isCollapsed()) panel.collapse()
+  }, [drawerOpen, anyShells])
+
+  const handleDrawerResize = (size: { asPercentage: number }) => {
+    if (!view) return
+    const open = size.asPercentage > DRAWER_OPEN_THRESHOLD_PCT
+    if (open !== view.shellDrawerOpen) setShellDrawerOpen(view.projectId, open)
+  }
+
+  const handleOpenFile = async (relativePath: string) => {
+    if (!view) return
+    try {
+      const res = await window.api.files.read(view.projectPath, relativePath)
+      if (!res.ok) {
+        alert(`failed to open ${relativePath}: ${res.error ?? 'unknown error'}`)
+        return
+      }
+      openFile(view.projectId, { path: relativePath, content: res.content ?? '', dirty: false, binary: res.binary })
+    } catch (err) {
+      alert(`error opening ${relativePath}: ${(err as Error).message}`)
+    }
+  }
+
+  return (
+    <Group orientation="horizontal" id="work-tools" className="h-full">
+      {view && sidePanelOpen && (
+        <>
+          <Panel id="side" defaultSize="20%" minSize="10%" collapsible>
+            {activityView === 'explorer' && (
+              <FileTree key={view.projectId} cwd={view.projectPath} onOpenFile={handleOpenFile} activeFilePath={view.activeFilePath} />
+            )}
+            {activityView === 'sourceControl' && (
+              <SourceControlPanel key={view.projectId} cwd={view.projectPath} projectId={view.projectId} />
+            )}
+          </Panel>
+          <Separator className="w-px bg-subtle hover:w-1 hover:bg-focus" />
+        </>
+      )}
+      <Panel id="center-and-shells" minSize="40%">
+        <Group orientation="vertical" id="work-center" className="h-full">
+          <Panel id="center" minSize="20%">
+            <div className="flex h-full min-h-0 flex-col">{children}</div>
+          </Panel>
+          {anyShells && (
+            <>
+              <Separator
+                className={
+                  'h-1 bg-sidebar transition-colors hover:bg-focus/50 active:bg-focus/70 ' + (drawerOpen ? '' : 'hidden')
+                }
+              />
+              <Panel
+                id="shells"
+                panelRef={drawerRef}
+                defaultSize={drawerOpen ? '30%' : '0%'}
+                minSize="10%"
+                collapsible
+                collapsedSize="0%"
+                onResize={handleDrawerResize}
+              >
+                <div className="relative h-full">
+                  {order.map((id) => {
+                    const v = views[id]
+                    if (!v || v.shellTabs.length === 0) return null
+                    return (
+                      <Layer key={id} slot={v.projectId === view?.projectId ? 'full' : null}>
+                        <ShellTabs view={v} />
+                      </Layer>
+                    )
+                  })}
+                </div>
+              </Panel>
+            </>
+          )}
+        </Group>
+      </Panel>
+    </Group>
+  )
+}

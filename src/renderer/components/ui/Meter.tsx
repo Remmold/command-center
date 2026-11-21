@@ -11,9 +11,12 @@ interface Props {
   percent: number | null
   tone: MeterTone
   label: string
+  size?: 'compact' | 'fill'
 }
 
-export function Meter({ percent, tone, label }: Props) {
+const TRACK = { compact: 'w-12', fill: 'w-full' } as const
+
+export function Meter({ percent, tone, label, size = 'compact' }: Props) {
   const width = percent === null ? 0 : Math.min(100, Math.max(0, percent))
   return (
     <span
@@ -22,7 +25,7 @@ export function Meter({ percent, tone, label }: Props) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent ?? undefined}
-      className="block h-1 w-12 shrink-0 overflow-hidden rounded-full bg-zinc-800"
+      className={`block h-1 shrink-0 overflow-hidden rounded-full bg-meter-track ${TRACK[size]}`}
     >
       <span className={`block h-full rounded-full ${FILL[tone]}`} style={{ width: `${width}%` }} />
     </span>

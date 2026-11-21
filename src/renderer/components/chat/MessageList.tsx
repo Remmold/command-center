@@ -1,11 +1,12 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { ChatItem } from './types'
-import { Message } from './Message'
+import { ChatItems } from './ChatItems'
+import { MessageColumn } from './MessageColumn'
 
 const STICK_PX = 48
 
 /** Scrolling list of chat items that follows new items while the reader is at the bottom. */
-export function MessageList({ items, children }: { items: ChatItem[]; children?: ReactNode }) {
+export function MessageList({ items, cwd, children }: { items: ChatItem[]; cwd: string | undefined; children?: ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const atBottom = useRef(true)
 
@@ -21,12 +22,12 @@ export function MessageList({ items, children }: { items: ChatItem[]; children?:
         const el = e.currentTarget
         atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX
       }}
-      className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4"
+      className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
     >
-      {children}
-      {items.map((item) => (
-        <Message key={item.id} item={item} />
-      ))}
+      <MessageColumn className="space-y-3">
+        {children}
+        <ChatItems items={items} cwd={cwd} />
+      </MessageColumn>
     </div>
   )
 }

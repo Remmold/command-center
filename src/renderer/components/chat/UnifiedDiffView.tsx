@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Button } from '../ui/Button'
 
 interface Props {
   text: string
@@ -18,21 +19,21 @@ export function isUnifiedDiff(text: string): boolean {
 
 function classifyLine(line: string): { row: string; bg: string } {
   if (line.startsWith('diff --git ') || line.startsWith('index ')) {
-    return { row: 'text-zinc-500', bg: '' }
+    return { row: 'text-muted', bg: '' }
   }
   if (line.startsWith('--- ') || line.startsWith('+++ ')) {
-    return { row: 'text-zinc-300 font-semibold', bg: '' }
+    return { row: 'text-fg font-semibold', bg: '' }
   }
   if (line.startsWith('@@')) {
-    return { row: 'text-sky-400', bg: 'bg-zinc-900/40' }
+    return { row: 'text-link', bg: 'bg-sidebar' }
   }
   if (line.startsWith('+')) {
-    return { row: 'text-emerald-300', bg: 'bg-emerald-950/40' }
+    return { row: 'text-fg', bg: 'bg-diff-inserted' }
   }
   if (line.startsWith('-')) {
-    return { row: 'text-red-300', bg: 'bg-red-950/40' }
+    return { row: 'text-fg', bg: 'bg-diff-removed' }
   }
-  return { row: 'text-zinc-400', bg: '' }
+  return { row: 'text-fg', bg: '' }
 }
 
 export function UnifiedDiffView({ text, className, maxLines = DEFAULT_MAX }: Props) {
@@ -49,29 +50,26 @@ export function UnifiedDiffView({ text, className, maxLines = DEFAULT_MAX }: Pro
   return (
     <div
       className={
-        'overflow-x-auto font-mono text-[11.5px] leading-relaxed ' + (className ?? '')
+        'overflow-x-auto font-mono text-[12px] leading-[18px] ' + (className ?? '')
       }
     >
       {visibleLines.map((line, i) => {
         const c = classifyLine(line)
         return (
-          <div key={i} className={`${c.row} ${c.bg}`}>
+          <div key={i} className={`min-w-max px-2 ${c.row} ${c.bg}`}>
             <span className="whitespace-pre">{line || ' '}</span>
           </div>
         )
       })}
       {truncated && (
-        <div className="sticky bottom-0 mt-1 flex items-center justify-between border-t border-zinc-800 bg-zinc-950/95 px-3 py-1.5 text-[11px] text-zinc-400 backdrop-blur">
+        <div className="sticky bottom-0 mt-1 flex items-center justify-between border-t border-subtle bg-editor/95 px-3 py-1.5 text-[11px] text-muted backdrop-blur">
           <span>
             Diff truncated at {maxLines} lines —{' '}
-            <span className="text-zinc-300">{allLines.length - maxLines}</span> more hidden
+            <span className="text-fg">{allLines.length - maxLines}</span> more hidden
           </span>
-          <button
-            onClick={() => setExpanded(true)}
-            className="rounded bg-zinc-800 px-2 py-0.5 text-zinc-100 hover:bg-zinc-700"
-          >
+          <Button variant="secondary" onClick={() => setExpanded(true)}>
             show all
-          </button>
+          </Button>
         </div>
       )}
     </div>

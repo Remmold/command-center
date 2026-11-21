@@ -20,6 +20,10 @@ _Avoid_: Chat, pane
 A Claude Code session running somewhere else (the VS Code extension). The command center follows it read-only.
 _Avoid_: External session, VS Code chat
 
+**Session title**:
+The name a session goes by in lists and headers. It comes from the session's first prompt, shortened, and is "New session" before any prompt. A rename replaces it for good.
+_Avoid_: Chat name, label, tab name
+
 **Session status**:
 What a hosted session is doing: Running, Needs approval, Your turn, or Idle (no process, or a process that has not had a turn yet). An observed session is only ever Live or Quiet.
 _Avoid_: State, activity
@@ -28,15 +32,33 @@ _Avoid_: State, activity
 A hosted session in Needs approval or Your turn. The tray badge counts these.
 _Avoid_: Pending, blocked session
 
+**Live sessions**:
+The Dashboard panel of sessions in motion: hosted sessions that are Running, Needs approval or Your turn, plus observed sessions that are Live. Broader than the observed status Live.
+_Avoid_: Active sessions, running sessions
+
 **Repo group**:
 The worktrees of one git repository, shown together under the repo's name.
 _Avoid_: Shard set, worktree family
+
+## Views
+
+**Dashboard**:
+The view the app opens on: Needs you, Now building, Usage per account and Live sessions on one screen.
+_Avoid_: Home, overview, start page
+
+**Work view**:
+The view with one list of every session across all workspaces beside the open session, or two sessions side by side.
+_Avoid_: Sessions view, chat view, workspace view
+
+**Settings**:
+The full-window page for setup: Workspaces, Accounts, Apps, Board and General. It is not a view.
+_Avoid_: Preferences, options
 
 ## Board
 
 **Board**:
 The single kanban view of the tickets from all workspaces.
-_Avoid_: Kanban, dashboard
+_Avoid_: Kanban, ticket dashboard
 
 **Feature**:
 One `.scratch/<feature>` folder: a spec plus its tickets and progress notes.

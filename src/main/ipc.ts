@@ -27,14 +27,16 @@ import { sessionStatusTracker } from './sessions/tracker'
 import { setScreenFocus } from './sessions/screenFocus'
 import { DEFAULT_PROFILE_ID, type AddWorkspaceResult, type ScreenFocus } from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
+import type { StartWithWindowsControl } from './tray/startWithWindows'
 
 let unsubscribers: Array<() => void> = []
 
 interface IpcDeps {
   repoIdentities: RepoIdentityService
+  startWithWindows: StartWithWindowsControl
 }
 
-export function registerIpc({ repoIdentities }: IpcDeps): void {
+export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void {
   const board = new BoardService(workspaces.list, (model) => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send(IPC.BOARD_CHANGED, model)
@@ -58,6 +60,10 @@ export function registerIpc({ repoIdentities }: IpcDeps): void {
       if (!win.isDestroyed()) win.webContents.send(channel, payload)
     }
   }
+  ipcMain.handle(IPC.START_WITH_WINDOWS_GET, () => startWithWindows.get())
+  ipcMain.handle(IPC.START_WITH_WINDOWS_SET, (_e, checked: boolean) => startWithWindows.set(checked === true))
+  startWithWindows.onChanged((state) => sendAll(IPC.START_WITH_WINDOWS_CHANGED, state))
+
   const observed = new ObservedService(
     workspaces.list,
     transcriptsDirForWorkspace,

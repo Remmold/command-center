@@ -1,10 +1,11 @@
-import type { ReactNode } from 'react'
+import { forwardRef, type ReactNode } from 'react'
 
-type Variant = 'primary' | 'ghost'
+type Variant = 'primary' | 'secondary' | 'ghost'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-zinc-100 text-zinc-900 hover:bg-white',
-  ghost: 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+  primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
+  secondary: 'bg-input text-fg hover:bg-strong',
+  ghost: 'text-muted hover:bg-list-hover hover:text-fg'
 }
 
 interface Props {
@@ -16,19 +17,23 @@ interface Props {
   pressed?: boolean
 }
 
-const PRESSED = 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700'
+const PRESSED = 'bg-list-selected text-fg hover:bg-strong'
 
-export function Button({ children, onClick, variant = 'primary', tooltip, label, pressed }: Props) {
+export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
+  { children, onClick, variant = 'primary', tooltip, label, pressed },
+  ref
+) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       title={tooltip}
       aria-label={label}
       aria-pressed={pressed}
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-400 ${pressed ? PRESSED : VARIANTS[variant]}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus ${pressed ? PRESSED : VARIANTS[variant]}`}
     >
       {children}
     </button>
   )
-}
+})

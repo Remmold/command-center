@@ -126,13 +126,24 @@ export function toggleFeatureFilter(filter: BoardFilter, repoGroupKey: string, k
   return { ...filter, repoGroupKeys: keepsRepo ? filter.repoGroupKeys : [], featureKeys: [key] }
 }
 
+/** Only that feature, with no search left that could hide its tickets. */
+export function showOnlyFeature(filter: BoardFilter, repoGroupKey: string, key: string): BoardFilter {
+  return { ...toggleFeatureFilter({ ...filter, featureKeys: [] }, repoGroupKey, key), search: '' }
+}
+
 export const MINUTE_MS = 60_000
 
-export function timeAgo(then: number, now: number): string {
+/** How long since `then`, e.g. "5m", "2h", "3d"; null under a minute. */
+export function elapsed(then: number, now: number): string | null {
   const minutes = Math.floor((now - then) / MINUTE_MS)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 1) return null
+  if (minutes < 60) return `${minutes}m`
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
+  if (hours < 24) return `${hours}h`
+  return `${Math.floor(hours / 24)}d`
+}
+
+export function timeAgo(then: number, now: number): string {
+  const span = elapsed(then, now)
+  return span ? `${span} ago` : 'just now'
 }

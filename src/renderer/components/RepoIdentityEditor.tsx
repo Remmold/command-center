@@ -19,7 +19,7 @@ import { BUILTIN_ICONS } from './repoIconSet'
 
 const DEFAULT_ACCENT: RepoAccent = 'blue'
 
-export function RepoIdentityEditor({ group }: { group: RepoGroupView }) {
+export function RepoIdentityEditor({ group, revealOnHover = true }: { group: RepoGroupView; revealOnHover?: boolean }) {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
@@ -30,7 +30,7 @@ export function RepoIdentityEditor({ group }: { group: RepoGroupView }) {
         onClick={() => setOpen(!open)}
         label={`edit icon and name of ${group.repoName}`}
         tooltip="edit repo icon and name"
-        revealOnHover
+        revealOnHover={revealOnHover}
         pinned={open}
       >
         <Pencil size={11} strokeWidth={2.25} />

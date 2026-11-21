@@ -14,11 +14,11 @@ export function ProgressBar({ value, max, label }: Props) {
         aria-valuemin={0}
         aria-valuemax={max}
         aria-valuenow={value}
-        className="h-1 w-20 overflow-hidden rounded-full bg-zinc-800"
+        className="h-1 w-20 overflow-hidden rounded-full bg-list-selected"
       >
         <span className="block h-full rounded-full bg-progress" style={{ width: `${percent}%` }} />
       </span>
-      <span className="text-[10px] tabular-nums text-zinc-500">
+      <span className="text-[10px] tabular-nums text-muted">
         {value}/{max}
       </span>
     </span>

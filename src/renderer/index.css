@@ -1,8 +1,9 @@
+@import './theme/theme.css';
+@import './theme/syntax.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import 'highlight.js/styles/github-dark.css';
 
 html, body, #root {
   height: 100%;
@@ -10,11 +11,17 @@ html, body, #root {
 
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--cc-font-ui);
+  font-size: var(--cc-font-size);
+  background: rgb(var(--cc-editor));
+  color: rgb(var(--cc-fg));
 }
 
-/* Thin custom scrollbars across the whole renderer.
-   Chromium-only (Electron is fine). */
+code, kbd, pre, samp {
+  font-family: var(--cc-font-mono);
+}
+
+/* Chromium-only (Electron is fine). */
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -25,34 +32,25 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(113, 113, 122, 0.25); /* zinc-500/25 */
+  background: rgb(var(--cc-scrollbar));
   border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(161, 161, 170, 0.45); /* zinc-400/45 */
+  background: rgb(var(--cc-scrollbar-hover));
 }
 
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-/* Slimmer variant for tight panels (file tree, etc.) */
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(82, 82, 91, 0.4);
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(161, 161, 170, 0.6);
-}
-
 /* Firefox fallback */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(113, 113, 122, 0.35) transparent;
+  scrollbar-color: rgb(var(--cc-scrollbar)) transparent;
 }

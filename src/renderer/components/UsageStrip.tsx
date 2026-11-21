@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
+import { useMinuteClock } from '../hooks/useMinuteClock'
 import { formatResetTime, formatTokens, totalTokens, useUsageStore } from '../state/usageStore'
 import { buildUsageStrip, type UsageBar } from '../state/usageModel'
 import { useProfilesStore } from '../state/profilesStore'
@@ -7,20 +8,11 @@ import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useViewStore } from '../state/viewStore'
 import { Meter } from './ui/Meter'
 
-function useMinuteClock(): number {
-  const [now, setNow] = useState(Date.now)
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-  return now
-}
-
 function useProfileOnScreen(): string | null {
   const view = useViewStore((s) => s.view)
   const activeProjectId = useProjectViewsStore((s) => s.activeProjectId)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
-  if (view !== 'sessions' || !activeProjectId) return null
+  if (view !== 'work' || !activeProjectId) return null
   return workspaces.find((w) => w.id === activeProjectId)?.profileId ?? null
 }
 
@@ -52,7 +44,7 @@ export function UsageStrip() {
 
   if (bars.length === 0) return null
   return (
-    <ul aria-label="usage per account profile" className="flex h-full shrink-0 items-center gap-1 border-l border-zinc-800 px-2">
+    <ul aria-label="usage per account profile" className="flex h-full shrink-0 items-center gap-1 border-l border-subtle px-2">
       {bars.map((bar) => (
         <UsageStripItem key={bar.profileId} bar={bar} />
       ))}
@@ -70,7 +62,7 @@ function UsageStripItem({ bar }: { bar: UsageBar }) {
       title={describe(bar)}
       className={
         'flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] ' +
-        (bar.highlighted ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500')
+        (bar.highlighted ? 'bg-list-selected text-fg' : 'text-muted')
       }
     >
       <span className="max-w-[6rem] truncate">{bar.name}</span>

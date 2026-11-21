@@ -7,19 +7,23 @@ interface Props {
   /** The element the panel opens under. */
   anchor: HTMLElement | null
   label: string
+  /** `end` lines the panel's right edge up with the anchor's, for buttons near the window's right side. */
+  align?: 'start' | 'end'
   children: ReactNode
 }
 
+const PANEL_WIDTH = 256
+
 /** A floating panel portalled to the body, so a scrolling parent never clips it. */
-export function Popover({ open, onClose, anchor, label, children }: Props) {
+export function Popover({ open, onClose, anchor, label, align = 'start', children }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
 
   useLayoutEffect(() => {
     if (!open || !anchor) return
     const rect = anchor.getBoundingClientRect()
-    setPos({ top: rect.bottom + 4, left: rect.left })
-  }, [open, anchor])
+    setPos({ top: rect.bottom + 4, left: align === 'end' ? rect.right - PANEL_WIDTH : rect.left })
+  }, [open, anchor, align])
 
   useEffect(() => {
     if (!open) return
@@ -45,9 +49,9 @@ export function Popover({ open, onClose, anchor, label, children }: Props) {
       ref={panelRef}
       role="dialog"
       aria-label={label}
-      style={{ top: pos.top, left: pos.left }}
+      style={{ top: pos.top, left: pos.left, width: PANEL_WIDTH }}
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-50 flex w-64 flex-col gap-2 rounded border border-zinc-700 bg-zinc-900 py-2 text-xs text-zinc-300 shadow-lg"
+      className="fixed z-50 flex flex-col gap-2 rounded border border-strong bg-widget py-2 text-xs text-fg shadow-lg"
     >
       {children}
     </div>,
@@ -60,9 +64,17 @@ export function PopoverSection({ children }: { children: ReactNode }) {
 }
 
 export function PopoverNote({ children }: { children: ReactNode }) {
-  return <p className="text-[11px] leading-4 text-zinc-500">{children}</p>
+  return <p className="text-[11px] leading-4 text-muted">{children}</p>
 }
 
 export function PopoverActions({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap gap-1">{children}</div>
+}
+
+export function PopoverMenu({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div role="menu" aria-label={label} className="flex flex-col">
+      {children}
+    </div>
+  )
 }

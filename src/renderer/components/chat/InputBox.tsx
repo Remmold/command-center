@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Image as ImageIcon, Paperclip, Square, X } from 'lucide-react'
 import { AutocompletePopup, type AutocompleteItem } from './AutocompletePopup'
+import { MessageColumn } from './MessageColumn'
 import type { ImageAttachment } from '../../../shared/types'
 
 interface Props {
@@ -298,123 +299,125 @@ export function InputBox({
   return (
     <div
       className={
-        'border-t border-zinc-800 bg-zinc-950 p-3 ' +
-        (isDragging ? 'ring-2 ring-inset ring-blue-500' : '')
+        'bg-editor px-5 pb-3 pt-1 ' +
+        (isDragging ? 'ring-2 ring-inset ring-focus' : '')
       }
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={handleFileInput}
-      />
-      {autocomplete && items.length > 0 && (
-        <AutocompletePopup
-          items={items}
-          selectedIndex={selectedIndex}
-          onSelect={applySelection}
-          onHoverIndex={setSelectedIndex}
-          header={autocomplete.type === 'slash' ? 'slash commands' : 'mention a file'}
+      <MessageColumn className="relative">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleFileInput}
         />
-      )}
-      {pendingImages.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {pendingImages.map((img) => (
-            <div
-              key={img.id}
-              className="group flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 py-1.5 pl-1.5 pr-2"
-            >
-              <img
-                src={img.previewUrl}
-                alt={img.filename}
-                className="h-9 w-9 shrink-0 rounded object-cover"
-              />
-              <div className="min-w-0 max-w-[200px]">
-                <div className="truncate text-[12px] text-zinc-200" title={img.filename}>
-                  {img.filename}
-                </div>
-                <div className="truncate text-[10px] text-zinc-500">
-                  {img.width > 0 && `${img.width}×${img.height} · `}
-                  {formatBytes(img.size)}
-                </div>
-              </div>
-              <button
-                onClick={() => removeImage(img.id)}
-                className="rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
-                aria-label="remove image"
+        {autocomplete && items.length > 0 && (
+          <AutocompletePopup
+            items={items}
+            selectedIndex={selectedIndex}
+            onSelect={applySelection}
+            onHoverIndex={setSelectedIndex}
+            header={autocomplete.type === 'slash' ? 'slash commands' : 'mention a file'}
+          />
+        )}
+        {pendingImages.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {pendingImages.map((img) => (
+              <div
+                key={img.id}
+                className="group flex items-center gap-2 rounded-md border border-subtle bg-sidebar py-1.5 pl-1.5 pr-2"
               >
-                <X size={12} strokeWidth={2.25} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 focus-within:border-zinc-600 focus-within:ring-1 focus-within:ring-zinc-600/50">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          disabled={disabled}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          onSelect={updateAutocomplete}
-          onClick={updateAutocomplete}
-          onPaste={handlePaste}
-          rows={1}
-          placeholder={placeholder ?? 'message claude…'}
-          className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-zinc-100 placeholder:text-zinc-500 focus:outline-none disabled:opacity-50"
-        />
-        <div className="flex items-end justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleAttachClick}
-              className="rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-              title="attach image"
-              type="button"
-            >
-              <Paperclip size={14} strokeWidth={2} />
-            </button>
-            <span className="text-[10px] text-zinc-600">
-              enter to send · shift+enter newline · / commands · @ files ·{' '}
-              <ImageIcon
-                size={10}
-                strokeWidth={2}
-                className="inline-block align-text-bottom"
-              />{' '}
-              paste images
-            </span>
+                <img
+                  src={img.previewUrl}
+                  alt={img.filename}
+                  className="h-9 w-9 shrink-0 rounded object-cover"
+                />
+                <div className="min-w-0 max-w-[200px]">
+                  <div className="truncate text-[12px] text-fg" title={img.filename}>
+                    {img.filename}
+                  </div>
+                  <div className="truncate text-[10px] text-muted">
+                    {img.width > 0 && `${img.width}×${img.height} · `}
+                    {formatBytes(img.size)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeImage(img.id)}
+                  className="rounded p-0.5 text-muted hover:bg-list-hover hover:text-error"
+                  aria-label="remove image"
+                >
+                  <X size={12} strokeWidth={2.25} />
+                </button>
+              </div>
+            ))}
           </div>
-          {disabled && onInterrupt ? (
-            <button
-              onClick={onInterrupt}
-              className="rounded-md bg-red-700 p-1.5 text-red-50 hover:bg-red-600"
-              title="stop"
-              type="button"
-            >
-              <Square size={14} strokeWidth={2.5} fill="currentColor" />
-            </button>
-          ) : (
-            <button
-              onClick={send}
-              disabled={!canSend}
-              className={
-                'flex h-7 w-7 items-center justify-center rounded-md transition-colors ' +
-                (canSend
-                  ? 'bg-blue-600 text-white hover:bg-blue-500'
-                  : 'bg-zinc-800 text-zinc-600')
-              }
-              title="send (enter)"
-              type="button"
-            >
-              <ArrowUp size={14} strokeWidth={2.5} />
-            </button>
-          )}
+        )}
+        <div className="flex flex-col gap-1.5 rounded-md border border-strong bg-input px-3 py-2 focus-within:border-focus">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            disabled={disabled}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onSelect={updateAutocomplete}
+            onClick={updateAutocomplete}
+            onPaste={handlePaste}
+            rows={1}
+            placeholder={placeholder ?? 'message claude…'}
+            className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none disabled:opacity-50"
+          />
+          <div className="flex items-end justify-between gap-2">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleAttachClick}
+                className="rounded p-1.5 text-muted hover:bg-list-hover hover:text-fg"
+                title="attach image"
+                type="button"
+              >
+                <Paperclip size={14} strokeWidth={2} />
+              </button>
+              <span className="text-[10px] text-faint">
+                enter to send · shift+enter newline · / commands · @ files ·{' '}
+                <ImageIcon
+                  size={10}
+                  strokeWidth={2}
+                  className="inline-block align-text-bottom"
+                />{' '}
+                paste images
+              </span>
+            </div>
+            {disabled && onInterrupt ? (
+              <button
+                onClick={onInterrupt}
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-error text-accent-fg hover:bg-error/80"
+                title="stop"
+                type="button"
+              >
+                <Square size={12} strokeWidth={2.5} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                onClick={send}
+                disabled={!canSend}
+                className={
+                  'flex h-7 w-7 items-center justify-center rounded-md transition-colors ' +
+                  (canSend
+                    ? 'bg-accent text-accent-fg hover:bg-accent-hover'
+                    : 'text-faint')
+                }
+                title="send (enter)"
+                type="button"
+              >
+                <ArrowUp size={14} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      </MessageColumn>
     </div>
   )
 }

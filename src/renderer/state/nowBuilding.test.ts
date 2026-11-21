@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BoardColumn, BoardFeature, BoardModel, BoardTicket, FeatureState, SessionStatus } from '../../shared/types'
-import { nowBuilding, timeAgo, toggleFeatureFilter, type NowBuildingInput } from './nowBuilding'
+import { nowBuilding, showOnlyFeature, timeAgo, toggleFeatureFilter, type NowBuildingInput } from './nowBuilding'
 
 const HOUR = 60 * 60 * 1000
 const NOW = 1_800_000_000_000
@@ -173,6 +173,11 @@ describe('now building: clicking a row', () => {
     })
     const sameRepo = { repoGroupKeys: ['git:fs'], featureKeys: [], search: '' }
     expect(toggleFeatureFilter(sameRepo, 'git:fs', 'git:fs/combat').repoGroupKeys).toEqual(['git:fs'])
+  })
+
+  it('from the Dashboard always shows that feature, clearing a search that could hide its tickets', () => {
+    const on = { repoGroupKeys: ['git:agon'], featureKeys: ['git:fs/combat'], search: 'boss' }
+    expect(showOnlyFeature(on, 'git:fs', 'git:fs/combat')).toEqual({ repoGroupKeys: [], featureKeys: ['git:fs/combat'], search: '' })
   })
 })
 

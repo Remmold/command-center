@@ -1,0 +1,3 @@
+- Done: views dashboard|work|board (Ctrl+1/2/3, tray, parseView 'sessions'→work), Settings overlay (Ctrl+, / gear, Esc) with 5 sections, Start with Windows IPC, text-sm 13px; ae2b9d4 + review fixes; build + quick 197/197 green; boot-checked via CDP.
+- Next: ticket 03 (Work flat list) — remove ProjectTabs/Sidebar/CenterTabs; guard chat shortcuts (Ctrl+T/W/K, Alt+n, Ctrl+B/`) to Work.
+- Open reds: none.

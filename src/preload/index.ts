@@ -22,6 +22,7 @@ import type {
   ScreenFocus,
   SessionStatusEntry,
   SpawnResult,
+  StartWithWindowsState,
   Workspace
 } from '../shared/types'
 
@@ -170,6 +171,15 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.SESSION_STATUS_CHANGED, handler)
     },
     reportScreenFocus: (focus: ScreenFocus) => ipcRenderer.send(IPC.SESSION_SCREEN_FOCUS, focus)
+  },
+  startWithWindows: {
+    get: () => ipcRenderer.invoke(IPC.START_WITH_WINDOWS_GET),
+    set: (checked) => ipcRenderer.invoke(IPC.START_WITH_WINDOWS_SET, checked),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, state: StartWithWindowsState) => cb(state)
+      ipcRenderer.on(IPC.START_WITH_WINDOWS_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.START_WITH_WINDOWS_CHANGED, handler)
+    }
   },
   navigation: {
     onShowView: (cb) => {

@@ -13,13 +13,13 @@ export function HeaderRow({ icon, title, subtitle, children, note }: Props) {
   return (
     <div className="flex min-w-0 items-center gap-2 px-1 text-xs">
       {icon}
-      <span className="shrink-0 font-medium text-zinc-200">
-        {subtitle && <span className="font-normal text-zinc-500">{subtitle} / </span>}
+      <span className="shrink-0 font-medium text-fg">
+        {subtitle && <span className="font-normal text-muted">{subtitle} / </span>}
         {title}
       </span>
       {children}
       {note && (
-        <span title={note} className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
+        <span title={note} className="min-w-0 flex-1 truncate text-[11px] text-muted">
           {note}
         </span>
       )}

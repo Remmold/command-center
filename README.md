@@ -4,16 +4,31 @@ One desktop window for every Claude Code workspace on this machine: run sessions
 
 Sessions are the real `claude` CLI, driven from the app, not a reimplementation. Windows only for now.
 
-## Two views
+## Views
 
-Switch with the title bar or **Ctrl+1** / **Ctrl+2**.
+Three views, switched in the title bar or with **Ctrl+1** / **Ctrl+2** / **Ctrl+3**. The app opens on the Dashboard. The gear in the title bar, or **Ctrl+,**, opens Settings.
 
-- **Sessions**: a sidebar of every workspace, grouped by repo, with each session's status and account profile. The chat fills the workspace area. **Ctrl+B** slides in the IDE panels (file tree, editor, git), remembered per workspace. **Ctrl+`** opens a shell on demand.
+- **Dashboard**: four panels on one screen.
+  - **Needs you**: every session waiting on you, longest wait first. Click one to open it in Work.
+  - **Now building**: features with work in progress, with their progress bar, the ticket in progress, the session's status and the last progress note. Click one to see that feature on the Board.
+  - **Usage per account**: one row per account profile with how full its rate-limit window is, when it resets, and today's tokens.
+  - **Live sessions**: a card per session that is Running, Needs approval or Your turn, plus every observed session that is Live, with its last reply and how long ago it last moved. Click one to open it in Work.
+- **Work**: one list of every session across all workspaces, grouped as **Needs you**, **Running**, **Idle** and **In VS Code**, most recent first, beside the open chat. Search filters by title, repo or worktree. **New session** asks which workspace and opens the new chat. A session's title comes from its first prompt; double-click a hosted session's row (or its menu → Rename) to rename it. A row's menu → **Close** stops the session; resume it later from the list menu's **Past sessions…**. **Ctrl+click** a row, its menu → **Open beside**, or **Split** in the chat header shows a second chat beside the first (never more than two). **Ctrl+B** shows the IDE panels (file tree, editor, git) and **Ctrl+`** the shells of the open session's workspace, both hidden by default.
 - **Board**: one kanban of the tickets from all workspaces, in four side-by-side columns: Backlog, Blocked, In progress, Done. Filter by repo and feature, search, and group into swimlanes by feature or repo (each with its progress bar). Done hides the cards of finished features until you show them. Click a card to read the ticket in a resizable side panel (Esc closes, up/down step through the column) and jump from it to its session. Filters, grouping and the finished toggle are remembered.
+
+## Settings
+
+A full-window page with five sections (Esc closes it):
+
+- **Workspaces**: every workspace grouped by repo, with its account profile, the repo icon editor, **Remove**, and **Add workspace**.
+- **Accounts**: the account profiles, with **Log in** and **Rename**, and a field to create a new one.
+- **Apps**: start and stop your local apps.
+- **Board**: the scan roots, and the repos with tickets that aren't added yet.
+- **General**: **Start with Windows**.
 
 ## Needs you
 
-The **Needs you** queue lists every session waiting on you across all workspaces, longest wait first. Click one to open it, or press **Ctrl+J** to jump to the next.
+A session waiting on you shows in **Needs you** on the Dashboard and at the top of the Work list. Click one to open it with its input or approval prompt ready, or press **Ctrl+J** from any view to jump to the next.
 
 Session statuses:
 
@@ -32,29 +47,29 @@ Closing the window hides it to the tray; the app keeps running. Quit from the tr
 
 A session that starts waiting raises a Windows notification, unless you are already looking at it. Clicking the notification opens that session.
 
-The tray menu has **Start with Windows**. It only works in the installed app; in dev it is greyed out ("installed app only"). When on, the app starts hidden in the tray at login.
+The tray menu opens the Dashboard, Work or Board directly, and has **Start with Windows** (also in Settings → General). It only works in the installed app; in dev it is greyed out ("installed app only"). When on, the app starts hidden in the tray at login.
 
 ## Account profiles
 
-Every workspace uses one account profile, a named Claude login. **Default** is your normal `~/.claude` login. Pick or create a profile from the workspace row in the sidebar; a change applies to the next session started there.
+Every workspace uses one account profile, a named Claude login. **Default** is your normal `~/.claude` login. Pick or create a profile in Settings → Workspaces or from the chat header; a change applies to the next session started there.
 
 A new profile shares your setup with Default: `CLAUDE.md`, `settings.json`, skills, plugins, hooks, agents, commands and session history (`projects`), plus files that `settings.json` points to (such as a status line script). Only the login itself is separate.
 
-To log a profile in: open the profile picker, click **Log in** (it opens a shell as that profile), run `claude`, then `/login`.
+To log a profile in: in Settings → Accounts (or the profile picker), click **Log in** (it opens a shell as that profile), run `claude`, then `/login`.
 
-The header shows usage per profile.
+The title bar and the Dashboard show usage per profile.
 
 ## Repo icons
 
-Each repo group has a repo icon and a display name, shown on sidebar rows, session tabs, the Needs you queue, board cards, feature headers and notifications. Click the pencil on a repo row in the sidebar to pick a built-in icon and accent colour, use an image, or go back to the letter. Worktrees of one repo share the icon and are told apart by a short worktree tag (for example `shard-2`).
+Each repo group has a repo icon and a display name, shown on session rows, chat headers, the Dashboard, board cards, feature headers and notifications. Click the pencil beside a repo in Settings → Workspaces to pick a built-in icon and accent colour, use an image, or go back to the letter. Worktrees of one repo share the icon and are told apart by a short worktree tag (for example `shard-2`).
 
 ## Observed sessions
 
-Claude Code chats running in the VS Code extension in an added workspace show up in the sidebar as observed sessions. They are read-only: you can watch the transcript but not type into it. They are listed for 30 minutes after their last activity and show **Live** while active in the last 2 minutes, **Quiet** otherwise.
+Claude Code chats running in the VS Code extension in an added workspace show up in the Work list under **In VS Code** as observed sessions. They open in the same chat area, read-only: you can watch the transcript but not type into it. They are listed for 30 minutes after their last activity and show **Live** while active in the last 2 minutes, **Quiet** otherwise.
 
 ## Board discovery and ticket lifecycle
 
-The board reads ticket files from each workspace's `.scratch/<feature>/` folders. It also scans a few folders (scan roots, default `C:\projects` and `C:\darkfall64`) for repos that have tickets but are not added yet, and shows one line, "N repos with tickets aren't added · Review". **Review** lists those repos with **Add workspace**; tick "show worktrees" to list worktrees too. Edit the scan roots from the board settings button; the scan reruns on opening the board and every 5 minutes.
+The board reads ticket files from each workspace's `.scratch/<feature>/` folders. It also scans a few folders (scan roots, default `C:\projects` and `C:\darkfall64`) for repos that have tickets but are not added yet, and shows one line, "N repos with tickets aren't added · Review". **Review** opens Settings → Board, which lists those repos with **Add workspace**; tick "show worktrees" to list worktrees too. The scan roots are edited there too (the board's settings button leads to it); the scan reruns on opening the board and every 5 minutes.
 
 A ticket's column comes from its `**Status:**` word (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `in-progress`, `blocked`, `resolved`, `wontfix`) and its `**Blocked by:**` line. The full rules, and who sets which word, are in [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md#ticket-lifecycle).
 
@@ -62,16 +77,21 @@ A ticket's column comes from its `**Status:**` word (`needs-triage`, `needs-info
 
 | Shortcut | Action |
 | --- | --- |
-| Ctrl+1 / Ctrl+2 | Sessions / Board |
+| Ctrl+1 / Ctrl+2 / Ctrl+3 | Dashboard / Work / Board |
+| Ctrl+, | Open Settings |
 | Ctrl+J | Jump to the next waiting session |
-| Ctrl+B | Show or hide the IDE panels |
-| Ctrl+` | Open, show or hide shells (the key left of 1, on any layout) |
-| Ctrl+T | New chat in the current workspace |
-| Ctrl+W | Close the current chat |
+| Ctrl+T | New session (asks which workspace) |
+| Ctrl+L | Past sessions (asks which workspace) |
+| Ctrl+W | Close the session on screen |
 | Ctrl+K | Focus the chat input |
-| Alt+1 … Alt+9 | Switch to chat tab 1 … 9 |
+| Alt+1 … Alt+9 | Open row 1 … 9 of the Work list |
+| Ctrl+click a row | Open it beside the current chat (also row menu → Open beside, or Split in the chat header) |
+| Ctrl+B | Show or hide the IDE panels of the open session's workspace |
+| Ctrl+` | Open, show or hide its shells (the key left of 1, on any layout) |
 | Ctrl+S | Save the file in the editor |
 | Enter / Shift+Enter | Send / new line in the chat input |
+
+Ctrl+1/2/3, Ctrl+, and Ctrl+J work in every view; the others act only while Work is on screen.
 
 ## Prerequisites
 

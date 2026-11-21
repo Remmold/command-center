@@ -1,0 +1,57 @@
+/* VS Code Dark Modern palette. Colours are RGB channels so Tailwind's
+   opacity modifiers (bg-sidebar/40) work; theme.ts reads them for Monaco and xterm. */
+:root {
+  --cc-editor: 31 31 31;
+  --cc-sidebar: 24 24 24;
+  --cc-titlebar: 24 24 24;
+  --cc-widget: 32 32 32;
+  --cc-border: 43 43 43;
+  --cc-border-strong: 60 60 60;
+  --cc-fg: 204 204 204;
+  --cc-muted: 157 157 157;
+  --cc-faint: 110 118 129;
+  --cc-accent: 0 120 212;
+  --cc-accent-hover: 2 110 193;
+  --cc-accent-fg: 255 255 255;
+  --cc-focus: 0 120 212;
+  --cc-list-hover: 42 45 46;
+  --cc-list-selected: 55 55 61;
+  --cc-input: 49 49 49;
+  --cc-diff-inserted: 155 185 85 / 0.2;
+  --cc-diff-removed: 255 0 0 / 0.2;
+  --cc-error: 248 81 73;
+  --cc-warning: 204 167 0;
+  --cc-success: 129 184 139;
+  --cc-link: 77 170 252;
+  --cc-code: 60 60 60;
+  --cc-code-fg: 208 208 208;
+  --cc-scrollbar: 121 121 121 / 0.4;
+  --cc-scrollbar-hover: 100 100 100 / 0.7;
+
+  --cc-status-running: 55 148 255;
+  --cc-status-approval: 204 167 0;
+  --cc-status-turn: 137 209 133;
+  --cc-status-idle: 110 118 129;
+  --cc-status-live: 137 209 133;
+  --cc-status-quiet: 110 118 129;
+
+  --cc-meter-ok: 137 209 133;
+  --cc-meter-warn: 204 167 0;
+  --cc-meter-limit: 241 76 76;
+  --cc-meter-track: 76 76 76;
+
+  /* Dark+ token colours, read by syntax.css for highlight.js. */
+  --cc-syntax-keyword: 86 156 214;
+  --cc-syntax-meta: 197 134 192;
+  --cc-syntax-string: 206 145 120;
+  --cc-syntax-comment: 106 153 85;
+  --cc-syntax-function: 220 220 170;
+  --cc-syntax-type: 78 201 176;
+  --cc-syntax-number: 181 206 168;
+  --cc-syntax-variable: 156 220 254;
+  --cc-syntax-regexp: 209 105 105;
+
+  --cc-font-ui: 'Segoe UI', system-ui, sans-serif;
+  --cc-font-mono: 'Cascadia Code', Consolas, monospace;
+  --cc-font-size: 13px;
+}
