@@ -37,3 +37,9 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - It lists profiles by email and plan, and grays out the ones not logged in.
     - Picking one restarts the running chat on it, with `--resume`, after the current turn. A chat with no running process simply starts on the new profile when you next send.
     - Creating and renaming profiles stays in Settings → Accounts and the Workspaces settings.
+13. **"No" with feedback on the plan prompt uses the new wording too.**
+    - Why: it sends the same deny reply, and the same injection worry applies. "No" without feedback on the plan prompt still says "User chose to stay in plan mode and continue planning".
+    - Alternative: keep the extension's exact wording for plan feedback.
+14. **Typed feedback goes to Claude inside plain double quotes, unescaped, with spaces trimmed from both ends.** Quotes and line breaks inside it are passed on unchanged.
+    - Why: escaping would show Claude `\n` and `\"` instead of what was typed. The trimming was already there.
+    - Alternative: JSON-escape the text.

@@ -2,3 +2,4 @@
 - 02 resolved: approvals over stdio (can_use_tool) with the extension's prompt, footer mode picker + Shift+Tab, hook/server removed, Interrupted wording — cce767c
 - 03 resolved: model pill + effort + thinking live, defaults in user settings.json (effort under modelSettings), row model tag, allow-bypass setting
 - 04 resolved: per-profile usage service (initialize+get_usage, 5 min / after turns / Refresh, live rate_limit_events), strip with email+plan and 5h/weekly bars, Account & Usage popover, Dashboard on same data, header account dropdown restarting with --resume
+- 05 resolved: deny-with-feedback message now says the user denied the call and typed the quoted instruction; no-feedback deny unchanged; real Haiku check wrote b.txt — d261587
