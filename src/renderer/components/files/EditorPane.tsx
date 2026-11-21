@@ -44,7 +44,7 @@ export function EditorPane({ view }: Props) {
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-editor">
-      <div className="flex shrink-0 items-center overflow-x-auto border-b border-subtle">
+      <div className="flex shrink-0 items-center overflow-x-auto border-b border-subtle bg-sidebar">
         {view.openFiles.length === 0 && (
           <span className="px-3 py-1.5 text-xs text-muted">no files open</span>
         )}
@@ -55,7 +55,7 @@ export function EditorPane({ view }: Props) {
               key={file.path}
               className={
                 'group flex items-center gap-1 border-r border-subtle px-3 py-1.5 text-xs ' +
-                (active ? 'bg-sidebar text-fg' : 'text-muted hover:bg-list-hover')
+                (active ? 'bg-editor text-fg' : 'text-muted hover:bg-list-hover')
               }
             >
               <button

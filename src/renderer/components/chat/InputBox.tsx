@@ -404,7 +404,7 @@ export function InputBox({
               className={
                 'flex h-7 w-7 items-center justify-center rounded-md transition-colors ' +
                 (canSend
-                  ? 'bg-blue-600 text-white hover:bg-blue-500'
+                  ? 'bg-accent text-accent-fg hover:bg-accent-hover'
                   : 'bg-list-selected text-faint')
               }
               title="send (enter)"

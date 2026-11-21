@@ -95,5 +95,5 @@ export function Terminal({ paneId, kind, cwd, env }: Props) {
     }
   }, [paneId, kind, cwd])
 
-  return <div ref={containerRef} className="h-full w-full bg-black" />
+  return <div ref={containerRef} className="h-full w-full bg-editor" />
 }

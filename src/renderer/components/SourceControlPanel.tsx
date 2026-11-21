@@ -98,7 +98,7 @@ export function SourceControlPanel({ cwd, projectId }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-editor">
+    <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <header className="flex shrink-0 items-center justify-between border-b border-subtle px-3 py-2">
         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">
           source control

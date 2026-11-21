@@ -86,7 +86,7 @@ export function ProjectTabs() {
               {workspace ? (
                 <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
               ) : (
-                <Folder size={13} strokeWidth={1.75} className={active ? 'text-blue-400' : 'text-muted'} />
+                <Folder size={13} strokeWidth={1.75} className={active ? 'text-accent' : 'text-muted'} />
               )}
               {workspace?.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
               <span className="truncate" title={view.projectPath}>
@@ -168,7 +168,7 @@ export function ProjectTabs() {
               onClick={handleAddNew}
               className="flex w-full items-center gap-2 border-t border-subtle px-3 py-2 text-left text-xs text-fg hover:bg-list-hover"
             >
-              <FolderSearch size={14} strokeWidth={1.75} className="text-blue-400" />
+              <FolderSearch size={14} strokeWidth={1.75} className="text-accent" />
               <span>browse for new workspace…</span>
             </button>
           </div>

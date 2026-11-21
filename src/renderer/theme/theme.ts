@@ -1,6 +1,6 @@
 import type { ITheme } from '@xterm/xterm'
 
-type ThemeVar = 'editor' | 'sidebar' | 'fg' | 'accent' | 'list-hover' | 'list-selected' | 'input'
+type ThemeVar = 'editor' | 'sidebar' | 'widget' | 'fg' | 'accent' | 'list-hover' | 'list-selected' | 'input'
 
 function rootValue(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -46,7 +46,7 @@ export function defineMonacoTheme(monaco: MonacoThemeHost): void {
       'editor.foreground': themeHex('fg'),
       'editorGutter.background': themeHex('editor'),
       'editor.lineHighlightBackground': themeHex('list-hover'),
-      'editorWidget.background': themeHex('sidebar'),
+      'editorWidget.background': themeHex('widget'),
       'input.background': themeHex('input'),
       focusBorder: themeHex('accent')
     }

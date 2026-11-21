@@ -152,7 +152,7 @@ export function ShellTabs({ view }: Props) {
 
       {/* body — terminal content (left) + shell list (right, when >1) */}
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-h-0 flex-1 bg-black">
+        <div className="relative min-h-0 flex-1 bg-editor">
           {view.shellTabs.map((tab) => {
             const active = tab.id === view.activeShellTabId
             return (
