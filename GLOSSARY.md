@@ -49,3 +49,13 @@ _Avoid_: Issue (in UI text), task
 **Column**:
 One of the board's four stages: Backlog, Blocked, In progress, Done. The stage comes from the ticket's status and blockers.
 _Avoid_: Lane, state
+
+## Identity
+
+**Repo icon**:
+The picture that marks one repo group everywhere in the app: a chosen icon with an accent colour, an image, or a letter by default.
+_Avoid_: Logo, avatar
+
+**Worktree tag**:
+The short label that tells worktrees of one repo group apart, e.g. "shard-2".
+_Avoid_: Suffix, shard name
