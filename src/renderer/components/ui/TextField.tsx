@@ -29,7 +29,7 @@ export function TextField({ label, placeholder, initialValue = '', autoFocus, on
           onCancel()
         }
       }}
-      className="w-full min-w-0 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
+      className="w-full min-w-0 rounded border border-strong bg-input px-2 py-1 text-xs text-fg placeholder:text-faint focus:border-focus focus:outline-none"
     />
   )
 }

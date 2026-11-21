@@ -13,9 +13,9 @@ interface CardProps {
 const BASE = 'flex shrink-0 flex-col gap-1.5 rounded-md border p-2.5 text-left'
 
 function look(selected: boolean, muted: boolean): string {
-  if (muted) return 'border-dashed border-zinc-800 bg-transparent text-zinc-500'
-  if (selected) return 'border-zinc-300 bg-zinc-800 ring-1 ring-zinc-300'
-  return 'border-zinc-800 bg-zinc-900'
+  if (muted) return 'border-dashed border-subtle bg-transparent text-muted'
+  if (selected) return 'border-focus bg-list-selected ring-1 ring-focus'
+  return 'border-subtle bg-sidebar'
 }
 
 export function Card({ children, tooltip, onClick, selected = false, muted = false, anchorId }: CardProps) {
@@ -34,7 +34,7 @@ export function Card({ children, tooltip, onClick, selected = false, muted = fal
       title={tooltip}
       onClick={onClick}
       aria-pressed={selected}
-      className={`${className} w-full min-w-0 hover:border-zinc-600 focus-visible:border-zinc-400 focus-visible:outline-none`}
+      className={`${className} w-full min-w-0 hover:border-muted focus-visible:border-focus focus-visible:outline-none`}
     >
       {children}
     </button>
@@ -42,18 +42,18 @@ export function Card({ children, tooltip, onClick, selected = false, muted = fal
 }
 
 export function CardMeta({ children }: { children: ReactNode }) {
-  return <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-zinc-500">{children}</div>
+  return <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted">{children}</div>
 }
 
 /** Secondary prose under a card's title, cut to two lines. */
 export function CardNote({ children }: { children: ReactNode }) {
-  return <p className="line-clamp-2 text-[10px] leading-4 text-zinc-500">{children}</p>
+  return <p className="line-clamp-2 text-[10px] leading-4 text-muted">{children}</p>
 }
 
 export function CardTitle({ children, prefix }: { children: ReactNode; prefix?: string }) {
   return (
-    <div className="line-clamp-3 text-xs leading-snug text-zinc-100">
-      {prefix && <span className="mr-1 tabular-nums text-zinc-500">{prefix}</span>}
+    <div className="line-clamp-3 text-xs leading-snug text-fg">
+      {prefix && <span className="mr-1 tabular-nums text-muted">{prefix}</span>}
       {children}
     </div>
   )

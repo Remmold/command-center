@@ -47,7 +47,7 @@ export function Popover({ open, onClose, anchor, label, children }: Props) {
       aria-label={label}
       style={{ top: pos.top, left: pos.left }}
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-50 flex w-64 flex-col gap-2 rounded border border-zinc-700 bg-zinc-900 py-2 text-xs text-zinc-300 shadow-lg"
+      className="fixed z-50 flex w-64 flex-col gap-2 rounded border border-strong bg-widget py-2 text-xs text-fg shadow-lg"
     >
       {children}
     </div>,
@@ -60,7 +60,7 @@ export function PopoverSection({ children }: { children: ReactNode }) {
 }
 
 export function PopoverNote({ children }: { children: ReactNode }) {
-  return <p className="text-[11px] leading-4 text-zinc-500">{children}</p>
+  return <p className="text-[11px] leading-4 text-muted">{children}</p>
 }
 
 export function PopoverActions({ children }: { children: ReactNode }) {

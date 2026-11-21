@@ -26,7 +26,7 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(function IconButt
       aria-label={label}
       title={tooltip ?? label}
       className={
-        'rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 focus-visible:opacity-100 ' +
+        'rounded p-0.5 text-muted hover:bg-list-hover hover:text-fg focus-visible:opacity-100 ' +
         (revealOnHover && !pinned ? 'opacity-0 group-hover:opacity-100' : '')
       }
     >

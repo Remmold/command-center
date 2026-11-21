@@ -27,10 +27,10 @@ export function Dialog({ title, onClose, children, actions }: Props) {
         role="dialog"
         aria-label={title}
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl"
+        className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-subtle bg-editor shadow-2xl"
       >
-        <header className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-4 py-2.5">
-          <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-100">{title}</h2>
+        <header className="flex shrink-0 items-center gap-2 border-b border-subtle px-4 py-2.5">
+          <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{title}</h2>
           {actions}
           <Button variant="ghost" onClick={onClose} label="Close" tooltip="Close (Esc)">
             <X size={14} />

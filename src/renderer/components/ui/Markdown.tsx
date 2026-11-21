@@ -4,7 +4,7 @@ import rehypeHighlight from 'rehype-highlight'
 
 export function Markdown({ text }: { text: string }) {
   return (
-    <div className="markdown text-[13px] leading-relaxed text-zinc-100">
+    <div className="markdown text-[13px] leading-relaxed text-fg">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
@@ -37,18 +37,18 @@ export function Markdown({ text }: { text: string }) {
               )
             }
             return (
-              <code className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-[12px] text-amber-300">
+              <code className="rounded bg-list-selected px-1.5 py-0.5 text-[12px] text-amber-300">
                 {children}
               </code>
             )
           },
           pre: ({ children }) => (
-            <pre className="my-3 overflow-x-auto rounded-md border border-zinc-800 bg-black/60 px-4 py-3 text-[12px]">
+            <pre className="my-3 overflow-x-auto rounded-md border border-subtle bg-black/60 px-4 py-3 text-[12px]">
               {children}
             </pre>
           ),
           blockquote: ({ children }) => (
-            <blockquote className="my-2 border-l-2 border-zinc-700 pl-3 text-zinc-300">
+            <blockquote className="my-2 border-l-2 border-strong pl-3 text-fg">
               {children}
             </blockquote>
           ),
@@ -58,9 +58,9 @@ export function Markdown({ text }: { text: string }) {
             </div>
           ),
           th: ({ children }) => (
-            <th className="border border-zinc-800 bg-zinc-900 px-2 py-1 text-left">{children}</th>
+            <th className="border border-subtle bg-sidebar px-2 py-1 text-left">{children}</th>
           ),
-          td: ({ children }) => <td className="border border-zinc-800 px-2 py-1">{children}</td>
+          td: ({ children }) => <td className="border border-subtle px-2 py-1">{children}</td>
         }}
       >
         {text}

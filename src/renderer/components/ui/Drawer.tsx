@@ -8,7 +8,7 @@ const MAX_SHARE = 0.8
 
 /** Lays content and a docked Drawer side by side. */
 export function DrawerHost({ children }: { children: ReactNode }) {
-  return <div className="flex h-full min-h-0 min-w-0 bg-zinc-950">{children}</div>
+  return <div className="flex h-full min-h-0 min-w-0 bg-editor">{children}</div>
 }
 
 /** The main region beside a docked Drawer. */
@@ -62,16 +62,16 @@ export function Drawer({ label, title, onClose, children, share, minWidth, onRes
       ref={panel}
       aria-label={label}
       style={{ width: `${share * 100}%`, minWidth }}
-      className="relative flex h-full max-w-[80%] shrink-0 flex-col border-l border-zinc-800 bg-zinc-950"
+      className="relative flex h-full max-w-[80%] shrink-0 flex-col border-l border-subtle bg-editor"
     >
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize panel"
         onPointerDown={startResize}
-        className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-zinc-700/50"
+        className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-focus"
       />
-      <header className="flex shrink-0 items-start gap-2 border-b border-zinc-800 px-4 py-3">
+      <header className="flex shrink-0 items-start gap-2 border-b border-subtle px-4 py-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">{title}</div>
         <Button variant="ghost" onClick={onClose} label="Close" tooltip="Close (Esc)">
           <X size={14} />
@@ -92,7 +92,7 @@ export function DrawerSection({ title, children }: { title: string; children: Re
 }
 
 export function DrawerText({ children }: { children: ReactNode }) {
-  return <p className="text-xs leading-5 text-zinc-300">{children}</p>
+  return <p className="text-xs leading-5 text-fg">{children}</p>
 }
 
 export function DrawerList({ children }: { children: ReactNode }) {

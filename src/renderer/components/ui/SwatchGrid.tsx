@@ -28,9 +28,9 @@ export function Swatch({ label, selected, onClick, fill, children }: SwatchProps
       onClick={onClick}
       style={fill ? { backgroundColor: fill } : undefined}
       className={
-        'flex h-6 w-6 items-center justify-center rounded text-zinc-300 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-zinc-400 ' +
-        (selected ? 'ring-2 ring-zinc-100 ' : '') +
-        (fill ? '' : selected ? 'bg-zinc-700 text-zinc-100' : 'hover:bg-zinc-800 hover:text-zinc-100')
+        'flex h-6 w-6 items-center justify-center rounded text-fg transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus ' +
+        (selected ? 'ring-2 ring-focus ' : '') +
+        (fill ? '' : selected ? 'bg-list-selected text-fg' : 'hover:bg-list-hover hover:text-fg')
       }
     >
       {children}

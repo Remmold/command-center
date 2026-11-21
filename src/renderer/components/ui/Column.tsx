@@ -20,7 +20,7 @@ interface Props {
 
 export function Column({ title, count, children, footer, scroll = true }: Props) {
   return (
-    <section aria-label={title} className={`flex min-w-0 flex-col rounded-lg bg-zinc-900/40 ${scroll ? 'min-h-0' : ''}`}>
+    <section aria-label={title} className={`flex min-w-0 flex-col rounded-lg bg-sidebar/40 ${scroll ? 'min-h-0' : ''}`}>
       <ColumnHeader title={title} count={count} />
       <div className={`flex flex-col gap-2 p-2 ${scroll ? 'scrollbar-thin min-h-0 flex-1 overflow-y-auto' : ''}`}>
         {children}
@@ -34,7 +34,7 @@ function ColumnHeader({ title, count }: { title: string; count: number }) {
   return (
     <header className="flex shrink-0 items-center justify-between px-3 pt-2">
       <SectionLabel as="h2">{title}</SectionLabel>
-      <span className="text-[10px] tabular-nums text-zinc-500">{count}</span>
+      <span className="text-[10px] tabular-nums text-muted">{count}</span>
     </header>
   )
 }

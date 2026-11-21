@@ -44,10 +44,10 @@ export function MultiSelect({ label, options, selected, onChange }: Props) {
         onClick={() => setOpen((o) => !o)}
         className={
           'inline-flex min-w-0 shrink-0 items-center gap-1 rounded border px-2 py-1 text-xs transition-colors ' +
-          (active ? 'border-zinc-500 bg-zinc-800 text-zinc-100' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200')
+          (active ? 'border-focus bg-list-selected text-fg' : 'border-strong text-muted hover:border-muted hover:text-fg')
         }
       >
-        <span className="text-zinc-500">{label}:</span>
+        <span className="text-muted">{label}:</span>
         <span className="max-w-40 truncate">{summary(options, selected)}</span>
         <ChevronDown size={12} />
       </button>
@@ -83,11 +83,11 @@ function MultiSelectRow({ checked, onClick, hint, children }: RowProps) {
         role="menuitemcheckbox"
         aria-checked={checked}
         onClick={onClick}
-        className="flex w-full min-w-0 items-center gap-1.5 px-3 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+        className="flex w-full min-w-0 items-center gap-1.5 px-3 py-1 text-left text-xs text-fg hover:bg-list-hover"
       >
         <span className="flex w-3 shrink-0 justify-center">{checked && <Check size={12} />}</span>
         {children}
-        {hint && <span className="ml-auto shrink-0 pl-2 text-[10px] text-zinc-500">{hint}</span>}
+        {hint && <span className="ml-auto shrink-0 pl-2 text-[10px] text-muted">{hint}</span>}
       </button>
     </li>
   )
