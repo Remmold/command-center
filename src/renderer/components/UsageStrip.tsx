@@ -1,8 +1,8 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useMenu } from '../hooks/useMenu'
 import { useMinuteClock } from '../hooks/useMinuteClock'
-import { usageEntries, type UsageEntry } from '../state/usageModel'
-import { useUsageStore } from '../state/usageStore'
+import type { UsageEntry } from '../state/usageModel'
+import { useUsageEntries } from '../state/useUsageEntries'
 import { useProfilesStore } from '../state/profilesStore'
 import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
@@ -18,12 +18,6 @@ function useProfileOnScreen(): string | null {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   if (view !== 'work' || !activeProjectId) return null
   return workspaces.find((w) => w.id === activeProjectId)?.profileId ?? null
-}
-
-export function useUsageEntries(activeProfileId: string | null, now: number): UsageEntry[] {
-  const profiles = useProfilesStore((s) => s.profiles)
-  const usage = useUsageStore((s) => s.byProfile)
-  return useMemo(() => usageEntries({ profiles, usage, activeProfileId, now }), [profiles, usage, activeProfileId, now])
 }
 
 /** Every account profile with its plan-limit bars; the profile of the chat on screen is highlighted. */

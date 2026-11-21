@@ -400,9 +400,10 @@ export function ChatView({
       }
       switchPhaseRef.current = 'waiting'
     }
+    if (switchPhaseRef.current === 'waiting' && !processRunning) switchPhaseRef.current = 'stopping'
     if (switchPhaseRef.current === 'waiting' && !turnActive) {
       switchPhaseRef.current = 'stopping'
-      note(`switching account to ${switchTo}; resuming this session on it`)
+      note(`switching profile to ${switchTo}; resuming this session on it`)
       window.api.claude.stop(paneId)
       return
     }

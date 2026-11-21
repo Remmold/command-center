@@ -5,7 +5,7 @@ import { useMinuteClock } from '../../hooks/useMinuteClock'
 import { useAccountSwitchStore } from '../../state/accountSwitchStore'
 import { useProfilesStore } from '../../state/profilesStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
-import { useUsageEntries } from '../UsageStrip'
+import { useUsageEntries } from '../../state/useUsageEntries'
 import { Button } from '../ui/Button'
 import { ListRow, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { Popover, PopoverHeading, PopoverNote, PopoverSection } from '../ui/Popover'
@@ -46,14 +46,14 @@ export function AccountSwitcher({ workspace, paneId }: Props) {
         variant="ghost"
         pressed={menu.open}
         onClick={toggle}
-        label={`account for ${workspace.name}`}
-        tooltip={switching ? `Switching to ${switching} after this turn` : `Account: ${label}${current?.plan ? ` · ${current.plan}` : ''}`}
+        label={`account profile for ${workspace.name}`}
+        tooltip={switching ? `Switching to ${switching} after this turn` : `Account profile: ${label}${current?.plan ? ` · ${current.plan}` : ''}`}
       >
         <UserRound size={12} strokeWidth={2.25} />
         {switching ? `${switching}…` : label}
       </Button>
-      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} width={320} label="account">
-        <PopoverHeading title="Account" />
+      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} width={320} label="account profile">
+        <PopoverHeading title="Account profile" />
         <ul>
           {entries.map((e) => (
             <ListRow
@@ -73,7 +73,7 @@ export function AccountSwitcher({ workspace, paneId }: Props) {
         </ul>
         <PopoverSection>
           <PopoverNote>
-            This chat restarts on the account you pick, after its current turn. Other chats in {workspace.name} switch when they next start.
+            This session restarts on the profile you pick, after its current turn. Other sessions in {workspace.name} switch when they next start.
           </PopoverNote>
         </PopoverSection>
       </Popover>

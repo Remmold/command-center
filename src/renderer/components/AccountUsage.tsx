@@ -119,7 +119,7 @@ export function AccountUsagePanel({ entry, now }: { entry: UsageEntry; now: numb
       <PopoverSection>
         <div className="flex items-center justify-between gap-2">
           <PopoverNote>{entry.refreshing ? 'Refreshing…' : updatedText(entry.updatedAt, now)}</PopoverNote>
-          <Button variant="ghost" onClick={() => refresh(entry.profileId)} tooltip="Fetch this account's usage now">
+          <Button variant="ghost" onClick={() => refresh(entry.profileId)} tooltip="Fetch this profile's usage now">
             <RefreshCw size={12} />
             Refresh
           </Button>

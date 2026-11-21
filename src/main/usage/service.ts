@@ -64,7 +64,7 @@ export class UsageService {
   rateLimitEvent(profileId: string, info: RateLimitInfo): void {
     const prior = this.byProfile.get(profileId)
     if (!prior) return
-    this.byProfile.set(profileId, applyRateLimitEvent(prior, info))
+    this.byProfile.set(profileId, { ...applyRateLimitEvent(prior, info), updatedAt: this.now() })
     this.emit()
   }
 
@@ -88,13 +88,19 @@ export class UsageService {
 
   private syncProfiles(profiles: AccountProfile[]): void {
     this.order = profiles.map((p) => p.id)
+    const loggedInSince: string[] = []
     for (const id of [...this.byProfile.keys()]) if (!this.order.includes(id)) this.byProfile.delete(id)
     for (const p of profiles) {
       const prior = this.byProfile.get(p.id)
       if (!prior) this.byProfile.set(p.id, blank(p.id, p.loggedIn))
       else if (!p.loggedIn) this.byProfile.set(p.id, blank(p.id, false))
+      else if (!prior.loggedIn && prior.updatedAt === null) {
+        this.byProfile.set(p.id, blank(p.id, true))
+        loggedInSince.push(p.id)
+      }
     }
     this.plan.setProfiles(this.order, this.now())
+    for (const id of loggedInSince) this.plan.requestNow(id, this.now())
   }
 
   private schedule(): void {
@@ -120,7 +126,7 @@ export class UsageService {
       const env = profile.id === DEFAULT_PROFILE_ID ? {} : await this.deps.envFor(profile.id)
       const { init, usage } = await this.deps.probe(this.deps.probeDir, env)
       const reading = readUsage(init, usage)
-      const loggedIn = Boolean(reading.account?.email)
+      const loggedIn = Object.keys(reading.account ?? {}).length > 0
       this.byProfile.set(profile.id, {
         profileId: profile.id,
         loggedIn,
