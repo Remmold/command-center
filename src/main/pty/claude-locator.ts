@@ -1,11 +1,15 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 export interface ClaudeLaunch {
   command: string
   args: string[]
+  /** Variables the launch itself needs, applied after the cleaned child environment. */
+  env?: Record<string, string>
 }
+
+const FAKE_CLAUDE_VAR = 'CC_CLAUDE_BIN'
 
 export class ClaudeNotFoundError extends Error {
   constructor(detail?: string) {
@@ -83,7 +87,15 @@ function resolveUnixLaunch(): ClaudeLaunch {
   return { command: claude, args: [] }
 }
 
+/** Only under the fake CLI: an inherited CLAUDE_CONFIG_DIR must never move the real Default profile. */
+export function harnessConfigDir(env: Record<string, string | undefined> = process.env): string | null {
+  return (env[FAKE_CLAUDE_VAR] && env.CLAUDE_CONFIG_DIR) || null
+}
+
+/** CC_CLAUDE_BIN (tests only) wins over the real CLI. */
 export function locateClaude(): ClaudeLaunch {
+  const fake = process.env[FAKE_CLAUDE_VAR]
+  if (fake) return { command: process.execPath, args: [resolve(fake)], env: { ELECTRON_RUN_AS_NODE: '1' } }
   if (cached) return cached
   cached = process.platform === 'win32' ? resolveWindowsLaunch() : resolveUnixLaunch()
   return cached

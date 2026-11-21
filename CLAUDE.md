@@ -23,6 +23,8 @@ Package manager is pnpm (`pnpm install`).
 - `pnpm test`: Vitest once (`src/**/*.test.ts`, Node environment, no Electron)
 - `pnpm dist`: build the per-user NSIS installer into `release/` (`release/win-unpacked/` is the unpacked app)
 - `pnpm quick`: quick tier, typecheck + tests; non-zero on any failure. Run it every round.
+- `pnpm e2e`: builds, then runs the Playwright smoke suite in `e2e/` against the built app on the fake CLI (temp user data, workspace and config dir per test; about 30 s with the build). Slow, so not part of `pnpm quick`; it belongs to the full check before a merge or release.
 - Every commit that touches a non-`.md` file runs `pnpm quick` through `.githooks/pre-commit` (wired by `pnpm install`). A red quick tier blocks the commit; fix it, never `--no-verify`.
+- Fake CLI for zero-token tests: set `CC_CLAUDE_BIN` to `tools/fake-claude/fake-claude.mjs` (scripts, log and variables in `tools/fake-claude/README.md`). Its replies are cloned from the recordings in `src/main/claude/fixtures/`.
 
 `node-pty` loads its prebuilt N-API binaries in Electron, so no rebuild is needed. Its install script must still run (allowed in `pnpm.onlyBuiltDependencies`): it copies `conpty.dll` into place.

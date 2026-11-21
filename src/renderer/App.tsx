@@ -101,16 +101,17 @@ export function App() {
       <TitleBar />
       <div className="relative flex min-h-0 flex-1">
         {appView === 'dashboard' && (
-          <div className="absolute inset-0 z-30">
+          <div data-testid="view-dashboard" className="absolute inset-0 z-30">
             <DashboardView />
           </div>
         )}
         {appView === 'board' && (
-          <div className="absolute inset-0 z-30">
+          <div data-testid="view-board" className="absolute inset-0 z-30">
             <BoardView />
           </div>
         )}
         <div
+          data-testid="view-work"
           className={'min-h-0 min-w-0 flex-1 ' + (appView === 'work' ? '' : 'invisible')}
           aria-hidden={appView !== 'work'}
         >

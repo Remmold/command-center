@@ -1,0 +1,20 @@
+{
+  "turns": [
+    {
+      "match": "",
+      "repeat": true,
+      "events": [
+        { "type": "text", "text": "I'll create hello.txt for you." },
+        {
+          "type": "tool_use",
+          "name": "Write",
+          "input": { "file_path": "{cwd}{sep}hello.txt", "content": "hi" },
+          "result": "File created successfully at: {cwd}{sep}hello.txt",
+          "onDeny": [{ "type": "text", "text": "Understood, I won't create the file." }]
+        },
+        { "type": "rate_limit_event" },
+        { "type": "text", "text": "Created hello.txt containing hi." }
+      ]
+    }
+  ]
+}

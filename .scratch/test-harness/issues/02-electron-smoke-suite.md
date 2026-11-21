@@ -4,11 +4,11 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Playwright (`@playwright/test` with `_electron`) as a dev dependency; `pnpm e2e` builds if needed and runs the suite; not part of `pnpm quick`; documented in CLAUDE.md as part of Ship mode
-- [ ] Each test is isolated (own temp dirs), launches the app, and closes it and its process tree afterwards
-- [ ] Scenarios:
+- [x] Playwright (`@playwright/test` with `_electron`) as a dev dependency; `pnpm e2e` builds if needed and runs the suite; not part of `pnpm quick`; documented in CLAUDE.md as part of Ship mode
+- [x] Each test is isolated (own temp dirs), launches the app, and closes it and its process tree afterwards
+- [x] Scenarios:
   - start a session in the temp workspace and see the streamed reply;
   - a tool approval: 1 runs it; 3 with feedback logs the deny payload; "allow for this session" suppresses the second prompt;
   - Shift+Tab logs `set_permission_mode`;
@@ -16,5 +16,5 @@
   - Stop logs `interrupt` and shows "Interrupted";
   - Ctrl+1/2/3 switch Dashboard / Work / Board;
   - the usage strip shows the fake account and its weekly bar.
-- [ ] Stable selectors: add `data-testid` attributes where needed, no styling changes
-- [ ] The whole suite runs in under 3 minutes on this machine and passes three times in a row
+- [x] Stable selectors: add `data-testid` attributes where needed, no styling changes
+- [x] The whole suite runs in under 3 minutes on this machine and passes three times in a row

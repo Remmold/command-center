@@ -6,6 +6,7 @@ import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../shared/types'
 import { profileEnv } from '../../shared/profiles'
 import { userDataPath } from '../util/paths'
 import { ensureProfileLinks } from './linker'
+import { harnessConfigDir } from '../pty/claude-locator'
 
 interface SavedProfile {
   id: string
@@ -14,7 +15,7 @@ interface SavedProfile {
 }
 
 export function defaultConfigDir(): string {
-  return join(homedir(), '.claude')
+  return harnessConfigDir() ?? join(homedir(), '.claude')
 }
 
 function profilesFile(): string {

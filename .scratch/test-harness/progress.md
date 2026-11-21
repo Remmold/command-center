@@ -1,0 +1,2 @@
+- 01 fake-claude: resolved (fake CLI, locator wiring, recorded fixtures; app verified on the fake)
+- 02 electron-smoke-suite: resolved (pnpm e2e, 9 scenarios, about 30 s with the build)

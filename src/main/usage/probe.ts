@@ -27,7 +27,7 @@ export function probeUsage(cwd: string, profileEnv: Record<string, string>): Pro
   const child = spawn(launch.command, args, {
     cwd,
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: childEnv(process.env, profileEnv),
+    env: childEnv(process.env, { ...profileEnv, ...launch.env }),
     shell: false,
     windowsHide: true
   })
