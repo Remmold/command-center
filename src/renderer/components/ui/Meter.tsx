@@ -25,7 +25,7 @@ export function Meter({ percent, tone, label, size = 'compact' }: Props) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent ?? undefined}
-      className={`block h-1 shrink-0 overflow-hidden rounded-full bg-list-selected ${TRACK[size]}`}
+      className={`block h-1 shrink-0 overflow-hidden rounded-full bg-meter-track ${TRACK[size]}`}
     >
       <span className={`block h-full rounded-full ${FILL[tone]}`} style={{ width: `${width}%` }} />
     </span>

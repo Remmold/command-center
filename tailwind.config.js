@@ -41,7 +41,8 @@ module.exports = {
         meter: {
           ok: theme('meter-ok'),
           warn: theme('meter-warn'),
-          limit: theme('meter-limit')
+          limit: theme('meter-limit'),
+          track: theme('meter-track')
         },
         status: {
           running: theme('status-running'),

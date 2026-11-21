@@ -38,6 +38,7 @@
   --cc-meter-ok: 137 209 133;
   --cc-meter-warn: 204 167 0;
   --cc-meter-limit: 241 76 76;
+  --cc-meter-track: 76 76 76;
 
   /* Dark+ token colours, read by syntax.css for highlight.js. */
   --cc-syntax-keyword: 86 156 214;
