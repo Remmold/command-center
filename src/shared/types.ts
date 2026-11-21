@@ -13,6 +13,15 @@ export interface Workspace {
   worktreeTag: string
 }
 
+export interface AccountProfile {
+  id: string
+  name: string
+  /** The Claude config folder; Default's is ~/.claude. */
+  configDir: string
+  /** True when the profile's credentials file exists. */
+  loggedIn: boolean
+}
+
 export type SessionStatus = 'running' | 'needs-approval' | 'your-turn' | 'idle'
 
 export const WAITING_STATUSES: readonly SessionStatus[] = ['needs-approval', 'your-turn']
@@ -214,6 +223,12 @@ export interface RendererApi {
     list: () => Promise<Workspace[]>
     add: () => Promise<Workspace | null>
     remove: (id: string) => Promise<void>
+    setProfile: (id: string, profileId: string) => Promise<Workspace | null>
+  }
+  profiles: {
+    list: () => Promise<AccountProfile[]>
+    create: (name: string) => Promise<AccountProfile>
+    rename: (id: string, name: string) => Promise<AccountProfile | null>
   }
   board: {
     get: () => Promise<BoardModel>
@@ -232,7 +247,13 @@ export interface RendererApi {
     onExit: (cb: (event: AppExitEvent) => void) => () => void
   }
   pty: {
-    spawn: (paneId: string, kind: PtyKind, cwd: string) => Promise<SpawnResult>
+    /** `env` adds variables on top of the app's cleaned environment. */
+    spawn: (
+      paneId: string,
+      kind: PtyKind,
+      cwd: string,
+      env?: Record<string, string>
+    ) => Promise<SpawnResult>
     write: (paneId: string, data: string) => void
     resize: (paneId: string, cols: number, rows: number) => void
     kill: (paneId: string) => void

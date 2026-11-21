@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type {
+  AccountProfile,
   AppExitEvent,
   AppView,
   AppOutputEvent,
@@ -24,7 +25,15 @@ const api: RendererApi = {
   workspaces: {
     list: (): Promise<Workspace[]> => ipcRenderer.invoke(IPC.WORKSPACES_LIST),
     add: (): Promise<Workspace | null> => ipcRenderer.invoke(IPC.WORKSPACES_ADD),
-    remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC.WORKSPACES_REMOVE, id)
+    remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC.WORKSPACES_REMOVE, id),
+    setProfile: (id: string, profileId: string): Promise<Workspace | null> =>
+      ipcRenderer.invoke(IPC.WORKSPACES_SET_PROFILE, id, profileId)
+  },
+  profiles: {
+    list: (): Promise<AccountProfile[]> => ipcRenderer.invoke(IPC.PROFILES_LIST),
+    create: (name: string): Promise<AccountProfile> => ipcRenderer.invoke(IPC.PROFILES_CREATE, name),
+    rename: (id: string, name: string): Promise<AccountProfile | null> =>
+      ipcRenderer.invoke(IPC.PROFILES_RENAME, id, name)
   },
   board: {
     get: (): Promise<BoardModel> => ipcRenderer.invoke(IPC.BOARD_GET),
@@ -63,8 +72,8 @@ const api: RendererApi = {
       ipcRenderer.invoke(IPC.FILES_WRITE, cwd, relativePath, content)
   },
   pty: {
-    spawn: (paneId, kind, cwd): Promise<SpawnResult> =>
-      ipcRenderer.invoke(IPC.PTY_SPAWN, paneId, kind, cwd),
+    spawn: (paneId, kind, cwd, env): Promise<SpawnResult> =>
+      ipcRenderer.invoke(IPC.PTY_SPAWN, paneId, kind, cwd, env),
     write: (paneId, data) => ipcRenderer.send(IPC.PTY_WRITE, paneId, data),
     resize: (paneId, cols, rows) => ipcRenderer.send(IPC.PTY_RESIZE, paneId, cols, rows),
     kill: (paneId) => ipcRenderer.send(IPC.PTY_KILL, paneId),

@@ -18,7 +18,8 @@ class ClaudeManager {
     cwd: string,
     model?: string,
     resumeSessionId?: string,
-    permissionMode?: string
+    permissionMode?: string,
+    profileEnv: Record<string, string> = {}
   ): { ok: boolean; error?: string } {
     const existing = this.sessions.get(paneId)
     if (existing && existing.isAlive()) return { ok: true }
@@ -40,7 +41,8 @@ class ClaudeManager {
         },
         model,
         resumeSessionId,
-        permissionMode
+        permissionMode,
+        profileEnv
       )
       this.sessions.set(paneId, session)
       for (const cb of this.spawnListeners) cb(paneId, cwd)

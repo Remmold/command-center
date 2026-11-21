@@ -7,6 +7,8 @@ import { useProjectViewsStore } from '../state/projectViewsStore'
 import { RepoIcon } from './RepoIcon'
 import { StatusDot } from './ui/StatusDot'
 import { NeedsYouQueue } from './NeedsYouQueue'
+import { ProfilePicker } from './ProfilePicker'
+import { useProfilesStore } from '../state/profilesStore'
 import { useWorkspaceStatus } from '../state/sessionStatusStore'
 
 export function Sidebar() {
@@ -14,10 +16,12 @@ export function Sidebar() {
   const load = useWorkspacesStore((s) => s.load)
   const add = useWorkspacesStore((s) => s.add)
   const openProject = useProjectViewsStore((s) => s.openProject)
+  const loadProfiles = useProfilesStore((s) => s.load)
 
   useEffect(() => {
     void load()
-  }, [load])
+    void loadProfiles()
+  }, [load, loadProfiles])
 
   const groups = useMemo(() => groupByRepo(workspaces), [workspaces])
 
@@ -91,6 +95,7 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
       <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {status && <StatusDot status={status} />}
+      <ProfilePicker workspace={workspace} />
       <button
         onClick={(e) => {
           e.stopPropagation()

@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { basename, dirname } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { DEFAULT_PROFILE_ID, type Workspace } from '../../shared/types'
 import { projectsFile } from '../util/paths'
@@ -111,5 +111,29 @@ export function remove(id: string): Promise<void> {
   return serial(async () => {
     const saved = await readAll()
     await writeAll(saved.filter((p) => p.id !== id))
+  })
+}
+
+export function setProfile(id: string, profileId: string): Promise<Workspace | null> {
+  return serial(async () => {
+    const saved = await readAll()
+    const target = saved.find((p) => p.id === id)
+    if (!target) return null
+    target.profileId = profileId
+    await writeAll(saved)
+    return toWorkspace(target)
+  })
+}
+
+function samePath(a: string, b: string): boolean {
+  const norm = (p: string): string => resolve(p).replace(/[\\/]+$/, '').toLowerCase()
+  return norm(a) === norm(b)
+}
+
+/** The workspace whose folder is exactly `path`, compared the way Windows compares paths. */
+export function findByPath(path: string): Promise<Workspace | undefined> {
+  return serial(async () => {
+    const match = (await readAll()).find((p) => samePath(p.path, path))
+    return match ? toWorkspace(match) : undefined
   })
 }

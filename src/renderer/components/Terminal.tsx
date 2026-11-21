@@ -8,10 +8,13 @@ interface Props {
   paneId: string
   kind: PtyKind
   cwd: string
+  /** Read once at spawn; a pane's environment never changes after its shell starts. */
+  env?: Record<string, string>
 }
 
-export function Terminal({ paneId, kind, cwd }: Props) {
+export function Terminal({ paneId, kind, cwd, env }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const envRef = useRef(env)
 
   useEffect(() => {
     const container = containerRef.current
@@ -41,7 +44,7 @@ export function Terminal({ paneId, kind, cwd }: Props) {
     let spawned = false
 
     const spawn = async () => {
-      const res = await window.api.pty.spawn(paneId, kind, cwd)
+      const res = await window.api.pty.spawn(paneId, kind, cwd, envRef.current)
       if (!alive) return
       if (!res.ok) {
         term.write(`\r\n\x1b[31m${res.error}\x1b[0m\r\n`)

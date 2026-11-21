@@ -7,6 +7,8 @@ interface WorkspacesState {
   load: () => Promise<void>
   add: () => Promise<Workspace | null>
   remove: (id: string) => Promise<void>
+  /** Takes effect from the workspace's next session start. */
+  setProfile: (id: string, profileId: string) => Promise<void>
 }
 
 export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
@@ -30,5 +32,9 @@ export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
   remove: async (id) => {
     await window.api.workspaces.remove(id)
     await get().load()
+  },
+  setProfile: async (id, profileId) => {
+    const updated = await window.api.workspaces.setProfile(id, profileId)
+    if (updated) set({ workspaces: get().workspaces.map((w) => (w.id === id ? updated : w)) })
   }
 }))

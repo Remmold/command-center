@@ -1,6 +1,7 @@
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import { locateShell, type ShellKind } from './shell-locator'
+import { CONFIG_DIR_VAR } from '../../shared/profiles'
 
 export type PtyKind = ShellKind
 
@@ -9,17 +10,18 @@ export interface SpawnResult {
   error?: string
 }
 
-function sanitizedEnv(): Record<string, string> {
+function sanitizedEnv(extras: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) {
     if (v === undefined) continue
     if (k === 'ELECTRON_RUN_AS_NODE') continue
     if (k === 'ELECTRON_NO_ATTACH_CONSOLE') continue
+    if (k === CONFIG_DIR_VAR) continue
     out[k] = v
   }
   out.TERM = 'xterm-256color'
   out.COLORTERM = 'truecolor'
-  return out
+  return { ...out, ...extras }
 }
 
 type DataCallback = (paneId: string, data: string) => void
@@ -30,7 +32,7 @@ class PtyManager {
   private dataListeners: DataCallback[] = []
   private exitListeners: ExitCallback[] = []
 
-  spawn(paneId: string, kind: PtyKind, cwd: string): SpawnResult {
+  spawn(paneId: string, kind: PtyKind, cwd: string, extraEnv: Record<string, string> = {}): SpawnResult {
     if (this.sessions.has(paneId)) {
       // Already attached — likely a re-mount. Reuse the existing pty so scrollback survives.
       return { ok: true }
@@ -41,8 +43,15 @@ class PtyManager {
     } catch (err) {
       return { ok: false, error: (err as Error).message }
     }
-    const env = sanitizedEnv()
-    console.log('[pty] spawn', { paneId, kind, cwd, command: launch.command, args: launch.args })
+    const env = sanitizedEnv(extraEnv)
+    console.log('[pty] spawn', {
+      paneId,
+      kind,
+      cwd,
+      command: launch.command,
+      args: launch.args,
+      extraEnv: Object.keys(extraEnv)
+    })
     try {
       const session = pty.spawn(launch.command, launch.args, {
         name: 'xterm-256color',

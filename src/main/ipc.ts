@@ -1,6 +1,8 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
+import * as profiles from './profiles/store'
+import { transcriptsDirForCwd } from './profiles/transcripts'
 import * as apps from './apps/store'
 import { appManager } from './apps/manager'
 import { ptyManager } from './pty/manager'
@@ -64,6 +66,14 @@ export function registerIpc(): void {
     void refreshBoard()
   })
 
+  ipcMain.handle(IPC.WORKSPACES_SET_PROFILE, (_e, id: string, profileId: string) =>
+    workspaces.setProfile(id, profileId)
+  )
+
+  ipcMain.handle(IPC.PROFILES_LIST, () => profiles.list())
+  ipcMain.handle(IPC.PROFILES_CREATE, (_e, name: string) => profiles.create(name))
+  ipcMain.handle(IPC.PROFILES_RENAME, (_e, id: string, name: string) => profiles.rename(id, name))
+
   ipcMain.handle(IPC.FILES_LIST, (_event, cwd: string) => listProjectFiles(cwd))
 
   // Managed apps (machine-wide launchers/servers — independent of any project)
@@ -100,8 +110,13 @@ export function registerIpc(): void {
   // PTY (shells only — claude no longer goes through here)
   ipcMain.handle(
     IPC.PTY_SPAWN,
-    (_e, paneId: string, kind: Parameters<typeof ptyManager.spawn>[1], cwd: string) =>
-      ptyManager.spawn(paneId, kind, cwd)
+    (
+      _e,
+      paneId: string,
+      kind: Parameters<typeof ptyManager.spawn>[1],
+      cwd: string,
+      env?: Record<string, string>
+    ) => ptyManager.spawn(paneId, kind, cwd, env)
   )
   ipcMain.on(IPC.PTY_WRITE, (_e, paneId: string, data: string) =>
     ptyManager.write(paneId, data)
@@ -134,14 +149,19 @@ export function registerIpc(): void {
   // Claude (stream-json subprocess)
   ipcMain.handle(
     IPC.CLAUDE_START,
-    (
+    async (
       _e,
       paneId: string,
       cwd: string,
       model?: string,
       resumeSessionId?: string,
       permissionMode?: string
-    ) => claudeManager.start(paneId, cwd, model, resumeSessionId, permissionMode)
+    ) => {
+      const workspace = await workspaces.findByPath(cwd)
+      if (!workspace) console.warn('[profiles] no workspace at', cwd, '- session runs on Default')
+      const env = workspace ? await profiles.prepareSession(workspace.profileId) : {}
+      return claudeManager.start(paneId, cwd, model, resumeSessionId, permissionMode, env)
+    }
   )
   ipcMain.on(
     IPC.CLAUDE_SEND,
@@ -153,7 +173,9 @@ export function registerIpc(): void {
     ) => claudeManager.send(paneId, text, images)
   )
 
-  ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, (_e, cwd: string) => listLocalSessions(cwd))
+  ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, async (_e, cwd: string) =>
+    listLocalSessions(await transcriptsDirForCwd(cwd))
+  )
 
   ipcMain.handle(IPC.FILES_SAVE_AS, async (event, suggestedName: string, content: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)
