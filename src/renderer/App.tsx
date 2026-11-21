@@ -99,7 +99,7 @@ export function App() {
     openSettings: () => useViewStore.getState().openSettings(),
     nextWaiting: jumpToNextWaiting,
     newChat: () => {
-      const projectId = useProjectViewsStore.getState().activeProjectId
+      const projectId = openHostedWorkspace()
       if (!projectId) return
       const created = useProjectViewsStore.getState().addClaudeSession(projectId)
       if (created) openSession(created.id)
@@ -151,8 +151,9 @@ export function App() {
   )
 }
 
-/** The workspace of the hosted session on screen; none while an observed session is open. */
+/** The workspace of the hosted session open in Work; none while an observed session is open. */
 function openHostedWorkspace(): string | null {
   if (useObservedStore.getState().viewing) return null
-  return useProjectViewsStore.getState().activeProjectId
+  const { activeProjectId, views } = useProjectViewsStore.getState()
+  return activeProjectId && views[activeProjectId]?.activeClaudeSessionId ? activeProjectId : null
 }

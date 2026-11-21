@@ -183,7 +183,7 @@ function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSes
   const exportMarkdown = async () => {
     const items = useChatItemsStore.getState().items[session.id] ?? []
     if (items.length === 0) {
-      alert('nothing to export — this chat has no items yet.')
+      alert('nothing to export — this session has no messages yet.')
       return
     }
     const title = `${view.projectName} — ${session.title}`
@@ -191,7 +191,7 @@ function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSes
   }
 
   const clear = () => {
-    const ok = confirm('Clear this chat? Items and the claude session id will be wiped (process restarts fresh on next send).')
+    const ok = confirm('Clear this session? Messages and the claude session id will be wiped (process restarts fresh on next send).')
     if (!ok) return
     window.api.claude.stop(session.id)
     useChatItemsStore.getState().clearItems(session.id)
@@ -205,18 +205,18 @@ function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSes
           <MoreHorizontal size={14} strokeWidth={2} />
         </Button>
       </span>
-      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" label="chat actions">
-        <PopoverMenu label="chat actions">
+      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" label="session actions">
+        <PopoverMenu label="session actions">
           {MODELS.map((m) => (
-            <MenuItem key={m} icon={MessageCirclePlus} label={`new ${m} chat here`} onClick={act(() => newChat(m))} />
+            <MenuItem key={m} icon={MessageCirclePlus} label={`new ${m} session here`} onClick={act(() => newChat(m))} />
           ))}
           <MenuItem
             icon={History}
             label="load past session…"
-            description="resume any previous claude session in this folder"
+            description="resume any previous claude session in this workspace"
             onClick={act(() => setPastOpen(true))}
           />
-          <MenuItem icon={Copy} label="duplicate chat" description="copy model + perms, fresh history" onClick={act(duplicate)} />
+          <MenuItem icon={Copy} label="duplicate session" description="copy model + perms, fresh history" onClick={act(duplicate)} />
           <MenuItem icon={Download} label="export to markdown…" description="save the conversation as .md" onClick={act(() => void exportMarkdown())} />
           <MenuItem
             icon={PieChart}
@@ -224,7 +224,7 @@ function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSes
             description="how to view subscription usage"
             onClick={act(() => alert('Type /usage in the input and press Enter to see your subscription usage breakdown.'))}
           />
-          <MenuItem icon={Trash2} label="clear chat" description="wipe items + session id (process restarts fresh)" onClick={act(clear)} />
+          <MenuItem icon={Trash2} label="clear session" description="wipe items + session id (process restarts fresh)" onClick={act(clear)} />
         </PopoverMenu>
       </Popover>
       {pastOpen && (

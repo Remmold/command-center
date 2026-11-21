@@ -32,11 +32,19 @@ function hostedInputs(views: Record<string, ProjectView>, byPane: Record<string,
   )
 }
 
-function listInput(): SessionListInput {
-  const byPane = useSessionStatusStore.getState().byPane
+interface ListSources extends Omit<SessionListInput, 'hosted' | 'statuses'> {
+  views: Record<string, ProjectView>
+  byPane: Record<string, SessionStatusEntry>
+}
+
+function listInput({ views, byPane, ...rest }: ListSources): SessionListInput {
+  return { hosted: hostedInputs(views, byPane), statuses: Object.values(byPane), ...rest }
+}
+
+function currentSources(): ListSources {
   return {
-    hosted: hostedInputs(useProjectViewsStore.getState().views, byPane),
-    statuses: Object.values(byPane),
+    views: useProjectViewsStore.getState().views,
+    byPane: useSessionStatusStore.getState().byPane,
     observed: useObservedStore.getState().sessions,
     workspaces: useWorkspacesStore.getState().workspaces,
     identities: useRepoIdentitiesStore.getState().identities,
@@ -52,15 +60,7 @@ export function useSessionGroups(): SessionGroup[] {
   const identities = useRepoIdentitiesStore((s) => s.identities)
   const search = useWorkSearchStore((s) => s.search)
   return useMemo(
-    () =>
-      sessionList({
-        hosted: hostedInputs(views, byPane),
-        statuses: Object.values(byPane),
-        observed,
-        workspaces,
-        identities,
-        search
-      }),
+    () => sessionList(listInput({ views, byPane, observed, workspaces, identities, search })),
     [views, byPane, observed, workspaces, identities, search]
   )
 }
@@ -97,6 +97,6 @@ export function openRow(row: SessionRow, options?: { focus?: boolean }): void {
 
 /** Opens the list's nth row as it is shown, search applied. */
 export function openRowAt(index: number): void {
-  const row = sessionList(listInput()).flatMap((g) => g.rows)[index]
+  const row = sessionList(listInput(currentSources())).flatMap((g) => g.rows)[index]
   if (row) openRow(row)
 }

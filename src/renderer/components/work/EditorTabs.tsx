@@ -51,9 +51,9 @@ export function EditorTabs({ view }: { view: ProjectView }) {
 
   return (
     <div role="tablist" className="scrollbar-thin flex shrink-0 items-center overflow-x-auto border-b border-subtle bg-sidebar">
-      <Tab active={view.centerView === 'chat'} onSelect={() => setCenterView(view.projectId, 'chat')} tooltip="chat">
+      <Tab active={view.centerView === 'chat'} onSelect={() => setCenterView(view.projectId, 'chat')} tooltip="session">
         <MessageCircle size={13} strokeWidth={2} className="text-muted" />
-        chat
+        session
       </Tab>
       {view.openFiles.map((file) => {
         const name = basename(file.path)

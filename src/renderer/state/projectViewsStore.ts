@@ -10,7 +10,7 @@ import {
   toggleIdePanels,
   type ShellOptions
 } from './projectViewLayout'
-import { NEW_SESSION_TITLE, migratedTitle, titleAfterPrompt, titleAfterRename } from './sessionTitle'
+import { NEW_SESSION_TITLE, migratedTitle, titleAfterPrompt, titleAfterRename, type SessionTitle } from './sessionTitle'
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku' | string
 export type PermissionMode =
@@ -26,11 +26,8 @@ export const PERMISSION_MODES: PermissionMode[] = [
   'plan'
 ]
 
-export interface ClaudeChatSession {
+export interface ClaudeChatSession extends SessionTitle {
   id: string
-  title: string
-  /** Set once the user names the session; prompts never change the title after that. */
-  titleRenamed?: boolean
   model: ClaudeModel
   permissionMode: PermissionMode
   /** session_id reported by claude in stream-json events; used for --resume */
@@ -161,17 +158,20 @@ function findSessionByPane(state: ProjectViewsState, paneId: string): {
 
 type SetState = (fn: (s: ProjectViewsState) => Partial<ProjectViewsState> | ProjectViewsState) => void
 
-function updateSession(set: SetState, paneId: string, change: (c: ClaudeChatSession) => ClaudeChatSession): void {
+function retitle(set: SetState, paneId: string, change: (t: SessionTitle) => SessionTitle): void {
   set((s) => {
     const found = findSessionByPane(s, paneId)
     if (!found) return s
-    const next = change(found.session)
-    if (next.title === found.session.title && next.titleRenamed === found.session.titleRenamed) return s
+    const { title, titleRenamed } = change(found.session)
+    if (title === found.session.title && titleRenamed === found.session.titleRenamed) return s
     const view = s.views[found.projectId]
-    const claudeSessions = view.claudeSessions.map((c) => (c.id === paneId ? next : c))
+    const claudeSessions = view.claudeSessions.map((c) => (c.id === paneId ? { ...c, title, titleRenamed } : c))
     return { views: { ...s.views, [found.projectId]: { ...view, claudeSessions } } }
   })
 }
+
+/** What ChatView appends to a sent prompt that carried images; never part of a title. */
+const IMAGES_NOTE = /\n\n_\[\d+ images? attached\]_$/
 
 /** Titles for sessions saved before they had one, from the user messages already in their chat. */
 function migrateTitles(views: Record<string, { claudeSessions: unknown[] }>): void {
@@ -180,7 +180,7 @@ function migrateTitles(views: Record<string, { claudeSessions: unknown[] }>): vo
     v.claudeSessions = v.claudeSessions.map((raw) => {
       const { label: _label, ...c } = raw as ClaudeChatSession & { label?: string }
       if (typeof c.title === 'string') return c
-      const prompts = (items[c.id] ?? []).flatMap((i) => (i.kind === 'user' ? [i.text] : []))
+      const prompts = (items[c.id] ?? []).flatMap((i) => (i.kind === 'user' ? [i.text.replace(IMAGES_NOTE, '')] : []))
       return { ...c, title: migratedTitle(prompts) }
     })
   }
@@ -376,9 +376,9 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           }
         }),
 
-      renameSession: (paneId, name) => updateSession(set, paneId, (c) => ({ ...c, ...titleAfterRename(c, name) })),
+      renameSession: (paneId, name) => retitle(set, paneId, (t) => titleAfterRename(t, name)),
 
-      notePrompt: (paneId, text) => updateSession(set, paneId, (c) => ({ ...c, ...titleAfterPrompt(c, text) })),
+      notePrompt: (paneId, text) => retitle(set, paneId, (t) => titleAfterPrompt(t, text)),
 
       duplicateSession: (projectId, sessionId) => {
         const view = get().views[projectId]
