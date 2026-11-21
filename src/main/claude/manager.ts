@@ -2,6 +2,7 @@ import {
   DEFAULT_PROFILE_ID,
   type ClaudeStartOptions,
   type ControlResult,
+  type ImageAttachment,
   type SessionInit
 } from '../../shared/types'
 import { ClaudeSession } from './session'
@@ -103,7 +104,7 @@ class ClaudeManager {
   send(
     paneId: string,
     text: string,
-    images: Array<{ media_type: string; data: string }> | undefined,
+    images: ImageAttachment[] | undefined,
     uuid: string
   ): void {
     const session = this.sessions.get(paneId)

@@ -54,4 +54,10 @@ describe('queued prompts', () => {
     expect(next).toEqual({ pickedUp: [], held: [a, { ...b, notice: RAN_AHEAD_NOTICE }], startsTurn: false })
     expect(RAN_AHEAD_NOTICE).toBe('Ran at once, while Claude was working.')
   })
+
+  it('a ran_ahead frame only marks, as in the extension; the replay echo releases the prompt after', () => {
+    const marked = pickUp([a], lifecycle('a', 'started', { ran_ahead: true }))
+    expect(marked.pickedUp).toEqual([])
+    expect(pickUp(marked.held, replay('a')).pickedUp).toEqual([{ ...a, notice: RAN_AHEAD_NOTICE }])
+  })
 })

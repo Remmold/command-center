@@ -33,7 +33,7 @@ export function reduceSessionStatus(
       return enter(prev, 'running', event.at, pending)
     case 'claude-event':
       if (isTurnResult(event.event)) return enter(prev, 'your-turn', event.at, pending)
-      if (isQueuedPromptStart(event.event)) return enter(prev, 'running', event.at, pending)
+      if (isQueuedPromptStart(event.event) && pending.length === 0) return enter(prev, 'running', event.at, pending)
       return prev ?? enter(null, 'running', event.at, pending)
     case 'permission-raised':
       if (pending.includes(event.requestId)) return prev ?? enter(null, 'needs-approval', event.at, pending)

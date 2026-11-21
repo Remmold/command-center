@@ -291,7 +291,6 @@ export function ChatView({
     }
   }
 
-  /** Moves prompts the CLI has taken from under the live turn into the transcript. */
   const release = (prompts: HeldPrompt[]): void => {
     if (prompts.length === 0) return
     appendItems(
@@ -303,7 +302,7 @@ export function ChatView({
     )
   }
 
-  /** True for the CLI's queue frames: `command_lifecycle` and the replay echo of a sent prompt. */
+  /** False for anything but `command_lifecycle` and replay echoes, which the rest of handleEvent must not see. */
   const handleQueueFrame = (event: ClaudeEvent): boolean => {
     const isReplay = event.type === 'user' && (event as { isReplay?: unknown }).isReplay === true
     if (!isReplay && event.type !== 'command_lifecycle') return false
@@ -436,7 +435,7 @@ export function ChatView({
       switchPhaseRef.current = 'waiting'
     }
     if (switchPhaseRef.current === 'waiting' && !processRunning) switchPhaseRef.current = 'stopping'
-    if (switchPhaseRef.current === 'waiting' && !turnActive) {
+    if (switchPhaseRef.current === 'waiting' && !turnActive && held.length === 0) {
       switchPhaseRef.current = 'stopping'
       note(`switching profile to ${switchTo}; resuming this session on it`)
       window.api.claude.stop(paneId)
@@ -448,7 +447,7 @@ export function ChatView({
       void ensureStarted()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [switchTo, processRunning, turnActive])
+  }, [switchTo, processRunning, turnActive, held.length])
 
   const handleSend = async (text: string, images?: ImageAttachment[]) => {
     const uuid = crypto.randomUUID()
@@ -459,7 +458,13 @@ export function ChatView({
     else appendItems(paneId, [{ kind: 'user', id: uuid, text: userText }])
     useProjectViewsStore.getState().notePrompt(paneId, text)
     const ok = await ensureStarted()
-    if (!ok) return
+    if (!ok) {
+      if (queued) {
+        const store = useHeldPromptsStore.getState()
+        store.set(paneId, (store.byPane[paneId] ?? []).filter((p) => p.uuid !== uuid))
+      }
+      return
+    }
     if (!queued) setTurnActive(true)
     window.api.claude.send(paneId, text, images, uuid)
   }

@@ -110,7 +110,7 @@ function readFileAsImage(file: File): Promise<PendingImage> {
   })
 }
 
-/** Shift+Enter, or Ctrl+J as in the extension (`eLt`). */
+/** Shift+Enter, or Ctrl+J as in the extension. */
 function isNewlineKey(e: React.KeyboardEvent): boolean {
   if (e.key === 'Enter' && e.shiftKey) return true
   return e.key.toLowerCase() === 'j' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey
@@ -287,11 +287,12 @@ export function InputBox({
         return
       }
     }
-    if (e.key === 'ArrowUp' && ta.selectionStart === 0 && recallPrompt(ta, 'older')) {
+    const bare = !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
+    if (bare && e.key === 'ArrowUp' && ta.selectionStart === 0 && recallPrompt(ta, 'older')) {
       e.preventDefault()
       return
     }
-    if (e.key === 'ArrowDown' && ta.selectionEnd === value.length && recallPrompt(ta, 'newer')) {
+    if (bare && e.key === 'ArrowDown' && ta.selectionEnd === value.length && recallPrompt(ta, 'newer')) {
       e.preventDefault()
       return
     }

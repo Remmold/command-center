@@ -30,6 +30,7 @@ import {
   DEFAULT_PROFILE_ID,
   type AddWorkspaceResult,
   type ClaudeStartOptions,
+  type ImageAttachment,
   type ModelDefaultsPatch,
   type ScreenFocus,
   type SessionInitEnvelope
@@ -285,7 +286,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       _e,
       paneId: string,
       text: string,
-      images: Array<{ media_type: string; data: string }> | undefined,
+      images: ImageAttachment[] | undefined,
       uuid: string
     ) => claudeManager.send(paneId, text, images, uuid)
   )

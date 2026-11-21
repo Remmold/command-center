@@ -3,13 +3,12 @@ import type { HeldPrompt } from './heldPrompts'
 
 const IMAGES_MARKER = /\n\n_\[\d+ images? attached\]_$/
 
-/** The transcript text of a sent prompt. */
 export function userItemText(text: string, imageCount: number): string {
   if (imageCount === 0) return text
   return `${text}\n\n_[${imageCount} image${imageCount === 1 ? '' : 's'} attached]_`
 }
 
-/** This session's prompts, newest first, as the extension's `QW`. */
+/** This session's prompts, newest first, queued ones included, as in the extension. */
 export function historyEntries(items: readonly ChatItem[], held: readonly HeldPrompt[]): string[] {
   const texts = [...items.flatMap((item) => (item.kind === 'user' ? [item.text] : [])), ...held.map((p) => p.text)]
   return texts

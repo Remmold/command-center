@@ -19,7 +19,7 @@ const ENDED = new Set(['completed', 'cancelled', 'discarded', 'refused'])
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 
-/** What a CLI event does to the held prompts, as the extension's `heldPickupFor`. */
+/** What a CLI event does to the held prompts, as in the extension: `ran_ahead` only marks one. */
 export function pickUp(held: readonly HeldPrompt[], event: unknown): Pickup {
   const unchanged: Pickup = { pickedUp: [], held: [...held], startsTurn: false }
   if (!isRecord(event)) return unchanged

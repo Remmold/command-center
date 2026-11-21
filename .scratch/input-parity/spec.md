@@ -38,7 +38,7 @@ Copy the extension exactly, gap by gap, in the research doc's priority order. Ea
 ## Implementation Decisions
 
 - **Ctrl+J** is a newline inside the prompt box, as in the extension. The app's "next waiting session" shortcut moves to **Ctrl+Shift+J**, and README, tests and test pages follow.
-- Queued messages are written to the CLI's stdin straight away; the CLI queues them, as with the extension. The bubble shows "queued" until the CLI echoes or starts it. Stop replaces Send only while the input is empty.
+- Queued messages are written to the CLI's stdin straight away; the CLI queues them, as with the extension. The bubble sits under the live turn until the CLI echoes or starts it; like the extension it looks like any prompt and only reads "You, queued" to a screen reader. Stop replaces Send only while the input is empty.
 - Slash commands go as user text unless the extension handles them locally (per the research doc); the locally handled ones open the app's own picker and dialogs.
 - Context usage comes from the `get_context_usage` control request after each turn.
 - Everything is tested on the fake CLI (`tools/fake-claude/`). Real-CLI checks: Haiku, one-line prompts, at most 3 per ticket, and never copy credentials.

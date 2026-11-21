@@ -145,6 +145,21 @@ describe('session status reducer', () => {
     ])
   })
 
+  it('a queued prompt joining the turn during an approval keeps Needs approval', () => {
+    const started = { type: 'command_lifecycle', command_uuid: 'q1', state: 'started', uuid: 'f1', session_id: 's1' }
+    expect(
+      statuses([
+        { kind: 'user-message', at: 200 },
+        { kind: 'permission-raised', requestId: 'r1', at: 250 },
+        claude(started, 260)
+      ])
+    ).toEqual([
+      ['running', 200],
+      ['needs-approval', 250],
+      ['needs-approval', 250]
+    ])
+  })
+
   it('a prompt queued during a turn runs again once the CLI starts it after the result', () => {
     const started = { type: 'command_lifecycle', command_uuid: 'q1', state: 'started', uuid: 'f1', session_id: 's1' }
     const queued = { ...started, state: 'queued' }

@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { locateClaude } from '../pty/claude-locator'
 import { CONFIG_DIR_VAR } from '../../shared/profiles'
-import { THINKING_BUDGET, type ClaudeStartOptions, type SessionInit } from '../../shared/types'
+import { THINKING_BUDGET, type ClaudeStartOptions, type ImageAttachment, type SessionInit } from '../../shared/types'
 import { childEnv } from '../util/childEnv'
 import { ControlChannel, type ControlPayload, type IncomingHandler } from './controlChannel'
 import { parseInitialize } from './initialize'
@@ -141,7 +141,7 @@ export class ClaudeSession {
 
   send(
     text: string,
-    images: Array<{ media_type: string; data: string }> | undefined,
+    images: ImageAttachment[] | undefined,
     uuid: string
   ): void {
     if (!this.alive) return
