@@ -47,7 +47,7 @@ export function Message({ item }: MessageProps) {
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-zinc-700/90 px-4 py-2.5 text-[13px] leading-relaxed text-zinc-50">
+      <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-list-selected px-4 py-2.5 text-[13px] leading-relaxed text-fg">
         {text}
       </div>
     </div>
@@ -100,8 +100,8 @@ function toolMeta(name: string): ToolMeta {
   return (
     TOOL_META[name] ?? {
       Icon: Wrench,
-      accent: 'border-zinc-600/60',
-      iconColor: 'text-zinc-400',
+      accent: 'border-strong',
+      iconColor: 'text-muted',
       label: name
     }
   )
@@ -123,28 +123,28 @@ function GenericToolUseCard({ block }: { block: { name: string; input: unknown; 
   const summary = summarizeToolInput(block.name, block.input)
   return (
     <div
-      className={`rounded-md border-l-2 ${meta.accent} border-y border-r border-zinc-800 bg-zinc-900/40`}
+      className={`rounded-md border-l-2 ${meta.accent} border-y border-r border-subtle bg-sidebar/40`}
     >
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-zinc-900/70"
+        className="flex w-full items-start gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-list-hover"
       >
         <meta.Icon size={15} strokeWidth={1.75} className={`mt-0.5 shrink-0 ${meta.iconColor}`} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[12px]">
-            <span className="font-medium text-zinc-200">{meta.label}</span>
-            <span className="text-[10px] text-zinc-500">{block.name}</span>
+            <span className="font-medium text-fg">{meta.label}</span>
+            <span className="text-[10px] text-muted">{block.name}</span>
           </div>
           {summary && (
-            <div className="mt-0.5 truncate font-mono text-[11.5px] text-zinc-400">{summary}</div>
+            <div className="mt-0.5 truncate font-mono text-[11.5px] text-muted">{summary}</div>
           )}
         </div>
-        <span className="mt-0.5 shrink-0 text-zinc-600">
+        <span className="mt-0.5 shrink-0 text-faint">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </span>
       </button>
       {open && (
-        <pre className="overflow-x-auto border-t border-zinc-800 bg-black/40 px-4 py-2.5 text-[11px] text-zinc-300">
+        <pre className="overflow-x-auto border-t border-subtle bg-black/40 px-4 py-2.5 text-[11px] text-fg">
           {JSON.stringify(block.input, null, 2)}
         </pre>
       )}
@@ -192,20 +192,20 @@ function EditDiffCard({ input }: { input: EditInput }) {
     0
   )
   return (
-    <div className="rounded-md border-l-2 border-amber-500/60 border-y border-r border-zinc-800 bg-zinc-900/40">
+    <div className="rounded-md border-l-2 border-amber-500/60 border-y border-r border-subtle bg-sidebar/40">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-zinc-900/70"
+        className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-list-hover"
       >
         <FileEdit size={15} strokeWidth={1.75} className="shrink-0 text-amber-400" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[12px]">
-            <span className="font-medium text-zinc-200">Edit</span>
-            <span className="truncate font-mono text-[11.5px] text-zinc-400">
+            <span className="font-medium text-fg">Edit</span>
+            <span className="truncate font-mono text-[11.5px] text-muted">
               {shortPath(input.file_path)}
             </span>
             {input.replace_all && (
-              <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+              <span className="rounded bg-list-selected px-1.5 py-0.5 text-[10px] text-muted">
                 replace_all
               </span>
             )}
@@ -213,15 +213,15 @@ function EditDiffCard({ input }: { input: EditInput }) {
         </div>
         <span className="shrink-0 text-[11px]">
           <span className="text-emerald-400">+{adds}</span>
-          <span className="text-zinc-600 mx-1">/</span>
+          <span className="text-faint mx-1">/</span>
           <span className="text-red-400">-{dels}</span>
         </span>
-        <span className="shrink-0 text-zinc-600">
+        <span className="shrink-0 text-faint">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </span>
       </button>
       {open && (
-        <div className="border-t border-zinc-800 bg-black/50">
+        <div className="border-t border-subtle bg-black/50">
           <DiffView segments={segments} />
         </div>
       )}
@@ -233,27 +233,27 @@ function WriteFileCard({ input }: { input: WriteInput }) {
   const [open, setOpen] = useState(false)
   const lineCount = countLines(input.content)
   return (
-    <div className="rounded-md border-l-2 border-amber-500/60 border-y border-r border-zinc-800 bg-zinc-900/40">
+    <div className="rounded-md border-l-2 border-amber-500/60 border-y border-r border-subtle bg-sidebar/40">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-zinc-900/70"
+        className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-list-hover"
       >
         <FilePlus size={15} strokeWidth={1.75} className="shrink-0 text-amber-400" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[12px]">
-            <span className="font-medium text-zinc-200">Write</span>
-            <span className="truncate font-mono text-[11.5px] text-zinc-400">
+            <span className="font-medium text-fg">Write</span>
+            <span className="truncate font-mono text-[11.5px] text-muted">
               {shortPath(input.file_path)}
             </span>
           </div>
         </div>
         <span className="shrink-0 text-[11px] text-emerald-400">+{lineCount}</span>
-        <span className="shrink-0 text-zinc-600">
+        <span className="shrink-0 text-faint">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </span>
       </button>
       {open && (
-        <pre className="overflow-x-auto border-t border-zinc-800 bg-black/50 px-4 py-3 text-[11.5px] text-zinc-200">
+        <pre className="overflow-x-auto border-t border-subtle bg-black/50 px-4 py-3 text-[11.5px] text-fg">
           {input.content}
         </pre>
       )}
@@ -283,12 +283,12 @@ function DiffView({
             ? 'text-emerald-300'
             : seg.kind === 'remove'
               ? 'text-red-300'
-              : 'text-zinc-400'
+              : 'text-muted'
         return (
           <div key={i} className={bg}>
             {lines.map((line, j) => (
               <div key={j} className={`flex ${textColor}`}>
-                <span className="w-5 shrink-0 select-none text-zinc-600">{prefix}</span>
+                <span className="w-5 shrink-0 select-none text-faint">{prefix}</span>
                 <span className="whitespace-pre">{line}</span>
               </div>
             ))}
@@ -312,29 +312,29 @@ function ToolResultBubble({ item }: { item: ToolResultItem }) {
   const label = item.isError ? 'Tool error' : looksLikeDiff ? 'Git diff' : 'Tool result'
   return (
     <div
-      className={`rounded-md border-l-2 ${accent} border-y border-r border-zinc-800 bg-zinc-900/30`}
+      className={`rounded-md border-l-2 ${accent} border-y border-r border-subtle bg-sidebar/30`}
     >
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-start gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-zinc-900/60"
+        className="flex w-full items-start gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-list-hover"
       >
         <Icon size={14} strokeWidth={2} className={`mt-0.5 shrink-0 ${iconColor}`} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[11px]">
             <span className={item.isError ? 'text-red-300' : 'text-emerald-300'}>{label}</span>
-            <span className="truncate text-zinc-500">{preview}</span>
+            <span className="truncate text-muted">{preview}</span>
           </div>
         </div>
-        <span className="mt-0.5 shrink-0 text-zinc-600">
+        <span className="mt-0.5 shrink-0 text-faint">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </span>
       </button>
       {open && (
-        <div className="border-t border-zinc-800 bg-black/40">
+        <div className="border-t border-subtle bg-black/40">
           {looksLikeDiff ? (
             <UnifiedDiffView text={text} className="px-4 py-2.5" />
           ) : (
-            <pre className="overflow-x-auto whitespace-pre-wrap px-4 py-2.5 text-[11.5px] text-zinc-300">
+            <pre className="overflow-x-auto whitespace-pre-wrap px-4 py-2.5 text-[11.5px] text-fg">
               {text}
             </pre>
           )}
@@ -350,13 +350,13 @@ function ResultFooter({ item }: { item: ResultItem }) {
   const cost = item.costUsd !== undefined ? `$${item.costUsd.toFixed(4)}` : null
   const dur = item.durationMs !== undefined ? `${(item.durationMs / 1000).toFixed(1)}s` : null
   return (
-    <div className="flex items-center gap-3 px-2 text-[10.5px] text-zinc-500">
+    <div className="flex items-center gap-3 px-2 text-[10.5px] text-muted">
       <CodeXml
         size={12}
         strokeWidth={1.75}
-        className={item.isError ? 'text-red-400' : 'text-zinc-500'}
+        className={item.isError ? 'text-red-400' : 'text-muted'}
       />
-      <span className={item.isError ? 'text-red-400' : 'text-zinc-400'}>
+      <span className={item.isError ? 'text-red-400' : 'text-muted'}>
         {item.isError ? 'turn error' : 'turn complete'}
       </span>
       {dur && (
@@ -380,7 +380,7 @@ function ResultFooter({ item }: { item: ResultItem }) {
 }
 
 function SystemNote({ text }: { text: string }) {
-  return <div className="px-2 text-[10.5px] italic text-zinc-500">{text}</div>
+  return <div className="px-2 text-[10.5px] italic text-muted">{text}</div>
 }
 
 // ---------- helpers ----------

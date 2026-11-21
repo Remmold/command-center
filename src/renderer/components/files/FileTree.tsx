@@ -46,30 +46,30 @@ export function FileTree({ cwd, onOpenFile, activeFilePath }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-zinc-950">
-      <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+    <div className="flex h-full min-h-0 flex-col bg-editor">
+      <header className="flex shrink-0 items-center justify-between border-b border-subtle px-3 py-2">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">
           explorer
         </span>
         <button
           onClick={refresh}
-          className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+          className="rounded p-1 text-muted hover:bg-list-hover hover:text-fg"
           title="refresh"
         >
           <RefreshCw size={12} strokeWidth={2.5} />
         </button>
       </header>
-      <div className="shrink-0 border-b border-zinc-800 px-2 py-1.5">
+      <div className="shrink-0 border-b border-subtle px-2 py-1.5">
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="filter…"
-          className="w-full rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-700 focus:outline-none"
+          className="w-full rounded border border-strong bg-input px-2 py-1 text-xs text-fg placeholder:text-faint focus:border-focus focus:outline-none"
         />
       </div>
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto py-1">
         {files === null && !error && (
-          <div className="px-3 py-2 text-xs italic text-zinc-600">scanning…</div>
+          <div className="px-3 py-2 text-xs italic text-faint">scanning…</div>
         )}
         {error && (
           <div className="m-2 rounded border border-red-900 bg-red-950/30 px-2 py-1 text-xs text-red-300">
@@ -77,7 +77,7 @@ export function FileTree({ cwd, onOpenFile, activeFilePath }: Props) {
           </div>
         )}
         {files !== null && tree.children.length === 0 && (
-          <div className="px-3 py-2 text-xs italic text-zinc-600">
+          <div className="px-3 py-2 text-xs italic text-faint">
             {filter ? 'no matches' : 'empty workspace'}
           </div>
         )}
@@ -122,8 +122,8 @@ function TreeNodeView({ node, depth, activePath, onOpenFile, initiallyExpanded }
         className={
           'group flex w-full items-center gap-1.5 truncate py-[3px] pr-2 text-left text-[12px] leading-tight transition-colors ' +
           (isActive
-            ? 'bg-zinc-800/80 text-zinc-100'
-            : 'text-zinc-300 hover:bg-zinc-900')
+            ? 'bg-list-selected text-fg'
+            : 'text-fg hover:bg-list-hover')
         }
         style={{ paddingLeft: indent }}
         title={node.path}
@@ -138,10 +138,10 @@ function TreeNodeView({ node, depth, activePath, onOpenFile, initiallyExpanded }
     <div>
       <button
         onClick={() => setExpanded((e) => !e)}
-        className="group flex w-full items-center gap-1 truncate py-[3px] pr-2 text-left text-[12px] leading-tight text-zinc-200 hover:bg-zinc-900"
+        className="group flex w-full items-center gap-1 truncate py-[3px] pr-2 text-left text-[12px] leading-tight text-fg hover:bg-list-hover"
         style={{ paddingLeft: indent }}
       >
-        <span className="flex h-3 w-3 shrink-0 items-center justify-center text-zinc-500">
+        <span className="flex h-3 w-3 shrink-0 items-center justify-center text-muted">
           {expanded ? (
             <ChevronDown size={11} strokeWidth={2.25} />
           ) : (
@@ -149,9 +149,9 @@ function TreeNodeView({ node, depth, activePath, onOpenFile, initiallyExpanded }
           )}
         </span>
         {expanded ? (
-          <FolderOpen size={13} strokeWidth={1.75} className="shrink-0 text-zinc-400" />
+          <FolderOpen size={13} strokeWidth={1.75} className="shrink-0 text-muted" />
         ) : (
-          <Folder size={13} strokeWidth={1.75} className="shrink-0 text-zinc-400" />
+          <Folder size={13} strokeWidth={1.75} className="shrink-0 text-muted" />
         )}
         <span className="truncate font-medium">{node.name}</span>
       </button>

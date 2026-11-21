@@ -28,9 +28,9 @@ export function AutocompletePopup({ items, selectedIndex, onSelect, onHoverIndex
   }, [selectedIndex])
 
   return (
-    <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-64 overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 shadow-xl">
+    <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-64 overflow-hidden rounded-md border border-subtle bg-widget shadow-xl">
       {header && (
-        <div className="border-b border-zinc-800 px-3 py-1 text-[10px] uppercase tracking-wide text-zinc-500">
+        <div className="border-b border-subtle px-3 py-1 text-[10px] uppercase tracking-wide text-muted">
           {header}
         </div>
       )}
@@ -45,12 +45,12 @@ export function AutocompletePopup({ items, selectedIndex, onSelect, onHoverIndex
               onMouseEnter={() => onHoverIndex(i)}
               className={
                 'flex w-full items-center justify-between px-3 py-1.5 text-left text-xs ' +
-                (active ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-900')
+                (active ? 'bg-list-selected text-fg' : 'text-fg hover:bg-list-hover')
               }
             >
               <span className="truncate font-mono">{item.primary}</span>
               {item.secondary && (
-                <span className="ml-2 truncate text-zinc-500">{item.secondary}</span>
+                <span className="ml-2 truncate text-muted">{item.secondary}</span>
               )}
             </button>
           )

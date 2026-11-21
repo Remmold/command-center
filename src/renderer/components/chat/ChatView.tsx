@@ -315,12 +315,12 @@ export function ChatView({
           </div>
         )}
         {items.length === 0 && !error && !processRunning && !inProgress && (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-600">
+          <div className="flex h-full items-center justify-center text-sm text-faint">
             starting claude…
           </div>
         )}
         {showIdleBanner && (
-          <div className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-400">
+          <div className="flex items-center justify-between rounded-md border border-subtle bg-sidebar/50 px-3 py-2 text-xs text-muted">
             <span>
               {resumeSessionId
                 ? 'paused — sending will resume this session'
@@ -328,7 +328,7 @@ export function ChatView({
             </span>
             <button
               onClick={handleResume}
-              className="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-700"
+              className="rounded bg-list-selected px-2 py-1 text-xs text-fg hover:bg-strong"
             >
               {resumeSessionId ? 'resume now' : 'start'}
             </button>
@@ -347,7 +347,7 @@ export function ChatView({
           />
         ))}
         {turnActive && !inProgress && pendingPermissions.length === 0 && (
-          <div className="text-xs italic text-zinc-500">claude is thinking…</div>
+          <div className="text-xs italic text-muted">claude is thinking…</div>
         )}
       </div>
       <InputBox

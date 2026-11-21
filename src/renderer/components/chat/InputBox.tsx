@@ -298,7 +298,7 @@ export function InputBox({
   return (
     <div
       className={
-        'border-t border-zinc-800 bg-zinc-950 p-3 ' +
+        'border-t border-subtle bg-editor p-3 ' +
         (isDragging ? 'ring-2 ring-inset ring-blue-500' : '')
       }
       onDrop={handleDrop}
@@ -327,7 +327,7 @@ export function InputBox({
           {pendingImages.map((img) => (
             <div
               key={img.id}
-              className="group flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 py-1.5 pl-1.5 pr-2"
+              className="group flex items-center gap-2 rounded-md border border-subtle bg-sidebar py-1.5 pl-1.5 pr-2"
             >
               <img
                 src={img.previewUrl}
@@ -335,17 +335,17 @@ export function InputBox({
                 className="h-9 w-9 shrink-0 rounded object-cover"
               />
               <div className="min-w-0 max-w-[200px]">
-                <div className="truncate text-[12px] text-zinc-200" title={img.filename}>
+                <div className="truncate text-[12px] text-fg" title={img.filename}>
                   {img.filename}
                 </div>
-                <div className="truncate text-[10px] text-zinc-500">
+                <div className="truncate text-[10px] text-muted">
                   {img.width > 0 && `${img.width}×${img.height} · `}
                   {formatBytes(img.size)}
                 </div>
               </div>
               <button
                 onClick={() => removeImage(img.id)}
-                className="rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+                className="rounded p-0.5 text-muted hover:bg-list-hover hover:text-red-400"
                 aria-label="remove image"
               >
                 <X size={12} strokeWidth={2.25} />
@@ -354,7 +354,7 @@ export function InputBox({
           ))}
         </div>
       )}
-      <div className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 focus-within:border-zinc-600 focus-within:ring-1 focus-within:ring-zinc-600/50">
+      <div className="flex flex-col gap-2 rounded-lg border border-subtle bg-input px-3 py-2 focus-within:border-focus focus-within:ring-1 focus-within:ring-focus/50">
         <textarea
           ref={textareaRef}
           value={value}
@@ -366,19 +366,19 @@ export function InputBox({
           onPaste={handlePaste}
           rows={1}
           placeholder={placeholder ?? 'message claude…'}
-          className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-zinc-100 placeholder:text-zinc-500 focus:outline-none disabled:opacity-50"
+          className="min-h-[22px] resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none disabled:opacity-50"
         />
         <div className="flex items-end justify-between gap-2">
           <div className="flex items-center gap-1">
             <button
               onClick={handleAttachClick}
-              className="rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+              className="rounded p-1.5 text-muted hover:bg-list-hover hover:text-fg"
               title="attach image"
               type="button"
             >
               <Paperclip size={14} strokeWidth={2} />
             </button>
-            <span className="text-[10px] text-zinc-600">
+            <span className="text-[10px] text-faint">
               enter to send · shift+enter newline · / commands · @ files ·{' '}
               <ImageIcon
                 size={10}
@@ -405,7 +405,7 @@ export function InputBox({
                 'flex h-7 w-7 items-center justify-center rounded-md transition-colors ' +
                 (canSend
                   ? 'bg-blue-600 text-white hover:bg-blue-500'
-                  : 'bg-zinc-800 text-zinc-600')
+                  : 'bg-list-selected text-faint')
               }
               title="send (enter)"
               type="button"

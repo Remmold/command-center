@@ -43,10 +43,10 @@ export function EditorPane({ view }: Props) {
   }, [activeFile, view.projectId, view.projectPath, markFileSaved])
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-zinc-950">
-      <div className="flex shrink-0 items-center overflow-x-auto border-b border-zinc-800">
+    <section className="flex h-full min-h-0 flex-col bg-editor">
+      <div className="flex shrink-0 items-center overflow-x-auto border-b border-subtle">
         {view.openFiles.length === 0 && (
-          <span className="px-3 py-1.5 text-xs text-zinc-500">no files open</span>
+          <span className="px-3 py-1.5 text-xs text-muted">no files open</span>
         )}
         {view.openFiles.map((file) => {
           const active = file.path === view.activeFilePath
@@ -54,8 +54,8 @@ export function EditorPane({ view }: Props) {
             <div
               key={file.path}
               className={
-                'group flex items-center gap-1 border-r border-zinc-800 px-3 py-1.5 text-xs ' +
-                (active ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900')
+                'group flex items-center gap-1 border-r border-subtle px-3 py-1.5 text-xs ' +
+                (active ? 'bg-sidebar text-fg' : 'text-muted hover:bg-list-hover')
               }
             >
               <button
@@ -71,7 +71,7 @@ export function EditorPane({ view }: Props) {
                   e.stopPropagation()
                   closeFile(view.projectId, file.path)
                 }}
-                className="rounded px-1 text-zinc-500 opacity-0 hover:text-red-400 group-hover:opacity-100"
+                className="rounded px-1 text-muted opacity-0 hover:text-red-400 group-hover:opacity-100"
                 role="button"
                 aria-label={`close ${file.path}`}
               >
@@ -83,12 +83,12 @@ export function EditorPane({ view }: Props) {
       </div>
       <div className="min-h-0 flex-1">
         {!activeFile && (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-600">
+          <div className="flex h-full items-center justify-center text-sm text-faint">
             click a file to open
           </div>
         )}
         {activeFile && activeFile.binary && (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-zinc-500">
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted">
             binary file — preview not supported
           </div>
         )}
