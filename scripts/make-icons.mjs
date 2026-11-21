@@ -7,8 +7,10 @@ import { deflateSync } from 'node:zlib'
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'resources', 'icons')
 const SAMPLES = 4
 
-const BG = [79, 70, 229]
-const FG = [255, 255, 255]
+const BG_TOP = [28, 28, 28]
+const BG_BOTTOM = [4, 4, 4]
+const BG = (_x, y) => BG_TOP.map((c, i) => c + (BG_BOTTOM[i] - c) * y)
+const FG = [240, 240, 240]
 const BADGE = [239, 68, 68]
 
 function segmentDistance(px, py, ax, ay, bx, by) {
@@ -73,7 +75,7 @@ function render(size, layers) {
     for (let x = 0; x < size; x++) {
       let rgb = [0, 0, 0]
       let alpha = 0
-      for (const [shape, colour] of layers) {
+      for (const [shape, paint] of layers) {
         let hits = 0
         for (let sy = 0; sy < SAMPLES; sy++) {
           for (let sx = 0; sx < SAMPLES; sx++) {
@@ -82,6 +84,7 @@ function render(size, layers) {
         }
         const a = hits / (SAMPLES * SAMPLES)
         if (a === 0) continue
+        const colour = typeof paint === 'function' ? paint((x + 0.5) / size, (y + 0.5) / size) : paint
         const outA = a + alpha * (1 - a)
         rgb = rgb.map((c, i) => (colour[i] * a + c * alpha * (1 - a)) / outA)
         alpha = outA
@@ -151,10 +154,53 @@ function ico(images) {
   return Buffer.concat([head, ...images.map((i) => i.data)])
 }
 
+// Three screens over a keyboard, black and white, with green code rain on the screens.
+const INK = [0, 0, 0]
+const RAIN_HEAD = [200, 255, 200]
+const RAIN = [0, 230, 65]
+const RAIN_DIM = [0, 110, 30]
+
+// Each rain column is [x offset, length, head position], in fractions of the screen.
+const RAIN_COLUMNS = [
+  [0.1, 0.5, 0.58],
+  [0.24, 0.75, 0.86],
+  [0.38, 0.35, 0.42],
+  [0.52, 0.85, 0.94],
+  [0.66, 0.45, 0.52],
+  [0.8, 0.7, 0.78],
+  [0.92, 0.3, 0.36]
+]
+
+function rain(x0, y0, x1, y1) {
+  const w = x1 - x0
+  const h = y1 - y0
+  const stripe = w * 0.06
+  const layers = []
+  for (const [offset, length, head] of RAIN_COLUMNS) {
+    const cx = x0 + w * offset
+    const top = y0 + h * Math.max(0, head - length)
+    const headY = y0 + h * head
+    layers.push([roundedRect(cx - stripe / 2, top, cx + stripe / 2, headY, 0), RAIN_DIM])
+    layers.push([roundedRect(cx - stripe / 2, top + (headY - top) * 0.5, cx + stripe / 2, headY, 0), RAIN])
+    layers.push([roundedRect(cx - stripe / 2, headY - h * 0.07, cx + stripe / 2, headY, 0), RAIN_HEAD])
+  }
+  return layers
+}
+
+const BEZEL = 0.014
+const screen = (x0, y0, x1, y1) => [
+  [roundedRect(x0, y0, x1, y1, 0.02), FG],
+  [roundedRect(x0 + BEZEL, y0 + BEZEL, x1 - BEZEL, y1 - BEZEL, 0.01), INK],
+  ...rain(x0 + BEZEL * 2, y0 + BEZEL * 2, x1 - BEZEL * 2, y1 - BEZEL * 2)
+]
 const appLayers = [
   [roundedRect(0.03, 0.03, 0.97, 0.97, 0.22), BG],
-  [stroke([[0.26, 0.3], [0.48, 0.5], [0.26, 0.7]], 0.12), FG],
-  [stroke([[0.56, 0.7], [0.76, 0.7]], 0.12), FG]
+  ...screen(0.09, 0.28, 0.35, 0.5),
+  ...screen(0.65, 0.28, 0.91, 0.5),
+  ...screen(0.31, 0.18, 0.69, 0.55),
+  [roundedRect(0.49, 0.55, 0.51, 0.64, 0), FG],
+  [roundedRect(0.42, 0.635, 0.58, 0.65, 0.006), FG],
+  [roundedRect(0.22, 0.71, 0.78, 0.745, 0.017), FG]
 ]
 const trayBadgeLayers = (label) => [
   ...appLayers,
