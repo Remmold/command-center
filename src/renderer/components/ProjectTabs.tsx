@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Folder, FolderPlus, FolderSearch, LayoutGrid, X } from 'lucide-react'
-import { useProjectsStore } from '../state/projectsStore'
+import { RepoIcon } from './RepoIcon'
+import { Badge } from './ui/Badge'
+import { useWorkspacesStore } from '../state/workspacesStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useAppsStore } from '../state/appsStore'
+import { useViewStore, type AppView } from '../state/viewStore'
+import { SegmentedControl } from './ui/SegmentedControl'
+import { UsageStrip } from './UsageStrip'
 
 export function ProjectTabs() {
-  const projects = useProjectsStore((s) => s.projects)
-  const loadProjects = useProjectsStore((s) => s.load)
-  const addProject = useProjectsStore((s) => s.add)
-  const removeProject = useProjectsStore((s) => s.remove)
+  const workspaces = useWorkspacesStore((s) => s.workspaces)
+  const loadWorkspaces = useWorkspacesStore((s) => s.load)
+  const addWorkspace = useWorkspacesStore((s) => s.add)
+  const removeWorkspace = useWorkspacesStore((s) => s.remove)
 
   const order = useProjectViewsStore((s) => s.order)
   const views = useProjectViewsStore((s) => s.views)
@@ -20,38 +25,53 @@ export function ProjectTabs() {
   const showApps = useAppsStore((s) => s.showApps)
   const setShowApps = useAppsStore((s) => s.setShowApps)
 
+  const view = useViewStore((s) => s.view)
+  const setView = useViewStore((s) => s.setView)
+
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
-    void loadProjects()
-  }, [loadProjects])
+    void loadWorkspaces()
+  }, [loadWorkspaces])
 
-  const closedProjects = projects.filter((p) => !views[p.id])
+  const closedWorkspaces = workspaces.filter((p) => !views[p.id])
 
   const handleAddNew = async () => {
     setMenuOpen(false)
-    const added = await addProject()
+    const added = await addWorkspace()
     if (added) openProject(added)
   }
 
   const handleOpenSaved = (projectId: string) => {
-    const proj = projects.find((p) => p.id === projectId)
+    const proj = workspaces.find((p) => p.id === projectId)
     if (proj) openProject(proj)
     setMenuOpen(false)
   }
 
   return (
     <div className="relative flex h-10 shrink-0 items-center border-b border-zinc-800 bg-zinc-950">
+      <div className="shrink-0 border-r border-zinc-800 px-2">
+        <SegmentedControl<AppView>
+          label="view"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'sessions', label: 'Sessions', title: 'Sessions (Ctrl+1)' },
+            { value: 'board', label: 'Board', title: 'Board (Ctrl+2)' }
+          ]}
+        />
+      </div>
       <div className="flex h-full min-w-0 flex-1 items-center overflow-x-auto">
         {order.length === 0 && (
           <span className="px-3 text-xs text-zinc-500">
-            no projects open · click + to open one
+            no workspaces open · click + to open one
           </span>
         )}
         {order.map((projectId) => {
           const view = views[projectId]
           if (!view) return null
           const active = projectId === activeProjectId
+          const workspace = workspaces.find((w) => w.id === projectId)
           return (
             <div
               key={projectId}
@@ -63,11 +83,12 @@ export function ProjectTabs() {
                   : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200')
               }
             >
-              <Folder
-                size={13}
-                strokeWidth={1.75}
-                className={active ? 'text-blue-400' : 'text-zinc-500'}
-              />
+              {workspace ? (
+                <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
+              ) : (
+                <Folder size={13} strokeWidth={1.75} className={active ? 'text-blue-400' : 'text-zinc-500'} />
+              )}
+              {workspace?.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
               <span className="truncate" title={view.projectPath}>
                 {view.projectName}
               </span>
@@ -78,7 +99,7 @@ export function ProjectTabs() {
                 }}
                 className="rounded p-0.5 text-zinc-500 opacity-0 hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
                 aria-label={`close ${view.projectName}`}
-                title="close project"
+                title="close workspace"
               >
                 <X size={11} strokeWidth={2.25} />
               </button>
@@ -86,6 +107,7 @@ export function ProjectTabs() {
           )
         })}
       </div>
+      <UsageStrip />
       <button
         onClick={() => setShowApps(!showApps)}
         className={
@@ -103,7 +125,7 @@ export function ProjectTabs() {
         <button
           onClick={() => setMenuOpen((o) => !o)}
           className="flex h-full items-center gap-1 px-3 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
-          title="open a project"
+          title="open a workspace"
         >
           <FolderPlus size={14} strokeWidth={2} />
         </button>
@@ -115,12 +137,12 @@ export function ProjectTabs() {
             <div className="border-b border-zinc-800 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
               recent
             </div>
-            {closedProjects.length === 0 && (
+            {closedWorkspaces.length === 0 && (
               <div className="px-3 py-2 text-xs italic text-zinc-500">
-                all saved projects are open
+                all saved workspaces are open
               </div>
             )}
-            {closedProjects.map((p) => (
+            {closedWorkspaces.map((p) => (
               <div
                 key={p.id}
                 className="group flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-zinc-900"
@@ -134,9 +156,9 @@ export function ProjectTabs() {
                   <div className="truncate text-[10px] text-zinc-500">{p.path}</div>
                 </button>
                 <button
-                  onClick={() => removeProject(p.id)}
+                  onClick={() => removeWorkspace(p.id)}
                   className="rounded p-0.5 text-zinc-500 opacity-0 hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
-                  title="forget this project"
+                  title="forget this workspace"
                 >
                   <X size={11} strokeWidth={2.25} />
                 </button>
@@ -147,7 +169,7 @@ export function ProjectTabs() {
               className="flex w-full items-center gap-2 border-t border-zinc-800 px-3 py-2 text-left text-xs text-zinc-100 hover:bg-zinc-900"
             >
               <FolderSearch size={14} strokeWidth={1.75} className="text-blue-400" />
-              <span>browse for new project…</span>
+              <span>browse for new workspace…</span>
             </button>
           </div>
         )}

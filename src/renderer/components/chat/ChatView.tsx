@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Message } from './Message'
 import type {
   AssistantMessageItem,
@@ -11,6 +11,7 @@ import { PermissionPrompt } from './PermissionPrompt'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { usePermissionsStore } from '../../state/permissionsStore'
+import { useFocusRequestStore } from '../../state/sessionNavigation'
 import type {
   ClaudeAssistantEvent,
   ClaudeEvent,
@@ -84,6 +85,28 @@ export function ChatView({
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const itemsLenRef = useRef(0)
   const initialItemsCountRef = useRef(items.length)
+  const focusInputRef = useRef<(() => void) | null>(null)
+  const firstPromptRef = useRef<HTMLButtonElement | null>(null)
+  const focusRequest = useFocusRequestStore((s) => (s.request?.paneId === paneId ? s.request.nonce : null))
+
+  const registerInputFocus = useCallback(
+    (fn: () => void) => {
+      focusInputRef.current = fn
+      registerFocus?.(fn)
+    },
+    [registerFocus]
+  )
+
+  useEffect(() => {
+    if (focusRequest === null) return
+    // The pane turns visible in this same commit; focus once the browser has applied it.
+    const frame = requestAnimationFrame(() => {
+      if (firstPromptRef.current) firstPromptRef.current.focus()
+      else focusInputRef.current?.()
+      useFocusRequestStore.getState().clear()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [focusRequest])
 
   useEffect(() => {
     const unsubEvent = window.api.claude.onEvent(({ paneId: id, event }) => {
@@ -315,10 +338,11 @@ export function ChatView({
           <Message key={item.id} item={item} />
         ))}
         {inProgress && <Message item={inProgress} />}
-        {pendingPermissions.map((req) => (
+        {pendingPermissions.map((req, i) => (
           <PermissionPrompt
             key={req.requestId}
             request={req}
+            primaryActionRef={i === 0 ? firstPromptRef : undefined}
             onResolve={() => resolvePermission(req.requestId)}
           />
         ))}
@@ -332,7 +356,7 @@ export function ChatView({
         onInterrupt={handleInterrupt}
         slashCommands={slashCommands}
         cwd={cwd}
-        registerFocus={registerFocus}
+        registerFocus={registerInputFocus}
       />
     </div>
   )

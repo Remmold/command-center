@@ -1,19 +1,28 @@
+import { DEFAULT_PROFILE_ID } from '../../shared/types'
 import { ClaudeSession } from './session'
+import { permissionServer } from '../permission/server'
 
 type EventCallback = (paneId: string, event: unknown) => void
 type ExitCallback = (paneId: string, code: number | null) => void
+type SpawnCallback = (paneId: string, cwd: string) => void
+type SendCallback = (paneId: string) => void
 
 class ClaudeManager {
   private sessions = new Map<string, ClaudeSession>()
+  private profileIds = new Map<string, string>()
   private eventListeners: EventCallback[] = []
   private exitListeners: ExitCallback[] = []
+  private spawnListeners: SpawnCallback[] = []
+  private sendListeners: SendCallback[] = []
 
   start(
     paneId: string,
     cwd: string,
     model?: string,
     resumeSessionId?: string,
-    permissionMode?: string
+    permissionMode?: string,
+    profileEnv: Record<string, string> = {},
+    profileId: string = DEFAULT_PROFILE_ID
   ): { ok: boolean; error?: string } {
     const existing = this.sessions.get(paneId)
     if (existing && existing.isAlive()) return { ok: true }
@@ -25,18 +34,31 @@ class ClaudeManager {
           for (const cb of this.eventListeners) cb(id, event)
         },
         (id, code) => {
+          // A stopped process can exit after a new one took its pane; that exit is stale.
+          const current = this.sessions.get(id)
+          if (current && current !== session) return
           this.sessions.delete(id)
           for (const cb of this.exitListeners) cb(id, code)
+          // After the exit listeners, so the status reducer ignores the resolves this emits.
+          permissionServer.clearPane(id)
         },
         model,
         resumeSessionId,
-        permissionMode
+        permissionMode,
+        profileEnv
       )
       this.sessions.set(paneId, session)
+      this.profileIds.set(paneId, profileId)
+      for (const cb of this.spawnListeners) cb(paneId, cwd)
       return { ok: true }
     } catch (err) {
       return { ok: false, error: (err as Error).message }
     }
+  }
+
+  /** The account profile the pane's latest process was started on. */
+  profileOf(paneId: string): string {
+    return this.profileIds.get(paneId) ?? DEFAULT_PROFILE_ID
   }
 
   isAlive(paneId: string): boolean {
@@ -48,7 +70,10 @@ class ClaudeManager {
     text: string,
     images?: Array<{ media_type: string; data: string }>
   ): void {
-    this.sessions.get(paneId)?.send(text, images)
+    const session = this.sessions.get(paneId)
+    if (!session?.isAlive()) return
+    session.send(text, images)
+    for (const cb of this.sendListeners) cb(paneId)
   }
 
   interrupt(paneId: string): void {
@@ -70,6 +95,20 @@ class ClaudeManager {
     this.eventListeners.push(cb)
     return () => {
       this.eventListeners = this.eventListeners.filter((c) => c !== cb)
+    }
+  }
+
+  onSpawn(cb: SpawnCallback): () => void {
+    this.spawnListeners.push(cb)
+    return () => {
+      this.spawnListeners = this.spawnListeners.filter((c) => c !== cb)
+    }
+  }
+
+  onSend(cb: SendCallback): () => void {
+    this.sendListeners.push(cb)
+    return () => {
+      this.sendListeners = this.sendListeners.filter((c) => c !== cb)
     }
   }
 

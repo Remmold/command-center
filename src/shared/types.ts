@@ -1,8 +1,47 @@
-export interface Project {
+import type { BuiltinIconChoice, ChooseImageResult, RepoIdentityViews } from './repoIdentity'
+import type { ChatItem } from './chatItems'
+export const DEFAULT_PROFILE_ID = 'default'
+
+export interface Workspace {
   id: string
   name: string
   path: string
   createdAt: number
+  profileId: string
+  /** Shared by every worktree of one git repo; a folder outside git is its own group. */
+  repoGroupKey: string
+  repoName: string
+  /** Empty for the main checkout. */
+  worktreeTag: string
+}
+
+export interface AccountProfile {
+  id: string
+  name: string
+  /** The Claude config folder; Default's is ~/.claude. */
+  configDir: string
+  /** True when the profile's credentials file exists. */
+  loggedIn: boolean
+}
+
+export type SessionStatus = 'running' | 'needs-approval' | 'your-turn' | 'idle'
+
+export const WAITING_STATUSES: readonly SessionStatus[] = ['needs-approval', 'your-turn']
+
+export interface SessionStatusEntry {
+  paneId: string
+  cwd: string
+  status: SessionStatus
+  /** Epoch ms when the current status began. */
+  since: number
+}
+
+export type AppView = 'sessions' | 'board'
+
+/** What the renderer has on screen, reported to main for notifications. */
+export interface ScreenFocus {
+  paneId: string | null
+  windowVisible: boolean
 }
 
 export type PtyKind = 'pwsh' | 'powershell' | 'cmd' | 'bash'
@@ -28,6 +67,8 @@ export interface PtyExitEvent {
 // pass them through as `unknown` and narrow at the call site.
 export interface ClaudeEventEnvelope {
   paneId: string
+  /** Account profile the session runs on, fixed when its process started. */
+  profileId: string
   event: ClaudeEvent
 }
 
@@ -181,11 +222,43 @@ export interface AppExitEvent {
   exitCode: number | null
 }
 
+export type AddWorkspaceResult = { ok: true; workspace: Workspace } | { ok: false; error: string }
+
 export interface RendererApi {
-  projects: {
-    list: () => Promise<Project[]>
-    add: () => Promise<Project | null>
+  workspaces: {
+    list: () => Promise<Workspace[]>
+    add: () => Promise<Workspace | null>
+    /** Adds a folder without a dialog; main checks it exists and is a directory. */
+    addPath: (path: string) => Promise<AddWorkspaceResult>
     remove: (id: string) => Promise<void>
+    setProfile: (id: string, profileId: string) => Promise<Workspace | null>
+  }
+  repoIdentities: {
+    list: () => Promise<RepoIdentityViews>
+    setDisplayName: (repoGroupKey: string, name: string) => Promise<RepoIdentityViews>
+    /** undefined goes back to the letter. */
+    setIcon: (repoGroupKey: string, icon: BuiltinIconChoice | undefined) => Promise<RepoIdentityViews>
+    /** Opens a file dialog; null when cancelled. */
+    chooseImage: (repoGroupKey: string) => Promise<ChooseImageResult | null>
+    /** Hands main the icon drawn as a PNG data URL, for notifications. */
+    setRendered: (repoGroupKey: string, pngDataUrl: string) => void
+  }
+  profiles: {
+    list: () => Promise<AccountProfile[]>
+    create: (name: string) => Promise<AccountProfile>
+    rename: (id: string, name: string) => Promise<AccountProfile | null>
+  }
+  board: {
+    get: () => Promise<BoardModel>
+    onChanged: (cb: (model: BoardModel) => void) => () => void
+    /** Reads a ticket, ticket notes, spec or progress file named in the current model; null for any other path. */
+    readFile: (path: string) => Promise<string | null>
+  }
+  discovery: {
+    get: () => Promise<DiscoveryModel>
+    onChanged: (cb: (model: DiscoveryModel) => void) => () => void
+    rescan: () => Promise<DiscoveryModel>
+    setRoots: (roots: string[]) => Promise<DiscoveryModel>
   }
   apps: {
     list: () => Promise<ManagedApp[]>
@@ -198,7 +271,13 @@ export interface RendererApi {
     onExit: (cb: (event: AppExitEvent) => void) => () => void
   }
   pty: {
-    spawn: (paneId: string, kind: PtyKind, cwd: string) => Promise<SpawnResult>
+    /** `env` adds variables on top of the app's cleaned environment. */
+    spawn: (
+      paneId: string,
+      kind: PtyKind,
+      cwd: string,
+      env?: Record<string, string>
+    ) => Promise<SpawnResult>
     write: (paneId: string, data: string) => void
     resize: (paneId: string, cols: number, rows: number) => void
     kill: (paneId: string) => void
@@ -236,6 +315,16 @@ export interface RendererApi {
     onExit: (cb: (envelope: ClaudeExitEnvelope) => void) => () => void
     listLocalSessions: (cwd: string) => Promise<LocalSessionInfo[]>
   }
+  observed: {
+    list: () => Promise<ObservedSession[]>
+    onChanged: (cb: (sessions: ObservedSession[]) => void) => () => void
+    /** The app's own sessions' claude ids; their transcripts are never listed as observed. */
+    setHosted: (sessionIds: string[]) => void
+    /** Returns the last items and starts tailing; any session opened before stops being tailed. */
+    open: (workspaceId: string, sessionId: string) => Promise<ObservedOpenResult>
+    close: () => void
+    onItems: (cb: (event: ObservedItemsEvent) => void) => () => void
+  }
   permission: {
     onRequest: (cb: (request: PermissionRequest) => void) => () => void
     respond: (
@@ -243,6 +332,16 @@ export interface RendererApi {
       response: PermissionResponse,
       allowForSession?: boolean
     ) => void
+  }
+  sessionStatus: {
+    list: () => Promise<SessionStatusEntry[]>
+    onChanged: (cb: (entry: SessionStatusEntry) => void) => () => void
+    reportScreenFocus: (focus: ScreenFocus) => void
+  }
+  /** Requests from main (tray menu, notification clicks) to bring something on screen. */
+  navigation: {
+    onShowView: (cb: (view: AppView) => void) => () => void
+    onOpenSession: (cb: (paneId: string) => void) => () => void
   }
   git: {
     status: (cwd: string) => Promise<GitStatusResult>
@@ -254,3 +353,133 @@ export interface RendererApi {
     ) => Promise<GitDiffResult>
   }
 }
+
+export type BoardColumn = 'backlog' | 'blocked' | 'in-progress' | 'done'
+
+/** What a ticket's Status line says. */
+export interface TicketStatus {
+  /** Lower-cased first word of the Status line; null when the ticket has none. */
+  status: string | null
+  /** Text after the word, without a leading em dash. */
+  statusNote: string | null
+  /** The whole Status value as written, for the unknown-status badge. */
+  statusLine: string | null
+  /** False when the word is neither a lifecycle word nor a legacy one; a missing status counts as known. */
+  statusKnown: boolean
+}
+
+/** One copy of a ticket file, in one workspace. */
+export interface TicketSighting extends TicketStatus {
+  workspaceId: string
+  column: BoardColumn
+  blockedBy: TicketNumber[]
+  filePath: string
+  progressPath: string | null
+}
+
+/** At least two digits plus an optional lower-case letter suffix: "02", "02b", "112". */
+export type TicketNumber = string
+
+/** One card: every worktree copy of one ticket, merged. */
+export interface BoardTicket extends TicketStatus {
+  number: TicketNumber
+  /** Lower-cased ticket file name; copies merge on it, so two files sharing a number stay two cards. */
+  fileName: string
+  title: string
+  column: BoardColumn
+  /** Highest column first, then workspace order. */
+  sightings: TicketSighting[]
+}
+
+export interface FeatureSighting {
+  workspaceId: string
+  specPath: string | null
+  progressPath: string | null
+  /** Newest modification time (epoch ms) of this copy's spec, progress notes, tickets and ticket notes. */
+  lastActivity: number | null
+}
+
+export type FeatureState = 'active' | 'finished' | 'spec-only' | 'empty'
+
+export interface FeatureProgress {
+  done: number
+  total: number
+  /** Last non-empty line of the fullest worktree copy of progress.md. */
+  lastNote: string | null
+}
+
+export interface BoardFeature {
+  name: string
+  state: FeatureState
+  progress: FeatureProgress
+  /** Newest lastActivity across the feature's worktree copies. */
+  lastActivity: number | null
+  tickets: BoardTicket[]
+  sightings: FeatureSighting[]
+}
+
+export interface BoardRepoGroup {
+  repoGroupKey: string
+  repoName: string
+  features: BoardFeature[]
+}
+
+export interface BoardModel {
+  repoGroups: BoardRepoGroup[]
+}
+
+/** A repo folder with tickets that isn't an added workspace. */
+export interface DiscoveredFolder {
+  path: string
+  /** Empty for the main checkout. */
+  worktreeTag: string
+  featureCount: number
+  openTicketCount: number
+}
+
+export interface DiscoveredRepo {
+  repoGroupKey: string
+  repoName: string
+  /** Null when the main checkout is added already or holds no tickets. */
+  main: DiscoveredFolder | null
+  mainAdded: boolean
+  worktrees: DiscoveredFolder[]
+  /** Over the main checkout and worktrees listed here, with worktree copies merged as on the board. */
+  featureCount: number
+  openTicketCount: number
+}
+
+export interface DiscoveryModel {
+  scanRoots: string[]
+  repos: DiscoveredRepo[]
+  /** Epoch ms of the last finished scan; null before the first one. */
+  scannedAt: number | null
+  scanMs: number | null
+  /** Why the last scan failed; null when it worked. */
+  error: string | null
+}
+
+export type ObservedStatus = 'live' | 'quiet'
+
+export const OBSERVED_STATUS_LABEL: Record<ObservedStatus, string> = { live: 'Live', quiet: 'Quiet' }
+
+export interface ObservedSession {
+  workspaceId: string
+  sessionId: string
+  title: string
+  modifiedAt: number
+  status: ObservedStatus
+}
+
+/** Opening an observed session renders at most this many of its latest chat items. */
+export const OBSERVED_INITIAL_ITEMS = 200
+
+export interface ObservedItemsEvent {
+  workspaceId: string
+  sessionId: string
+  items: ChatItem[]
+}
+
+export type ObservedOpenResult =
+  | { ok: true; items: ChatItem[]; shortened: boolean }
+  | { ok: false; error: string }

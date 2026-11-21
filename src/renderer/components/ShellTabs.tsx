@@ -160,7 +160,12 @@ export function ShellTabs({ view }: Props) {
                 key={tab.id}
                 className={'absolute inset-0 p-1 ' + (active ? '' : 'invisible')}
               >
-                <PtyTerminal paneId={tab.id} kind={tab.kind as PtyKind} cwd={view.projectPath} />
+                <PtyTerminal
+                  paneId={tab.id}
+                  kind={tab.kind as PtyKind}
+                  cwd={view.projectPath}
+                  env={tab.env}
+                />
               </div>
             )
           })}

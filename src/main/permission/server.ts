@@ -10,6 +10,11 @@ export interface PermissionRequest {
   sessionId?: string
 }
 
+export interface PermissionResolved {
+  requestId: string
+  paneId: string
+}
+
 export interface PermissionResponse {
   decision: 'approve' | 'block'
   reason?: string
@@ -100,11 +105,7 @@ export class PermissionServer extends EventEmitter {
 
       // Timeout safety: if no response after 10 min, deny.
       const timer = setTimeout(() => {
-        const p = this.pending.get(requestId)
-        if (p) {
-          p.resolve({ decision: 'block', reason: 'no response from user' })
-          this.pending.delete(requestId)
-        }
+        this.settle(requestId, { decision: 'block', reason: 'no response from user' })
       }, 600_000)
       // Make sure to clear timer when resolved early.
       const original = this.pending.get(requestId)
@@ -135,19 +136,24 @@ export class PermissionServer extends EventEmitter {
       }
       allows.add(pending.toolName)
     }
-    pending.resolve(response)
-    this.pending.delete(requestId)
+    this.settle(requestId, response)
     return true
+  }
+
+  private settle(requestId: string, response: PermissionResponse): void {
+    const pending = this.pending.get(requestId)
+    if (!pending) return
+    this.pending.delete(requestId)
+    pending.resolve(response)
+    const resolved: PermissionResolved = { requestId, paneId: pending.paneId }
+    this.emit('resolved', resolved)
   }
 
   clearPane(paneId: string): void {
     this.sessionAllows.delete(paneId)
     // Reject any pending requests for this pane
-    for (const [requestId, p] of this.pending) {
-      if (p.paneId === paneId) {
-        p.resolve({ decision: 'block', reason: 'session ended' })
-        this.pending.delete(requestId)
-      }
+    for (const [requestId, p] of Array.from(this.pending)) {
+      if (p.paneId === paneId) this.settle(requestId, { decision: 'block', reason: 'session ended' })
     }
   }
 

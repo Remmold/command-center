@@ -1,0 +1,3 @@
+- done: reducer + queue test-first, tracker in main, status IPC, dots on tabs/sidebar/board cards, Needs you panel, Ctrl+J, screen-focus channel; review fixes (stale exit after restart, focus request cleared); quick 29/29, build ok, dev boots
+- next: Lane 2 look/feel check; open question: a spawned-but-unprompted (fresh or resumed) chat shows Running per spec
+- open reds: none

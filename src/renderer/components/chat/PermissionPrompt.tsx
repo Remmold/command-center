@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, type Ref } from 'react'
 import { CheckCircle2, Lock, ShieldCheck, X } from 'lucide-react'
 import type { PermissionRequest } from '../../../shared/types'
 
 interface Props {
   request: PermissionRequest
   onResolve: () => void
+  primaryActionRef?: Ref<HTMLButtonElement>
 }
 
 function summarizeTool(toolName: string, input: unknown): string {
@@ -27,7 +28,7 @@ const TOOL_HINT: Record<string, string> = {
   Grep: 'will search file contents'
 }
 
-export function PermissionPrompt({ request, onResolve }: Props) {
+export function PermissionPrompt({ request, onResolve, primaryActionRef }: Props) {
   const [showRaw, setShowRaw] = useState(false)
   const summary = summarizeTool(request.toolName, request.toolInput)
   const hint = TOOL_HINT[request.toolName] ?? 'wants permission to run'
@@ -72,6 +73,7 @@ export function PermissionPrompt({ request, onResolve }: Props) {
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <button
+          ref={primaryActionRef}
           onClick={() => respond('approve')}
           className="flex items-center gap-1 rounded bg-emerald-700 px-3 py-1 text-xs text-emerald-50 hover:bg-emerald-600"
         >

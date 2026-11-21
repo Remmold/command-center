@@ -1,3 +1,5 @@
+> **Replaced.** This backlog is superseded by the workspace hub revamp: spec and tickets in `.scratch/workspace-hub/`. What follows is kept as history and is no longer maintained.
+
 # command-center — feature backlog
 
 Tracks the planned work to reach feature parity with the Claude Code VS Code extension. Batches are sized to fit in one focused work session; each batch ends in something testable.

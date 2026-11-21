@@ -220,7 +220,7 @@ export function AppsDashboard(): JSX.Element {
           <button
             onClick={() => setShowApps(false)}
             className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
-            title="back to projects"
+            title="back to workspaces"
           >
             <ChevronDown size={14} /> Close
           </button>

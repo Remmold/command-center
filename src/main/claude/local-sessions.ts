@@ -1,5 +1,4 @@
 import { promises as fs, createReadStream } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
@@ -8,14 +7,6 @@ export interface LocalSessionInfo {
   modifiedAt: number
   preview: string
   messageCount: number
-}
-
-function sanitizeCwd(cwd: string): string {
-  return cwd.replace(/[:\\/]/g, '-')
-}
-
-function claudeProjectsDir(): string {
-  return join(homedir(), '.claude', 'projects')
 }
 
 async function readFirstUserText(filePath: string): Promise<{ preview: string; count: number }> {
@@ -51,8 +42,8 @@ async function readFirstUserText(filePath: string): Promise<{ preview: string; c
   })
 }
 
-export async function listLocalSessions(cwd: string): Promise<LocalSessionInfo[]> {
-  const dir = join(claudeProjectsDir(), sanitizeCwd(cwd))
+/** Lists the transcripts in one project's folder, e.g. from `transcriptsDirForWorkspace`. */
+export async function listLocalSessions(dir: string): Promise<LocalSessionInfo[]> {
   let entries: string[]
   try {
     entries = await fs.readdir(dir)

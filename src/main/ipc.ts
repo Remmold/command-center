@@ -1,6 +1,11 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
+import { promises as fs } from 'node:fs'
+import { resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
-import * as projects from './projects/store'
+import * as workspaces from './workspaces/store'
+import * as profiles from './profiles/store'
+import { transcriptsDirForCwd, transcriptsDirForWorkspace } from './profiles/transcripts'
+import { ObservedService } from './observed/service'
 import * as apps from './apps/store'
 import { appManager } from './apps/manager'
 import { ptyManager } from './pty/manager'
@@ -9,20 +14,95 @@ import { listProjectFiles } from './files/lister'
 import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { listLocalSessions } from './claude/local-sessions'
+import { BoardService } from './board/service'
+import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import {
   permissionServer,
   type PermissionRequest,
+  type PermissionResolved,
   type PermissionResponse
 } from './permission/server'
+import { sessionStatusTracker } from './sessions/tracker'
+import { setScreenFocus } from './sessions/screenFocus'
+import { DEFAULT_PROFILE_ID, type AddWorkspaceResult, type ScreenFocus } from '../shared/types'
+import type { RepoIdentityService } from './repoIdentity/service'
 
 let unsubscribers: Array<() => void> = []
 
-export function registerIpc(): void {
-  // Projects
-  ipcMain.handle(IPC.PROJECTS_LIST, () => projects.list())
+interface IpcDeps {
+  repoIdentities: RepoIdentityService
+}
 
-  ipcMain.handle(IPC.PROJECTS_ADD, async (event) => {
+export function registerIpc({ repoIdentities }: IpcDeps): void {
+  const board = new BoardService(workspaces.list, (model) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IPC.BOARD_CHANGED, model)
+    }
+  })
+  const refreshBoard = (): Promise<void> =>
+    board.refresh().then(
+      () => undefined,
+      (err) => console.error('[board] refresh failed', err)
+    )
+  const firstRead = refreshBoard()
+  ipcMain.handle(IPC.BOARD_GET, async () => {
+    await firstRead
+    return board.current()
+  })
+  ipcMain.handle(IPC.BOARD_READ_FILE, (_e, path: string) => board.readFile(path))
+  unsubscribers.push(() => board.stop())
+
+  const sendAll = (channel: string, payload: unknown): void => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(channel, payload)
+    }
+  }
+  const observed = new ObservedService(
+    workspaces.list,
+    transcriptsDirForWorkspace,
+    (sessions) => sendAll(IPC.OBSERVED_CHANGED, sessions),
+    (event) => sendAll(IPC.OBSERVED_ITEMS, event)
+  )
+  observed.start()
+  ipcMain.handle(IPC.OBSERVED_LIST, () => observed.list())
+  ipcMain.on(IPC.OBSERVED_SET_HOSTED, (_e, sessionIds: string[]) => observed.setHosted(sessionIds))
+  ipcMain.handle(IPC.OBSERVED_OPEN, (_e, workspaceId: string, sessionId: string) =>
+    observed.open(workspaceId, sessionId)
+  )
+  ipcMain.on(IPC.OBSERVED_CLOSE, () => observed.close())
+  unsubscribers.push(() => observed.stop())
+
+  const discovery = new DiscoveryService(workspaces.list, (model) => sendAll(IPC.DISCOVERY_CHANGED, model))
+  discovery.start()
+  ipcMain.handle(IPC.DISCOVERY_GET, () => discovery.current())
+  ipcMain.handle(IPC.DISCOVERY_RESCAN, () => discovery.rescan())
+  ipcMain.handle(IPC.DISCOVERY_SET_ROOTS, (_e, roots: unknown) => {
+    if (!Array.isArray(roots) || !roots.every((r) => typeof r === 'string')) throw new Error('scan roots must be strings')
+    return discovery.setRoots(roots)
+  })
+  unsubscribers.push(() => discovery.stop())
+
+  const workspacesChanged = (): void => {
+    void refreshBoard()
+    void observed.workspacesChanged()
+    void discovery.rescan()
+  }
+
+  ipcMain.handle(IPC.WORKSPACES_LIST, () => workspaces.list())
+
+  ipcMain.handle(IPC.WORKSPACES_ADD_PATH, async (_e, path: unknown): Promise<AddWorkspaceResult> => {
+    if (typeof path !== 'string' || path.trim() === '') return { ok: false, error: 'No folder given' }
+    const folder = resolve(path.trim())
+    const stat = await fs.stat(folder).catch(() => null)
+    if (!stat) return { ok: false, error: `${folder} does not exist` }
+    if (!stat.isDirectory()) return { ok: false, error: `${folder} is not a folder` }
+    const workspace = await workspaces.add(folder)
+    workspacesChanged()
+    return { ok: true, workspace }
+  })
+
+  ipcMain.handle(IPC.WORKSPACES_ADD, async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     const result = win
       ? await dialog.showOpenDialog(win, {
@@ -32,10 +112,45 @@ export function registerIpc(): void {
           properties: ['openDirectory', 'createDirectory']
         })
     if (result.canceled || result.filePaths.length === 0) return null
-    return projects.add(result.filePaths[0])
+    const added = await workspaces.add(result.filePaths[0])
+    workspacesChanged()
+    return added
   })
 
-  ipcMain.handle(IPC.PROJECTS_REMOVE, (_event, id: string) => projects.remove(id))
+  ipcMain.handle(IPC.WORKSPACES_REMOVE, async (_event, id: string) => {
+    await workspaces.remove(id)
+    workspacesChanged()
+  })
+
+  ipcMain.handle(IPC.WORKSPACES_SET_PROFILE, async (_e, id: string, profileId: string) => {
+    const updated = await workspaces.setProfile(id, profileId)
+    void observed.workspacesChanged()
+    return updated
+  })
+
+  ipcMain.handle(IPC.REPO_IDENTITIES_LIST, () => repoIdentities.list())
+  ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, (_e, key: string, name: string) =>
+    repoIdentities.setDisplayName(key, name)
+  )
+  ipcMain.handle(IPC.REPO_IDENTITIES_SET_ICON, (_e, key: string, icon: unknown) => repoIdentities.setIcon(key, icon))
+  ipcMain.handle(IPC.REPO_IDENTITIES_CHOOSE_IMAGE, async (event, key: string) => {
+    const options: Electron.OpenDialogOptions = {
+      title: 'Choose a repo icon',
+      properties: ['openFile'],
+      filters: [{ name: 'PNG or SVG image', extensions: ['png', 'svg'] }]
+    }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (result.canceled || result.filePaths.length === 0) return null
+    return repoIdentities.importImage(key, result.filePaths[0])
+  })
+  ipcMain.on(IPC.REPO_IDENTITIES_SET_RENDERED, (_e, key: string, dataUrl: string) => {
+    repoIdentities.setRendered(key, dataUrl).catch((err) => console.error('[repo icons] could not keep drawn icon', err))
+  })
+
+  ipcMain.handle(IPC.PROFILES_LIST, () => profiles.list())
+  ipcMain.handle(IPC.PROFILES_CREATE, (_e, name: string) => profiles.create(name))
+  ipcMain.handle(IPC.PROFILES_RENAME, (_e, id: string, name: string) => profiles.rename(id, name))
 
   ipcMain.handle(IPC.FILES_LIST, (_event, cwd: string) => listProjectFiles(cwd))
 
@@ -73,8 +188,13 @@ export function registerIpc(): void {
   // PTY (shells only — claude no longer goes through here)
   ipcMain.handle(
     IPC.PTY_SPAWN,
-    (_e, paneId: string, kind: Parameters<typeof ptyManager.spawn>[1], cwd: string) =>
-      ptyManager.spawn(paneId, kind, cwd)
+    (
+      _e,
+      paneId: string,
+      kind: Parameters<typeof ptyManager.spawn>[1],
+      cwd: string,
+      env?: Record<string, string>
+    ) => ptyManager.spawn(paneId, kind, cwd, env)
   )
   ipcMain.on(IPC.PTY_WRITE, (_e, paneId: string, data: string) =>
     ptyManager.write(paneId, data)
@@ -107,14 +227,21 @@ export function registerIpc(): void {
   // Claude (stream-json subprocess)
   ipcMain.handle(
     IPC.CLAUDE_START,
-    (
+    async (
       _e,
       paneId: string,
       cwd: string,
       model?: string,
       resumeSessionId?: string,
       permissionMode?: string
-    ) => claudeManager.start(paneId, cwd, model, resumeSessionId, permissionMode)
+    ) => {
+      const workspace = await workspaces.findByPath(cwd)
+      if (!workspace) console.warn('[profiles] no workspace at', cwd, '- session runs on Default')
+      const { profileId, env } = workspace
+        ? await profiles.prepareSession(workspace.profileId)
+        : { profileId: DEFAULT_PROFILE_ID, env: {} }
+      return claudeManager.start(paneId, cwd, model, resumeSessionId, permissionMode, env, profileId)
+    }
   )
   ipcMain.on(
     IPC.CLAUDE_SEND,
@@ -126,7 +253,9 @@ export function registerIpc(): void {
     ) => claudeManager.send(paneId, text, images)
   )
 
-  ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, (_e, cwd: string) => listLocalSessions(cwd))
+  ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, async (_e, cwd: string) =>
+    listLocalSessions(await transcriptsDirForCwd(cwd))
+  )
 
   ipcMain.handle(IPC.FILES_SAVE_AS, async (event, suggestedName: string, content: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)
@@ -151,8 +280,9 @@ export function registerIpc(): void {
 
   unsubscribers.push(
     claudeManager.onEvent((paneId, event) => {
+      const envelope = { paneId, profileId: claudeManager.profileOf(paneId), event }
       for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) win.webContents.send(IPC.CLAUDE_EVENT, { paneId, event })
+        if (!win.isDestroyed()) win.webContents.send(IPC.CLAUDE_EVENT, envelope)
       }
     })
   )
@@ -165,11 +295,30 @@ export function registerIpc(): void {
   )
 
   const onPermissionRequest = (req: PermissionRequest) => {
+    sessionStatusTracker.apply(req.paneId, { kind: 'permission-raised', requestId: req.requestId })
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send(IPC.PERMISSION_REQUEST, req)
     }
   }
   permissionServer.on('request', onPermissionRequest)
+  const onPermissionResolved = ({ requestId, paneId }: PermissionResolved) => {
+    sessionStatusTracker.apply(paneId, { kind: 'permission-resolved', requestId })
+  }
+  permissionServer.on('resolved', onPermissionResolved)
+
+  unsubscribers.push(
+    claudeManager.onSpawn((paneId, cwd) => sessionStatusTracker.spawned(paneId, cwd)),
+    claudeManager.onSend((paneId) => sessionStatusTracker.apply(paneId, { kind: 'user-message' })),
+    claudeManager.onEvent((paneId, event) => sessionStatusTracker.apply(paneId, { kind: 'claude-event', event })),
+    claudeManager.onExit((paneId) => sessionStatusTracker.apply(paneId, { kind: 'exit' })),
+    sessionStatusTracker.onChange((entry) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.SESSION_STATUS_CHANGED, entry)
+      }
+    })
+  )
+  ipcMain.handle(IPC.SESSION_STATUS_LIST, () => sessionStatusTracker.list())
+  ipcMain.on(IPC.SESSION_SCREEN_FOCUS, (_e, focus: ScreenFocus) => setScreenFocus(focus))
 
   ipcMain.on(
     IPC.PERMISSION_RESPOND,
@@ -187,6 +336,7 @@ export function registerIpc(): void {
     ptyManager.killAll()
     claudeManager.stopAll()
     permissionServer.off('request', onPermissionRequest)
+    permissionServer.off('resolved', onPermissionResolved)
     void permissionServer.stop()
     for (const u of unsubscribers) u()
     unsubscribers = []

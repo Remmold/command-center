@@ -8,6 +8,7 @@ import {
   writeSettingsLocal
 } from '../permission/hookScript'
 import { permissionServer } from '../permission/server'
+import { CONFIG_DIR_VAR } from '../../shared/profiles'
 
 function sanitizedEnv(extras: Record<string, string> = {}): Record<string, string> {
   const out: Record<string, string> = {}
@@ -15,6 +16,7 @@ function sanitizedEnv(extras: Record<string, string> = {}): Record<string, strin
     if (v === undefined) continue
     if (k === 'ELECTRON_RUN_AS_NODE') continue
     if (k === 'ELECTRON_NO_ATTACH_CONSOLE') continue
+    if (k === CONFIG_DIR_VAR) continue
     out[k] = v
   }
   out.TERM = 'xterm-256color'
@@ -49,7 +51,8 @@ export class ClaudeSession {
     private onExit: ExitCallback,
     model?: string,
     resumeSessionId?: string,
-    permissionMode?: string
+    permissionMode?: string,
+    profileEnv: Record<string, string> = {}
   ) {
     const launch = locateClaude()
     const args = [
@@ -76,7 +79,7 @@ export class ClaudeSession {
       args.push('--permission-mode', cliPermissionMode)
     }
 
-    const extraEnv: Record<string, string> = {}
+    const extraEnv: Record<string, string> = { ...profileEnv }
     const useHook = !!permissionMode && HOOK_MODES.has(permissionMode)
     if (useHook && permissionServer.port) {
       extraEnv.CC_PERMISSION_PORT = String(permissionServer.port)
@@ -96,6 +99,7 @@ export class ClaudeSession {
       model,
       resume: resumeSessionId,
       permissionMode,
+      configDir: profileEnv[CONFIG_DIR_VAR] ?? 'default',
       hookEnabled: useHook,
       command: launch.command,
       args
@@ -116,7 +120,6 @@ export class ClaudeSession {
     })
     this.child.on('exit', (code) => {
       this.alive = false
-      permissionServer.clearPane(paneId)
       console.log('[claude] exit', { paneId, code })
       this.onExit(paneId, code)
     })

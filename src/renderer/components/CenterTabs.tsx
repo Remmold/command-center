@@ -1,4 +1,7 @@
 import { GitCompare, MessageCircle, X } from 'lucide-react'
+import { useWorkspacesStore } from '../state/workspacesStore'
+import { RepoIcon } from './RepoIcon'
+import { Badge } from './ui/Badge'
 import { ClaudePane } from './ClaudePane'
 import { DiffPane } from './DiffPane'
 import { EditorPane } from './files/EditorPane'
@@ -9,6 +12,7 @@ import { getFileIcon } from './files/fileIcons'
 
 interface Props {
   view: ProjectView
+  chatOnly?: boolean
   registerFocus?: (fn: () => void) => void
 }
 
@@ -24,20 +28,26 @@ const DIFF_KIND_COLOR: Record<string, string> = {
   untracked: 'text-emerald-300'
 }
 
-export function CenterTabs({ view, registerFocus }: Props) {
+export function CenterTabs({ view, chatOnly = false, registerFocus }: Props) {
   const setCenterView = useProjectViewsStore((s) => s.setCenterView)
   const setActiveFile = useProjectViewsStore((s) => s.setActiveFile)
   const closeFile = useProjectViewsStore((s) => s.closeFile)
   const setActiveDiff = useProjectViewsStore((s) => s.setActiveDiff)
   const closeDiff = useProjectViewsStore((s) => s.closeDiff)
+  const workspace = useWorkspacesStore((s) => s.workspaces.find((w) => w.id === view.projectId))
 
-  const chatActive = view.centerView === 'chat'
-  const fileActive = view.centerView === 'file'
-  const diffActive = view.centerView === 'diff'
+  const chatActive = chatOnly || view.centerView === 'chat'
+  const fileActive = !chatOnly && view.centerView === 'file'
+  const diffActive = !chatOnly && view.centerView === 'diff'
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <div className="scrollbar-thin flex shrink-0 items-center overflow-x-auto border-b border-zinc-800 bg-zinc-950/60">
+      <div
+        className={
+          'scrollbar-thin flex shrink-0 items-center overflow-x-auto border-b border-zinc-800 bg-zinc-950/60 ' +
+          (chatOnly ? 'hidden' : '')
+        }
+      >
         <button
           onClick={() => setCenterView(view.projectId, 'chat')}
           className={
@@ -48,7 +58,12 @@ export function CenterTabs({ view, registerFocus }: Props) {
           }
           title="claude chat"
         >
-          <MessageCircle size={13} strokeWidth={2} className="text-blue-400" />
+          {workspace ? (
+            <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
+          ) : (
+            <MessageCircle size={13} strokeWidth={2} className="text-blue-400" />
+          )}
+          {workspace?.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
           <span>chat</span>
         </button>
         {view.openFiles.map((file) => {

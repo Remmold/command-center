@@ -18,6 +18,8 @@ import { PastSessionsModal } from './PastSessionsModal'
 import { useProjectViewsStore, PERMISSION_MODES } from '../state/projectViewsStore'
 import { useChatItemsStore } from '../state/chatItemsStore'
 import { itemsToMarkdown } from './chat/exportMarkdown'
+import { StatusDot } from './ui/StatusDot'
+import { usePaneStatus } from '../state/sessionStatusStore'
 import type {
   ClaudeChatSession,
   ClaudeModel,
@@ -342,6 +344,7 @@ export function ClaudePane({ view, registerFocus }: Props) {
                   (active ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900')
                 }
               >
+                <PaneStatusDot paneId={sess.id} />
                 {renaming ? (
                   <input
                     autoFocus
@@ -472,4 +475,8 @@ export function ClaudePane({ view, registerFocus }: Props) {
       </div>
     </section>
   )
+}
+
+function PaneStatusDot({ paneId }: { paneId: string }) {
+  return <StatusDot status={usePaneStatus(paneId)} />
 }
