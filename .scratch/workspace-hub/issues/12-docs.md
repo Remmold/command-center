@@ -4,7 +4,7 @@
 
 **Blocked by:** 04, 07, 09, 10, 11, 13, 14
 
-**Status:** in-progress
+**Status:** resolved
 
-- [ ] `docs/BACKLOG.md` is marked as replaced by this revamp
-- [ ] The README describes the two views, the Needs you queue, account profiles, repo icons, the tray and the installer, with pnpm commands
+- [x] `docs/BACKLOG.md` is marked as replaced by this revamp
+- [x] The README describes the two views, the Needs you queue, account profiles, repo icons, the tray and the installer, with pnpm commands
