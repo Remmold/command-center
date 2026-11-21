@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] One theme file defines CSS variables for the VS Code Dark Modern palette: editor background #1f1f1f, side bar #181818, title bar #181818, borders #2b2b2b, foreground #cccccc, muted #9d9d9d, accent #0078d4, focus border #0078d4, list hover #2a2d2e, list selection #37373d, input background #313131, plus diff inserted/removed backgrounds
 - [ ] Tailwind's config maps semantic names (e.g. `bg-editor`, `bg-sidebar`, `border-subtle`, `text-fg`, `text-muted`, `accent`, `list-hover`, `list-selected`, `input`) onto those variables; the meter colours that copied hex values in tailwind.config.js use the theme too

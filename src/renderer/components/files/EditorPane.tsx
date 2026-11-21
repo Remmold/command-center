@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import Editor from '@monaco-editor/react'
+import { defineMonacoTheme, monoFont, MONACO_THEME } from '../../theme/theme'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import type { ProjectView } from '../../state/projectViewsStore'
 import { basename, detectLanguage } from './fileTreeUtil'
@@ -100,10 +101,11 @@ export function EditorPane({ view }: Props) {
             onChange={(v) =>
               updateFileContent(view.projectId, activeFile.path, v ?? '')
             }
-            theme="vs-dark"
+            beforeMount={defineMonacoTheme}
+            theme={MONACO_THEME}
             options={{
               fontSize: 13,
-              fontFamily: '"Cascadia Code", Consolas, "JetBrains Mono", monospace',
+              fontFamily: monoFont(),
               minimap: { enabled: true },
               automaticLayout: true,
               wordWrap: 'on',
