@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { registerIpc } from './ipc'
 import { permissionServer } from './permission/server'
 import { ensureHookScriptInstalled } from './permission/hookScript'
+import { removeLegacyHook } from './permission/launch'
 import { sessionStatusTracker } from './sessions/tracker'
 import * as workspaces from './workspaces/store'
 import { startAttention } from './attention/service'
@@ -77,6 +78,10 @@ if (!app.requestSingleInstanceLock()) {
     } catch (err) {
       console.error('[permission] failed to start', err)
     }
+    void workspaces
+      .list()
+      .then((all) => Promise.all(all.map((w) => removeLegacyHook(w.path).then((changed) => changed && console.log('[permission] removed legacy hook from', w.path)))))
+      .catch((err) => console.error('[permission] legacy hook cleanup failed', err))
     const repoIdentities = createRepoIdentityService(app.getPath('userData'), iconPath('icon.png'), workspaces.list)
     const startWithWindows = createStartWithWindowsControl()
     registerIpc({ repoIdentities, startWithWindows })

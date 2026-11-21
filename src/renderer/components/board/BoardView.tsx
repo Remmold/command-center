@@ -29,6 +29,7 @@ import { BoardToolbar } from './BoardToolbar'
 import { NotAddedLine } from './NotAddedLine'
 import { cardAnchorId, SpecOnlyCard, TicketCard } from './TicketCard'
 import { TicketDrawer } from './TicketDrawer'
+import { plainNote } from '../../state/plainNote'
 
 export function BoardView() {
   const model = useBoardStore((s) => s.model)
@@ -136,7 +137,7 @@ function LaneTitle({ header }: { header: LaneHeader }) {
       icon={<RepoIcon repoGroupKey={header.repoGroupKey} repoName={header.repoName} size="sm" />}
       subtitle={header.featureName ? displayName : undefined}
       title={title}
-      note={lastNote}
+      note={lastNote === null ? null : plainNote(lastNote)}
     >
       {total > 0 && <ProgressBar value={done} max={total} label={`${title}: ${done} of ${total} done`} />}
     </HeaderRow>

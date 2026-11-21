@@ -1,12 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import { app } from 'electron'
 import { join } from 'node:path'
 import { locateClaude } from '../pty/claude-locator'
-import {
-  ensureHookScriptInstalled,
-  hookCommandFor,
-  writeSettingsLocal
-} from '../permission/hookScript'
+import { hookCommandFor } from '../permission/hookScript'
+import { hookSettings, permissionLaunch } from '../permission/launch'
 import { permissionServer } from '../permission/server'
 import { CONFIG_DIR_VAR } from '../../shared/profiles'
 import { childEnv } from '../util/childEnv'
@@ -16,12 +14,11 @@ function hookScriptPath(): string {
   return join(app.getPath('userData'), 'permission-hook.cjs')
 }
 
-/**
- * Permission modes where we want our PreToolUse hook to fire and gate
- * tool execution through our UI. Bypass and plan modes skip the hook
- * entirely (bypass = trust everything, plan = no execution at all).
- */
-const HOOK_MODES = new Set(['ask', 'acceptEdits'])
+function hookSettingsPath(): string {
+  const path = join(app.getPath('userData'), 'permission-settings.json')
+  writeFileSync(path, JSON.stringify(hookSettings(hookCommandFor(hookScriptPath()))), 'utf-8')
+  return path
+}
 
 export type EventCallback = (paneId: string, event: unknown) => void
 export type ExitCallback = (paneId: string, code: number | null) => void
@@ -58,27 +55,10 @@ export class ClaudeSession {
     if (resumeSessionId) {
       args.push('--resume', resumeSessionId)
     }
-    // Map "ask" to bypassPermissions so the CLI doesn't double-prompt;
-    // our PreToolUse hook is the source of truth.
-    const cliPermissionMode =
-      permissionMode === 'ask' ? 'bypassPermissions' : permissionMode
-    if (cliPermissionMode) {
-      args.push('--permission-mode', cliPermissionMode)
-    }
-
-    const extraEnv: Record<string, string> = { ...profileEnv }
-    const useHook = !!permissionMode && HOOK_MODES.has(permissionMode)
-    if (useHook && permissionServer.port) {
-      extraEnv.CC_PERMISSION_PORT = String(permissionServer.port)
-      extraEnv.CC_PANE_ID = paneId
-      extraEnv.CC_PERMISSION_MODE = permissionMode
-      // Install hook synchronously enough — fire-and-forget; if the file
-      // doesn't exist yet, the first tool call will fail to find it, but
-      // the file is also written on app start so this is just a safety net.
-      void ensureHookScriptInstalled(hookScriptPath())
-        .then(() => writeSettingsLocal(cwd, hookCommandFor(hookScriptPath())))
-        .catch((err) => console.error('[claude] failed to install hook', err))
-    }
+    const permissions = permissionLaunch(permissionMode, permissionServer.port ?? null, paneId)
+    if (permissions.cliMode) args.push('--permission-mode', permissions.cliMode)
+    if (permissions.useHook) args.push('--settings', hookSettingsPath())
+    const extraEnv: Record<string, string> = { ...profileEnv, ...permissions.env }
 
     console.log('[claude] spawn', {
       paneId,
@@ -87,7 +67,7 @@ export class ClaudeSession {
       resume: resumeSessionId,
       permissionMode,
       configDir: profileEnv[CONFIG_DIR_VAR] ?? 'default',
-      hookEnabled: useHook,
+      hookEnabled: permissions.useHook,
       command: launch.command,
       args
     })

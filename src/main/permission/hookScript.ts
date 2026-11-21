@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 
 /**
  * Node.js script content for the PreToolUse hook. Written to disk on first
@@ -8,8 +8,9 @@ import { dirname, join } from 'node:path'
  * Reads tool info from stdin, contacts our localhost server (CC_PERMISSION_PORT)
  * to get the user's decision, then writes a decision JSON to stdout.
  *
- * If the env vars aren't set (e.g. user runs claude outside command-center),
- * the hook silently allows everything so it doesn't break standalone usage.
+ * The hook stays in the repo's settings, so sessions the app did not start (VS Code,
+ * a terminal) run it too: without the app's env vars it makes no decision, and
+ * Claude's own permission prompts apply.
  */
 const HOOK_SCRIPT = `#!/usr/bin/env node
 // command-center permission hook — auto-generated, do not edit
@@ -27,11 +28,7 @@ process.stdin.on('end', () => {
   const paneId = process.env.CC_PANE_ID
   const mode = process.env.CC_PERMISSION_MODE || 'ask'
 
-  // Standalone (no env) → allow silently so claude works outside command-center.
-  if (!port || !paneId) {
-    process.stdout.write(JSON.stringify({ decision: 'approve' }))
-    process.exit(0)
-  }
+  if (!port || !paneId) process.exit(0)
 
   const toolName = payload.tool_name || payload.toolName || 'unknown'
   const toolInput = payload.tool_input || payload.toolInput || {}
@@ -81,8 +78,8 @@ process.stdin.on('end', () => {
     }
   )
   req.on('error', () => {
-    // server unreachable — default allow so we don't break claude
-    process.stdout.write(JSON.stringify({ decision: 'approve' }))
+    // A hosted session runs with the CLI's own prompts off, so allowing here would allow everything.
+    process.stdout.write(JSON.stringify({ decision: 'block', reason: 'command center is not reachable to ask for approval' }))
     process.exit(0)
   })
   req.on('timeout', () => {
@@ -104,42 +101,4 @@ export function hookCommandFor(scriptPath: string): string {
   // Use forward slashes so Windows paths don't need backslash escaping in JSON
   const normalized = scriptPath.replace(/\\/g, '/')
   return `node "${normalized}"`
-}
-
-export async function writeSettingsLocal(
-  projectCwd: string,
-  hookCommand: string
-): Promise<void> {
-  const settingsDir = join(projectCwd, '.claude')
-  const settingsPath = join(settingsDir, 'settings.local.json')
-  await fs.mkdir(settingsDir, { recursive: true })
-
-  let existing: Record<string, unknown> = {}
-  try {
-    const content = await fs.readFile(settingsPath, 'utf-8')
-    existing = JSON.parse(content)
-  } catch {
-    // file doesn't exist or invalid JSON — start fresh
-  }
-
-  type HookEntry = { matcher?: string; hooks?: Array<{ type?: string; command?: string }> }
-  const hooks = (existing.hooks as Record<string, HookEntry[]> | undefined) ?? {}
-  const preToolUse = hooks.PreToolUse ?? []
-
-  // Strip any prior command-center hooks (identified by node script path).
-  const filtered = preToolUse.filter((entry) => {
-    const cmds = entry.hooks ?? []
-    return !cmds.some((c) => typeof c.command === 'string' && c.command.includes('permission-hook'))
-  })
-
-  filtered.push({
-    matcher: '*',
-    hooks: [{ type: 'command', command: hookCommand }]
-  })
-
-  const next = {
-    ...existing,
-    hooks: { ...hooks, PreToolUse: filtered }
-  }
-  await fs.writeFile(settingsPath, JSON.stringify(next, null, 2), 'utf-8')
 }
