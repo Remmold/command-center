@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
 
-type Tone = 'neutral' | 'warning'
+type Tone = 'neutral' | 'warning' | 'count'
 
 const TONES: Record<Tone, string> = {
   neutral: 'bg-list-selected text-muted',
-  warning: 'bg-amber-500/15 text-amber-300'
+  warning: 'bg-amber-500/15 text-amber-300',
+  /** VS Code's activity badge: a number that asks for attention. */
+  count: 'bg-accent font-semibold tabular-nums text-accent-fg'
 }
 
 interface Props {

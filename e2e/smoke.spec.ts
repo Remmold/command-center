@@ -1,4 +1,5 @@
 import type { ElectronApplication, Page } from '@playwright/test'
+import type { RendererApi } from '../src/shared/types'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -806,5 +807,66 @@ test.describe('taking over a VS Code chat', () => {
     await expect(page.getByText('Build check is now in Command Center')).toBeVisible()
     await expect(page.getByRole('region', { name: 'observed session' })).toHaveCount(0)
     await expect(row).toHaveCount(0)
+  })
+})
+
+test.describe('grouped by account', () => {
+  test('Work shows a section per account with a waiting badge, the Board groups By account, Settings lists workspaces under their account', async ({ launched }) => {
+    const { page, log, root, workspace } = launched
+    const work = join(root, 'claude-work')
+    mkdirSync(work, { recursive: true })
+    writeFileSync(join(work, '.credentials.json'), '{}')
+    const workRepo = join(root, 'work-repo')
+    const ticket = (repo: string, feature: string, title: string) => {
+      mkdirSync(join(repo, '.scratch', feature, 'issues'), { recursive: true })
+      writeFileSync(join(repo, '.scratch', feature, 'issues', '01-t.md'), `# 01: ${title}\n\n**Blocked by:** None\n\n**Status:** ready-for-agent\n`)
+    }
+    ticket(workspace, 'home-feature', 'Home ticket')
+    ticket(workRepo, 'work-feature', 'Work ticket')
+    const userData = join(root, 'user-data')
+    writeFileSync(join(userData, 'profiles.json'), JSON.stringify([{ id: 'p-work', name: 'Work', createdAt: 1, configDir: work }]))
+    await page.evaluate(async (path) => {
+      const { api } = globalThis as unknown as { api: RendererApi }
+      const added = await api.workspaces.addPath(path)
+      if (added.ok) await api.workspaces.setProfile(added.workspace.id, 'p-work')
+    }, workRepo)
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+
+    const homeLabel = 'someone@example.com · Claude Ultra'
+    const workLabel = 'Work · Claude Ultra'
+    await startSession(launched)
+    await page.keyboard.press('Control+t')
+    await page.getByRole('option', { name: /work-repo/ }).first().click()
+    await expect.poll(() => log.initializedIn(workRepo)).toBe(true)
+    await send(page, 'say hello')
+    await expect(page.getByText(BASIC_REPLY)).toBeVisible()
+
+    const list = page.getByRole('navigation', { name: 'Sessions' })
+    const homeSection = list.getByRole('region', { name: homeLabel })
+    const workSection = list.getByRole('region', { name: workLabel })
+    await expect(homeSection.getByRole('region', { name: 'Idle' })).toBeVisible()
+    await expect(workSection.getByRole('region', { name: 'Needs you' })).toBeVisible()
+    const workHeader = workSection.getByRole('button', { name: workLabel })
+    await expect(workHeader).toContainText('1')
+    await expect(list.getByRole('region').first()).toHaveAttribute('aria-label', homeLabel)
+
+    await workHeader.click()
+    await expect(workSection.getByRole('region', { name: 'Needs you' })).toBeHidden()
+    await expect(workHeader).toContainText('1')
+    await page.keyboard.press('Alt+1')
+    await page.keyboard.press('Control+Shift+J')
+    await expect(workSection.getByRole('region', { name: 'Needs you' })).toBeVisible()
+
+    await page.keyboard.press('Control+3')
+    await page.getByRole('tab', { name: 'By account' }).click()
+    const board = page.getByTestId('view-board')
+    await expect(board.getByRole('region', { name: homeLabel }).getByText('Home ticket')).toBeVisible()
+    await expect(board.getByRole('region', { name: workLabel }).getByText('Work ticket')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Workspaces', { exact: true }).click()
+    await expect(page.getByRole('region', { name: workLabel }).getByRole('listitem', { name: 'work-repo' })).toBeVisible()
+    await expect(page.getByRole('region', { name: homeLabel }).getByRole('listitem', { name: 'e2e-workspace' })).toBeVisible()
   })
 })

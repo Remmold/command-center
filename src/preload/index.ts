@@ -40,7 +40,8 @@ const api: RendererApi = {
     addPath: (path: string): Promise<AddWorkspaceResult> => ipcRenderer.invoke(IPC.WORKSPACES_ADD_PATH, path),
     remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC.WORKSPACES_REMOVE, id),
     setProfile: (id: string, profileId: string): Promise<Workspace | null> =>
-      ipcRenderer.invoke(IPC.WORKSPACES_SET_PROFILE, id, profileId)
+      ipcRenderer.invoke(IPC.WORKSPACES_SET_PROFILE, id, profileId),
+    reorder: (ids: string[]): Promise<Workspace[]> => ipcRenderer.invoke(IPC.WORKSPACES_REORDER, ids)
   },
   repoIdentities: {
     list: () => ipcRenderer.invoke(IPC.REPO_IDENTITIES_LIST),

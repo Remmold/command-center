@@ -371,6 +371,8 @@ export interface RendererApi {
     addPath: (path: string) => Promise<AddWorkspaceResult>
     remove: (id: string) => Promise<void>
     setProfile: (id: string, profileId: string) => Promise<Workspace | null>
+    /** Saves this order; ids it leaves out keep their place after the ones it names. */
+    reorder: (ids: string[]) => Promise<Workspace[]>
   }
   repoIdentities: {
     list: () => Promise<RepoIdentityViews>

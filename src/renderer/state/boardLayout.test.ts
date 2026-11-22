@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscoveredRepo, BoardColumn, BoardFeature, BoardModel, BoardRepoGroup, BoardTicket, FeatureState } from '../../shared/types'
+import type { Account } from './accounts'
 import { featureOptions, layoutBoard, neighbourCard, notAddedRepos, type BoardLayout, type BoardViewOptions } from './boardLayout'
 
 function ticket(number: string, column: BoardColumn, title = `ticket ${number}`, statusNote: string | null = null): BoardTicket {
@@ -178,6 +179,40 @@ describe('board layout', () => {
         { repoGroupKey: 'key:beta', repoName: 'beta', featureName: null, progress: { done: 0, total: 1, lastNote: null } }
       ])
       expect(layout.lanes[0].columns.find((c) => c.column === 'done')?.finished).toEqual({ cards: 1, features: 1 })
+    })
+  })
+
+  describe('by account', () => {
+    const personal: Account = { profileId: 'p', name: 'Personal', plan: 'Max', label: 'Personal · Max' }
+    const work: Account = { profileId: 'w', name: 'Work', plan: 'Team', label: 'Work · Team' }
+    const model: BoardModel = {
+      repoGroups: [
+        repo('alpha', [feature('mining', [ticket('01', 'backlog')])]),
+        repo('beta', [feature('crafting', [ticket('02', 'backlog')])]),
+        repo('gamma', [feature('pvp', [ticket('03', 'in-progress')])])
+      ]
+    }
+    const accounts = {
+      order: [personal, work],
+      byRepo: { 'key:alpha': work, 'key:beta': personal, 'key:gamma': work },
+      repoOrder: ['key:gamma', 'key:beta', 'key:alpha']
+    }
+
+    it("makes one lane per account, in Settings order, each holding its repos' tickets in saved workspace order", () => {
+      const layout = layoutBoard(model, view({ groupBy: 'account', accounts }))
+      expect(layout.lanes.map((l) => [l.key, l.header?.account?.label])).toEqual([
+        ['account:p', 'Personal · Max'],
+        ['account:w', 'Work · Team']
+      ])
+      expect(columnsOf(layout, 0).backlog).toEqual(['beta/crafting#02'])
+      expect(columnsOf(layout, 1)).toMatchObject({ backlog: ['alpha/mining#01'], 'in-progress': ['gamma/pvp#03'] })
+      expect(layout.lanes[1].header?.progress).toEqual({ done: 0, total: 2, lastNote: null })
+    })
+
+    it('puts a repo no workspace claims under the first account', () => {
+      const layout = layoutBoard(model, view({ groupBy: 'account', accounts: { ...accounts, byRepo: { 'key:alpha': work } } }))
+      expect(layout.lanes.map((l) => l.key)).toEqual(['account:p', 'account:w'])
+      expect(columnsOf(layout, 0).backlog).toEqual(['beta/crafting#02'])
     })
   })
 

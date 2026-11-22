@@ -5,6 +5,7 @@ import { DEFAULT_PROFILE_ID, type Workspace } from '../../shared/types'
 import { projectsFile } from '../util/paths'
 import { getCommonDir } from '../git/service'
 import { deriveRepoGroup } from './repoGroup'
+import { inOrder, toEnd } from './order'
 
 type SavedWorkspace = Pick<Workspace, 'id' | 'name' | 'path' | 'createdAt'> &
   Partial<Pick<Workspace, 'profileId' | 'repoGroupKey'>>
@@ -119,9 +120,19 @@ export function setProfile(id: string, profileId: string): Promise<Workspace | n
     const saved = await readAll()
     const target = saved.find((p) => p.id === id)
     if (!target) return null
+    const moved = target.profileId !== profileId
     target.profileId = profileId
-    await writeAll(saved)
+    await writeAll(moved ? toEnd(saved, id) : saved)
     return toWorkspace(target)
+  })
+}
+
+/** Saves the order Settings shows; it is the order every list of workspaces follows. */
+export function reorder(ids: readonly string[]): Promise<Workspace[]> {
+  return serial(async () => {
+    const saved = inOrder(await readAll(), ids)
+    await writeAll(saved)
+    return Promise.all(saved.map(toWorkspace))
   })
 }
 

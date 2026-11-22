@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { nextWaiting } from '../../shared/needsYou'
 import type { CliModel, ModelDefaults, SessionInit, SessionStatusEntry } from '../../shared/types'
 import { currentChoice, paneModels, sessionTag } from './modelPicker'
 import { useModelStore, type AppliedModel } from './modelStore'
@@ -9,8 +11,19 @@ import { useProjectViewsStore, type ClaudeChatSession, type ProjectView } from '
 import { useRepoIdentitiesStore } from './repoIdentitiesStore'
 import { halfShowing, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
 import { useChatPairStore } from './chatPairStore'
-import { openObserved, openSession, resolveChat, type OpenOptions, type OpenTarget } from './sessionNavigation'
-import { sessionList, type HostedSessionInput, type SessionGroup, type SessionListInput, type SessionRow } from './sessionList'
+import { openObserved, openSession, paneOnScreen, resolveChat, type OpenOptions, type OpenTarget } from './sessionNavigation'
+import {
+  accountSections,
+  sessionList,
+  shownRows,
+  waitingRows,
+  type AccountSection,
+  type HostedSessionInput,
+  type SessionListInput,
+  type SessionRow
+} from './sessionList'
+import { accountOf, type Account } from './accounts'
+import { currentAccounts, useAccounts } from './useAccounts'
 import { useSessionStatusStore } from './sessionStatusStore'
 import { useWorkspacesStore } from './workspacesStore'
 
@@ -23,6 +36,29 @@ export const useWorkSearchStore = create<WorkSearchState>((set) => ({
   search: '',
   setSearch: (search) => set({ search })
 }))
+
+interface AccountSectionsState {
+  /** Profile ids of the account sections folded shut. */
+  collapsed: string[]
+  toggle: (profileId: string) => void
+  expand: (profileId: string) => void
+}
+
+export const useAccountSectionsStore = create<AccountSectionsState>()(
+  persist(
+    (set) => ({
+      collapsed: [],
+      toggle: (id) => set((s) => ({ collapsed: s.collapsed.includes(id) ? s.collapsed.filter((c) => c !== id) : [...s.collapsed, id] })),
+      expand: (id) => set((s) => (s.collapsed.includes(id) ? { collapsed: s.collapsed.filter((c) => c !== id) } : s))
+    }),
+    {
+      name: 'command-center.work-accounts',
+      storage: createJSONStorage(() => localStorage),
+      version: 1,
+      partialize: (s) => ({ collapsed: s.collapsed })
+    }
+  )
+)
 
 interface ModelSources {
   inits: Record<string, SessionInit>
@@ -109,10 +145,21 @@ export function useSessionSources(): Omit<SessionListInput, 'search'> {
   )
 }
 
-export function useSessionGroups(): SessionGroup[] {
+export interface SessionSections {
+  sections: AccountSection[]
+  /** False with a single account: the list then shows its status groups without an account header. */
+  headed: boolean
+}
+
+function sectionsOf(sources: Omit<SessionListInput, 'search'>, search: string, accounts: readonly Account[]): SessionSections {
+  return { sections: accountSections(sessionList({ ...sources, search }), accounts), headed: accounts.length > 1 }
+}
+
+export function useSessionSections(): SessionSections {
   const sources = useSessionSources()
   const search = useWorkSearchStore((s) => s.search)
-  return useMemo(() => sessionList({ ...sources, search }), [sources, search])
+  const accounts = useAccounts()
+  return useMemo(() => sectionsOf(sources, search, accounts), [sources, search, accounts])
 }
 
 export interface ShownChats {
@@ -138,12 +185,31 @@ export function isShown(row: SessionRow, pair: ChatPair): boolean {
 }
 
 export function openRow(row: SessionRow, options?: OpenOptions): void {
+  useAccountSectionsStore.getState().expand(accountOf(currentAccounts(), row.workspace.profileId).profileId)
   if (row.kind === 'hosted') openSession(row.paneId, options)
   else openObserved(row.workspace.id, row.sessionId, options)
 }
 
-/** Opens the list's nth row as it is shown, search applied. */
+function currentSections(applySearch: boolean): SessionSections {
+  const { search, ...sources } = listInput(currentSources())
+  return sectionsOf(sources, applySearch ? search : '', currentAccounts())
+}
+
+/** Opens the list's nth row as it is shown: search applied, collapsed sections skipped. */
 export function openRowAt(index: number): void {
-  const row = sessionList(listInput(currentSources())).flatMap((g) => g.rows)[index]
+  const { sections, headed } = currentSections(true)
+  const row = shownRows(sections, headed ? useAccountSectionsStore.getState().collapsed : [])[index]
+  if (row) openRow(row)
+}
+
+/** The waiting session after the one on screen, in the order the list shows them; a search never hides one. */
+export function jumpToNextWaiting(): void {
+  const { sections } = currentSections(false)
+  const rows = waitingRows(sections)
+  const next = nextWaiting(
+    rows.map((r) => ({ paneId: r.paneId, cwd: '', status: r.status, since: r.statusSince })),
+    paneOnScreen()
+  )
+  const row = next && rows.find((r) => r.paneId === next.paneId)
   if (row) openRow(row)
 }

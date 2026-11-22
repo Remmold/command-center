@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { timeAgo, type NowBuilding, type NowBuildingRow } from '../../state/nowBuilding'
 import { plainNote } from '../../state/plainNote'
+import { AccountTag } from '../AccountTag'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -12,16 +13,18 @@ interface Props {
   building: NowBuilding
   now: number
   onOpen: (row: NowBuildingRow) => void
+  /** Account label by row key; empty with a single account. */
+  accountTags: Readonly<Record<string, string>>
 }
 
-export function NowBuildingList({ building, now, onOpen }: Props) {
+export function NowBuildingList({ building, now, onOpen, accountTags }: Props) {
   const [showAll, setShowAll] = useState(false)
   const rows = showAll ? [...building.rows, ...building.hidden] : building.rows
   return (
     <>
       <ul>
         {rows.map((row) => (
-          <FeatureRow key={row.key} row={row} now={now} onOpen={() => onOpen(row)} />
+          <FeatureRow key={row.key} row={row} now={now} onOpen={() => onOpen(row)} account={accountTags[row.key]} />
         ))}
       </ul>
       {building.hidden.length > 0 && (
@@ -39,7 +42,7 @@ function ticketsLabel(row: NowBuildingRow): string | null {
   return `#${first.number} ${first.title}${rest.length > 0 ? ` +${rest.length}` : ''}`
 }
 
-function FeatureRow({ row, now, onOpen }: { row: NowBuildingRow; now: number; onOpen: () => void }) {
+function FeatureRow({ row, now, onOpen, account }: { row: NowBuildingRow; now: number; onOpen: () => void; account?: string }) {
   const { done, total, lastNote } = row.feature.progress
   const tickets = ticketsLabel(row)
 
@@ -66,6 +69,7 @@ function FeatureRow({ row, now, onOpen }: { row: NowBuildingRow; now: number; on
           </>
         }
       />
+      <AccountTag label={account} />
       {row.status && <StatusTag status={row.status} />}
       {row.lastActivity !== null && <ListRowMeta>{timeAgo(row.lastActivity, now)}</ListRowMeta>}
     </ListRow>

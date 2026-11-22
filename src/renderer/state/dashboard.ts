@@ -1,9 +1,10 @@
 import type { ChatItem } from '../../shared/chatItems'
-import type { BoardModel, SessionStatus } from '../../shared/types'
+import { DEFAULT_PROFILE_ID, type BoardModel, type SessionStatus } from '../../shared/types'
 import { nowBuilding, type NowBuilding } from './nowBuilding'
 import { sessionList, type HostedRow, type SessionGroupId, type SessionListInput, type SessionRow } from './sessionList'
 import type { ProfileUsage } from '../../shared/types'
 import { usageEntries, type UsageEntriesInput, type UsageEntry } from './usageModel'
+import { accountOf, accountRank, repoAccounts, type Account } from './accounts'
 
 export interface ObservedTail {
   workspaceId: string
@@ -20,6 +21,8 @@ export interface DashboardInput extends Omit<SessionListInput, 'search'> {
   /** Items of the one observed session being followed, if any. */
   observedTail: ObservedTail | null
   now: number
+  /** Settings order; rows are grouped by these. */
+  accounts?: readonly Account[]
 }
 
 export interface LiveCard {
@@ -35,6 +38,8 @@ export interface Dashboard {
   nowBuilding: NowBuilding
   live: LiveCard[]
   usage: UsageEntry[]
+  /** Account label by row key (session rows and Now building rows); empty with a single account. */
+  accountTags: Readonly<Record<string, string>>
 }
 
 const SNIPPET_MAX = 300
@@ -87,24 +92,62 @@ function statusesByWorkspace(input: DashboardInput): Record<string, SessionStatu
   return out
 }
 
+/** Stable, so each account keeps the order its rows already had. */
+function byAccount<T>(items: readonly T[], profileOf: (item: T) => string, rank: (profileId: string) => number): T[] {
+  return items
+    .map((item, i) => ({ item, i, r: rank(profileOf(item)) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.item)
+}
+
+function accountTagsOf(rows: readonly SessionRow[], building: NowBuilding, accounts: readonly Account[], byRepo: Record<string, Account>): Record<string, string> {
+  if (accounts.length < 2) return {}
+  const tags: Record<string, string> = {}
+  for (const row of rows) tags[row.key] = accountOf(accounts, row.workspace.profileId).label
+  for (const row of [...building.rows, ...building.hidden]) tags[row.key] = (byRepo[row.repoGroupKey] ?? accounts[0]).label
+  return tags
+}
+
 export function dashboard(input: DashboardInput): Dashboard {
+  const accounts = input.accounts ?? []
+  const rank = accountRank(accounts)
+  const byRepo = repoAccounts(input.workspaces, accounts)
+  const repoProfile = (key: string) => (byRepo[key] ?? accounts[0])?.profileId ?? DEFAULT_PROFILE_ID
+  const rowProfile = (row: SessionRow) => row.workspace.profileId
   const groups = sessionList({ ...input, search: '' })
   const rowsOf = (id: SessionGroupId) => groups.find((g) => g.id === id)?.rows ?? []
-  return {
-    needsYou: rowsOf('needs-you').filter((r): r is HostedRow => r.kind === 'hosted'),
-    live: [
+  const needsYou = byAccount(
+    rowsOf('needs-you').filter((r): r is HostedRow => r.kind === 'hosted'),
+    rowProfile,
+    rank
+  )
+  const live = byAccount(
+    [
       ...rowsOf('needs-you'),
       ...rowsOf('running'),
       ...rowsOf('in-vscode').filter((r) => r.kind === 'observed' && r.status === 'live')
     ]
       .map((row) => liveCard(row, input))
       .sort((a, b) => b.lastEventAt - a.lastEventAt),
-    nowBuilding: nowBuilding({
-      model: input.board,
-      statuses: statusesByWorkspace(input),
-      worktreeTags: Object.fromEntries(input.workspaces.map((w) => [w.id, w.worktreeTag])),
-      now: input.now
-    }),
-    usage: usageEntries({ profiles: input.profiles, usage: input.usage, activeProfileId: null, now: input.now })
+    (c) => rowProfile(c.row),
+    rank
+  )
+  const building = nowBuilding({
+    model: input.board,
+    statuses: statusesByWorkspace(input),
+    worktreeTags: Object.fromEntries(input.workspaces.map((w) => [w.id, w.worktreeTag])),
+    now: input.now
+  })
+  const nowBuildingByAccount: NowBuilding = {
+    ...building,
+    rows: byAccount(building.rows, (r) => repoProfile(r.repoGroupKey), rank),
+    hidden: byAccount(building.hidden, (r) => repoProfile(r.repoGroupKey), rank)
+  }
+  return {
+    needsYou,
+    live,
+    nowBuilding: nowBuildingByAccount,
+    usage: usageEntries({ profiles: input.profiles, usage: input.usage, activeProfileId: null, now: input.now }),
+    accountTags: accountTagsOf([...needsYou, ...live.map((c) => c.row)], nowBuildingByAccount, accounts, byRepo)
   }
 }

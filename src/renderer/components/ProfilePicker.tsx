@@ -5,6 +5,8 @@ import { profileEnv } from '../../shared/profiles'
 import { useProfilesStore } from '../state/profilesStore'
 import { useWorkspacesStore } from '../state/workspacesStore'
 import { openShell } from '../state/sessionNavigation'
+import { accountOf } from '../state/accounts'
+import { useAccounts } from '../state/useAccounts'
 import { Button } from './ui/Button'
 import { ListRow, ListRowMeta, ListRowText } from './ui/ListRow'
 import { Popover, PopoverActions, PopoverNote, PopoverSection } from './ui/Popover'
@@ -29,6 +31,7 @@ export function ProfilePicker({ workspace, labelled = false }: Props) {
   const profiles = useProfilesStore((s) => s.profiles)
   const load = useProfilesStore((s) => s.load)
   const current = currentProfile(profiles, workspace)
+  const account = accountOf(useAccounts(), workspace.profileId)
   const close = useCallback(() => setOpen(false), [])
 
   const toggle = () => {
@@ -46,7 +49,7 @@ export function ProfilePicker({ workspace, labelled = false }: Props) {
           toggle()
         }}
         aria-label={`account profile for ${workspace.name}`}
-        title={`account profile: ${current?.name ?? 'Default'}`}
+        title={`account profile: ${account.label}`}
         className={
           'inline-flex shrink-0 items-center gap-1.5 rounded text-muted hover:bg-list-hover hover:text-fg ' +
           (labelled ? 'px-2 py-1 text-xs ' : 'p-0.5 ') +
@@ -54,7 +57,7 @@ export function ProfilePicker({ workspace, labelled = false }: Props) {
         }
       >
         <UserRound size={11} strokeWidth={2.25} />
-        {labelled && (current?.name ?? 'Default')}
+        {labelled && account.name}
       </button>
       <Popover open={open} onClose={close} anchor={anchor} label="account profile">
         <ProfileList workspace={workspace} profiles={profiles} onDone={close} />
@@ -77,6 +80,7 @@ function ProfileList({
   const renameProfile = useProfilesStore((s) => s.rename)
   const [renaming, setRenaming] = useState(false)
   const current = currentProfile(profiles, workspace)
+  const accounts = useAccounts()
 
   const logIn = (profile: AccountProfile) => {
     openShell(workspace, { env: profileEnv(profile) })
@@ -91,7 +95,7 @@ function ProfileList({
       <ul>
         {profiles.map((p) => (
           <ListRow key={p.id} onClick={() => void setProfile(workspace.id, p.id)} tooltip={p.configDir}>
-            <ListRowText primary={p.name} secondary={p.loggedIn ? undefined : 'not logged in'} />
+            <ListRowText primary={accountOf(accounts, p.id).label} secondary={p.loggedIn ? undefined : 'not logged in'} />
             {p.id === current?.id && (
               <ListRowMeta>
                 <Check size={11} strokeWidth={2.25} />

@@ -12,6 +12,10 @@ _Avoid_: Project (in new UI text), folder, repo
 A named Claude login that a workspace uses. Every workspace uses exactly one. "Default" is the login Andreas already has.
 _Avoid_: Licence, account, user
 
+**Account**:
+How an account profile is shown: its name and plan, e.g. "Work · Team". Default goes by its login's email. Projects and their sessions are grouped by account in Work, the Dashboard, the Board and Settings.
+_Avoid_: Subscription, licence
+
 **Adopted folder**:
 An existing Claude config folder (such as one a VS Code profile uses) that an account profile runs on instead of a folder the app made. The app only reads it: no shared-item links, no writes, and removing the profile never deletes it.
 _Avoid_: Imported profile

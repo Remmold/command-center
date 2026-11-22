@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ObservedSession, SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
-import { sessionList, type HostedSessionInput, type SessionListInput } from './sessionList'
+import { accountSections, sessionList, shownRows, waitingRows, type HostedSessionInput, type SessionListInput } from './sessionList'
+import type { Account } from './accounts'
 
 const workspace = (id: string, repoName: string, worktreeTag = ''): Workspace => ({
   id,
@@ -139,5 +140,49 @@ describe('session list', () => {
     it('shows everything for a blank search', () => {
       expect(titles('   ')).toHaveLength(3)
     })
+  })
+})
+
+describe('account sections', () => {
+  const ACCOUNTS: Account[] = [
+    { profileId: 'default', name: 'a@home.com', plan: 'Max', label: 'a@home.com · Max' },
+    { profileId: 'p-work', name: 'Work', plan: 'Team', label: 'Work · Team' }
+  ]
+  const workWs = { ...workspace('wk', 'work-repo'), profileId: 'p-work' }
+  const sessions: Partial<SessionListInput> = {
+    workspaces: [...WORKSPACES, workWs],
+
+    hosted: [hosted('w1', 'work waiting', 0, 'wk'), hosted('h1', 'home running', 0), hosted('h2', 'home waiting', 0), hosted('w2', 'work idle', 0, 'wk')],
+    statuses: [status('w1', 'your-turn', 1), status('h1', 'running', 2), status('h2', 'needs-approval', 3)],
+    observed: [observed('o', 'home vscode', 1)]
+  }
+  const sections = () => accountSections(sessionList(input(sessions)), ACCOUNTS)
+
+  it('puts each account in its own section, in Settings order, with the status groups inside', () => {
+    expect(sections().map((s) => [s.account.label, s.groups.map((g) => [g.id, g.rows.map((r) => r.title)])])).toEqual([
+      ['a@home.com · Max', [['needs-you', ['home waiting']], ['running', ['home running']], ['in-vscode', ['home vscode']]]],
+      ['Work · Team', [['needs-you', ['work waiting']], ['idle', ['work idle']]]]
+    ])
+  })
+
+  it("counts each account's waiting sessions for its header badge", () => {
+    expect(sections().map((s) => s.needsYou)).toEqual([1, 1])
+  })
+
+  it('leaves out accounts without sessions and puts sessions of a removed profile under the default account', () => {
+    const orphan = { ...workspace('or', 'orphan'), profileId: 'gone' }
+    const list = sessionList(input({ workspaces: [...WORKSPACES, orphan], hosted: [hosted('x', 'orphan one', 0, 'or')] }))
+    expect(accountSections(list, ACCOUNTS).map((s) => [s.account.profileId, s.groups[0].rows[0].title])).toEqual([['default', 'orphan one']])
+  })
+
+  it('numbers rows for Alt+1..9 in the order shown, skipping collapsed sections', () => {
+    expect(shownRows(sections(), []).map((r) => r.title)).toEqual(['home waiting', 'home running', 'home vscode', 'work waiting', 'work idle'])
+    expect(shownRows(sections(), ['default']).map((r) => r.title)).toEqual(['work waiting', 'work idle'])
+  })
+
+  it('queues waiting sessions for Ctrl+Shift+J in the order shown, collapsed sections included', () => {
+    const more = { ...sessions, statuses: [...sessions.statuses!, status('w2', 'your-turn', 0)] }
+    const list = accountSections(sessionList(input(more)), ACCOUNTS)
+    expect(waitingRows(list).map((r) => r.title)).toEqual(['home waiting', 'work idle', 'work waiting'])
   })
 })

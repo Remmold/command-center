@@ -4,6 +4,7 @@ export const IPC = {
   WORKSPACES_ADD_PATH: 'workspaces:addPath',
   WORKSPACES_REMOVE: 'workspaces:remove',
   WORKSPACES_SET_PROFILE: 'workspaces:setProfile',
+  WORKSPACES_REORDER: 'workspaces:reorder',
   REPO_IDENTITIES_LIST: 'repoIdentities:list',
   REPO_IDENTITIES_SET_NAME: 'repoIdentities:setName',
   REPO_IDENTITIES_SET_ICON: 'repoIdentities:setIcon',

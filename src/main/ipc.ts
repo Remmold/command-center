@@ -152,6 +152,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     return updated
   })
 
+  ipcMain.handle(IPC.WORKSPACES_REORDER, (_e, ids: unknown) =>
+    workspaces.reorder(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])
+  )
+
   ipcMain.handle(IPC.REPO_IDENTITIES_LIST, () => repoIdentities.list())
   ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, (_e, key: string, name: string) =>
     repoIdentities.setDisplayName(key, name)

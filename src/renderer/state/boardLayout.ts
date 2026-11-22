@@ -1,12 +1,14 @@
-import type {
-  BoardColumn,
-  BoardFeature,
-  BoardModel,
-  BoardRepoGroup,
-  BoardTicket,
-  DiscoveredRepo,
-  Workspace
+import {
+  DEFAULT_PROFILE_ID,
+  type BoardColumn,
+  type BoardFeature,
+  type BoardModel,
+  type BoardRepoGroup,
+  type BoardTicket,
+  type DiscoveredRepo,
+  type Workspace
 } from '../../shared/types'
+import type { Account } from './accounts'
 
 export const COLUMN_TITLE: Record<BoardColumn, string> = {
   backlog: 'Backlog',
@@ -45,12 +47,22 @@ export interface BoardFilter {
   search: string
 }
 
-export type GroupBy = 'none' | 'feature' | 'repo'
+export type GroupBy = 'none' | 'feature' | 'repo' | 'account'
+
+export interface BoardAccounts {
+  /** Settings order. */
+  order: readonly Account[]
+  /** A repo's account is that of its first workspace; a repo missing here goes to the first account. */
+  byRepo: Readonly<Record<string, Account>>
+  /** Repo group keys in saved workspace order. */
+  repoOrder: readonly string[]
+}
 
 export interface BoardViewOptions {
   filter: BoardFilter
   groupBy: GroupBy
   showFinished: boolean
+  accounts?: BoardAccounts
 }
 
 export function featureKey(repoGroupKey: string, featureName: string): string {
@@ -89,8 +101,10 @@ export interface BoardLane {
 export interface LaneHeader {
   repoGroupKey: string
   repoName: string
-  /** Null for a repo lane. */
+  /** Null for a repo or account lane. */
   featureName: string | null
+  /** Set on an account lane only. */
+  account?: Account
   progress: { done: number; total: number; lastNote: string | null }
 }
 
@@ -182,11 +196,29 @@ function place(lane: BoardLane, group: BoardRepoGroup, feature: BoardFeature, op
   for (const card of cards) lane.columns.find((c) => c.column === columnOf(card))?.cards.push(card)
 }
 
-function laneFor(lanes: BoardLane[], group: BoardRepoGroup, feature: BoardFeature, groupBy: GroupBy): BoardLane {
-  const key =
-    groupBy === 'none' ? 'all' : groupBy === 'repo' ? `repo:${group.repoGroupKey}` : `feature:${featureKey(group.repoGroupKey, feature.name)}`
+function accountOfRepo(accounts: BoardAccounts | undefined, repoGroupKey: string): Account | undefined {
+  return accounts?.byRepo[repoGroupKey] ?? accounts?.order[0]
+}
+
+function laneKey(group: BoardRepoGroup, feature: BoardFeature, options: BoardViewOptions): string {
+  switch (options.groupBy) {
+    case 'none':
+      return 'all'
+    case 'repo':
+      return `repo:${group.repoGroupKey}`
+    case 'feature':
+      return `feature:${featureKey(group.repoGroupKey, feature.name)}`
+    case 'account':
+      return `account:${accountOfRepo(options.accounts, group.repoGroupKey)?.profileId ?? DEFAULT_PROFILE_ID}`
+  }
+}
+
+function laneFor(lanes: BoardLane[], group: BoardRepoGroup, feature: BoardFeature, options: BoardViewOptions): BoardLane {
+  const { groupBy } = options
+  const key = laneKey(group, feature, options)
   let lane = lanes.find((l) => l.key === key)
   if (!lane) {
+    const account = groupBy === 'account' ? accountOfRepo(options.accounts, group.repoGroupKey) : undefined
     const header: LaneHeader | null =
       groupBy === 'none'
         ? null
@@ -194,6 +226,7 @@ function laneFor(lanes: BoardLane[], group: BoardRepoGroup, feature: BoardFeatur
             repoGroupKey: group.repoGroupKey,
             repoName: group.repoName,
             featureName: groupBy === 'feature' ? feature.name : null,
+            ...(account ? { account } : {}),
             progress: { done: 0, total: 0, lastNote: groupBy === 'feature' ? feature.progress.lastNote : null }
           }
     lane = { key, header, columns: emptyColumns() }
@@ -210,13 +243,30 @@ function hasCards(lane: BoardLane): boolean {
   return lane.columns.some((c) => c.cards.length > 0)
 }
 
+/** By account, repos follow the saved workspace order, so each account lane lists them as Settings does. */
+function groupsInOrder(groups: BoardRepoGroup[], options: BoardViewOptions): BoardRepoGroup[] {
+  const accounts = options.accounts
+  if (options.groupBy !== 'account' || !accounts) return groups
+  const accountAt = new Map(accounts.order.map((a, i) => [a.profileId, i]))
+  const repoAt = new Map(accounts.repoOrder.map((k, i) => [k, i]))
+  const rank = (g: BoardRepoGroup): [number, number] => [
+    accountAt.get(accountOfRepo(accounts, g.repoGroupKey)?.profileId ?? '') ?? accounts.order.length,
+    repoAt.get(g.repoGroupKey) ?? accounts.repoOrder.length
+  ]
+  return [...groups].sort((a, b) => {
+    const [aa, ar] = rank(a)
+    const [ba, br] = rank(b)
+    return aa - ba || ar - br
+  })
+}
+
 export function layoutBoard(model: BoardModel, options: BoardViewOptions): BoardLayout {
   const lanes: BoardLane[] = []
   const scope = scopeOf(model, options.filter)
-  for (const group of scope.groups) {
+  for (const group of groupsInOrder(scope.groups, options)) {
     for (const feature of [...group.features].sort(byName)) {
       if (scope.featureKeys && !scope.featureKeys.has(featureKey(group.repoGroupKey, feature.name))) continue
-      place(laneFor(lanes, group, feature, options.groupBy), group, feature, options)
+      place(laneFor(lanes, group, feature, options), group, feature, options)
     }
   }
   if (options.groupBy === 'none') return { lanes: lanes.length > 0 ? lanes : [{ key: 'all', header: null, columns: emptyColumns() }] }

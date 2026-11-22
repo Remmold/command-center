@@ -14,7 +14,8 @@ import { ScanRootsButton } from './ScanRootsButton'
 const GROUP_BY: { value: GroupBy; label: string }[] = [
   { value: 'none', label: 'No grouping' },
   { value: 'feature', label: 'By feature' },
-  { value: 'repo', label: 'By repo' }
+  { value: 'repo', label: 'By repo' },
+  { value: 'account', label: 'By account' }
 ]
 
 export function BoardToolbar({ model }: { model: BoardModel }) {
