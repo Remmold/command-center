@@ -2,8 +2,12 @@
 
 const LOCALE = 'en-US'
 
+function formatter(options: Intl.DateTimeFormatOptions, timeZone: string | undefined): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(LOCALE, timeZone ? { ...options, timeZone } : options)
+}
+
 function format(at: number, options: Intl.DateTimeFormatOptions, timeZone: string | undefined): Intl.DateTimeFormatPart[] {
-  return new Intl.DateTimeFormat(LOCALE, timeZone ? { ...options, timeZone } : options).formatToParts(new Date(at))
+  return formatter(options, timeZone).formatToParts(new Date(at))
 }
 
 function part(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): string {
@@ -12,8 +16,7 @@ function part(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTyp
 
 /** The stamp next to a message, e.g. "3:07 PM". */
 export function stampLabel(at: number, timeZone?: string): string {
-  const options: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', hourCycle: 'h12' }
-  return new Intl.DateTimeFormat(LOCALE, timeZone ? { ...options, timeZone } : options).format(new Date(at))
+  return formatter({ hour: 'numeric', minute: '2-digit', hourCycle: 'h12' }, timeZone).format(new Date(at))
 }
 
 /** The stamp's hover text, e.g. "2026-11-22 15:07:42 GMT+1". */
@@ -36,7 +39,7 @@ function dayKey(at: number, timeZone: string | undefined): string {
 export function dayLabel(at: number, now: number, timeZone?: string): string {
   const sameYear = dayKey(at, timeZone).slice(0, 4) === dayKey(now, timeZone).slice(0, 4)
   const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) }
-  return new Intl.DateTimeFormat(LOCALE, timeZone ? { ...options, timeZone } : options).format(new Date(at))
+  return formatter(options, timeZone).format(new Date(at))
 }
 
 /** For each message time, that time when a date line goes before it: the first stamped message and each one on a new day. */

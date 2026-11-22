@@ -127,7 +127,8 @@ export function ChatView({
   const [error, setError] = useState<string | null>(null)
   const [inProgress, setInProgress] = useState<AssistantMessageItem | null>(null)
   const [thinkingTokens, setThinkingTokens] = useState<number | undefined>(undefined)
-  const thinkingStartsRef = useRef(new Map<number, number>())
+  /** When each thinking block of the streaming message started, by block index. */
+  const thinkingStartsRef = useRef<{ messageId: string | undefined; starts: Map<number, number> }>({ messageId: undefined, starts: new Map() })
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [contextOpen, setContextOpen] = useState(false)
   const closeContext = useCallback(() => setContextOpen(false), [])
@@ -259,7 +260,7 @@ export function ChatView({
 
   const handleStreamEvent = (inner: AnthropicStreamInner) => {
     if (inner.type === 'message_start') {
-      thinkingStartsRef.current = new Map()
+      thinkingStartsRef.current = { messageId: inner.message?.id, starts: new Map() }
       setThinkingTokens(undefined)
       setInProgress({
         kind: 'assistant',
@@ -273,7 +274,7 @@ export function ChatView({
       const idx = inner.index
       const block = inner.content_block
       if (block.type === 'thinking') {
-        thinkingStartsRef.current.set(idx, Date.now())
+        thinkingStartsRef.current.starts.set(idx, Date.now())
         setThinkingTokens(undefined)
       }
       setInProgress((prev) => {
@@ -374,7 +375,8 @@ export function ChatView({
       const id = ae.message.id ?? crypto.randomUUID()
       const now = Date.now()
       const firstIndex = committedLength(useChatItemsStore.getState().items[paneId] ?? [], id)
-      const thinkingMs = thinkingDurations(thinkingStartsRef.current, firstIndex, ae.message.content, now)
+      const timing = thinkingStartsRef.current
+      const thinkingMs = timing.messageId === id ? thinkingDurations(timing.starts, firstIndex, ae.message.content, now) : undefined
       mergeAssistant(paneId, { kind: 'assistant', id, content: ae.message.content, raw: ae, at: now, ...(thinkingMs ? { thinkingMs } : {}) })
       // A message from a subagent, or one sent without stream events, is not the one streaming.
       setInProgress((prev) => (prev && prev.id === id ? prev : null))
@@ -556,42 +558,42 @@ export function ChatView({
     <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col" onKeyDown={handlePaneKeyDown}>
       <div ref={scrollRef} tabIndex={-1} data-transcript="" className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
         <div ref={contentRef}>
-        <MessageColumn className="space-y-3">
-          {error && (
-            <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
-              {error}
-            </ChatBanner>
-          )}
-          {items.length === 0 && !error && !processRunning && !inProgress && (
-            <div className="py-10 text-center text-sm text-faint">starting claude…</div>
-          )}
-          {showIdleBanner && (
-            <ChatBanner
-              action={
-                <Button variant="secondary" onClick={handleResume}>
-                  {resumeSessionId ? 'resume now' : 'start'}
-                </Button>
-              }
-            >
-              {resumeSessionId
-                ? 'paused — sending will resume this session'
-                : 'idle — sending will start a new claude process'}
-            </ChatBanner>
-          )}
-          <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} />
-          {pendingApprovals.map((req) => (
-            <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
-          ))}
-          {turnActive && !inProgress && pendingApprovals.length === 0 && (
-            <div className="px-1.5 text-xs text-faint">claude is thinking…</div>
-          )}
-          {held.map((p) => (
-            <UserPrompt key={p.uuid} text={p.text} queued />
-          ))}
-          <div role="status" className="sr-only">
-            {held.length > 0 ? 'Message queued.' : ''}
-          </div>
-        </MessageColumn>
+          <MessageColumn className="space-y-3">
+            {error && (
+              <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
+                {error}
+              </ChatBanner>
+            )}
+            {items.length === 0 && !error && !processRunning && !inProgress && (
+              <div className="py-10 text-center text-sm text-faint">starting claude…</div>
+            )}
+            {showIdleBanner && (
+              <ChatBanner
+                action={
+                  <Button variant="secondary" onClick={handleResume}>
+                    {resumeSessionId ? 'resume now' : 'start'}
+                  </Button>
+                }
+              >
+                {resumeSessionId
+                  ? 'paused — sending will resume this session'
+                  : 'idle — sending will start a new claude process'}
+              </ChatBanner>
+            )}
+            <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} />
+            {pendingApprovals.map((req) => (
+              <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
+            ))}
+            {turnActive && !inProgress && pendingApprovals.length === 0 && (
+              <div className="px-1.5 text-xs text-faint">claude is thinking…</div>
+            )}
+            {held.map((p) => (
+              <UserPrompt key={p.uuid} text={p.text} queued />
+            ))}
+            <div role="status" className="sr-only">
+              {held.length > 0 ? 'Message queued.' : ''}
+            </div>
+          </MessageColumn>
         </div>
       </div>
       <InputBox

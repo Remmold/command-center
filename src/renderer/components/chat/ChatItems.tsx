@@ -30,7 +30,8 @@ export function ChatItems({ items, cwd, streaming = null, thinkingTokens }: Prop
   const pairs = useMemo(() => pairToolResults(view.items), [view.items])
   const latestTodoId = useMemo(() => latestTodoCallId(view.items, pairs), [view.items, pairs])
   const context = useMemo(() => ({ pairs, cwd, latestTodoId }), [pairs, cwd, latestTodoId])
-  const days = useMemo(() => dayBreaks(view.items.map((item) => stampTime(item, view.live?.id))), [view])
+  const stamps = useMemo(() => view.items.map((item) => stampTime(item, view.live?.id)), [view])
+  const days = useMemo(() => dayBreaks(stamps), [stamps])
   const now = Date.now()
   // Chats saved before blocks were merged can hold several items with one message id.
   const seen = new Set<string>()
@@ -44,7 +45,12 @@ export function ChatItems({ items, cwd, streaming = null, thinkingTokens }: Prop
         return (
           <Fragment key={key}>
             {day !== undefined && <LabeledDivider>{dayLabel(day, now)}</LabeledDivider>}
-            <Message item={item} streamingFrom={live ? view.live?.from : undefined} thinkingTokens={live ? thinkingTokens : undefined} />
+            <Message
+              item={item}
+              stampAt={stamps[i]}
+              streamingFrom={live ? view.live?.from : undefined}
+              thinkingTokens={live ? thinkingTokens : undefined}
+            />
           </Fragment>
         )
       })}

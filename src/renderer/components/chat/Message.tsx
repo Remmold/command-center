@@ -18,18 +18,20 @@ const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', i
 
 interface MessageProps {
   item: ChatItem
+  /** The time shown next to it; only typed prompts and settled replies with text have one. */
+  stampAt?: number
   /** Set while this message streams: the index of its first block not committed yet. */
   streamingFrom?: number
   /** The CLI's running thinking-token estimate for a streaming thinking block. */
   thinkingTokens?: number
 }
 
-export function Message({ item, streamingFrom, thinkingTokens }: MessageProps) {
+export function Message({ item, stampAt, streamingFrom, thinkingTokens }: MessageProps) {
   switch (item.kind) {
     case 'user':
-      return <UserPrompt text={item.text} at={item.at} />
+      return <UserPrompt text={item.text} at={stampAt} />
     case 'assistant':
-      return <AssistantMessage item={item} streamingFrom={streamingFrom} thinkingTokens={thinkingTokens} />
+      return <AssistantMessage item={item} stampAt={stampAt} streamingFrom={streamingFrom} thinkingTokens={thinkingTokens} />
     case 'tool_result':
       return <LooseToolResult item={item} />
     case 'result':
@@ -71,21 +73,25 @@ function textBlocks(content: ContentBlock[]): string[] {
   return content.flatMap((b) => (b.type === 'text' && typeof b.text === 'string' ? [b.text] : []))
 }
 
-function AssistantMessage({ item, streamingFrom, thinkingTokens }: { item: AssistantMessageItem; streamingFrom?: number; thinkingTokens?: number }) {
+interface AssistantProps {
+  item: AssistantMessageItem
+  stampAt?: number
+  streamingFrom?: number
+  thinkingTokens?: number
+}
+
+function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens }: AssistantProps) {
   const { content } = item
   if (content.length === 0) return null
-  const partial = streamingFrom !== undefined && streamingFrom < content.length
-  const settled = textBlocks(content).length > 0 && !partial
-  const stamped = settled && item.at !== undefined
-  const copyable = settled && !item.raw.parent_tool_use_id
+  const copyable = streamingFrom === undefined && textBlocks(content).length > 0 && !item.raw.parent_tool_use_id
   return (
     <div data-assistant-message="" className="group/message relative space-y-2">
-      {stamped && (
+      {stampAt !== undefined && (
         <div className="absolute right-0 top-0">
-          <Stamp at={item.at as number} />
+          <Stamp at={stampAt} />
         </div>
       )}
-      <div className={`space-y-2 ${stamped ? 'pr-16' : ''}`}>
+      <div className={`space-y-2 ${stampAt !== undefined ? 'pr-16' : ''}`}>
         {content.map((block, i) => (
           <ContentBlockView
             key={i}

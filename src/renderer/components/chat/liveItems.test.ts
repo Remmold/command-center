@@ -15,9 +15,9 @@ const text: ContentBlock = { type: 'text', text: 'Done.' }
 const prompt: ChatItem = { kind: 'user', id: 'u1', text: 'go', at: 1 }
 
 describe('assistant messages from the CLI', () => {
-  it('joins the blocks of one message, which the CLI sends one event at a time, into one item', () => {
+  it('joins the blocks of one message, which the CLI sends one event at a time, into one item stamped by its last block', () => {
     const items = mergeAssistant([prompt, assistant('msg_1', [thinking], { at: 100, thinkingMs: { 0: 2000 } })], assistant('msg_1', [text], { at: 300 }))
-    expect(items).toEqual([prompt, { ...assistant('msg_1', [thinking], { at: 100, thinkingMs: { 0: 2000 } }), content: [thinking, text] }])
+    expect(items).toEqual([prompt, { ...assistant('msg_1', [thinking], { at: 300, thinkingMs: { 0: 2000 } }), content: [thinking, text] }])
   })
 
   it('appends a message with a new id as its own item', () => {

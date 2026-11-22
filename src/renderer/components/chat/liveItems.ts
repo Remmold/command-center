@@ -24,6 +24,8 @@ export function mergeAssistant(items: ChatItem[], incoming: AssistantMessageItem
   const merged: AssistantMessageItem = {
     ...committed,
     content: [...committed.content, ...incoming.content],
+    // A reply is stamped when its last block arrived.
+    ...(incoming.at !== undefined ? { at: incoming.at } : {}),
     ...(thinkingMs ? { thinkingMs } : {})
   }
   return [...items.slice(0, index), merged, ...items.slice(index + 1)]

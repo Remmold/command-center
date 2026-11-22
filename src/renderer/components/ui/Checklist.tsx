@@ -19,7 +19,6 @@ function ReadOnlyCheck({ state }: { state: CheckState }) {
       checked={state === 'checked'}
       readOnly
       disabled
-      aria-checked={state === 'mixed' ? 'mixed' : state === 'checked'}
       className="mt-[3px] h-3 w-3 shrink-0 accent-accent"
     />
   )
