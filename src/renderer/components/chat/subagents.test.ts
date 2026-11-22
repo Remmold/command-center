@@ -135,6 +135,12 @@ describe('agent status', () => {
     expect(agentStatus('x', {}, result('x'), false).status).toBe('finished')
     expect(agentStatus('x', {}, result('x', undefined, true), false).status).toBe('failed')
   })
+
+  it('does not read a background agent’s launch receipt as finished', () => {
+    const launched: ToolResultItem = { ...result('x'), content: [{ type: 'text', text: 'Async agent launched successfully.\nagentId: a1' }] }
+    expect(agentStatus('x', {}, launched, true).status).toBe('working')
+    expect(agentStatus('x', {}, launched, false).status).toBe('stopped')
+  })
 })
 
 describe('agent meta line', () => {

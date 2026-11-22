@@ -35,6 +35,11 @@ describe('a subagent transcript', () => {
     expect(items?.map((i) => i.kind)).toEqual(['user', 'assistant'])
   })
 
+  it('marks its replies as a subagent’s, so they get no copy button or time of their own', async () => {
+    const items = await readSubagentTranscript(dir, SESSION, { toolUseId: 'toolu_01Tp' })
+    expect(items?.[1]).toMatchObject({ kind: 'assistant', parentToolUseId: 'toolu_01Tp', raw: { parent_tool_use_id: 'toolu_01Tp' } })
+  })
+
   it('is found by its Agent call when the agent id is not known, through the meta file', async () => {
     const items = await readSubagentTranscript(dir, SESSION, { toolUseId: 'toolu_01Tp' })
     expect(items).toHaveLength(2)

@@ -607,6 +607,7 @@ export function ChatView({
 
   const subagentTasks = useSubagentTasksStore((s) => s.byPane[paneId] ?? NO_TASKS)
   const claudeSessionId = useProjectViewsStore((s) => findSessionByPane(s, paneId)?.session.claudeSessionId)
+  const transcript = useMemo(() => (claudeSessionId ? { cwd, sessionId: claudeSessionId } : undefined), [cwd, claudeSessionId])
   const agents = useMemo((): AgentHost => {
     const stop = async (taskId: string): Promise<string | null> => {
       const res = await window.api.claude.control(paneId, 'stop_task', { task_id: taskId })
@@ -616,9 +617,9 @@ export function ChatView({
       tasks: subagentTasks,
       running: processRunning,
       stop,
-      ...(claudeSessionId ? { transcript: { cwd, sessionId: claudeSessionId } } : {})
+      ...(transcript ? { transcript } : {})
     }
-  }, [paneId, subagentTasks, processRunning, claudeSessionId, cwd])
+  }, [paneId, subagentTasks, processRunning, transcript])
 
   const indicator = contextUsage ? contextIndicator(contextUsage) : null
   const commands = useMemo(

@@ -161,11 +161,20 @@ export interface AgentState {
   task?: SubagentTask
 }
 
+/** The CLI answers a background Agent call at once; that receipt says nothing about how the agent ended. */
+const BACKGROUND_RECEIPT = 'Async agent launched'
+
+function isBackgroundReceipt(result: ToolResultItem): boolean {
+  const content = result.content
+  const first = typeof content === 'string' ? content : Array.isArray(content) ? (content[0] as { text?: unknown } | undefined)?.text : undefined
+  return typeof first === 'string' && first.startsWith(BACKGROUND_RECEIPT)
+}
+
 /** A known task decides; without one (a resumed chat) the call's result does, and a call without one is working only while its process runs. */
 export function agentStatus(toolUseId: string, tasks: SubagentTasks, result: ToolResultItem | undefined, running: boolean): AgentState {
   const task = taskForCall(tasks, toolUseId)
   if (task) return { status: task.status, task }
-  if (!result) return { status: running ? 'working' : 'stopped' }
+  if (!result || (!result.isError && isBackgroundReceipt(result))) return { status: running ? 'working' : 'stopped' }
   return { status: result.isError ? 'failed' : 'finished' }
 }
 

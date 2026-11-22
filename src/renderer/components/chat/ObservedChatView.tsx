@@ -1,8 +1,8 @@
+import { useMemo } from 'react'
 import { OBSERVED_INITIAL_ITEMS } from '../../../shared/types'
 import { useObservedStore } from '../../state/observedStore'
 import { EmptyHint } from '../ui/Section'
 import { Pane } from '../ui/Pane'
-import { useMemo } from 'react'
 import { MessageList } from './MessageList'
 import type { AgentHost } from './toolContext'
 

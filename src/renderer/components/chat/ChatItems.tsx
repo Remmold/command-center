@@ -3,7 +3,7 @@ import type { AssistantMessageItem, ChatItem } from './types'
 import { Message } from './Message'
 import { pairToolResults } from './toolCall'
 import { ToolContext, type AgentHost } from './toolContext'
-import { groupSubagents } from './subagents'
+import { groupSubagents, parentOf } from './subagents'
 import { latestTodoCallId } from './todos'
 import { withStreaming } from './liveItems'
 import { dayBreaks, dayLabel } from './messageTime'
@@ -20,7 +20,7 @@ interface Props {
 
 /** The time a message shows a stamp for, as the extension's `m4`: a typed prompt or a settled reply with text. */
 function stampTime(item: ChatItem, streamingId: string | undefined): number | undefined {
-  if (item.at === undefined) return undefined
+  if (item.at === undefined || parentOf(item) !== undefined) return undefined
   if (item.kind === 'user') return item.at
   if (item.kind !== 'assistant' || item.id === streamingId) return undefined
   return item.content.some((b) => b.type === 'text') ? item.at : undefined

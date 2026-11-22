@@ -47,5 +47,12 @@ export async function readSubagentTranscript(transcripts: string, sessionId: str
   } catch {
     return null
   }
-  return text.split('\n').flatMap((line) => sidechainLineToItems(line))
+  const parent = ref.toolUseId ?? agentId
+  return text.split('\n').flatMap((line) => sidechainLineToItems(line).map((item) => asSubagentItem(item, parent)))
+}
+
+function asSubagentItem(item: ChatItem, parentToolUseId: string): ChatItem {
+  if (item.kind === 'assistant') return { ...item, parentToolUseId, raw: { ...item.raw, parent_tool_use_id: parentToolUseId } }
+  if (item.kind === 'tool_result') return { ...item, parentToolUseId }
+  return item
 }

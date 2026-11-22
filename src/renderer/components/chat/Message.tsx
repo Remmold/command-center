@@ -13,7 +13,7 @@ import { stampLabel, stampTitle } from './messageTime'
 import { CopyButton } from '../ui/CopyButton'
 import { TimeStamp } from '../ui/TimeStamp'
 import { Checklist, type CheckState } from '../ui/Checklist'
-import { AgentCall } from './AgentCall'
+import { AgentCall, SubagentItemList } from './AgentCall'
 import { AGENT_TOOLS } from './subagents'
 
 const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
@@ -85,7 +85,7 @@ interface AssistantProps {
 function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens }: AssistantProps) {
   const { content } = item
   if (content.length === 0) return null
-  const copyable = streamingFrom === undefined && textBlocks(content).length > 0 && !item.raw.parent_tool_use_id
+  const copyable = streamingFrom === undefined && textBlocks(content).length > 0 && !item.parentToolUseId && !item.raw.parent_tool_use_id
   return (
     <div data-assistant-message="" className="group/message relative space-y-2">
       {stampAt !== undefined && (
@@ -218,13 +218,7 @@ function ToolCall({ block }: { block: ToolUse }) {
         <ToolCallText>{inputText(block.input)}</ToolCallText>
       </ToolCallSection>
       {result && <ResultSection result={result} />}
-      {woken.length > 0 && (
-        <div data-subagent-items="" className="space-y-2 py-1">
-          {woken.map((item, i) => (
-            <Message key={`${item.id}#${i}`} item={item} />
-          ))}
-        </div>
-      )}
+      {woken.length > 0 && <SubagentItemList items={woken} />}
     </ToolCallRow>
   )
 }

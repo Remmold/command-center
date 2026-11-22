@@ -3,6 +3,12 @@ import type { ToolPairs } from './toolCall'
 import type { ChatItem } from './types'
 import type { SubagentTasks } from './subagents'
 
+/** A hosted or followed session whose transcripts folder holds its subagents' own files. */
+export interface TranscriptSource {
+  cwd: string
+  sessionId: string
+}
+
 /** What an Agent call needs beyond its items: the pane's live tasks and the means to stop one or read its transcript. */
 export interface AgentHost {
   tasks: SubagentTasks
@@ -11,7 +17,7 @@ export interface AgentHost {
   /** Sends `stop_task`; resolves to an error message when the CLI refused. */
   stop?: (taskId: string) => Promise<string | null>
   /** Where the session's transcripts are, for a subagent's own transcript file. */
-  transcript?: { cwd: string; sessionId: string }
+  transcript?: TranscriptSource
 }
 
 interface ToolContextValue {
