@@ -4,11 +4,11 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Thinking content blocks render collapsed as "Thought for Ns" (wording per the extension), expandable to the text
-- [ ] TodoWrite tool calls render as the extension's checklist (pending / in progress / done), updating as later TodoWrite calls arrive
-- [ ] Copy buttons: on every code block and on each whole assistant response, as the extension places them
-- [ ] Message timestamps as the extension shows them (placement/format per research doc)
-- [ ] Scroll-follow: auto-scroll only when the view is at (or within a small threshold of) the bottom; a "jump to latest" affordance appears when new output arrives while scrolled up (if the extension has one, mimic it)
-- [ ] Tests: pure scroll-follow rule, todo state merging, thinking duration; smoke scenario on the fake CLI with a script emitting thinking + TodoWrite
+- [x] Thinking content blocks render collapsed as "Thought for Ns" (wording per the extension), expandable to the text
+- [x] TodoWrite tool calls render as the extension's checklist (pending / in progress / done), updating as later TodoWrite calls arrive
+- [x] Copy buttons: on every code block and on each whole assistant response, as the extension places them
+- [x] Message timestamps as the extension shows them (placement/format per research doc)
+- [x] Scroll-follow: auto-scroll only when the view is at (or within a small threshold of) the bottom; a "jump to latest" affordance appears when new output arrives while scrolled up (if the extension has one, mimic it) — it has none, so none (decision 45)
+- [x] Tests: pure scroll-follow rule, todo state merging, thinking duration; smoke scenario on the fake CLI with a script emitting thinking + TodoWrite
