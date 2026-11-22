@@ -51,8 +51,20 @@ function toCommand(raw: Raw): CliCommand | null {
   }
 }
 
+/** The extension's `pze`: the CLI says to turn Remote Control on at start, and the IDE rollout allows it. */
+function remoteControlAutoEnable(response: Raw): boolean {
+  if (response.remote_control_auto_enable !== true) return false
+  return response.remote_control_auto_on_by_default === false || response.ide_rc_auto_enable_gate === true
+}
+
+export interface InitializeContext {
+  /** The resumed transcript came from another machine (`teleported-from`); the extension never auto-enables those. */
+  teleported?: boolean
+}
+
 /** Narrows the CLI's `initialize` reply to what the app keeps. */
-export function parseInitialize(response: Raw): SessionInit {
+export function parseInitialize(response: Raw, context: InitializeContext = {}): SessionInit {
+  const available = typeof response.remote_control_available === 'boolean' ? response.remote_control_available : undefined
   return {
     models: records(response.models)
       .map(toModel)
@@ -61,6 +73,10 @@ export function parseInitialize(response: Raw): SessionInit {
     commands: records(response.commands)
       .map(toCommand)
       .filter((c): c is CliCommand => c !== null),
-    permissionMode: text(response.current_permission_mode) ?? 'default'
+    permissionMode: text(response.current_permission_mode) ?? 'default',
+    remoteControl: {
+      ...(available !== undefined ? { available } : {}),
+      autoStart: remoteControlAutoEnable(response) && available !== false && context.teleported !== true
+    }
   }
 }

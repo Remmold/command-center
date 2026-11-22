@@ -580,3 +580,56 @@ test.describe('subagents', () => {
     await expect(pane.getByText('Subagent never says this.')).toHaveCount(0)
   })
 })
+
+test.describe('Remote Control', () => {
+  const FAKE_SESSION = /^https:\/\/claude\.ai\/code\/session_01Fake[0-9a-f]+$/
+
+  test('/remote-control turns it on and shows the link; the menu row turns it off', async ({ launched }) => {
+    const { page, log } = launched
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await expect(pane.getByRole('link', { name: 'Remote Control' })).toHaveCount(0)
+
+    await prompt(page).fill('/remote-control')
+    await prompt(page).press('Enter')
+    const pill = pane.getByRole('link', { name: 'Remote Control' })
+    await expect(pill).toHaveAttribute('href', FAKE_SESSION)
+    await expect(pill).toHaveAttribute('title', 'Remote Control is active · Click to open claude.ai/code · Run /remote-control to turn off')
+    await expect(pane.getByText('Remote Control is active · Continue here, on your phone, or at')).toBeVisible()
+    const link = pane.getByRole('link', { name: 'claude.ai/code' })
+    expect(await link.getAttribute('href')).toBe(await pill.getAttribute('href'))
+
+    await prompt(page).pressSequentially('/remote')
+    await page.getByRole('listbox', { name: 'Actions' }).getByRole('option', { name: /\/remote-control/ }).click()
+    await expect(pane.getByText('Remote Control disabled.')).toBeVisible()
+    await expect(pill).toHaveCount(0)
+    await expect.poll(() => log.controlRequests('remote_control').map((r) => r.enabled)).toEqual([true, false])
+    expect(log.userTexts()).toEqual([])
+  })
+
+  test('turned on while the process is still starting, reaches the CLI once it is up', async ({ launched }) => {
+    const { app, page, log, workspace } = launched
+    await delayClaudeStart(app, 2000)
+    await page.keyboard.press('Control+2')
+    await page.keyboard.press('Control+t')
+    await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+    await prompt(page).fill('/rc')
+    await prompt(page).press('Enter')
+    const pane = page.locator('[data-chat-pane]')
+    await expect(pane.getByRole('status', { name: 'Connecting to claude.ai/code…' })).toBeVisible()
+    expect(log.initializedIn(workspace)).toBe(false)
+    await expect(pane.getByRole('link', { name: 'Remote Control' })).toHaveAttribute('href', FAKE_SESSION)
+    expect(log.controlRequests('remote_control').map((r) => r.enabled)).toEqual([true])
+  })
+
+  test.describe('with remoteControlAtStartup', () => {
+    test.use({ script: 'remoteControl' })
+
+    test('a new chat turns it on by itself once the CLI says so', async ({ launched }) => {
+      const { page, log } = launched
+      await startSession(launched)
+      await expect(page.locator('[data-chat-pane]').getByRole('link', { name: 'Remote Control' })).toHaveAttribute('href', FAKE_SESSION)
+      expect(log.controlRequests('remote_control').map((r) => r.enabled)).toEqual([true])
+    })
+  })
+})

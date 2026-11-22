@@ -20,6 +20,10 @@ _Avoid_: Imported profile
 A Claude Code session started and controlled from the command center.
 _Avoid_: Chat, pane
 
+**Remote Control**:
+A hosted session's link to claude.ai/code, so it can be followed and steered from the web or the phone. Turned on per session with `/remote-control`, or at start when the CLI says so; a new process starts with it off.
+_Avoid_: Bridge, remote session
+
 **Observed session**:
 A Claude Code session running somewhere else (the VS Code extension). The command center follows it read-only.
 _Avoid_: External session, VS Code chat

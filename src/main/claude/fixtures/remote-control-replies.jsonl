@@ -1,0 +1,10 @@
+{"direction":"host","line":{"type":"control_request","request_id":"r3","request":{"subtype":"remote_control","enabled":true}}}
+{"direction":"cli","line":{"type":"system","subtype":"bridge_state","state":"ready","uuid":"5fef639b-33c8-43a4-8662-0c52ccebf2cb","session_id":"00000000-0000-4000-8000-000000000000"}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r3","response":{"session_url":"https://claude.ai/code/session_01FakeRemoteControlSession","connect_url":"https://claude.ai/code?environment=","environment_id":"","bridge_epoch":1,"bridge_session_id":"cse_01FakeRemoteControlSession"}}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r4","request":{"subtype":"remote_control","enabled":true}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r4","response":{"session_url":"https://claude.ai/code/session_01FakeRemoteControlSession","connect_url":"https://claude.ai/code?environment=","environment_id":"","bridge_epoch":1,"bridge_session_id":"cse_01FakeRemoteControlSession"}}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r5","request":{"subtype":"remote_control","enabled":false}}}
+{"direction":"cli","line":{"type":"system","subtype":"bridge_state","state":"connected","bridge_epoch":1,"uuid":"1b39ea2e-1187-42d2-b2d5-ff15d2b9522e","session_id":"00000000-0000-4000-8000-000000000000"}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r5"}}}
+{"direction":"host","line":{"type":"control_request","request_id":"r6","request":{"subtype":"remote_control","enabled":false}}}
+{"direction":"cli","line":{"type":"control_response","response":{"subtype":"success","request_id":"r6"}}}

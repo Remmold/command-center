@@ -204,6 +204,27 @@ describe('control replies', () => {
     expect(reply).toEqual({ subtype: 'success', request_id: reply.request_id })
   })
 
+  it('answers remote_control as the recorded probe: bridge ready, the same links while on, off always succeeds', async () => {
+    const fake = start()
+    const init = await fake.control('initialize', { hooks: null })
+    expect(init.response).toMatchObject({ remote_control_auto_enable: false, remote_control_available: true })
+    const on = await fake.control('remote_control', { enabled: true })
+    expect(on.subtype).toBe('success')
+    expect(on.response.session_url).toMatch(/^https:\/\/claude\.ai\/code\/session_01Fake/)
+    expect(Object.keys(on.response).sort()).toEqual(['bridge_epoch', 'bridge_session_id', 'connect_url', 'environment_id', 'session_url'])
+    expect(fake.lines.filter((l) => l.subtype === 'bridge_state')).toHaveLength(1)
+    expect((await fake.control('remote_control', { enabled: true })).response.session_url).toBe(on.response.session_url)
+    expect(await fake.control('remote_control', { enabled: false })).toEqual({ subtype: 'success', request_id: expect.any(String) })
+    expect((await fake.control('remote_control', { enabled: true })).response.session_url).not.toBe(on.response.session_url)
+  })
+
+  it("takes Remote Control's start-up verdict, availability and a refusal from the script", async () => {
+    const fake = start([], { turns: [], remoteControlAtStartup: true, remoteControlAvailable: false, remoteControlError: 'Remote Control is not enabled for your account' })
+    const init = await fake.control('initialize', { hooks: null })
+    expect(init.response).toMatchObject({ remote_control_auto_enable: true, remote_control_available: false })
+    expect(await fake.control('remote_control', { enabled: true })).toMatchObject({ subtype: 'error', error: 'Remote Control is not enabled for your account' })
+  })
+
   it('rejects an unknown subtype with the recorded error wording', async () => {
     const reply = await start().control('no_such_subtype')
     expect(reply).toMatchObject({ subtype: 'error', error: 'Unsupported control request subtype: no_such_subtype' })

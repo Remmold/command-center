@@ -45,6 +45,9 @@ import { contextIndicator, parseContextUsage, type ContextUsage } from './contex
 import type { LocalAction, OpenTarget } from './slashMenuModel'
 import { useUsagePopoverStore } from '../../state/usagePopoverStore'
 import { Brain } from 'lucide-react'
+import { RemoteControlPill } from './RemoteControlPill'
+import { REMOTE_CONTROL_COMMAND, REMOTE_CONTROL_DESCRIPTION, isRemoteControlCommand, remoteControlOffered } from './remoteControl'
+import { remoteControlOf, useRemoteControlStore } from '../../state/remoteControlStore'
 import { THINKING_BUDGET } from '../../../shared/types'
 import type {
   ClaudeAssistantEvent,
@@ -72,6 +75,15 @@ const LOCAL_ACTIONS: readonly LocalAction[] = [
   { id: 'toggle-thinking', section: 'Model', label: 'Thinking', description: 'Toggle extended thinking mode', keepOpen: true },
   { id: 'account-usage', section: 'Model', label: 'Account & usage…', description: 'View account info and usage' }
 ]
+
+/** Registered only while Remote Control is offered, as the extension's `$u.remoteControl` row. */
+const REMOTE_CONTROL_ACTION: LocalAction = {
+  id: REMOTE_CONTROL_COMMAND,
+  section: 'Slash Commands',
+  label: `/${REMOTE_CONTROL_COMMAND}`,
+  description: REMOTE_CONTROL_DESCRIPTION
+}
+const WITH_REMOTE_CONTROL: readonly LocalAction[] = [...LOCAL_ACTIONS, REMOTE_CONTROL_ACTION]
 
 interface Props {
   paneId: string
@@ -140,6 +152,9 @@ export function ChatView({
   const [initCommandNames, setInitCommandNames] = useState<string[]>([])
   const [modelMenuSignal, setModelMenuSignal] = useState(0)
   const sessionInit = useSessionInit(paneId)
+  const remoteControl = useRemoteControlStore((s) => remoteControlOf(s.byPane, paneId))
+  const remoteControlAvailable = sessionInit?.remoteControl?.available
+  const remoteControlShown = remoteControlOffered(remoteControlAvailable, remoteControl)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const { toBottom } = useFollowOutput(scrollRef, contentRef)
@@ -481,8 +496,17 @@ export function ChatView({
     else setContextOpen(true)
   }
 
+  /** As the extension, turning it on starts the chat's process if needed and sends once it is up. */
+  const toggleRemoteControl = (): Promise<void> =>
+    useRemoteControlStore.getState().toggle(paneId, async (enabled) => {
+      if (!enabled) return window.api.claude.control(paneId, 'remote_control', { enabled })
+      if (!(await ensureStarted())) return { ok: false, error: NOT_RUNNING }
+      return control('remote_control', { enabled })
+    })
+
   const runAction = (id: string): void => {
-    if (id === 'model') openTarget('model')
+    if (id === REMOTE_CONTROL_COMMAND) void toggleRemoteControl()
+    else if (id === 'model') openTarget('model')
     else if (id === 'account-usage') openTarget('usage')
     else if (id === 'toggle-thinking') void toggleThinking()
   }
@@ -563,6 +587,10 @@ export function ChatView({
   }, [switchTo, processRunning, turnActive, held.length])
 
   const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []) => {
+    if (attachments.length === 0 && remoteControlShown && isRemoteControlCommand(text)) {
+      void toggleRemoteControl()
+      return
+    }
     const uuid = crypto.randomUUID()
     const userText = userItemText(text, attachments)
     // As the extension's `turnRunningOrQueued`: the CLI queues it and says when it starts.
@@ -681,7 +709,7 @@ export function ChatView({
         onSend={handleSend}
         onInterrupt={handleInterrupt}
         commands={commands}
-        localActions={LOCAL_ACTIONS}
+        localActions={remoteControlShown ? WITH_REMOTE_CONTROL : LOCAL_ACTIONS}
         onAction={runAction}
         onOpen={openTarget}
         menuTrailing={{
@@ -711,6 +739,8 @@ export function ChatView({
         footerEnd={
           <>
             {indicator && <ContextPie indicator={indicator} onCompact={() => void handleSend('/compact')} />}
+            {/* The extension's footer rule: once unavailable, only a connected session keeps its pill. */}
+            {(remoteControl.status === 'connected' || remoteControlAvailable !== false) && <RemoteControlPill state={remoteControl} />}
             <PermissionModePicker
               mode={mode}
               modes={modes}

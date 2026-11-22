@@ -16,6 +16,7 @@ import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
 import { readSubagentTranscript } from './claude/subagentTranscript'
+import { isTeleportedSession } from './claude/teleport'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
@@ -291,7 +292,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const workspace = await workspaces.findByPath(options.cwd)
     if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
     const { profileId, env } = await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)
-    return claudeManager.start({ ...options, profileEnv: env, profileId })
+    const teleported = options.resumeSessionId ? await isTeleportedSession(await transcriptsDirForCwd(options.cwd), options.resumeSessionId) : false
+    return claudeManager.start({ ...options, profileEnv: env, profileId, teleported })
   })
   ipcMain.handle(
     IPC.CLAUDE_CONTROL,

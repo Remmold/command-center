@@ -17,6 +17,8 @@ type InitCallback = (paneId: string, init: SessionInit) => void
 export interface StartOptions extends ClaudeStartOptions {
   profileEnv?: Record<string, string>
   profileId?: string
+  /** The resumed session came from another machine, so Remote Control is not turned on at start. */
+  teleported?: boolean
 }
 
 /** Builds the handler for requests the CLI sends on a pane, e.g. `can_use_tool`. */
@@ -47,6 +49,7 @@ class ClaudeManager {
         resumeSessionId: options.resumeSessionId,
         permissionMode: options.permissionMode,
         profileEnv: options.profileEnv,
+        teleported: options.teleported,
         onEvent: (id, event) => {
           for (const cb of this.eventListeners) cb(id, event)
         },

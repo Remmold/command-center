@@ -12,6 +12,7 @@ import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
 import { useSessionInitStore } from './state/sessionInitStore'
+import { useRemoteControlStore } from './state/remoteControlStore'
 import { useModelStore } from './state/modelStore'
 import { closeSession, focusedTarget, initChatPair, jumpToNextWaiting, paneOnScreen } from './state/sessionNavigation'
 import { useLauncherStore } from './state/launcherStore'
@@ -55,6 +56,7 @@ export function App() {
     initSessionStatus()
     initSessionInit()
     initModels()
+    useRemoteControlStore.getState().init()
   }, [initSessionStatus, initSessionInit, initModels])
 
   useEffect(() => {

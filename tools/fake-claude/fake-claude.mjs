@@ -27,6 +27,9 @@ const recorded = {
     .map((entry) => entry.line),
   control: readLines(join(FIXTURES, 'control-replies.jsonl'))
     .filter((entry) => entry.direction === 'cli')
+    .map((entry) => entry.line),
+  remoteControl: readLines(join(FIXTURES, 'remote-control-replies.jsonl'))
+    .filter((entry) => entry.direction === 'cli')
     .map((entry) => entry.line)
 }
 
@@ -70,6 +73,8 @@ const template = {
   bypassRefused: clone(recorded.control.find((l) => l.response?.error_code === 'bypass_not_launched').response),
   lifecycle: clone(recorded.queued.find((l) => l.type === 'command_lifecycle')),
   replay: clone(recorded.queued.find((l) => l.type === 'user' && l.isReplay)),
+  bridgeReady: clone(recorded.remoteControl.find((l) => l.subtype === 'bridge_state' && l.state === 'ready')),
+  remoteControlReply: clone(recorded.remoteControl.find((l) => l.response?.response?.session_url).response.response),
   interruptReply: clone(recorded.control.find((l) => l.response?.response && 'still_queued' in l.response.response).response.response)
 }
 
@@ -164,6 +169,7 @@ class Fake {
     this.pendingApprovals = new Map()
     this.counter = 0
     this.title = null
+    this.bridgeSessionId = null
     this.log({ kind: 'argv', argv, cwd: process.cwd(), configDir: process.env.CLAUDE_CONFIG_DIR ?? null })
   }
 
@@ -258,7 +264,15 @@ class Fake {
       this.send({ type: 'control_response', response: { subtype: 'success', request_id: requestId, ...(response ? { response } : {}) } })
     switch (request.subtype) {
       case 'initialize':
-        return ok({ ...clone(recorded.initialize), pid: process.pid, current_permission_mode: this.permissionMode })
+        return ok({
+          ...clone(recorded.initialize),
+          pid: process.pid,
+          current_permission_mode: this.permissionMode,
+          remote_control_auto_enable: this.script.remoteControlAtStartup === true,
+          remote_control_available: this.script.remoteControlAvailable !== false
+        })
+      case 'remote_control':
+        return this.remoteControl(request.enabled === true, ok, fail)
       case 'get_usage':
         return ok(clone(recorded.usage))
       case 'get_context_usage':
@@ -317,6 +331,23 @@ class Fake {
           response: { subtype: 'error', request_id: requestId, error: recorded.unsupported.replace(/: .*$/, `: ${request.subtype}`) }
         })
     }
+  }
+
+  /** As the recorded probe: on sends `bridge_state` ready and the session links (the same ones while on); off always succeeds. */
+  remoteControl(enabled, ok, fail) {
+    if (!enabled) {
+      this.bridgeSessionId = null
+      return ok()
+    }
+    if (typeof this.script.remoteControlError === 'string') return fail(this.script.remoteControlError)
+    if (!this.bridgeSessionId) {
+      this.bridgeSessionId = `01Fake${randomBytes(9).toString('hex')}`
+      this.send(this.stamp(clone(template.bridgeReady)))
+    }
+    const reply = clone(template.remoteControlReply)
+    reply.session_url = `https://claude.ai/code/session_${this.bridgeSessionId}`
+    reply.bridge_session_id = `cse_${this.bridgeSessionId}`
+    return ok(reply)
   }
 
   /** As the CLI's receipt: a plain interrupt leaves queued prompts to run next; `cancel_queued` drops them. */

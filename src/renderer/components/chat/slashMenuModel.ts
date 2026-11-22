@@ -88,21 +88,20 @@ export function buildMenu(commands: readonly CliCommand[], local: readonly Local
       slash: true
     }))
     .sort((a, b) => a.label.localeCompare(b.label))
+  const actions = (name: SectionName): MenuCommand[] =>
+    local
+      .filter((a) => a.section === name)
+      .map((a) => ({
+        id: a.id,
+        label: a.label,
+        description: a.description,
+        filterOnly: a.filterOnly,
+        keepOpen: a.keepOpen,
+        slash: false
+      }))
   const sections = SECTION_ORDER.map((name): MenuSection => ({
     name,
-    commands:
-      name === 'Slash Commands'
-        ? slash
-        : local
-            .filter((a) => a.section === name)
-            .map((a) => ({
-              id: a.id,
-              label: a.label,
-              description: a.description,
-              filterOnly: a.filterOnly,
-              keepOpen: a.keepOpen,
-              slash: false
-            }))
+    commands: name === 'Slash Commands' ? [...slash, ...actions(name)].sort((a, b) => a.label.localeCompare(b.label)) : actions(name)
   }))
   return { sections: sections.filter((s) => s.commands.length > 0) }
 }

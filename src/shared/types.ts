@@ -123,6 +123,14 @@ export interface SessionInit {
   account: CliAccount | null
   commands: CliCommand[]
   permissionMode: string
+  remoteControl: RemoteControlInit
+}
+
+export interface RemoteControlInit {
+  /** False when the CLI says Remote Control can't be offered here; unset when it didn't say. */
+  available?: boolean
+  /** Turn it on once the process is up: the CLI's start-up verdict (`remoteControlAtStartup` and rollout). */
+  autoStart: boolean
 }
 
 export interface SessionInitEnvelope {
