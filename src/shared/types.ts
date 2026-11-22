@@ -439,6 +439,11 @@ export interface RendererApi {
     onExit: (cb: (event: PtyExitEvent) => void) => () => void
   }
   files: {
+    /** Where a file link in a chat points, or null when nothing is there. */
+    resolveLink: (cwd: string, path: string) => Promise<LinkedPath | null>
+    readImage: (path: string) => Promise<{ ok: true; dataUrl: string } | { ok: false; error: string }>
+    /** Opens an existing file or folder in its system app; resolves to an error message, '' on success. */
+    openWithSystem: (path: string) => Promise<string>
     list: (cwd: string) => Promise<string[]>
     /** The @ menu's rows for the text typed after `@`: ripgrep's listing, fuzzy-ranked. */
     mentions: (cwd: string, query: string) => Promise<MentionEntry[]>
@@ -680,4 +685,10 @@ export interface ProfileUsage {
   updatedAt: number | null
   refreshing: boolean
   error?: string
+}
+
+/** A file link resolved on disk: its absolute path, and its path in the workspace when it lies inside. */
+export interface LinkedPath {
+  path: string
+  relative: string | null
 }

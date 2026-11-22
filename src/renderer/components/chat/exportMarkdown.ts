@@ -1,3 +1,4 @@
+import { compactLabel } from './compaction'
 import type { ChatItem } from './types'
 import type { ContentBlock } from '../../../shared/types'
 
@@ -63,7 +64,8 @@ export function itemsToMarkdown(items: ChatItem[], title?: string): string {
         break
       }
       case 'system':
-        lines.push(`\n_${item.text}_\n`)
+        if (item.compact) lines.push(`\n_${compactLabel(item.compact)}_\n`)
+        else if (item.text) lines.push(`\n_${item.text}_\n`)
         break
     }
   }

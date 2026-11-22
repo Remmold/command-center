@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTranscriptParser } from './transcriptItems'
+import { createTranscriptParser, transcriptLinesToItems } from './transcriptItems'
 
 const base = {
   isSidechain: false,
@@ -178,5 +178,46 @@ describe('createTranscriptParser', () => {
     const content = (item as { content: string }).content
     expect(content.length).toBeLessThan(25_000)
     expect(content.endsWith('… (shortened)')).toBe(true)
+  })
+
+  it('times a thinking block from the line before it to its own line, as the CLI writes each block when it ends', () => {
+    const request = { type: 'api-request', timestamp: '2026-11-21T14:02:06.000Z' }
+    const thought = { ...thinking, timestamp: '2026-11-21T14:02:08.400Z' }
+    const items = createTranscriptParser().push(jsonl([humanPrompt, request, thought]))
+    expect(items[1]).toMatchObject({ id: 'a1', thinkingMs: { 0: 2400 } })
+  })
+
+  it('times a thinking block across two reads', () => {
+    const parser = createTranscriptParser()
+    parser.push(jsonl([humanPrompt]))
+    const [item] = parser.push(jsonl([{ ...thinking, timestamp: '2026-11-21T14:02:07.745Z' }]))
+    expect(item).toMatchObject({ thinkingMs: { 0: 2000 } })
+  })
+
+  it('leaves a thinking block untimed with nothing timed before it, or no time between', () => {
+    expect(createTranscriptParser().push(jsonl([thinking]))[0]).not.toHaveProperty('thinkingMs')
+    expect(createTranscriptParser().push(jsonl([humanPrompt, thinking]))[1]).not.toHaveProperty('thinkingMs')
+  })
+
+  it('times blocks the same way when a tail is read in one batch', () => {
+    const lines = jsonl([humanPrompt, { ...thinking, timestamp: '2026-11-21T14:02:09.745Z' }]).split('\n')
+    expect(transcriptLinesToItems(lines)[1]).toMatchObject({ thinkingMs: { 0: 4000 } })
+  })
+
+  it('turns a compaction boundary and its summary into the compaction line', () => {
+    const boundary = {
+      ...base,
+      type: 'system',
+      subtype: 'compact_boundary',
+      uuid: 'c1',
+      content: 'Conversation compacted',
+      compactMetadata: { trigger: 'auto', preTokens: 974_400, postTokens: 18_000 }
+    }
+    const summary = { ...base, type: 'user', uuid: 'c2', isCompactSummary: true, message: { role: 'user', content: 'This session is being continued…' } }
+    const at = Date.parse(base.timestamp)
+    expect(createTranscriptParser().push(jsonl([boundary, summary]))).toEqual([
+      { kind: 'system', id: 'c1', text: '', compact: { trigger: 'auto', preTokens: 974_400 }, at },
+      { kind: 'system', id: 'c2', text: '', compactSummary: 'This session is being continued…', at }
+    ])
   })
 })

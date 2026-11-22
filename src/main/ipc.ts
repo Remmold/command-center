@@ -14,6 +14,7 @@ import { listProjectFiles } from './files/lister'
 import { findMentions } from './files/mentions'
 import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
+import { openWithSystem, readImage, resolveLink } from './files/links'
 import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
 import { readSubagentTranscript } from './claude/subagentTranscript'
 import { isTeleportedSession } from './claude/teleport'
@@ -355,6 +356,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.FILES_WRITE, (_e, cwd: string, relativePath: string, content: string) =>
     writeProjectFile(cwd, relativePath, content)
   )
+  ipcMain.handle(IPC.FILES_RESOLVE_LINK, (_e, cwd: string, path: string) => resolveLink(cwd, path))
+  ipcMain.handle(IPC.FILES_READ_IMAGE, (_e, path: string) => readImage(path))
+  ipcMain.handle(IPC.FILES_OPEN_WITH_SYSTEM, (_e, path: string) => openWithSystem(path))
 
   ipcMain.handle(IPC.GIT_STATUS, (_e, cwd: string) => getStatus(cwd))
   ipcMain.handle(

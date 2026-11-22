@@ -7,6 +7,9 @@ import { groupSubagents, parentOf } from './subagents'
 import { latestTodoCallId } from './todos'
 import { withStreaming } from './liveItems'
 import { dayBreaks, dayLabel } from './messageTime'
+import { pairCompactions } from './compaction'
+import { rowKind, timelineJoins, type RowKind } from './timelineRows'
+import { FileOpenerProvider } from './fileOpener'
 import { LabeledDivider } from '../ui/LabeledDivider'
 
 interface Props {
@@ -31,6 +34,9 @@ export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents
   const view = useMemo(() => withStreaming(items, streaming), [items, streaming])
   const pairs = useMemo(() => pairToolResults(view.items), [view.items])
   const groups = useMemo(() => groupSubagents(view.items), [view.items])
+  const compactions = useMemo(() => pairCompactions(groups.main), [groups])
+  const kinds = useMemo(() => groups.main.map((item) => rowKind(item, pairs, compactions)), [groups, pairs, compactions])
+  const joins = useMemo(() => timelineJoins(kinds), [kinds])
   const latestTodoId = useMemo(() => latestTodoCallId(groups.main, pairs), [groups, pairs])
   const context = useMemo(
     () => ({ pairs, cwd, latestTodoId, subagentItems: groups.byCall, agents }),
@@ -42,26 +48,39 @@ export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents
   // Chats saved before blocks were merged can hold several items with one message id.
   const seen = new Set<string>()
   return (
-    <ToolContext.Provider value={context}>
-      {groups.main.map((item, i) => {
-        const live = view.live?.id === item.id && item.kind === 'assistant'
-        const day = days[i]
-        const key = seen.has(item.id) ? `${item.id}#${i}` : item.id
-        seen.add(item.id)
-        return (
-          <Fragment key={key}>
-            {day !== undefined && <LabeledDivider>{dayLabel(day, now)}</LabeledDivider>}
-            <div className="lazy-render">
-              <Message
-                item={item}
-                stampAt={stamps[i]}
-                streamingFrom={live ? view.live?.from : undefined}
-                thinkingTokens={live ? thinkingTokens : undefined}
-              />
-            </div>
-          </Fragment>
-        )
-      })}
-    </ToolContext.Provider>
+    <FileOpenerProvider cwd={cwd}>
+      <ToolContext.Provider value={context}>
+        <div data-chat-items="">
+          {groups.main.map((item, i) => {
+            if (kinds[i] === 'hidden') return null
+            const live = view.live?.id === item.id && item.kind === 'assistant'
+            const day = days[i]
+            const key = seen.has(item.id) ? `${item.id}#${i}` : item.id
+            seen.add(item.id)
+            return (
+              <Fragment key={key}>
+                {day !== undefined && <LabeledDivider>{dayLabel(day, now)}</LabeledDivider>}
+                <div className="lazy-render">
+                  <Message
+                    item={item}
+                    stampAt={stamps[i]}
+                    streamingFrom={live ? view.live?.from : undefined}
+                    thinkingTokens={live ? thinkingTokens : undefined}
+                    joinAbove={joins[i].above && day === undefined}
+                    joinBelow={joins[i].below && days[nextDrawn(kinds, i)] === undefined}
+                    compactSummary={compactions.summaryFor.get(item.id)}
+                  />
+                </div>
+              </Fragment>
+            )
+          })}
+        </div>
+      </ToolContext.Provider>
+    </FileOpenerProvider>
   )
+}
+
+function nextDrawn(kinds: readonly RowKind[], i: number): number {
+  for (let j = i + 1; j < kinds.length; j++) if (kinds[j] !== 'hidden') return j
+  return -1
 }

@@ -16,7 +16,8 @@ export const SCRIPTS = {
   context: join(__dirname, 'scripts', 'context.json'),
   render: join(__dirname, 'scripts', 'render.json'),
   subagent: join(__dirname, 'scripts', 'subagent.json'),
-  remoteControl: join(__dirname, 'scripts', 'remote-control.json')
+  remoteControl: join(__dirname, 'scripts', 'remote-control.json'),
+  look: join(__dirname, 'scripts', 'look.json')
 } as const
 
 export type ScriptName = keyof typeof SCRIPTS

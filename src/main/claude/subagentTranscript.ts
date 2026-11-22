@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type { ChatItem } from '../../shared/chatItems'
-import { sidechainLineToItems } from '../observed/transcriptItems'
+import { sidechainLinesToItems } from '../observed/transcriptItems'
 
 /** The extension's check before it reads one (`getSubagentTranscript`). */
 const PLAIN_ID = /^[A-Za-z0-9_-]{1,128}$/
@@ -48,7 +48,7 @@ export async function readSubagentTranscript(transcripts: string, sessionId: str
     return null
   }
   const parent = ref.toolUseId ?? agentId
-  return text.split('\n').flatMap((line) => sidechainLineToItems(line).map((item) => asSubagentItem(item, parent)))
+  return sidechainLinesToItems(text.split('\n')).map((item) => asSubagentItem(item, parent))
 }
 
 function asSubagentItem(item: ChatItem, parentToolUseId: string): ChatItem {

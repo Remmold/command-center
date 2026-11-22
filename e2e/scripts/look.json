@@ -1,0 +1,41 @@
+{
+  "turns": [
+    {
+      "match": "render",
+      "events": [
+        {
+          "type": "tool_use",
+          "name": "mcp__meshy__meshy_check_balance",
+          "thinking": { "ms": 2000, "tokens": 40 },
+          "approval": false,
+          "input": {},
+          "result": "{\"balance\":1932,\"monthly_credits\":252,\"permanent_credits\":1680,\"monthly_reset\":\"2026-12-01\"}"
+        },
+        {
+          "type": "raw",
+          "line": { "type": "system", "subtype": "compact_boundary", "session_id": "fake", "uuid": "00000000-0000-4000-8000-00000000c0de", "compact_metadata": { "trigger": "auto", "pre_tokens": 974400 } }
+        },
+        {
+          "type": "raw",
+          "line": { "type": "user", "isSynthetic": true, "session_id": "fake", "parent_tool_use_id": null, "message": { "role": "user", "content": "This session is being continued from a previous conversation. Summary: checked the Meshy balance." } }
+        },
+        { "type": "text", "text": "Balance: 1932 credits.", "thinking": { "ms": 2000 } },
+        {
+          "type": "tool_use",
+          "name": "mcp__blender__execute_blender_code",
+          "approval": false,
+          "input": { "code": "render_refs()" },
+          "result": "{\"result\":\"Code executed successfully: ['SM_Chr_Blacksmith_Male_01.png']\"}"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "approval": false,
+          "input": { "file_path": "{cwd}{sep}refs{sep}shot.png" },
+          "result": "[image]"
+        },
+        { "type": "text", "text": "Rendered [the reference](refs/shot.png)." }
+      ]
+    }
+  ]
+}

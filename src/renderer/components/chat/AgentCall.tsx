@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ChatItem, ToolResultItem } from './types'
-import { ToolCallRow, ToolCallSection, ToolCallText, type ToolCallStatus } from './ToolCallRow'
+import { ToolCallBody, ToolCallRow, ToolCallSection, type ToolCallStatus } from './ToolCallRow'
 import { useToolContext, type AgentHost, type TranscriptSource } from './toolContext'
 import { toolCallTitle } from './toolCall'
 import { AGENT_STATUS_LABEL, agentMeta, agentStatus, type AgentStatus, type SubagentTask } from './subagents'
@@ -83,12 +83,12 @@ export function AgentCall({ id, name, input, result, resultText }: Props) {
         target={description}
         status={ROW_STATUS[status]}
         meta={<span className="text-[11px] text-faint">{[AGENT_STATUS_LABEL[status], meta].filter(Boolean).join(' · ')}</span>}
-        defaultOpen={status === 'working'}
+        foldable={{ defaultOpen: status === 'working' }}
       >
         {prompt && (
-          <ToolCallSection label="in">
-            <ToolCallText>{prompt}</ToolCallText>
-          </ToolCallSection>
+          <ToolCallBody>
+            <ToolCallSection label="in" text={prompt} />
+          </ToolCallBody>
         )}
         <SubagentBody callId={id} items={subagentItems.get(id) ?? []} source={agents?.transcript} agentId={task?.taskId} />
         {failure && <ErrorLine>{failure}</ErrorLine>}
