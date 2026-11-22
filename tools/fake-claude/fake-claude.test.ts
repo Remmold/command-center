@@ -182,6 +182,23 @@ describe('control replies', () => {
     expect((await fake.control('get_settings')).response.applied.model).toBe('claude-haiku-5-5')
   })
 
+  it('names the session from the description, keeps a persisted title, and takes a rename', async () => {
+    const fake = start(['--resume', 'abc-123'])
+    const first = await fake.control('generate_session_title', { description: 'fix the login bug today please', persist: true })
+    expect(first.response).toEqual({ title: 'Fix the login bug today' })
+    const again = await fake.control('generate_session_title', { description: 'something else', persist: true })
+    expect(again.response).toEqual({ title: 'Fix the login bug today' })
+    expect((await fake.control('rename_session', { title: 'Auth', source: 'host', session_id: 'abc-123' })).subtype).toBe('success')
+    expect((await fake.control('generate_session_title', { description: 'x', persist: true })).response).toEqual({ title: 'Auth' })
+  })
+
+  it("uses a script's title and refuses a rename for another session", async () => {
+    const fake = start([], { title: 'Scripted title', turns: [] })
+    expect((await fake.control('generate_session_title', { description: 'anything', persist: true })).response).toEqual({ title: 'Scripted title' })
+    const refused = await fake.control('rename_session', { title: 'X', source: 'host', session_id: 'not-this-one' })
+    expect(refused).toMatchObject({ subtype: 'error', error: 'session_id is not the current session' })
+  })
+
   it('accepts set_max_thinking_tokens with an empty success', async () => {
     const reply = await start().control('set_max_thinking_tokens', { max_thinking_tokens: 0 })
     expect(reply).toEqual({ subtype: 'success', request_id: reply.request_id })

@@ -24,6 +24,7 @@ import { committedLength, thinkingDurations } from './liveItems'
 import { useFollowOutput } from './useFollowOutput'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { shellTabsOfSession, useProjectViewsStore } from '../../state/projectViewsStore'
+import { isFirstPrompt, noteClaudeSessionId, requestClaudeTitle } from '../../state/sessionTitleSync'
 import { useApprovalsStore } from '../../state/approvalsStore'
 import { useAccountSwitchStore } from '../../state/accountSwitchStore'
 import { availableModes, isPermissionMode, migrateMode, nextMode, type PermissionMode } from '../../state/permissionModes'
@@ -118,7 +119,6 @@ export function ChatView({
   const items = useChatItemsStore((s) => s.items[paneId] ?? EMPTY_ITEMS)
   const appendItems = useChatItemsStore((s) => s.appendItems)
   const mergeAssistant = useChatItemsStore((s) => s.mergeAssistant)
-  const setClaudeSessionId = useProjectViewsStore((s) => s.setClaudeSessionId)
   const pendingApprovals = useApprovalsStore((s) => s.byPane[paneId] ?? EMPTY_REQUESTS)
   const held = useHeldPromptsStore((s) => s.byPane[paneId] ?? EMPTY_HELD)
   const history = useMemo(() => historyEntries(items, held), [items, held])
@@ -341,7 +341,7 @@ export function ChatView({
 
   const handleEvent = (event: ClaudeEvent) => {
     const sessId = (event as { session_id?: string }).session_id
-    if (sessId) setClaudeSessionId(paneId, sessId)
+    if (sessId) noteClaudeSessionId(paneId, sessId)
     if (handleQueueFrame(event)) return
 
     if (event.type === 'stream_event') {
@@ -511,6 +511,7 @@ export function ChatView({
     if (queued) useHeldPromptsStore.getState().hold(paneId, { uuid, text: userText })
     else appendItems(paneId, [{ kind: 'user', id: uuid, text: userText, at: Date.now() }])
     toBottom()
+    const firstPrompt = isFirstPrompt(paneId)
     useProjectViewsStore.getState().notePrompt(paneId, text)
     const ok = await ensureStarted()
     if (!ok) {
@@ -523,6 +524,7 @@ export function ChatView({
     if (!queued) setTurnActive(true)
     const terminals = terminalSnapshots(text, shellTabsOfSession(paneId), readTerminal)
     window.api.claude.send(paneId, promptContent(text, attachments, terminals), uuid)
+    requestClaudeTitle(paneId, text, firstPrompt)
   }
 
   /** Esc anywhere in the chat stops Claude, as the extension's document-level handler; menus and approvals take it first. */

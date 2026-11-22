@@ -89,6 +89,8 @@ interface Launched {
   page: Page
   log: FakeLog
   workspace: string
+  /** The temp `CLAUDE_CONFIG_DIR`; transcripts live under its `projects/`. */
+  configDir: string
 }
 
 function seedDirs(root: string): { userData: string; workspace: string; configDir: string; home: string; logFile: string } {
@@ -186,7 +188,7 @@ export const test = base.extend<{ script: ScriptName; launched: Launched }>({
       try {
         const page = await app.firstWindow()
         await page.waitForLoadState('domcontentloaded')
-        await use({ app, page, log: new FakeLog(dirs.logFile), workspace: dirs.workspace })
+        await use({ app, page, log: new FakeLog(dirs.logFile), workspace: dirs.workspace, configDir: dirs.configDir })
       } finally {
         await shutdown(app)
       }
@@ -207,8 +209,13 @@ export async function startSession({ page, log, workspace }: Launched): Promise<
   await expect.poll(() => log.initializedIn(workspace)).toBe(true)
 }
 
+/** The folder the app lists past sessions from: Claude's per-cwd transcript folder. */
+export function transcriptsOf({ configDir, workspace }: Pick<Launched, 'configDir' | 'workspace'>): string {
+  return join(configDir, 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
+}
+
 export function prompt(page: Page) {
-  return page.locator('[data-chat-pane] textarea')
+  return page.locator('[data-chat-pane] textarea:visible')
 }
 
 export async function send(page: Page, text: string): Promise<void> {

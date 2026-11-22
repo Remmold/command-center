@@ -163,6 +163,7 @@ class Fake {
     this.running = null
     this.pendingApprovals = new Map()
     this.counter = 0
+    this.title = null
     this.log({ kind: 'argv', argv, cwd: process.cwd(), configDir: process.env.CLAUDE_CONFIG_DIR ?? null })
   }
 
@@ -200,6 +201,13 @@ class Fake {
     reply.totalTokens = total
     reply.percentage = Math.round((total / reply.maxTokens) * 100)
     return reply
+  }
+
+  /** A script's `title`, else the description's first five words, capitalised. */
+  titleFor(description) {
+    if (typeof this.script.title === 'string') return this.script.title
+    const words = description.trim().split(/\s+/).slice(0, 5).join(' ')
+    return words ? words[0].toUpperCase() + words.slice(1) : null
   }
 
   resolvedModel() {
@@ -245,6 +253,7 @@ class Fake {
   }
 
   answer(requestId, request) {
+    const fail = (error) => this.send({ type: 'control_response', response: { subtype: 'error', request_id: requestId, error } })
     const ok = (response) =>
       this.send({ type: 'control_response', response: { subtype: 'success', request_id: requestId, ...(response ? { response } : {}) } })
     switch (request.subtype) {
@@ -280,6 +289,18 @@ class Fake {
         reply.sources = Object.keys(this.flagSettings).length ? [{ source: 'flagSettings', settings: clone(this.flagSettings) }] : []
         reply.applied = { ...reply.applied, model: this.resolvedModel(), effort: this.effort }
         return ok(reply)
+      }
+      case 'generate_session_title': {
+        if (typeof request.description !== 'string') return fail('generate_session_title: description must be a string')
+        if (this.title === null || request.persist !== true) this.title = this.titleFor(request.description)
+        const title = this.title
+        return setTimeout(() => ok({ title }), this.script.titleDelayMs ?? 0)
+      }
+      case 'rename_session': {
+        if (typeof request.title !== 'string') return fail('rename_session: title must be a string')
+        if (request.session_id !== undefined && request.session_id !== this.sessionId) return fail('session_id is not the current session')
+        this.title = request.title.trim()
+        return ok()
       }
       case 'interrupt':
         ok(clone(template.interruptReply))

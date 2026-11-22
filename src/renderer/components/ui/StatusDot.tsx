@@ -14,8 +14,9 @@ const TONE: Record<DotStatus, string> = {
 
 const LABEL: Record<DotStatus, string> = { ...STATUS_LABEL, ...OBSERVED_STATUS_LABEL }
 
-export function StatusDot({ status }: { status: DotStatus }) {
-  const label = LABEL[status]
+/** `tooltip` replaces the status name, e.g. where a past session is open. */
+export function StatusDot({ status, tooltip }: { status: DotStatus; tooltip?: string }) {
+  const label = tooltip ?? LABEL[status]
   return <span role="img" aria-label={label} title={label} className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE[status]}`} />
 }
 

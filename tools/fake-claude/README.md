@@ -60,6 +60,7 @@ One JSON object per line, each with `t` (ISO time) and `kind`:
   - `result`: ends the turn; `text` overrides the result text, `error: true` sends the interrupted result.
   - `wait`: pauses `ms`.
   - `raw`: writes `line` as given.
+- `generate_session_title` answers `{ title }`: a top-level `title` if the script has one, else the description's first five words, capitalised (after `titleDelayMs`, default 0). With `persist: true` the first title is kept, as the CLI keeps a persisted one; `rename_session` (`title`, optional `session_id`, which must be the current session) replaces it. No transcript is written.
 - A top-level `contextTokens` makes `get_context_usage` report that many tokens used (the difference moves between Messages and Free space). Without it the recorded reply comes back as is, with the current model.
 - `{cwd}` and `{sep}` in any string become the fake's working directory and path separator.
 - A user message with a `uuid` gets the CLI's `command_lifecycle` frames: `queued` on arrival, `started` when its turn begins, then `completed` (or `cancelled` when interrupted) after the result. With `--replay-user-messages` the prompt is echoed back as a `user` line with `isReplay: true` once it starts.

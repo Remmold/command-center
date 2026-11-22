@@ -4,6 +4,8 @@ export interface SessionTitle {
   title: string
   /** Set once the user names the session; prompts never change the title after that. */
   titleRenamed?: boolean
+  /** Set once Claude named the session (`generate_session_title`); prompts and later replies never change it. */
+  titleFromClaude?: boolean
 }
 
 function firstLine(text: string): string {
@@ -21,6 +23,29 @@ export function titleAfterPrompt(session: SessionTitle, prompt: string): Session
   if (session.titleRenamed || session.title !== NEW_SESSION_TITLE) return session
   const line = firstLine(prompt)
   return line ? { ...session, title: shortened(line) } : session
+}
+
+export function titleAfterClaude(session: SessionTitle, generated: string): SessionTitle {
+  const title = generated.trim()
+  if (!title || session.titleRenamed || session.titleFromClaude) return session
+  return { ...session, title, titleFromClaude: true }
+}
+
+/** As the extension: a title is asked for on at most this many prompts. */
+const MAX_TITLE_REQUESTS = 3
+
+export const titleRequests = (): number => 0
+
+/** The extension's `wantsGeneratedTitle`: the first prompt asks, the next ones ask again until a title comes back. */
+export function wantsClaudeTitle(
+  requests: number,
+  session: SessionTitle,
+  firstPrompt: boolean
+): { ask: boolean; requests: number } {
+  if (session.titleRenamed || session.titleFromClaude) return { ask: false, requests }
+  if (firstPrompt) return { ask: true, requests: 1 }
+  if (requests === 0 || requests >= MAX_TITLE_REQUESTS) return { ask: false, requests }
+  return { ask: true, requests: requests + 1 }
 }
 
 export function titleAfterRename(session: SessionTitle, name: string): SessionTitle {

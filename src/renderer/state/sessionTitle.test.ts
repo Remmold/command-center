@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { NEW_SESSION_TITLE, migratedTitle, titleAfterPrompt, titleAfterRename } from './sessionTitle'
+import {
+  NEW_SESSION_TITLE,
+  migratedTitle,
+  titleAfterClaude,
+  titleAfterPrompt,
+  titleAfterRename,
+  titleRequests,
+  wantsClaudeTitle
+} from './sessionTitle'
 
 const fresh = { title: NEW_SESSION_TITLE }
 
@@ -49,6 +57,56 @@ describe('session title', () => {
 
     it('is "New session" when the chat has no user message', () => {
       expect(migratedTitle([])).toBe(NEW_SESSION_TITLE)
+    })
+  })
+
+  describe('from Claude (generate_session_title)', () => {
+    it('replaces the first-prompt title', () => {
+      const named = titleAfterPrompt(fresh, 'fix the login bug please')
+      const titled = titleAfterClaude(named, 'Fix login bug')
+      expect(titled.title).toBe('Fix login bug')
+      expect(titled.titleFromClaude).toBe(true)
+    })
+
+    it('never replaces a rename, made before or after it', () => {
+      const renamed = titleAfterRename(titleAfterPrompt(fresh, 'fix it'), 'Auth')
+      expect(titleAfterClaude(renamed, 'Fix login bug').title).toBe('Auth')
+      const renamedLater = titleAfterRename(titleAfterClaude(fresh, 'Fix login bug'), 'Auth')
+      expect(renamedLater.title).toBe('Auth')
+      expect(titleAfterClaude(renamedLater, 'Other').title).toBe('Auth')
+    })
+
+    it('is kept once set; a later reply does not change it', () => {
+      const titled = titleAfterClaude(fresh, 'Fix login bug')
+      expect(titleAfterClaude(titled, 'Something else').title).toBe('Fix login bug')
+    })
+
+    it('ignores a blank title', () => {
+      const named = titleAfterPrompt(fresh, 'fix it')
+      expect(titleAfterClaude(named, '  ')).toEqual(named)
+    })
+  })
+
+  describe('asking Claude for a title', () => {
+    it('asks on the first prompt and the next two, until a title is set', () => {
+      let asked = titleRequests()
+      const answers: boolean[] = []
+      for (let i = 0; i < 5; i++) {
+        const next = wantsClaudeTitle(asked, fresh, i === 0)
+        answers.push(next.ask)
+        asked = next.requests
+      }
+      expect(answers).toEqual([true, true, true, false, false])
+    })
+
+    it('stops asking once the session has a title from Claude or a rename', () => {
+      expect(wantsClaudeTitle(titleRequests(), titleAfterClaude(fresh, 'T'), true).ask).toBe(false)
+      expect(wantsClaudeTitle(titleRequests(), titleAfterRename(fresh, 'T'), true).ask).toBe(false)
+    })
+
+    it('never asks for a session that was named before this process, e.g. a resumed one', () => {
+      const resumed = titleAfterPrompt(fresh, 'old prompt')
+      expect(wantsClaudeTitle(titleRequests(), resumed, false).ask).toBe(false)
     })
   })
 })

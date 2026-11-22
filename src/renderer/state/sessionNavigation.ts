@@ -145,7 +145,7 @@ export function startSession(workspace: Workspace): boolean {
 export function resumeSession(workspace: Workspace, info: LocalSessionInfo): boolean {
   const views = useProjectViewsStore.getState()
   if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
-  const loaded = useProjectViewsStore.getState().loadSessionFromLocal(workspace.id, info.sessionId, info.preview)
+  const loaded = useProjectViewsStore.getState().loadSessionFromLocal(workspace.id, info)
   return loaded ? openSession(loaded.id) : false
 }
 

@@ -1,8 +1,8 @@
 import type { ElectronApplication, Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { chooseMode, expect, prompt, send, startSession, test } from './harness'
+import { chooseMode, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
 const WRITE_DONE = 'Created hello.txt containing hi.'
@@ -364,5 +364,84 @@ test.describe('mentions and attachments', () => {
     await prompt(page).press('Enter')
     await expect(page.getByText('Your prompt is 1 character over the limit of 50000 · shorten it to send')).toBeVisible()
     expect(log.userTexts()).toHaveLength(1)
+  })
+})
+
+const OLD_SESSION = '11111111-1111-4111-8111-111111111111'
+const UNNAMED_SESSION = '22222222-2222-4222-8222-222222222222'
+
+function seedPastSessions(dir: string): void {
+  mkdirSync(dir, { recursive: true })
+  const userLine = (text: string, gitBranch: string) =>
+    JSON.stringify({ type: 'user', gitBranch, message: { role: 'user', content: [{ type: 'text', text }] } })
+  writeFileSync(
+    join(dir, `${OLD_SESSION}.jsonl`),
+    [userLine('the login is broken', 'feature/oauth'), JSON.stringify({ type: 'ai-title', aiTitle: 'Old login fix', sessionId: OLD_SESSION })].join('\n') + '\n'
+  )
+  writeFileSync(join(dir, `${UNNAMED_SESSION}.jsonl`), userLine('tidy the readme', 'main') + '\n')
+}
+
+test.describe('session history', () => {
+  test('Claude names the session, a rename reaches the CLI, and past sessions show titles, search and rename', async ({ launched }) => {
+    const { page, log } = launched
+    const transcripts = transcriptsOf(launched)
+    seedPastSessions(transcripts)
+    await startSession(launched)
+    const list = page.getByRole('navigation', { name: 'Sessions' })
+
+    await send(page, 'fix the login bug today please')
+    await expect(list.getByText('Fix the login bug today', { exact: true })).toBeVisible()
+    expect(log.controlRequests('generate_session_title')).toEqual([
+      { subtype: 'generate_session_title', description: 'fix the login bug today please', persist: true }
+    ])
+
+    await list.getByText('Fix the login bug today', { exact: true }).dblclick()
+    await list.getByRole('textbox', { name: 'Session title' }).fill('Auth work')
+    await list.getByRole('textbox', { name: 'Session title' }).press('Enter')
+    await expect(list.getByText('Auth work', { exact: true })).toBeVisible()
+    await expect.poll(() => log.controlRequests('rename_session')).toHaveLength(1)
+    expect(log.controlRequests('rename_session')[0]).toMatchObject({ title: 'Auth work', source: 'host', session_id: expect.stringMatching(/^[0-9a-f-]{36}$/) })
+    await send(page, 'and add a test')
+    await expect(page.getByText('Hello! This is a scripted reply from the fake Claude.').nth(1)).toBeVisible()
+    await expect(list.getByText('Auth work', { exact: true })).toBeVisible()
+    expect(log.controlRequests('generate_session_title')).toHaveLength(1)
+
+    const openPast = async () => {
+      await page.getByRole('button', { name: 'Session list actions' }).click()
+      await page.getByRole('menuitem', { name: /Past sessions/ }).click()
+      await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+      return page.getByRole('dialog', { name: 'Past conversations' })
+    }
+    let past = await openPast()
+    const rows = past.getByRole('list', { name: 'Sessions' }).getByRole('button', { name: /now$/ })
+    await expect(rows).toHaveCount(2)
+    await expect(past.getByRole('button', { name: 'Old login fix now' })).toBeVisible()
+    await expect(past.getByRole('button', { name: 'tidy the readme now' })).toBeVisible()
+
+    await past.getByRole('searchbox', { name: 'Search sessions' }).fill('OAUTH')
+    await expect(rows).toHaveCount(1)
+    await past.getByRole('searchbox', { name: 'Search sessions' }).fill('login')
+    await expect(past.locator('mark')).toHaveText('login')
+    await past.getByRole('searchbox', { name: 'Search sessions' }).fill('')
+
+    await past.getByRole('button', { name: 'tidy the readme now' }).hover()
+    await past.getByRole('listitem').filter({ hasText: 'tidy the readme' }).getByRole('button', { name: 'Rename session' }).click()
+    await past.getByRole('textbox', { name: 'Session title' }).fill('Readme tidy')
+    await past.getByRole('textbox', { name: 'Session title' }).press('Enter')
+    await expect(past.getByRole('button', { name: 'Readme tidy now' })).toBeVisible()
+    await expect
+      .poll(() => readFileSync(join(transcripts, `${UNNAMED_SESSION}.jsonl`), 'utf-8').trim().split('\n').at(-1))
+      .toBe(JSON.stringify({ type: 'custom-title', sessionId: UNNAMED_SESSION, customTitle: 'Readme tidy' }))
+
+    await past.getByRole('button', { name: 'Old login fix now' }).click()
+    await expect(past).toHaveCount(0)
+    await expect(list.getByText('Old login fix', { exact: true })).toBeVisible()
+    await send(page, 'carry on')
+    await expect.poll(() => log.entries().some((e) => e.kind === 'argv' && (e.argv as string[]).includes(OLD_SESSION))).toBe(true)
+    expect(log.controlRequests('generate_session_title')).toHaveLength(1)
+
+    past = await openPast()
+    await expect(past.getByRole('img', { name: /^Open in this window/ })).toHaveCount(1)
+    await expect(past.getByRole('listitem').filter({ hasText: 'Old login fix' }).getByRole('img', { name: /^Open in this window/ })).toBeVisible()
   })
 })

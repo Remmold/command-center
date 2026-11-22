@@ -3,11 +3,11 @@ import { useMenu } from '../../hooks/useMenu'
 import { Columns2, History, MoreHorizontal, Pencil, Plus, X } from 'lucide-react'
 import { OBSERVED_STATUS_LABEL } from '../../../shared/types'
 import { STATUS_LABEL } from '../../../shared/needsYou'
-import { useProjectViewsStore } from '../../state/projectViewsStore'
 import type { SessionGroupId, SessionRow } from '../../state/sessionList'
 import { useChatPairStore } from '../../state/chatPairStore'
 import { useLauncherStore } from '../../state/launcherStore'
 import { closeSession } from '../../state/sessionNavigation'
+import { renameHostedSession } from '../../state/sessionTitleSync'
 import { isShown, openRow, useSessionGroups, useWorkSearchStore } from '../../state/workSessions'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
@@ -155,7 +155,6 @@ function SessionListRow({ row, active, onRename }: { row: SessionRow; active: bo
 }
 
 function RenameRow({ paneId, title, onDone }: { paneId: string; title: string; onDone: () => void }) {
-  const renameSession = useProjectViewsStore((s) => s.renameSession)
   return (
     <li className="px-2 py-0.5">
       <TextField
@@ -164,7 +163,7 @@ function RenameRow({ paneId, title, onDone }: { paneId: string; title: string; o
         autoFocus
         submitOnBlur
         onSubmit={(name) => {
-          renameSession(paneId, name)
+          renameHostedSession(paneId, name)
           onDone()
         }}
         onCancel={onDone}

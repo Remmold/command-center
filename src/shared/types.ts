@@ -261,11 +261,28 @@ export interface GitDiffResult {
   error?: string
 }
 
+/** Where a past session's title came from: a rename (`custom-title`), Claude (`ai-title`) or a prompt. */
+export type LocalSessionTitleSource = 'renamed' | 'claude' | 'prompt'
+
+export interface SessionRename {
+  cwd: string
+  sessionId: string
+  title: string
+  /** The hosted session showing it, when one does; its running CLI takes the rename. */
+  paneId?: string
+}
+
+/** `title` is the name as stored: cleaned and cut the way the CLI does it. */
+export type RenameResult = { ok: true; title: string } | { ok: false; error: string }
+
 export interface LocalSessionInfo {
   sessionId: string
   modifiedAt: number
+  title: string
+  titleSource: LocalSessionTitleSource
+  /** The first prompt, whitespace collapsed. */
   preview: string
-  messageCount: number
+  gitBranch?: string
 }
 
 // A machine-wide app/server the command center can launch and monitor.
@@ -403,6 +420,8 @@ export interface RendererApi {
     onEvent: (cb: (envelope: ClaudeEventEnvelope) => void) => () => void
     onExit: (cb: (envelope: ClaudeExitEnvelope) => void) => () => void
     listLocalSessions: (cwd: string) => Promise<LocalSessionInfo[]>
+    /** Tells the pane's CLI (`rename_session`), or with no process appends a `custom-title` line to the transcript. */
+    renameSession: (rename: SessionRename) => Promise<RenameResult>
   }
   observed: {
     list: () => Promise<ObservedSession[]>
