@@ -103,6 +103,9 @@ export interface CliCommand {
   name: string
   description: string
   argumentHint: string
+  aliases: string[]
+  /** The CLI's own command, as opposed to a skill, plugin or custom command. */
+  builtin: boolean
 }
 
 /** What a hosted session's CLI reported in its `initialize` handshake. */
@@ -224,9 +227,18 @@ export interface ClaudeExitEnvelope {
   exitCode: number | null
 }
 
-export interface ImageAttachment {
-  media_type: string
-  data: string
+/** One block of a user message's `content`, as the extension writes it to the CLI's stdin. */
+export type UserContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string }; title: string }
+  | { type: 'document'; source: { type: 'text'; media_type: 'text/plain'; data: string }; title: string }
+
+/** A row of the @ menu; folders end in `/`. */
+export interface MentionEntry {
+  path: string
+  name: string
+  type: 'file' | 'directory'
 }
 
 export interface GitFile {
@@ -249,11 +261,28 @@ export interface GitDiffResult {
   error?: string
 }
 
+/** Where a past session's title came from: a rename (`custom-title`), Claude (`ai-title`) or a prompt. */
+export type LocalSessionTitleSource = 'renamed' | 'claude' | 'prompt'
+
+export interface SessionRename {
+  cwd: string
+  sessionId: string
+  title: string
+  /** The hosted session showing it, when one does; its running CLI takes the rename. */
+  paneId?: string
+}
+
+/** `title` is the name as stored: cleaned and cut the way the CLI does it. */
+export type RenameResult = { ok: true; title: string } | { ok: false; error: string }
+
 export interface LocalSessionInfo {
   sessionId: string
   modifiedAt: number
+  title: string
+  titleSource: LocalSessionTitleSource
+  /** The first prompt, whitespace collapsed. */
   preview: string
-  messageCount: number
+  gitBranch?: string
 }
 
 // A machine-wide app/server the command center can launch and monitor.
@@ -360,6 +389,8 @@ export interface RendererApi {
   }
   files: {
     list: (cwd: string) => Promise<string[]>
+    /** The @ menu's rows for the text typed after `@`: ripgrep's listing, fuzzy-ranked. */
+    mentions: (cwd: string, query: string) => Promise<MentionEntry[]>
     saveAs: (
       suggestedName: string,
       content: string
@@ -382,12 +413,15 @@ export interface RendererApi {
     readDefaults: () => Promise<ModelDefaults>
     saveDefaults: (patch: ModelDefaultsPatch) => Promise<SaveDefaultsResult>
     onInit: (cb: (envelope: SessionInitEnvelope) => void) => () => void
-    send: (paneId: string, text: string, images?: ImageAttachment[]) => void
+    /** `uuid` names the prompt in the CLI's `command_lifecycle` frames and replay echo. */
+    send: (paneId: string, content: UserContentBlock[], uuid: string) => void
     interrupt: (paneId: string) => void
     stop: (paneId: string) => void
     onEvent: (cb: (envelope: ClaudeEventEnvelope) => void) => () => void
     onExit: (cb: (envelope: ClaudeExitEnvelope) => void) => () => void
     listLocalSessions: (cwd: string) => Promise<LocalSessionInfo[]>
+    /** Tells the pane's CLI (`rename_session`), or with no process appends a `custom-title` line to the transcript. */
+    renameSession: (rename: SessionRename) => Promise<RenameResult>
   }
   observed: {
     list: () => Promise<ObservedSession[]>

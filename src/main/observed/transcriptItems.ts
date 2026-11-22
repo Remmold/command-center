@@ -4,6 +4,7 @@ import type { ClaudeAssistantEvent, ContentBlock } from '../../shared/types'
 
 const MAX_TOOL_RESULT_CHARS = 20_000
 const SHORTENED = '… (shortened)'
+const SHOWN_BLOCKS: ReadonlySet<string> = new Set(['text', 'tool_use', 'thinking'])
 const WHOLE_TAG_RE = /^<([a-z][\w-]*)>[\s\S]*<\/\1>$/
 const COMMAND_NAME_RE = /<command-name>([\s\S]*?)<\/command-name>/
 const COMMAND_ARGS_RE = /<command-args>([\s\S]*?)<\/command-args>/
@@ -14,6 +15,7 @@ interface TranscriptLine {
   isMeta?: boolean
   isSidechain?: boolean
   isCompactSummary?: boolean
+  timestamp?: string
   message?: { id?: string; role?: string; model?: string; content?: unknown }
 }
 
@@ -44,9 +46,9 @@ export function lineToItems(raw: string): ChatItem[] {
     return []
   }
   if (!line.uuid || line.isSidechain || line.isMeta || !line.message) return []
-  if (line.type === 'user') return userItems(line.uuid, line)
-  if (line.type === 'assistant') return assistantItems(line.uuid, line)
-  return []
+  const items = line.type === 'user' ? userItems(line.uuid, line) : line.type === 'assistant' ? assistantItems(line.uuid, line) : []
+  const at = line.timestamp ? Date.parse(line.timestamp) : NaN
+  return Number.isFinite(at) ? items.map((item) => ({ ...item, at })) : items
 }
 
 function userItems(id: string, line: TranscriptLine): ChatItem[] {
@@ -94,7 +96,7 @@ function promptText(text: string): string | null {
 function assistantItems(id: string, line: TranscriptLine): ChatItem[] {
   const content = line.message?.content
   if (!Array.isArray(content)) return []
-  const shown = (content as ContentBlock[]).filter((b) => b.type === 'text' || b.type === 'tool_use')
+  const shown = (content as ContentBlock[]).filter((b) => SHOWN_BLOCKS.has(b.type))
   if (shown.length === 0) return []
   const raw: ClaudeAssistantEvent = {
     type: 'assistant',

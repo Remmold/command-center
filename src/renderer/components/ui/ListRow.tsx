@@ -52,6 +52,20 @@ export function ListRowText({ primary, secondary }: { primary: string; secondary
   )
 }
 
+/** Every case-insensitive occurrence of `query` in `text` is marked, as the extension's session search. */
+export function ListRowMatch({ text, query }: { text: string; query: string }) {
+  const parts: ReactNode[] = []
+  const lower = text.toLowerCase()
+  const q = query.toLowerCase()
+  let from = 0
+  for (let at = q ? lower.indexOf(q) : -1; at !== -1; at = lower.indexOf(q, from)) {
+    parts.push(text.slice(from, at), <mark key={at} className="rounded-sm bg-clay/20 text-inherit">{text.slice(at, at + q.length)}</mark>)
+    from = at + q.length
+  }
+  parts.push(text.slice(from))
+  return <span className="min-w-0 flex-1 truncate">{parts}</span>
+}
+
 export function ListRowLabel({ children, tooltip, tone = 'primary' }: { children: ReactNode; tooltip?: string; tone?: 'primary' | 'secondary' }) {
   const look = tone === 'primary' ? 'font-medium text-fg' : 'text-muted'
   return (

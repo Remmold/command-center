@@ -24,11 +24,11 @@ A full-window page with five sections (Esc closes it):
 - **Accounts**: the account profiles, with **Log in** and **Rename**, and a field to create a new one.
 - **Apps**: start and stop your local apps.
 - **Board**: the scan roots, and the repos with tickets that aren't added yet.
-- **General**: **Start with Windows**.
+- **General**: **Start with Windows**, and how the chat input sends.
 
 ## Needs you
 
-A session waiting on you shows in **Needs you** on the Dashboard and at the top of the Work list. Click one to open it with its input or approval prompt ready, or press **Ctrl+J** from any view to jump to the next.
+A session waiting on you shows in **Needs you** on the Dashboard and at the top of the Work list. Click one to open it with its input or approval prompt ready, or press **Ctrl+Shift+J** from any view to jump to the next.
 
 Session statuses:
 
@@ -79,7 +79,7 @@ A ticket's column comes from its `**Status:**` word (`needs-triage`, `needs-info
 | --- | --- |
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | Dashboard / Work / Board |
 | Ctrl+, | Open Settings |
-| Ctrl+J | Jump to the next waiting session |
+| Ctrl+Shift+J | Jump to the next waiting session |
 | Ctrl+T | New session (asks which workspace) |
 | Ctrl+L | Past sessions (asks which workspace) |
 | Ctrl+W | Close the session on screen |
@@ -89,9 +89,11 @@ A ticket's column comes from its `**Status:**` word (`needs-triage`, `needs-info
 | Ctrl+B | Show or hide the IDE panels of the open session's workspace |
 | Ctrl+` | Open, show or hide its shells (the key left of 1, on any layout) |
 | Ctrl+S | Save the file in the editor |
-| Enter / Shift+Enter | Send / new line in the chat input |
+| Enter / Shift+Enter or Ctrl+J | Send / new line in the chat input (Settings → General → **Use Ctrl Enter To Send** swaps Enter and Ctrl+Enter) |
+| ↑ / ↓ in the chat input | Earlier / later prompts of this session (caret at the start / end) |
+| Esc in the chat | Stop Claude (a menu or approval prompt closes first) |
 
-Ctrl+1/2/3, Ctrl+, and Ctrl+J work in every view; the others act only while Work is on screen.
+Ctrl+1/2/3, Ctrl+, and Ctrl+Shift+J work in every view; the others act only while Work is on screen.
 
 ## Prerequisites
 

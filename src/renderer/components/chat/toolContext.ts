@@ -4,6 +4,8 @@ import type { ToolPairs } from './toolCall'
 interface ToolContextValue {
   pairs: ToolPairs
   cwd: string | undefined
+  /** The TodoWrite call holding the current list; it opens, earlier lists stay folded. */
+  latestTodoId?: string
 }
 
 const NO_PAIRS: ToolPairs = { resultFor: new Map(), isPaired: () => false }

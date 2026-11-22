@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { locateClaude } from '../pty/claude-locator'
 import { CONFIG_DIR_VAR } from '../../shared/profiles'
-import { THINKING_BUDGET, type ClaudeStartOptions, type SessionInit } from '../../shared/types'
+import { THINKING_BUDGET, type ClaudeStartOptions, type UserContentBlock, type SessionInit } from '../../shared/types'
 import { childEnv } from '../util/childEnv'
 import { ControlChannel, type ControlPayload, type IncomingHandler } from './controlChannel'
 import { parseInitialize } from './initialize'
@@ -17,6 +17,9 @@ export interface ClaudeSessionOptions extends ClaudeStartOptions {
   onExit: ExitCallback
   onInit: InitCallback
 }
+
+/** Set by the extension for its CLI: with tasks off the CLI keeps TodoWrite, which the chat draws as a checklist. */
+const EXTENSION_ENV: Readonly<Record<string, string>> = { CLAUDE_CODE_ENABLE_TASKS: '0' }
 
 export class ClaudeSession {
   readonly paneId: string
@@ -43,6 +46,7 @@ export class ClaudeSession {
       'stream-json',
       '--verbose',
       '--include-partial-messages',
+      '--replay-user-messages',
       '--permission-prompt-tool=stdio',
       '--setting-sources',
       'user,project,local'
@@ -73,7 +77,7 @@ export class ClaudeSession {
     this.child = spawn(launch.command, args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: childEnv(process.env, { ...profileEnv, ...launch.env }),
+      env: childEnv(process.env, { ...EXTENSION_ENV, ...profileEnv, ...launch.env }),
       shell: false,
       windowsHide: true
     })
@@ -138,25 +142,9 @@ export class ClaudeSession {
     }
   }
 
-  send(
-    text: string,
-    images?: Array<{ media_type: string; data: string }>
-  ): void {
-    if (!this.alive) return
-    const content: Array<unknown> = []
-    if (images && images.length > 0) {
-      for (const img of images) {
-        content.push({
-          type: 'image',
-          source: { type: 'base64', media_type: img.media_type, data: img.data }
-        })
-      }
-    }
-    if (text && text.length > 0) {
-      content.push({ type: 'text', text })
-    }
-    if (content.length === 0) return
-    const line = JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n'
+  send(content: UserContentBlock[], uuid: string): void {
+    if (!this.alive || !Array.isArray(content) || content.length === 0) return
+    const line = JSON.stringify({ type: 'user', uuid, message: { role: 'user', content } }) + '\n'
     void this.handshake.then(() => this.writeLine(line))
   }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ChatItems } from './ChatItems'
 import { MessageColumn } from './MessageColumn'
 import { ChatBanner } from './ChatBanner'
@@ -13,8 +13,18 @@ import { InputBox } from './InputBox'
 import { ApprovalPrompt } from './ApprovalPrompt'
 import { PermissionModePicker } from './PermissionModePicker'
 import { interruptNote } from './interrupt'
+import { UserPrompt } from './Message'
+import { pickUp, type HeldPrompt } from './heldPrompts'
+import { historyEntries, userItemText } from './promptHistory'
+import { promptContent, terminalSnapshots, type PromptAttachment } from './attachments'
+import { readTerminal } from '../../state/terminalBuffers'
+import { overlayOpen } from '../ui/overlay'
+import { useHeldPromptsStore } from '../../state/heldPromptsStore'
+import { committedLength, thinkingDurations } from './liveItems'
+import { useFollowOutput } from './useFollowOutput'
 import { useChatItemsStore } from '../../state/chatItemsStore'
-import { useProjectViewsStore } from '../../state/projectViewsStore'
+import { shellTabsOfSession, useProjectViewsStore } from '../../state/projectViewsStore'
+import { isFirstPrompt, noteClaudeSessionId, requestClaudeTitle } from '../../state/sessionTitleSync'
 import { useApprovalsStore } from '../../state/approvalsStore'
 import { useAccountSwitchStore } from '../../state/accountSwitchStore'
 import { availableModes, isPermissionMode, migrateMode, nextMode, type PermissionMode } from '../../state/permissionModes'
@@ -26,6 +36,11 @@ import { useModelChoice } from '../../state/useModelChoice'
 import { DEFAULT_MODEL, effortLabel, launchChoice, versionedName } from '../../state/modelPicker'
 import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
 import { ModelPicker } from './ModelPicker'
+import { ContextPie } from './ContextPie'
+import { ContextDialog } from './ContextDialog'
+import { contextIndicator, parseContextUsage, type ContextUsage } from './contextUsage'
+import type { LocalAction, OpenTarget } from './slashMenuModel'
+import { useUsagePopoverStore } from '../../state/usagePopoverStore'
 import { Brain } from 'lucide-react'
 import { THINKING_BUDGET } from '../../../shared/types'
 import type {
@@ -34,16 +49,25 @@ import type {
   ClaudeResultEvent,
   ClaudeStreamEvent,
   ClaudeSystemEvent,
-  ContentBlock,
-  ImageAttachment
+  ContentBlock
 } from '../../../shared/types'
 
 const EMPTY_ITEMS: ChatItem[] = []
 const NOT_RUNNING = 'claude process is not running'
 const EMPTY_REQUESTS: ApprovalRequest[] = []
+const EMPTY_HELD: HeldPrompt[] = []
 
 /** The extension saves these as the default for new sessions when the user picks them. */
 const DEFAULT_WORTHY: ReadonlySet<PermissionMode> = new Set(['default', 'auto', 'acceptEdits'])
+
+/** The extension's own menu rows the app can run, with its wording. */
+const LOCAL_ACTIONS: readonly LocalAction[] = [
+  { id: 'attach-file', section: 'Context', label: 'Attach file…', description: 'Upload a file to include in conversation' },
+  { id: 'mention-file', section: 'Context', label: 'Mention file from this project…', description: 'Reference a project file with @mention' },
+  { id: 'model', section: 'Model', label: 'Switch model…', description: 'Change the AI model' },
+  { id: 'toggle-thinking', section: 'Model', label: 'Thinking', description: 'Toggle extended thinking mode', keepOpen: true },
+  { id: 'account-usage', section: 'Model', label: 'Account & usage…', description: 'View account info and usage' }
+]
 
 interface Props {
   paneId: string
@@ -78,7 +102,7 @@ interface AnthropicStreamInner {
   type: string
   index?: number
   content_block?: ContentBlock
-  delta?: { type?: string; text?: string; partial_json?: string }
+  delta?: { type?: string; text?: string; thinking?: string; partial_json?: string }
   message?: { id?: string }
 }
 
@@ -94,17 +118,27 @@ export function ChatView({
 }: Props) {
   const items = useChatItemsStore((s) => s.items[paneId] ?? EMPTY_ITEMS)
   const appendItems = useChatItemsStore((s) => s.appendItems)
-  const setClaudeSessionId = useProjectViewsStore((s) => s.setClaudeSessionId)
+  const mergeAssistant = useChatItemsStore((s) => s.mergeAssistant)
   const pendingApprovals = useApprovalsStore((s) => s.byPane[paneId] ?? EMPTY_REQUESTS)
+  const held = useHeldPromptsStore((s) => s.byPane[paneId] ?? EMPTY_HELD)
+  const history = useMemo(() => historyEntries(items, held), [items, held])
 
   const [processRunning, setProcessRunning] = useState(false)
   const [turnActive, setTurnActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inProgress, setInProgress] = useState<AssistantMessageItem | null>(null)
-  const [slashCommands, setSlashCommands] = useState<string[]>([])
+  const [thinkingTokens, setThinkingTokens] = useState<number | undefined>(undefined)
+  /** When each thinking block of the streaming message started, by block index. */
+  const thinkingStartsRef = useRef<{ messageId: string | undefined; starts: Map<number, number> }>({ messageId: undefined, starts: new Map() })
+  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
+  const [contextOpen, setContextOpen] = useState(false)
+  const closeContext = useCallback(() => setContextOpen(false), [])
+  const [initCommandNames, setInitCommandNames] = useState<string[]>([])
+  const [modelMenuSignal, setModelMenuSignal] = useState(0)
   const sessionInit = useSessionInit(paneId)
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const itemsLenRef = useRef(0)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const { toBottom } = useFollowOutput(scrollRef, contentRef)
   const initialItemsCountRef = useRef(items.length)
   const focusInputRef = useRef<(() => void) | null>(null)
   const paneRef = useRef<HTMLDivElement | null>(null)
@@ -124,7 +158,7 @@ export function ChatView({
     bypassAvailable: bypassAllowed || launchedModeRef.current === 'bypassPermissions' || mode === 'bypassPermissions'
   })
 
-  const note = (text: string): void => appendItems(paneId, [{ kind: 'system', id: crypto.randomUUID(), text }])
+  const note = (text: string): void => appendItems(paneId, [{ kind: 'system', id: crypto.randomUUID(), text, at: Date.now() }])
 
   /** False when the running process refused the change; a pane without a process always takes it. */
   const applyFlags = async (settings: Record<string, unknown>): Promise<boolean> => {
@@ -207,8 +241,10 @@ export function ChatView({
       setProcessRunning(false)
       setTurnActive(false)
       setInProgress(null)
+      release(useHeldPromptsStore.getState().byPane[paneId] ?? [])
+      useHeldPromptsStore.getState().set(paneId, [])
       appendItems(paneId, [
-        { kind: 'system', id: crypto.randomUUID(), text: 'claude process exited' }
+        { kind: 'system', id: crypto.randomUUID(), text: 'claude process exited', at: Date.now() }
       ])
     })
 
@@ -223,18 +259,10 @@ export function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId])
 
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const len = items.length + (inProgress ? 1 : 0)
-    if (len !== itemsLenRef.current) {
-      itemsLenRef.current = len
-      el.scrollTop = el.scrollHeight
-    }
-  }, [items, inProgress])
-
   const handleStreamEvent = (inner: AnthropicStreamInner) => {
     if (inner.type === 'message_start') {
+      thinkingStartsRef.current = { messageId: inner.message?.id, starts: new Map() }
+      setThinkingTokens(undefined)
       setInProgress({
         kind: 'assistant',
         id: inner.message?.id ?? crypto.randomUUID(),
@@ -246,6 +274,10 @@ export function ChatView({
     if (inner.type === 'content_block_start' && inner.content_block && typeof inner.index === 'number') {
       const idx = inner.index
       const block = inner.content_block
+      if (block.type === 'thinking') {
+        thinkingStartsRef.current.starts.set(idx, Date.now())
+        setThinkingTokens(undefined)
+      }
       setInProgress((prev) => {
         if (!prev) return prev
         const content = [...prev.content]
@@ -270,20 +302,47 @@ export function ChatView({
         if (!block) return prev
         if (delta.type === 'text_delta' && block.type === 'text' && typeof delta.text === 'string') {
           content[idx] = { type: 'text', text: (block as { text: string }).text + delta.text }
+        } else if (delta.type === 'thinking_delta' && block.type === 'thinking' && typeof delta.thinking === 'string') {
+          content[idx] = { ...block, thinking: (typeof block.thinking === 'string' ? block.thinking : '') + delta.thinking }
         }
         return { ...prev, content }
       })
       return
     }
     if (inner.type === 'message_stop') {
-      // Do nothing — final 'assistant' event will commit the canonical message.
+      // Each block was committed by its own 'assistant' event already.
+      setInProgress(null)
       return
     }
   }
 
+  const release = (prompts: HeldPrompt[]): void => {
+    if (prompts.length === 0) return
+    appendItems(
+      paneId,
+      prompts.flatMap((p): ChatItem[] => [
+        { kind: 'user', id: p.uuid, text: p.text, at: Date.now() },
+        ...(p.notice ? [{ kind: 'system' as const, id: crypto.randomUUID(), text: p.notice, at: Date.now() }] : [])
+      ])
+    )
+  }
+
+  /** False for anything but `command_lifecycle` and replay echoes, which the rest of handleEvent must not see. */
+  const handleQueueFrame = (event: ClaudeEvent): boolean => {
+    const isReplay = event.type === 'user' && (event as { isReplay?: unknown }).isReplay === true
+    if (!isReplay && event.type !== 'command_lifecycle') return false
+    const store = useHeldPromptsStore.getState()
+    const pickup = pickUp(store.byPane[paneId] ?? [], event)
+    store.set(paneId, pickup.held)
+    release(pickup.pickedUp)
+    if (pickup.startsTurn) setTurnActive(true)
+    return true
+  }
+
   const handleEvent = (event: ClaudeEvent) => {
     const sessId = (event as { session_id?: string }).session_id
-    if (sessId) setClaudeSessionId(paneId, sessId)
+    if (sessId) noteClaudeSessionId(paneId, sessId)
+    if (handleQueueFrame(event)) return
 
     if (event.type === 'stream_event') {
       const se = event as ClaudeStreamEvent
@@ -296,26 +355,32 @@ export function ChatView({
         useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
         return
       }
+      if (sys.subtype === 'thinking_tokens') {
+        if (typeof sys.estimated_tokens === 'number') setThinkingTokens(sys.estimated_tokens)
+        return
+      }
+      if (sys.subtype === 'compact_boundary') {
+        setContextUsage((u) => (u ? { ...u, totalTokens: 0 } : u))
+        return
+      }
       if (sys.subtype === 'init') {
-        if (Array.isArray(sys.slash_commands)) {
-          setSlashCommands(sys.slash_commands as string[])
-        }
+        if (Array.isArray(sys.slash_commands)) setInitCommandNames(sys.slash_commands.filter((n): n is string => typeof n === 'string'))
         appendItems(paneId, [
-          { kind: 'system', id: crypto.randomUUID(), text: formatInitNote(sys) }
+          { kind: 'system', id: crypto.randomUUID(), text: formatInitNote(sys), at: Date.now() }
         ])
       }
       return
     }
     if (event.type === 'assistant') {
       const ae = event as ClaudeAssistantEvent
-      const item: AssistantMessageItem = {
-        kind: 'assistant',
-        id: ae.message.id ?? crypto.randomUUID(),
-        content: ae.message.content,
-        raw: ae
-      }
-      appendItems(paneId, [item])
-      setInProgress(null)
+      const id = ae.message.id ?? crypto.randomUUID()
+      const now = Date.now()
+      const firstIndex = committedLength(useChatItemsStore.getState().items[paneId] ?? [], id)
+      const timing = thinkingStartsRef.current
+      const thinkingMs = timing.messageId === id ? thinkingDurations(timing.starts, firstIndex, ae.message.content, now) : undefined
+      mergeAssistant(paneId, { kind: 'assistant', id, content: ae.message.content, raw: ae, at: now, ...(thinkingMs ? { thinkingMs } : {}) })
+      // A message from a subagent, or one sent without stream events, is not the one streaming.
+      setInProgress((prev) => (prev && prev.id === id ? prev : null))
       return
     }
     if (event.type === 'user') {
@@ -327,20 +392,22 @@ export function ChatView({
       })
       if (notes.length > 0) {
         interruptedRef.current = true
-        appendItems(paneId, notes.map((text) => ({ kind: 'system' as const, id: crypto.randomUUID(), text })))
+        appendItems(paneId, notes.map((text) => ({ kind: 'system' as const, id: crypto.randomUUID(), text, at: Date.now() })))
       }
       const results: ToolResultItem[] = content.filter(isToolResultBlock).map((block) => ({
         kind: 'tool_result' as const,
         id: crypto.randomUUID(),
         toolUseId: block.tool_use_id,
         content: block.content,
-        isError: block.is_error
+        isError: block.is_error,
+        at: Date.now()
       }))
       if (results.length > 0) appendItems(paneId, results)
       return
     }
     if (event.type === 'result') {
       const re = event as ClaudeResultEvent
+      void refreshContextUsage()
       if (interruptedRef.current) {
         interruptedRef.current = false
         setTurnActive(false)
@@ -354,13 +421,33 @@ export function ChatView({
         costUsd: re.total_cost_usd,
         numTurns: re.num_turns,
         isError: re.is_error,
-        raw: re
+        raw: re,
+        at: Date.now()
       }
       appendItems(paneId, [item])
       setTurnActive(false)
       setInProgress(null)
       return
     }
+  }
+
+  const refreshContextUsage = async (): Promise<void> => {
+    const res = await window.api.claude.control(paneId, 'get_context_usage')
+    if (!res.ok) return
+    const usage = parseContextUsage(res.response)
+    if (usage) setContextUsage(usage)
+  }
+
+  const openTarget = (target: OpenTarget): void => {
+    if (target === 'model') setModelMenuSignal((n) => n + 1)
+    else if (target === 'usage') useUsagePopoverStore.getState().open()
+    else setContextOpen(true)
+  }
+
+  const runAction = (id: string): void => {
+    if (id === 'model') openTarget('model')
+    else if (id === 'account-usage') openTarget('usage')
+    else if (id === 'toggle-thinking') void toggleThinking()
   }
 
   const ensureStarted = async (): Promise<boolean> => {
@@ -385,6 +472,7 @@ export function ChatView({
       return false
     }
     setProcessRunning(true)
+    void refreshContextUsage()
     return true
   }
 
@@ -401,7 +489,7 @@ export function ChatView({
       switchPhaseRef.current = 'waiting'
     }
     if (switchPhaseRef.current === 'waiting' && !processRunning) switchPhaseRef.current = 'stopping'
-    if (switchPhaseRef.current === 'waiting' && !turnActive) {
+    if (switchPhaseRef.current === 'waiting' && !turnActive && held.length === 0) {
       switchPhaseRef.current = 'stopping'
       note(`switching profile to ${switchTo}; resuming this session on it`)
       window.api.claude.stop(paneId)
@@ -413,22 +501,39 @@ export function ChatView({
       void ensureStarted()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [switchTo, processRunning, turnActive])
+  }, [switchTo, processRunning, turnActive, held.length])
 
-  const handleSend = async (text: string, images?: ImageAttachment[]) => {
-    const userText =
-      text +
-      (images && images.length > 0
-        ? `\n\n_[${images.length} image${images.length === 1 ? '' : 's'} attached]_`
-        : '')
-    appendItems(paneId, [
-      { kind: 'user', id: crypto.randomUUID(), text: userText } as ChatItem
-    ])
+  const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []) => {
+    const uuid = crypto.randomUUID()
+    const userText = userItemText(text, attachments)
+    // As the extension's `turnRunningOrQueued`: the CLI queues it and says when it starts.
+    const queued = turnActive || held.length > 0
+    if (queued) useHeldPromptsStore.getState().hold(paneId, { uuid, text: userText })
+    else appendItems(paneId, [{ kind: 'user', id: uuid, text: userText, at: Date.now() }])
+    toBottom()
+    const firstPrompt = isFirstPrompt(paneId)
     useProjectViewsStore.getState().notePrompt(paneId, text)
     const ok = await ensureStarted()
-    if (!ok) return
-    setTurnActive(true)
-    window.api.claude.send(paneId, text, images)
+    if (!ok) {
+      if (queued) {
+        const store = useHeldPromptsStore.getState()
+        store.set(paneId, (store.byPane[paneId] ?? []).filter((p) => p.uuid !== uuid))
+      }
+      return
+    }
+    if (!queued) setTurnActive(true)
+    const terminals = terminalSnapshots(text, shellTabsOfSession(paneId), readTerminal)
+    window.api.claude.send(paneId, promptContent(text, attachments, terminals), uuid)
+    requestClaudeTitle(paneId, text, firstPrompt)
+  }
+
+  /** Esc anywhere in the chat stops Claude, as the extension's document-level handler; menus and approvals take it first. */
+  const handlePaneKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.repeat || e.nativeEvent.isComposing) return
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+    if (!turnActive || pendingApprovals.length > 0 || overlayOpen()) return
+    e.preventDefault()
+    handleInterrupt()
   }
 
   const handleInterrupt = () => {
@@ -441,8 +546,11 @@ export function ChatView({
     await ensureStarted()
   }
 
-  const knownSlashCommands =
-    slashCommands.length > 0 ? slashCommands : (sessionInit?.commands.map((c) => c.name) ?? [])
+  const indicator = contextUsage ? contextIndicator(contextUsage) : null
+  const commands = useMemo(
+    () => sessionInit?.commands ?? initCommandNames.map((name) => ({ name, description: '', argumentHint: '', aliases: [], builtin: false })),
+    [sessionInit, initCommandNames]
+  )
 
   const showIdleBanner =
     items.length > 0 &&
@@ -451,44 +559,60 @@ export function ChatView({
     initialItemsCountRef.current > 0
 
   return (
-    <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
-        <MessageColumn className="space-y-3">
-          {error && (
-            <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
-              {error}
-            </ChatBanner>
-          )}
-          {items.length === 0 && !error && !processRunning && !inProgress && (
-            <div className="py-10 text-center text-sm text-faint">starting claude…</div>
-          )}
-          {showIdleBanner && (
-            <ChatBanner
-              action={
-                <Button variant="secondary" onClick={handleResume}>
-                  {resumeSessionId ? 'resume now' : 'start'}
-                </Button>
-              }
-            >
-              {resumeSessionId
-                ? 'paused — sending will resume this session'
-                : 'idle — sending will start a new claude process'}
-            </ChatBanner>
-          )}
-          <ChatItems items={items} cwd={cwd} streaming={inProgress} />
-          {pendingApprovals.map((req) => (
-            <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
-          ))}
-          {turnActive && !inProgress && pendingApprovals.length === 0 && (
-            <div className="px-1.5 text-xs text-faint">claude is thinking…</div>
-          )}
-        </MessageColumn>
+    <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col" onKeyDown={handlePaneKeyDown}>
+      <div ref={scrollRef} tabIndex={-1} data-transcript="" className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
+        <div ref={contentRef}>
+          <MessageColumn className="space-y-3">
+            {error && (
+              <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
+                {error}
+              </ChatBanner>
+            )}
+            {items.length === 0 && !error && !processRunning && !inProgress && (
+              <div className="py-10 text-center text-sm text-faint">starting claude…</div>
+            )}
+            {showIdleBanner && (
+              <ChatBanner
+                action={
+                  <Button variant="secondary" onClick={handleResume}>
+                    {resumeSessionId ? 'resume now' : 'start'}
+                  </Button>
+                }
+              >
+                {resumeSessionId
+                  ? 'paused — sending will resume this session'
+                  : 'idle — sending will start a new claude process'}
+              </ChatBanner>
+            )}
+            <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} />
+            {pendingApprovals.map((req) => (
+              <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
+            ))}
+            {turnActive && !inProgress && pendingApprovals.length === 0 && (
+              <div className="px-1.5 text-xs text-faint">claude is thinking…</div>
+            )}
+            {held.map((p) => (
+              <UserPrompt key={p.uuid} text={p.text} queued />
+            ))}
+            <div role="status" className="sr-only">
+              {held.length > 0 ? 'Message queued.' : ''}
+            </div>
+          </MessageColumn>
+        </div>
       </div>
       <InputBox
-        disabled={turnActive}
+        busy={turnActive}
+        history={history}
         onSend={handleSend}
         onInterrupt={handleInterrupt}
-        slashCommands={knownSlashCommands}
+        commands={commands}
+        localActions={LOCAL_ACTIONS}
+        onAction={runAction}
+        onOpen={openTarget}
+        menuTrailing={{
+          model: <span className="shrink-0 text-[11px] text-muted">{choice.pill.label}</span>,
+          'toggle-thinking': <span className="shrink-0 text-[11px] text-muted">{thinking ? 'On' : 'Off'}</span>
+        }}
         cwd={cwd}
         registerFocus={registerInputFocus}
         footerStart={
@@ -501,6 +625,7 @@ export function ChatView({
               levels={choice.levels}
               onSelectModel={(m) => void pickModel(m)}
               onSelectEffort={(l) => void pickEffort(l)}
+              openSignal={modelMenuSignal}
             />
             <Button variant="ghost" pressed={thinking} onClick={() => void toggleThinking()} tooltip="Toggle extended thinking mode">
               <Brain size={13} strokeWidth={2} />
@@ -509,15 +634,19 @@ export function ChatView({
           </>
         }
         footerEnd={
-          <PermissionModePicker
-            mode={mode}
-            modes={modes}
-            onSelect={(m) => void pickMode(m)}
-            effort={{ level: choice.effort, levels: choice.levels, onSelect: (l) => void pickEffort(l) }}
-          />
+          <>
+            {indicator && <ContextPie indicator={indicator} onCompact={() => void handleSend('/compact')} />}
+            <PermissionModePicker
+              mode={mode}
+              modes={modes}
+              onSelect={(m) => void pickMode(m)}
+              effort={{ level: choice.effort, levels: choice.levels, onSelect: (l) => void pickEffort(l) }}
+            />
+          </>
         }
         onShiftTab={() => void pickMode(nextMode(modes, mode))}
       />
+      {contextOpen && <ContextDialog paneId={paneId} onClose={closeContext} />}
     </div>
   )
 }

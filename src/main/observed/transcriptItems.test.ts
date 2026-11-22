@@ -105,32 +105,47 @@ function jsonl(lines: object[]): string {
 }
 
 describe('createTranscriptParser', () => {
-  it('maps a VS Code turn onto chat items, skipping thinking, meta and bookkeeping lines', () => {
+  it('maps a VS Code turn onto chat items, skipping meta and bookkeeping lines', () => {
     const parser = createTranscriptParser()
     const items = parser.push(
       jsonl([bookkeeping[0], humanPrompt, thinking, toolUse, toolResult, ...bookkeeping.slice(1), reply, metaReminder])
     )
+    const at = Date.parse(base.timestamp)
     expect(items).toEqual([
-      { kind: 'user', id: 'u1', text: 'fix the drawer' },
+      { kind: 'user', id: 'u1', text: 'fix the drawer', at },
+      {
+        kind: 'assistant',
+        id: 'a1',
+        content: [{ type: 'thinking', thinking: '', signature: 'sig' }],
+        raw: expect.objectContaining({ type: 'assistant' }),
+        at
+      },
       {
         kind: 'assistant',
         id: 'a2',
         content: [{ type: 'tool_use', id: 'toolu_1', name: 'Read', input: { file_path: 'a.ts' } }],
-        raw: expect.objectContaining({ type: 'assistant' })
+        raw: expect.objectContaining({ type: 'assistant' }),
+        at
       },
-      { kind: 'tool_result', id: 'u2:0', toolUseId: 'toolu_1', content: 'file body', isError: undefined },
+      { kind: 'tool_result', id: 'u2:0', toolUseId: 'toolu_1', content: 'file body', isError: undefined, at },
       {
         kind: 'assistant',
         id: 'a3',
         content: [{ type: 'text', text: 'Done.' }],
-        raw: expect.objectContaining({ type: 'assistant' })
+        raw: expect.objectContaining({ type: 'assistant' }),
+        at
       }
     ])
   })
 
+  it('leaves the time off a line without a valid timestamp', () => {
+    const items = createTranscriptParser().push(jsonl([{ ...slashCommand, timestamp: 'not a time' }]))
+    expect(items).toEqual([{ kind: 'user', id: 'u4', text: '/tdd' }])
+  })
+
   it('shows a slash command as the command typed', () => {
     const items = createTranscriptParser().push(jsonl([slashCommand]))
-    expect(items).toEqual([{ kind: 'user', id: 'u4', text: '/tdd' }])
+    expect(items).toEqual([{ kind: 'user', id: 'u4', text: '/tdd', at: Date.parse(base.timestamp) }])
   })
 
   it('holds back a partial last line until the rest of it arrives', () => {
@@ -148,7 +163,7 @@ describe('createTranscriptParser', () => {
     const bytes = Buffer.from(jsonl([{ ...humanPrompt, message: { role: 'user', content: 'café → ok' } }]))
     const split = bytes.indexOf(Buffer.from('→')) + 1
     expect(parser.push(bytes.subarray(0, split))).toEqual([])
-    expect(parser.push(bytes.subarray(split))).toEqual([{ kind: 'user', id: 'u1', text: 'café → ok' }])
+    expect(parser.push(bytes.subarray(split))).toEqual([{ kind: 'user', id: 'u1', text: 'café → ok', at: Date.parse(base.timestamp) }])
   })
 
   it('skips a malformed line and carries on', () => {

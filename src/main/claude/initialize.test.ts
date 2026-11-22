@@ -21,7 +21,15 @@ describe('parseInitialize', () => {
       subscriptionType: 'Claude Ultra',
       apiProvider: 'firstParty'
     })
-    expect(init.commands.map((c) => c.name)).toEqual(['compact', 'review'])
+    expect(init.commands.map((c) => c.name)).toEqual(['clear', 'compact', 'context', 'init', 'mcp', 'model', 'rename', 'usage', 'review'])
+    expect(init.commands[0]).toEqual({
+      name: 'clear',
+      description: 'Start a new session with empty context; previous session stays on disk (resumable with /resume)',
+      argumentHint: '[name]',
+      aliases: ['reset', 'new'],
+      builtin: true
+    })
+    expect(init.commands.at(-1)).toMatchObject({ name: 'review', aliases: [], builtin: false })
     expect(init.permissionMode).toBe('default')
   })
 

@@ -136,6 +136,22 @@ describe('control replies', () => {
     expect(reply.response).toEqual(recorded)
   })
 
+  it('answers get_context_usage with the recorded reply for the current model', async () => {
+    const recorded = JSON.parse(readFileSync(join(FIXTURES, 'get-context-usage-reply.json'), 'utf-8')).response.response
+    const reply = await start(['--model', 'haiku']).control('get_context_usage')
+    expect(reply.response).toEqual({ ...recorded, model: 'claude-haiku-5-5' })
+  })
+
+  it("moves a script's contextTokens into Messages and out of Free space", async () => {
+    const recorded = JSON.parse(readFileSync(join(FIXTURES, 'get-context-usage-reply.json'), 'utf-8')).response.response
+    const reply = await start([], { contextTokens: 600000, turns: [] }).control('get_context_usage')
+    const tokens = (name: string, from: Line) => from.categories.find((c: Line) => c.name === name).tokens
+    const extra = 600000 - recorded.totalTokens
+    expect(reply.response).toMatchObject({ totalTokens: 600000, percentage: 60 })
+    expect(tokens('Messages', reply.response)).toBe(tokens('Messages', recorded) + extra)
+    expect(tokens('Free space', reply.response)).toBe(tokens('Free space', recorded) - extra)
+  })
+
   it('switches the permission mode and reports it as a status line', async () => {
     const fake = start()
     const reply = await fake.control('set_permission_mode', { mode: 'acceptEdits' })
@@ -164,6 +180,23 @@ describe('control replies', () => {
     expect((await fake.control('get_settings')).response.applied.model).toBe('claude-opus-5-5')
     await fake.control('set_model', { model: 'haiku' })
     expect((await fake.control('get_settings')).response.applied.model).toBe('claude-haiku-5-5')
+  })
+
+  it('names the session from the description, keeps a persisted title, and takes a rename', async () => {
+    const fake = start(['--resume', 'abc-123'])
+    const first = await fake.control('generate_session_title', { description: 'fix the login bug today please', persist: true })
+    expect(first.response).toEqual({ title: 'Fix the login bug today' })
+    const again = await fake.control('generate_session_title', { description: 'something else', persist: true })
+    expect(again.response).toEqual({ title: 'Fix the login bug today' })
+    expect((await fake.control('rename_session', { title: 'Auth', source: 'host', session_id: 'abc-123' })).subtype).toBe('success')
+    expect((await fake.control('generate_session_title', { description: 'x', persist: true })).response).toEqual({ title: 'Auth' })
+  })
+
+  it("uses a script's title and refuses a rename for another session", async () => {
+    const fake = start([], { title: 'Scripted title', turns: [] })
+    expect((await fake.control('generate_session_title', { description: 'anything', persist: true })).response).toEqual({ title: 'Scripted title' })
+    const refused = await fake.control('rename_session', { title: 'X', source: 'host', session_id: 'not-this-one' })
+    expect(refused).toMatchObject({ subtype: 'error', error: 'session_id is not the current session' })
   })
 
   it('accepts set_max_thinking_tokens with an empty success', async () => {
@@ -227,6 +260,35 @@ describe('scripts', () => {
     fake.say('hi')
     const event = await fake.next((l) => l.type === 'rate_limit_event')
     expect(event.rate_limit_info.unifiedWindows.seven_day.utilization).toBe(0.42)
+  })
+})
+
+describe('thinking and todos', () => {
+  const stream = (fake: Fake): Line[] => fake.lines.filter((l) => l.type === 'stream_event').map((l) => l.event)
+
+  it('streams a thinking block before the text of the same message, as the recording does', async () => {
+    const fake = start(PARTIAL, { turns: [{ match: '', events: [{ type: 'text', text: 'Done.', thinking: { tokens: 258 } }] }] })
+    fake.say('hi')
+    await fake.next(isResult)
+    const events = stream(fake)
+    expect(events.find((e) => e.type === 'content_block_start' && e.index === 0)?.content_block).toEqual({ type: 'thinking', thinking: '', signature: '' })
+    expect(events.find((e) => e.type === 'content_block_start' && e.index === 1)?.content_block.type).toBe('text')
+    expect(events.some((e) => e.type === 'content_block_delta' && e.delta.type === 'signature_delta' && e.index === 0)).toBe(true)
+    const assistants = fake.lines.filter((l) => l.type === 'assistant')
+    expect(new Set(assistants.map((l) => l.message.id)).size).toBe(1)
+    expect(assistants.map((l) => l.message.content[0].type)).toEqual(['thinking', 'text'])
+    const estimate = fake.lines.filter((l) => l.type === 'system' && l.subtype === 'thinking_tokens').at(-1)
+    expect(estimate?.estimated_tokens).toBe(258)
+  })
+
+  it('runs TodoWrite without asking and answers with the CLI’s own result', async () => {
+    const todos = [{ content: 'Plan', status: 'in_progress', activeForm: 'Planning' }]
+    const fake = start(PARTIAL, { turns: [{ match: '', events: [{ type: 'tool_use', name: 'TodoWrite', input: { todos } }, { type: 'text', text: 'ok' }] }] })
+    fake.say('hi')
+    await fake.next(isResult)
+    expect(fake.lines.some(isApproval)).toBe(false)
+    const [result] = fake.lines.filter((l) => l.type === 'user').flatMap((l) => l.message.content)
+    expect(result.content).toMatch(/^Todos have been modified successfully\./)
   })
 })
 
@@ -384,5 +446,73 @@ describe('log', () => {
     expect(log[1].line.request.subtype).toBe('initialize')
     expect(log[3].line.request.subtype).toBe('can_use_tool')
     expect(log[4].line.response.response.behavior).toBe('allow')
+  })
+})
+
+describe('queued prompts', () => {
+  const REPLAY = ['--replay-user-messages']
+  const ask = (fake: Fake, text: string, uuid: string): void =>
+    fake.write({ type: 'user', uuid, message: { role: 'user', content: [{ type: 'text', text }] } })
+  /** Queue frames as `<uuid> <state>`, replay echoes as `<uuid> replay`, results as `result`. */
+  const frames = (fake: Fake): string[] =>
+    fake.lines.flatMap((l) => {
+      if (l.type === 'command_lifecycle') return [`${l.command_uuid} ${l.state}`]
+      if (l.type === 'user' && l.isReplay) return [`${l.uuid} replay`]
+      if (l.type === 'result') return ['result']
+      return []
+    })
+
+  it('reports a prompt queued, started, echoed and completed, like the recording', async () => {
+    const fake = start(REPLAY)
+    ask(fake, 'hello', 'a')
+    await fake.next(isResult)
+    await fake.next((l) => l.type === 'command_lifecycle' && l.state === 'completed')
+    expect(frames(fake)).toEqual(['a queued', 'a started', 'a replay', 'result', 'a completed'])
+    const echo = fake.lines.find((l) => l.isReplay)!
+    expect(echo.message.content).toEqual([{ type: 'text', text: 'hello' }])
+  })
+
+  it('sends no replay echo without --replay-user-messages, and no frames for a prompt without a uuid', async () => {
+    const fake = start()
+    ask(fake, 'hello', 'a')
+    await fake.next((l) => l.type === 'command_lifecycle' && l.state === 'completed')
+    fake.say('no uuid')
+    await fake.next(isResult, fake.lines.length)
+    expect(frames(fake)).toEqual(['a queued', 'a started', 'result', 'a completed', 'result'])
+  })
+
+  it('a prompt sent mid-reply waits for the turn, then starts its own', async () => {
+    const fake = start(REPLAY, {
+      turns: [
+        { match: 'first', events: [{ type: 'text', text: 'One.' }, { type: 'wait', ms: 300 }, { type: 'text', text: 'Two.' }] },
+        { match: 'second', events: [{ type: 'text', text: 'Three.' }] }
+      ]
+    })
+    ask(fake, 'first', 'a')
+    await fake.next((l) => l.type === 'assistant')
+    ask(fake, 'second', 'b')
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'b' && l.state === 'completed')
+    expect(frames(fake)).toEqual([
+      'a queued', 'a started', 'a replay', 'b queued', 'result', 'a completed',
+      'b started', 'b replay', 'result', 'b completed'
+    ])
+  })
+
+  it('a prompt queued during a tool call joins the running turn after the tool result, as the real CLI does', async () => {
+    const fake = start(REPLAY, {
+      turns: [
+        { match: 'sleep', events: [WRITE] },
+        { match: 'pong', events: [{ type: 'text', text: 'PONG' }] }
+      ]
+    })
+    ask(fake, 'sleep', 'a')
+    const approval = await fake.next(isApproval)
+    ask(fake, 'pong', 'b')
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'b')
+    reply(fake, approval, { behavior: 'allow', updatedInput: WRITE.input, updatedPermissions: [] })
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'a' && l.state === 'completed')
+    expect(frames(fake)).toEqual(['a queued', 'a started', 'a replay', 'b queued', 'b replay', 'b started', 'b completed', 'result', 'a completed'])
+    expect(fake.lines.filter(isResult)).toHaveLength(1)
+    expect(fake.lines.find(isResult)!.result).toBe('PONG')
   })
 })

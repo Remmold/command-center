@@ -11,9 +11,10 @@ import { appManager } from './apps/manager'
 import { ptyManager } from './pty/manager'
 import { claudeManager } from './claude/manager'
 import { listProjectFiles } from './files/lister'
+import { findMentions } from './files/mentions'
 import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
-import { listLocalSessions } from './claude/local-sessions'
+import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
@@ -30,9 +31,12 @@ import {
   DEFAULT_PROFILE_ID,
   type AddWorkspaceResult,
   type ClaudeStartOptions,
+  type UserContentBlock,
   type ModelDefaultsPatch,
   type ScreenFocus,
-  type SessionInitEnvelope
+  type SessionInitEnvelope,
+  type SessionRename,
+  type RenameResult
 } from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
 import type { StartWithWindowsControl } from './tray/startWithWindows'
@@ -189,6 +193,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
 
   ipcMain.handle(IPC.FILES_LIST, (_event, cwd: string) => listProjectFiles(cwd))
+  ipcMain.handle(IPC.FILES_MENTIONS, (_event, cwd: string, query: string) => findMentions(cwd, query))
 
   // Managed apps (machine-wide launchers/servers — independent of any project)
   ipcMain.handle(IPC.APPS_LIST, () => apps.list())
@@ -284,14 +289,25 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     (
       _e,
       paneId: string,
-      text: string,
-      images?: Array<{ media_type: string; data: string }>
-    ) => claudeManager.send(paneId, text, images)
+      content: UserContentBlock[],
+      uuid: string
+    ) => claudeManager.send(paneId, content, uuid)
   )
 
   ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, async (_e, cwd: string) =>
     listLocalSessions(await transcriptsDirForCwd(cwd))
   )
+  ipcMain.handle(IPC.CLAUDE_RENAME_SESSION, async (_e, rename: SessionRename): Promise<RenameResult> => {
+    const title = cleanSessionTitle(rename.title)
+    if (!title) return { ok: false, error: 'title must be non-empty' }
+    // A running CLI writes the transcript itself; appending beside it would race its writes.
+    if (rename.paneId && claudeManager.isAlive(rename.paneId)) {
+      const told = await claudeManager.control(rename.paneId, 'rename_session', { title, source: 'host', session_id: rename.sessionId })
+      return told.ok ? { ok: true, title } : { ok: false, error: told.error }
+    }
+    const written = await appendCustomTitle(await transcriptsDirForCwd(rename.cwd), rename.sessionId, title)
+    return written ? { ok: true, title } : { ok: false, error: 'no transcript to rename' }
+  })
 
   ipcMain.handle(IPC.FILES_SAVE_AS, async (event, suggestedName: string, content: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)

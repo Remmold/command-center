@@ -1,5 +1,8 @@
-import type { Page } from '@playwright/test'
-import { chooseMode, expect, prompt, send, startSession, test } from './harness'
+import type { ElectronApplication, Page } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { chooseMode, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
 const WRITE_DONE = 'Created hello.txt containing hi.'
@@ -81,6 +84,116 @@ test.describe('slow turn', () => {
     await expect(prompt(page)).toBeEditable()
     await expect(page.getByText('The long job finished.')).toHaveCount(0)
   })
+
+  test('a prompt sent mid-turn shows queued and starts after Esc from the transcript stops the turn', async ({ launched }) => {
+    const { page, log } = launched
+    const pane = page.locator('[data-chat-pane]')
+    const queued = pane.getByRole('article', { name: 'You, queued' })
+    const userLines = () => log.entries().filter((e) => e.kind === 'received' && e.line?.type === 'user')
+    await startSession(launched)
+    await send(page, 'run the long job')
+    await expect(page.getByText('Starting a long job.')).toBeVisible()
+    await expect(pane.getByRole('button', { name: 'Stop' })).toBeVisible()
+
+    await prompt(page).fill('and then this')
+    await expect(pane.getByRole('button', { name: 'Stop' })).toHaveCount(0)
+    await prompt(page).press('Enter')
+    await expect(queued).toHaveText('and then this')
+    await expect(pane.getByRole('button', { name: 'Stop' })).toBeVisible()
+    await expect.poll(() => userLines().length).toBe(2)
+    expect(userLines()[1].line).toMatchObject({ uuid: expect.any(String) })
+    expect(log.controlRequests('interrupt')).toHaveLength(0)
+
+    await pane.locator('[tabindex="-1"]').click({ position: { x: 5, y: 5 } })
+    await page.keyboard.press('Escape')
+    await expect.poll(() => log.controlRequests('interrupt').length).toBe(1)
+    await expect(queued).toHaveCount(0)
+    await expect(pane.getByText('and then this')).toBeVisible()
+    await expect(page.getByText('Starting a long job.')).toHaveCount(2)
+  })
+})
+
+test('↑/↓ recall earlier prompts and Ctrl+J adds a line', async ({ launched }) => {
+  const { page } = launched
+  await startSession(launched)
+  await send(page, 'first prompt')
+  await expect(page.getByText(BASIC_REPLY)).toHaveCount(1)
+  await send(page, 'second prompt')
+  await expect(page.getByText(BASIC_REPLY)).toHaveCount(2)
+
+  await prompt(page).fill('draft')
+  await prompt(page).press('Home')
+  await prompt(page).press('ArrowUp')
+  await expect(prompt(page)).toHaveValue('second prompt')
+  await prompt(page).press('ArrowUp')
+  await expect(prompt(page)).toHaveValue('first prompt')
+  await prompt(page).press('End')
+  await prompt(page).press('ArrowDown')
+  await expect(prompt(page)).toHaveValue('second prompt')
+  await prompt(page).press('End')
+  await prompt(page).press('ArrowDown')
+  await expect(prompt(page)).toHaveValue('draft')
+
+  await prompt(page).fill('')
+  await prompt(page).pressSequentially('a')
+  await prompt(page).press('Control+j')
+  await prompt(page).pressSequentially('b')
+  await expect(prompt(page)).toHaveValue(['a', 'b'].join(String.fromCharCode(10)))
+  await expect(page.getByTestId('view-work')).toBeVisible()
+})
+
+test('the slash menu sends on Enter, inserts with a hint on Tab, and opens the app’s own UI', async ({ launched }) => {
+  const { page, log } = launched
+  const menu = page.getByRole('listbox', { name: 'Actions' })
+  await startSession(launched)
+
+  await prompt(page).pressSequentially('/comp')
+  await expect(menu.getByRole('option', { name: '/compact' })).toHaveAttribute('aria-selected', 'true')
+  await prompt(page).press('Enter')
+  await expect.poll(() => log.userTexts()).toContain('/compact')
+  await expect(prompt(page)).toHaveValue('')
+  await expect(menu).toHaveCount(0)
+
+  await prompt(page).pressSequentially('/mod')
+  await prompt(page).press('Tab')
+  await expect(prompt(page)).toHaveValue('/model ')
+  await expect(page.locator('[data-argument-hint]')).toHaveText('<model>')
+
+  await prompt(page).fill('')
+  await prompt(page).pressSequentially('/model')
+  await prompt(page).press('Enter')
+  await expect(page.getByRole('dialog', { name: 'Select a model' })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await prompt(page).pressSequentially('/context')
+  await prompt(page).press('Enter')
+  const context = page.getByRole('dialog', { name: 'Context usage' })
+  await expect(context.getByText('22.1k / 1.0M tokens (2%)')).toBeVisible()
+  await expect(context.getByText('~\\.claude\\CLAUDE.md')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(context).toHaveCount(0)
+
+  await prompt(page).pressSequentially('/usage')
+  await prompt(page).press('Enter')
+  await expect(page.getByRole('dialog', { name: 'Account & Usage' })).toBeVisible()
+  expect(log.userTexts()).toEqual(['/compact'])
+})
+
+test.describe('a full context', () => {
+  test.use({ script: 'context' })
+
+  test('the context pie shows from the start, refreshes after a turn and sends /compact when clicked', async ({ launched }) => {
+    const { page, log } = launched
+    await startSession(launched)
+    const pie = page.getByRole('button', { name: '72% context used — click to compact' })
+    await expect(pie).toBeVisible()
+    await send(page, 'hello')
+    await expect(page.getByText('This chat is getting long.')).toBeVisible()
+    await expect.poll(() => log.controlRequests('get_context_usage').length).toBe(2)
+    await expect(pie).toHaveAttribute('title', '28% of context remaining until auto-compact.\nClick to compact now.')
+    await pie.click()
+    await expect.poll(() => log.userTexts()).toEqual(['hello', '/compact'])
+  })
 })
 
 test.describe('tool approval', () => {
@@ -133,5 +246,202 @@ test.describe('tool approval', () => {
     expect(log.approvalReplies()).toEqual([
       expect.objectContaining({ behavior: 'allow', updatedPermissions: [expect.objectContaining({ type: 'setMode', mode: 'acceptEdits' })] })
     ])
+  })
+})
+
+/** The system clipboard, with Windows line ends turned back into the plain newlines the app copied. */
+async function clipboardText(app: ElectronApplication): Promise<string> {
+  return (await app.evaluate(({ clipboard }) => clipboard.readText())).replace(/\r\n/g, '\n')
+}
+
+test.describe('chat rendering', () => {
+  test.use({ script: 'render' })
+
+  test('thinking, the todo checklist, copy buttons and timestamps render as in the extension', async ({ launched }) => {
+    const { app, page } = launched
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await send(page, 'plan the work')
+    await expect(pane.getByText('All planned.')).toBeVisible()
+
+    await expect(pane.getByText(/^Thought for \ds$/)).toBeVisible()
+
+    const lists = pane.getByRole('button', { name: /Update Todos/ })
+    await expect(lists).toHaveCount(2)
+    await expect(lists.nth(0)).toHaveAttribute('aria-expanded', 'false')
+    await expect(lists.nth(1)).toHaveAttribute('aria-expanded', 'true')
+    const items = pane.locator('li[data-state]')
+    await expect(items).toHaveCount(2)
+    await expect(items.nth(0)).toHaveAttribute('data-state', 'checked')
+    await expect(items.nth(1)).toHaveAttribute('data-state', 'mixed')
+
+    await pane.locator('pre').hover()
+    await pane.getByRole('button', { name: 'Copy code to clipboard' }).click()
+    await expect.poll(() => clipboardText(app)).toBe("console.log('copied')")
+
+    await pane.getByText('All planned.').hover()
+    await pane.getByRole('button', { name: 'Copy response to clipboard' }).click()
+    await expect.poll(() => clipboardText(app)).toBe("Here is the snippet:\n\n```js\nconsole.log('copied')\n```\n\nAll planned.")
+
+    await expect(pane.locator('[data-message-stamp]').first()).toHaveText(/^\d{1,2}:\d{2} [AP]M$/)
+    await expect(pane.getByRole('separator').first()).toHaveText(/^[A-Z][a-z]{2}, [A-Z][a-z]{2} \d{1,2}$/)
+  })
+
+  test('scrolling up holds the view while output arrives; sending follows again', async ({ launched }) => {
+    const { page } = launched
+    const pane = page.locator('[data-chat-pane]')
+    const transcript = pane.locator('[data-transcript]')
+    await startSession(launched)
+    await page.setViewportSize({ width: 900, height: 420 })
+    await send(page, 'a long answer')
+    await expect(pane.getByText('End of the first part.')).toBeVisible()
+
+    await transcript.evaluate((el) => (el.scrollTop = 0))
+    await expect(pane.getByText('The second part arrived.')).toBeAttached({ timeout: 10_000 })
+    expect(await transcript.evaluate((el) => el.scrollTop)).toBe(0)
+
+    await send(page, 'another long answer')
+    await expect(pane.getByText('End of the first part.').nth(1)).toBeVisible()
+    await expect
+      .poll(() => transcript.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
+      .toBeLessThan(50)
+  })
+})
+
+/** A git workspace with an ignored file, a folder with a space in its name and a source file. */
+function seedMentionWorkspace(workspace: string): void {
+  execFileSync('git', ['init', '-q'], { cwd: workspace })
+  writeFileSync(join(workspace, '.gitignore'), 'secret.log\n')
+  writeFileSync(join(workspace, 'secret.log'), 'hidden')
+  mkdirSync(join(workspace, 'my folder'))
+  writeFileSync(join(workspace, 'my folder', 'notes.md'), '# notes')
+  mkdirSync(join(workspace, 'src'))
+  writeFileSync(join(workspace, 'src', 'app.ts'), 'export {}')
+}
+
+test.describe('mentions and attachments', () => {
+  test('the @ menu lists folders but not ignored files, and quotes a path with a space', async ({ launched }) => {
+    const { page } = launched
+    seedMentionWorkspace(launched.workspace)
+    await startSession(launched)
+    const menu = page.getByRole('listbox', { name: 'Suggestions' })
+
+    await prompt(page).fill('@')
+    await expect(menu.getByRole('option', { name: 'my folder/' })).toBeVisible()
+    await expect(menu.getByRole('option', { name: 'src/' })).toBeVisible()
+    await expect(menu.getByRole('option', { name: /secret\.log/ })).toHaveCount(0)
+
+    await prompt(page).fill('@secret')
+    await expect(menu.getByText('No files found')).toBeVisible()
+
+    await prompt(page).fill('@notes')
+    await expect(menu.getByRole('option', { name: /notes\.md/ })).toBeVisible()
+    await prompt(page).press('Enter')
+    await expect(prompt(page)).toHaveValue('@"my folder/notes.md"  ')
+    await expect(menu).toHaveCount(0)
+  })
+
+  test('text and PDF files go as document blocks before the prompt; an over-long prompt is refused', async ({ launched }) => {
+    const { page, log } = launched
+    await startSession(launched)
+    await page.locator('[data-chat-pane] input[type="file"]').setInputFiles([
+      { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello notes') },
+      { name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') },
+      { name: 'archive.zip', mimeType: 'application/zip', buffer: Buffer.from('PK') }
+    ])
+    await expect(page.getByText(/^Unsupported file type: archive\.zip\. /)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Remove notes.txt' })).toBeVisible()
+    await send(page, 'read these')
+    await expect.poll(() => log.entries().filter((e) => e.kind === 'received' && e.line?.type === 'user').length).toBe(1)
+    const user = log.entries().find((e) => e.kind === 'received' && e.line?.type === 'user')
+    expect((user?.line?.message as { content: unknown }).content).toEqual([
+      { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'hello notes' }, title: 'notes.txt' },
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from('%PDF-1.4').toString('base64') }, title: 'paper.pdf' },
+      { type: 'text', text: 'read these' }
+    ])
+
+    await prompt(page).fill('x'.repeat(50_001))
+    await prompt(page).press('Enter')
+    await expect(page.getByText('Your prompt is 1 character over the limit of 50000 · shorten it to send')).toBeVisible()
+    expect(log.userTexts()).toHaveLength(1)
+  })
+})
+
+const OLD_SESSION = '11111111-1111-4111-8111-111111111111'
+const UNNAMED_SESSION = '22222222-2222-4222-8222-222222222222'
+
+function seedPastSessions(dir: string): void {
+  mkdirSync(dir, { recursive: true })
+  const userLine = (text: string, gitBranch: string) =>
+    JSON.stringify({ type: 'user', gitBranch, message: { role: 'user', content: [{ type: 'text', text }] } })
+  writeFileSync(
+    join(dir, `${OLD_SESSION}.jsonl`),
+    [userLine('the login is broken', 'feature/oauth'), JSON.stringify({ type: 'ai-title', aiTitle: 'Old login fix', sessionId: OLD_SESSION })].join('\n') + '\n'
+  )
+  writeFileSync(join(dir, `${UNNAMED_SESSION}.jsonl`), userLine('tidy the readme', 'main') + '\n')
+}
+
+test.describe('session history', () => {
+  test('Claude names the session, a rename reaches the CLI, and past sessions show titles, search and rename', async ({ launched }) => {
+    const { page, log } = launched
+    const transcripts = transcriptsOf(launched)
+    seedPastSessions(transcripts)
+    await startSession(launched)
+    const list = page.getByRole('navigation', { name: 'Sessions' })
+
+    await send(page, 'fix the login bug today please')
+    await expect(list.getByText('Fix the login bug today', { exact: true })).toBeVisible()
+    expect(log.controlRequests('generate_session_title')).toEqual([
+      { subtype: 'generate_session_title', description: 'fix the login bug today please', persist: true }
+    ])
+
+    await list.getByText('Fix the login bug today', { exact: true }).dblclick()
+    await list.getByRole('textbox', { name: 'Session title' }).fill('Auth work')
+    await list.getByRole('textbox', { name: 'Session title' }).press('Enter')
+    await expect(list.getByText('Auth work', { exact: true })).toBeVisible()
+    await expect.poll(() => log.controlRequests('rename_session')).toHaveLength(1)
+    expect(log.controlRequests('rename_session')[0]).toMatchObject({ title: 'Auth work', source: 'host', session_id: expect.stringMatching(/^[0-9a-f-]{36}$/) })
+    await send(page, 'and add a test')
+    await expect(page.getByText('Hello! This is a scripted reply from the fake Claude.').nth(1)).toBeVisible()
+    await expect(list.getByText('Auth work', { exact: true })).toBeVisible()
+    expect(log.controlRequests('generate_session_title')).toHaveLength(1)
+
+    const openPast = async () => {
+      await page.getByRole('button', { name: 'Session list actions' }).click()
+      await page.getByRole('menuitem', { name: /Past sessions/ }).click()
+      await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+      return page.getByRole('dialog', { name: 'Past conversations' })
+    }
+    let past = await openPast()
+    const rows = past.getByRole('list', { name: 'Sessions' }).getByRole('button', { name: /now$/ })
+    await expect(rows).toHaveCount(2)
+    await expect(past.getByRole('button', { name: 'Old login fix now' })).toBeVisible()
+    await expect(past.getByRole('button', { name: 'tidy the readme now' })).toBeVisible()
+
+    await past.getByRole('searchbox', { name: 'Search sessions' }).fill('OAUTH')
+    await expect(rows).toHaveCount(1)
+    await past.getByRole('searchbox', { name: 'Search sessions' }).fill('login')
+    await expect(past.locator('mark')).toHaveText('login')
+    await past.getByRole('searchbox', { name: 'Search sessions' }).fill('')
+
+    await past.getByRole('button', { name: 'tidy the readme now' }).hover()
+    await past.getByRole('listitem').filter({ hasText: 'tidy the readme' }).getByRole('button', { name: 'Rename session' }).click()
+    await past.getByRole('textbox', { name: 'Session title' }).fill('Readme tidy')
+    await past.getByRole('textbox', { name: 'Session title' }).press('Enter')
+    await expect(past.getByRole('button', { name: 'Readme tidy now' })).toBeVisible()
+    await expect
+      .poll(() => readFileSync(join(transcripts, `${UNNAMED_SESSION}.jsonl`), 'utf-8').trim().split('\n').at(-1))
+      .toBe(JSON.stringify({ type: 'custom-title', sessionId: UNNAMED_SESSION, customTitle: 'Readme tidy' }))
+
+    await past.getByRole('button', { name: 'Old login fix now' }).click()
+    await expect(past).toHaveCount(0)
+    await expect(list.getByText('Old login fix', { exact: true })).toBeVisible()
+    await send(page, 'carry on')
+    await expect.poll(() => log.entries().some((e) => e.kind === 'argv' && (e.argv as string[]).includes(OLD_SESSION))).toBe(true)
+    expect(log.controlRequests('generate_session_title')).toHaveLength(1)
+
+    past = await openPast()
+    await expect(past.getByRole('img', { name: /^Open in this window/ })).toHaveCount(1)
+    await expect(past.getByRole('listitem').filter({ hasText: 'Old login fix' }).getByRole('img', { name: /^Open in this window/ })).toBeVisible()
   })
 })

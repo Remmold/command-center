@@ -9,7 +9,7 @@ import { useSessionStatusStore } from './sessionStatusStore'
 import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
 
-export const NEXT_WAITING_SHORTCUT = 'Ctrl+J'
+export const NEXT_WAITING_SHORTCUT = 'Ctrl+Shift+J'
 
 export interface HostedSessionRef {
   paneId: string
@@ -145,7 +145,7 @@ export function startSession(workspace: Workspace): boolean {
 export function resumeSession(workspace: Workspace, info: LocalSessionInfo): boolean {
   const views = useProjectViewsStore.getState()
   if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
-  const loaded = useProjectViewsStore.getState().loadSessionFromLocal(workspace.id, info.sessionId, info.preview)
+  const loaded = useProjectViewsStore.getState().loadSessionFromLocal(workspace.id, info)
   return loaded ? openSession(loaded.id) : false
 }
 

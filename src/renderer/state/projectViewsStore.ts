@@ -12,7 +12,16 @@ import {
 } from './projectViewLayout'
 import { migratePermissionModes, type PermissionMode, type SavedModes } from './permissionModes'
 import { migrateModelChoices, type SavedModelChoices } from './modelPicker'
-import { NEW_SESSION_TITLE, migratedTitle, titleAfterPrompt, titleAfterRename, type SessionTitle } from './sessionTitle'
+import { ATTACHED_MARKER } from '../components/chat/promptHistory'
+import {
+  NEW_SESSION_TITLE,
+  migratedTitle,
+  titleAfterClaude,
+  titleAfterPrompt,
+  titleAfterRename,
+  type SessionTitle
+} from './sessionTitle'
+import type { LocalSessionInfo } from '../../shared/types'
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku' | string
 
@@ -108,13 +117,10 @@ interface ProjectViewsState {
   renameSession: (paneId: string, name: string) => void
   /** Names a session from its first prompt. */
   notePrompt: (paneId: string, text: string) => void
+  /** Claude's `generate_session_title` result; a rename keeps winning. */
+  applyClaudeTitle: (paneId: string, title: string) => void
   duplicateSession: (projectId: string, sessionId: string) => ClaudeChatSession | null
-  loadSessionFromLocal: (
-    projectId: string,
-    claudeSessionId: string,
-    firstPrompt?: string,
-    model?: ClaudeModel
-  ) => ClaudeChatSession | null
+  loadSessionFromLocal: (projectId: string, info: LocalSessionInfo, model?: ClaudeModel) => ClaudeChatSession | null
 
   openShell: (projectId: string, options?: ShellOptions) => ShellTab | null
   addShellTab: (projectId: string, kind?: PtyKind) => ShellTab | null
@@ -159,12 +165,25 @@ function retitle(set: SetState, paneId: string, change: (t: SessionTitle) => Ses
   set((s) => {
     const found = findSessionByPane(s, paneId)
     if (!found) return s
-    const { title, titleRenamed } = change(found.session)
-    if (title === found.session.title && titleRenamed === found.session.titleRenamed) return s
+    const { title, titleRenamed, titleFromClaude } = change(found.session)
+    const same =
+      title === found.session.title &&
+      titleRenamed === found.session.titleRenamed &&
+      titleFromClaude === found.session.titleFromClaude
+    if (same) return s
     const view = s.views[found.projectId]
-    const claudeSessions = view.claudeSessions.map((c) => (c.id === paneId ? { ...c, title, titleRenamed } : c))
+    const claudeSessions = view.claudeSessions.map((c) =>
+      c.id === paneId ? { ...c, title, titleRenamed, titleFromClaude } : c
+    )
     return { views: { ...s.views, [found.projectId]: { ...view, claudeSessions } } }
   })
+}
+
+/** A past session keeps the kind of title it was listed with, so a rename or Claude's title still wins over prompts. */
+function loadedTitle(info: LocalSessionInfo): SessionTitle {
+  if (info.titleSource === 'renamed') return { title: info.title, titleRenamed: true }
+  if (info.titleSource === 'claude') return { title: info.title, titleFromClaude: true }
+  return { title: migratedTitle([info.title]) }
 }
 
 function updateSession(set: SetState, paneId: string, change: Partial<ClaudeChatSession>): void {
@@ -177,8 +196,6 @@ function updateSession(set: SetState, paneId: string, change: Partial<ClaudeChat
   })
 }
 
-/** What ChatView appends to a sent prompt that carried images; never part of a title. */
-const IMAGES_NOTE = /\n\n_\[\d+ images? attached\]_$/
 
 /** Titles for sessions saved before they had one, from the user messages already in their chat. */
 function migrateTitles(views: Record<string, { claudeSessions: unknown[] }>): void {
@@ -187,10 +204,16 @@ function migrateTitles(views: Record<string, { claudeSessions: unknown[] }>): vo
     v.claudeSessions = v.claudeSessions.map((raw) => {
       const { label: _label, ...c } = raw as ClaudeChatSession & { label?: string }
       if (typeof c.title === 'string') return c
-      const prompts = (items[c.id] ?? []).flatMap((i) => (i.kind === 'user' ? [i.text.replace(IMAGES_NOTE, '')] : []))
+      const prompts = (items[c.id] ?? []).flatMap((i) => (i.kind === 'user' ? [i.text.replace(ATTACHED_MARKER, '')] : []))
       return { ...c, title: migratedTitle(prompts) }
     })
   }
+}
+
+/** The shell tabs of the workspace a chat session belongs to. */
+export function shellTabsOfSession(paneId: string): ShellTab[] {
+  const view = Object.values(useProjectViewsStore.getState().views).find((v) => v.claudeSessions.some((c) => c.id === paneId))
+  return view?.shellTabs ?? []
 }
 
 export const useProjectViewsStore = create<ProjectViewsState>()(
@@ -373,6 +396,8 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
 
       notePrompt: (paneId, text) => retitle(set, paneId, (t) => titleAfterPrompt(t, text)),
 
+      applyClaudeTitle: (paneId, title) => retitle(set, paneId, (t) => titleAfterClaude(t, title)),
+
       duplicateSession: (projectId, sessionId) => {
         const view = get().views[projectId]
         if (!view) return null
@@ -404,16 +429,16 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         return dup
       },
 
-      loadSessionFromLocal: (projectId, claudeSessionId, firstPrompt, model) => {
+      loadSessionFromLocal: (projectId, info, model) => {
         const view = get().views[projectId]
         if (!view) return null
         const session: ClaudeChatSession = {
           id: makeId(),
-          title: migratedTitle(firstPrompt ? [firstPrompt] : []),
+          ...loadedTitle(info),
           model,
           thinking: true,
           permissionMode: get().defaultPermissionMode,
-          claudeSessionId
+          claudeSessionId: info.sessionId
         }
         set((s) => {
           const v = s.views[projectId]

@@ -28,6 +28,8 @@ export function GeneralSettings() {
   const [startWithWindows, toggle] = useStartWithWindows()
   const allowBypass = useGeneralSettingsStore((s) => s.allowDangerouslySkipPermissions)
   const setAllowBypass = useGeneralSettingsStore((s) => s.setAllowDangerouslySkipPermissions)
+  const ctrlEnterSends = useGeneralSettingsStore((s) => s.useCtrlEnterToSend)
+  const setCtrlEnterSends = useGeneralSettingsStore((s) => s.setUseCtrlEnterToSend)
 
   return (
     <Page label="General">
@@ -48,6 +50,10 @@ export function GeneralSettings() {
             Allow Dangerously Skip Permissions
           </Checkbox>
           <PageNote>Allow bypass permissions mode. Recommended only for sandboxes with no internet access.</PageNote>
+          <Checkbox checked={ctrlEnterSends} onChange={setCtrlEnterSends}>
+            Use Ctrl Enter To Send
+          </Checkbox>
+          <PageNote>When enabled, use Ctrl/Cmd+Enter to send prompts instead of just Enter. This allows Enter to create new lines.</PageNote>
         </PageGroup>
       </PageBody>
     </Page>

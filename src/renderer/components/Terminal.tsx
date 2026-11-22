@@ -4,6 +4,18 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { PtyKind } from '../../shared/types'
 import { monoFont, xtermTheme } from '../theme/theme'
+import { registerTerminalReader } from '../state/terminalBuffers'
+
+/** The extension's `getTerminalContents` limit. */
+const TERMINAL_MENTION_LINES = 100
+
+function bufferText(term: XTerm): string {
+  const buffer = term.buffer.active
+  const lines: string[] = []
+  for (let i = 0; i < buffer.length; i++) lines.push(buffer.getLine(i)?.translateToString(true) ?? '')
+  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+  return lines.slice(-TERMINAL_MENTION_LINES).join('\n')
+}
 
 interface Props {
   paneId: string
@@ -39,6 +51,7 @@ export function Terminal({ paneId, kind, cwd, env }: Props) {
 
     let alive = true
     let spawned = false
+    const unregister = registerTerminalReader(paneId, () => bufferText(term))
 
     const spawn = async () => {
       const res = await window.api.pty.spawn(paneId, kind, cwd, envRef.current)
@@ -84,6 +97,7 @@ export function Terminal({ paneId, kind, cwd, env }: Props) {
 
     return () => {
       alive = false
+      unregister()
       ro.disconnect()
       dataDisposable.dispose()
       unsubData()

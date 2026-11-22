@@ -198,7 +198,7 @@ function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSes
           cwd={view.projectPath}
           onClose={() => setPastOpen(false)}
           onLoad={(info) => {
-            const loaded = store.getState().loadSessionFromLocal(view.projectId, info.sessionId, info.preview)
+            const loaded = store.getState().loadSessionFromLocal(view.projectId, info)
             if (loaded) openSession(loaded.id)
           }}
         />

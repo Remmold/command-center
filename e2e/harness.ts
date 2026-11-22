@@ -12,7 +12,9 @@ const ELECTRON = require('electron') as unknown as string
 export const SCRIPTS = {
   basic: join(REPO, 'tools', 'fake-claude', 'scripts', 'basic.json'),
   approval: join(REPO, 'tools', 'fake-claude', 'scripts', 'approval.json'),
-  slow: join(__dirname, 'scripts', 'slow.json')
+  slow: join(__dirname, 'scripts', 'slow.json'),
+  context: join(__dirname, 'scripts', 'context.json'),
+  render: join(__dirname, 'scripts', 'render.json')
 } as const
 
 export type ScriptName = keyof typeof SCRIPTS
@@ -57,6 +59,17 @@ export class FakeLog {
     })
   }
 
+  /** The text of each user message the app sent. */
+  userTexts(): string[] {
+    return this.entries().flatMap((e) => {
+      if (e.kind !== 'received' || e.line?.type !== 'user') return []
+      const content = (e.line.message as { content?: unknown } | undefined)?.content
+      if (typeof content === 'string') return [content]
+      if (!Array.isArray(content)) return []
+      return [content.flatMap((b) => (isRecord(b) && typeof b.text === 'string' ? [b.text] : [])).join('')]
+    })
+  }
+
   toolPrompts(): number {
     return this.entries().filter((e) => e.kind === 'sent' && bodyOf(e, 'control_request')?.subtype === 'can_use_tool').length
   }
@@ -76,6 +89,8 @@ interface Launched {
   page: Page
   log: FakeLog
   workspace: string
+  /** The temp `CLAUDE_CONFIG_DIR`; transcripts live under its `projects/`. */
+  configDir: string
 }
 
 function seedDirs(root: string): { userData: string; workspace: string; configDir: string; home: string; logFile: string } {
@@ -173,7 +188,7 @@ export const test = base.extend<{ script: ScriptName; launched: Launched }>({
       try {
         const page = await app.firstWindow()
         await page.waitForLoadState('domcontentloaded')
-        await use({ app, page, log: new FakeLog(dirs.logFile), workspace: dirs.workspace })
+        await use({ app, page, log: new FakeLog(dirs.logFile), workspace: dirs.workspace, configDir: dirs.configDir })
       } finally {
         await shutdown(app)
       }
@@ -194,8 +209,13 @@ export async function startSession({ page, log, workspace }: Launched): Promise<
   await expect.poll(() => log.initializedIn(workspace)).toBe(true)
 }
 
+/** The folder the app lists past sessions from: Claude's per-cwd transcript folder. */
+export function transcriptsOf({ configDir, workspace }: Pick<Launched, 'configDir' | 'workspace'>): string {
+  return join(configDir, 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
+}
+
 export function prompt(page: Page) {
-  return page.locator('[data-chat-pane] textarea')
+  return page.locator('[data-chat-pane] textarea:visible')
 }
 
 export async function send(page: Page, text: string): Promise<void> {

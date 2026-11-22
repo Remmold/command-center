@@ -27,7 +27,8 @@ import type {
   SessionInit,
   ModelDefaults,
   SaveDefaultsResult,
-  SessionInitEnvelope
+  SessionInitEnvelope,
+  MentionEntry
 } from '../shared/types'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from '../shared/approval'
 
@@ -102,6 +103,7 @@ const api: RendererApi = {
   },
   files: {
     list: (cwd: string): Promise<string[]> => ipcRenderer.invoke(IPC.FILES_LIST, cwd),
+    mentions: (cwd: string, query: string): Promise<MentionEntry[]> => ipcRenderer.invoke(IPC.FILES_MENTIONS, cwd, query),
     saveAs: (suggestedName: string, content: string) =>
       ipcRenderer.invoke(IPC.FILES_SAVE_AS, suggestedName, content),
     read: (cwd: string, relativePath: string) =>
@@ -138,8 +140,9 @@ const api: RendererApi = {
       ipcRenderer.on(IPC.CLAUDE_INIT, handler)
       return () => ipcRenderer.off(IPC.CLAUDE_INIT, handler)
     },
-    send: (paneId, text, images) => ipcRenderer.send(IPC.CLAUDE_SEND, paneId, text, images),
+    send: (paneId, content, uuid) => ipcRenderer.send(IPC.CLAUDE_SEND, paneId, content, uuid),
     listLocalSessions: (cwd) => ipcRenderer.invoke(IPC.CLAUDE_LIST_LOCAL_SESSIONS, cwd),
+    renameSession: (rename) => ipcRenderer.invoke(IPC.CLAUDE_RENAME_SESSION, rename),
     interrupt: (paneId) => ipcRenderer.send(IPC.CLAUDE_INTERRUPT, paneId),
     stop: (paneId) => ipcRenderer.send(IPC.CLAUDE_STOP, paneId),
     onEvent: (cb) => {

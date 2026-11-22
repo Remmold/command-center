@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { CliModel } from '../../../shared/types'
 import { useMenu } from '../../hooks/useMenu'
 import { DEFAULT_MODEL, pickerModels, type Pill as PillText } from '../../state/modelPicker'
@@ -15,11 +16,20 @@ interface Props {
   levels: string[]
   onSelectModel: (model: string) => void
   onSelectEffort: (level: string) => void
+  /** Each change opens the menu, as /model and "Switch model…" do. */
+  openSignal?: number
 }
 
 /** The prompt footer's model pill and its "Select a model" menu. */
-export function ModelPicker({ models, current, pill, effort, levels, onSelectModel, onSelectEffort }: Props) {
+export function ModelPicker({ models, current, pill, effort, levels, onSelectModel, onSelectEffort, openSignal = 0 }: Props) {
   const menu = useMenu()
+  const seen = useRef(openSignal)
+  const { show } = menu
+  useEffect(() => {
+    if (openSignal === seen.current) return
+    seen.current = openSignal
+    show()
+  }, [openSignal, show])
   const rows = pickerModels(models)
   const currentValue = current ?? DEFAULT_MODEL
   return (

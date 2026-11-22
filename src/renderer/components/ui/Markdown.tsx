@@ -1,10 +1,32 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+import { useRef, type ReactNode } from 'react'
+import { CopyButton } from './CopyButton'
 
-export function Markdown({ text }: { text: string }) {
+/** What "Copy code" copies, as the extension's `F8n`: a diff whole, anything else without trailing whitespace. */
+export function codeCopyText(text: string, codeClass: string | undefined): string {
+  return /\blanguage-(diff|patch)\b/i.test(codeClass ?? '') || /^(diff --git |--- .*\n\+\+\+ )/.test(text) ? text : text.trimEnd()
+}
+
+function CodeBlock({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLPreElement | null>(null)
+  const getText = (): string => codeCopyText(ref.current?.textContent ?? '', ref.current?.querySelector('code')?.className)
   return (
-    <div className="markdown break-words text-[13px] leading-[1.6] text-fg">
+    <div className="group/code relative my-2">
+      <pre ref={ref} className="overflow-x-auto rounded border border-subtle bg-editor px-3 py-2 font-mono text-[12px] leading-[18px]">
+        {children}
+      </pre>
+      <div className="absolute right-1 top-1">
+        <CopyButton getText={getText} reveal="code" framed />
+      </div>
+    </div>
+  )
+}
+
+export function Markdown({ text, tone = 'normal' }: { text: string; tone?: 'normal' | 'muted' }) {
+  return (
+    <div className={`markdown break-words text-[13px] leading-[1.6] ${tone === 'muted' ? 'text-muted' : 'text-fg'}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
@@ -34,11 +56,7 @@ export function Markdown({ text }: { text: string }) {
             }
             return <code className="rounded-sm bg-code px-1 py-px font-mono text-[12px] text-code-fg">{children}</code>
           },
-          pre: ({ children }) => (
-            <pre className="my-2 overflow-x-auto rounded border border-subtle bg-editor px-3 py-2 font-mono text-[12px] leading-[18px]">
-              {children}
-            </pre>
-          ),
+          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
           blockquote: ({ children }) => <blockquote className="my-2 border-l-[3px] border-strong pl-3 text-muted">{children}</blockquote>,
           table: ({ children }) => (
             <div className="my-2 overflow-x-auto">

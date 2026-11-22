@@ -1,0 +1,40 @@
+{
+  "turns": [
+    {
+      "match": "plan",
+      "events": [
+        {
+          "type": "tool_use",
+          "name": "TodoWrite",
+          "thinking": { "ms": 1200, "tokens": 258 },
+          "input": {
+            "todos": [
+              { "content": "Read the spec", "status": "in_progress", "activeForm": "Reading the spec" },
+              { "content": "Write the code", "status": "pending", "activeForm": "Writing the code" }
+            ]
+          }
+        },
+        {
+          "type": "tool_use",
+          "name": "TodoWrite",
+          "input": {
+            "todos": [
+              { "content": "Read the spec", "status": "completed", "activeForm": "Reading the spec" },
+              { "content": "Write the code", "status": "in_progress", "activeForm": "Writing the code" }
+            ]
+          }
+        },
+        { "type": "text", "text": "Here is the snippet:\n\n```js\nconsole.log('copied')\n```\n\nAll planned." }
+      ]
+    },
+    {
+      "match": "long",
+      "repeat": true,
+      "events": [
+        { "type": "text", "text": "Line one of a long answer.\n\n- a\n- b\n- c\n- d\n- e\n- f\n- g\n- h\n- i\n- j\n- k\n- l\n- m\n- n\n- o\n- p\n- q\n- r\n- s\n- t\n- u\n- v\n- w\n- x\n- y\n- z\n\nEnd of the first part." },
+        { "type": "wait", "ms": 2500 },
+        { "type": "text", "text": "The second part arrived." }
+      ]
+    }
+  ]
+}

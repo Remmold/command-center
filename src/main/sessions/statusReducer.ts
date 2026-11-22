@@ -33,6 +33,7 @@ export function reduceSessionStatus(
       return enter(prev, 'running', event.at, pending)
     case 'claude-event':
       if (isTurnResult(event.event)) return enter(prev, 'your-turn', event.at, pending)
+      if (isQueuedPromptStart(event.event) && pending.length === 0) return enter(prev, 'running', event.at, pending)
       return prev ?? enter(null, 'running', event.at, pending)
     case 'permission-raised':
       if (pending.includes(event.requestId)) return prev ?? enter(null, 'needs-approval', event.at, pending)
@@ -58,4 +59,11 @@ function enter(
 
 function isTurnResult(event: unknown): boolean {
   return typeof event === 'object' && event !== null && (event as { type?: unknown }).type === 'result'
+}
+
+/** A prompt sent mid-turn waits in the CLI's queue and may start its own turn after the result. */
+function isQueuedPromptStart(event: unknown): boolean {
+  if (typeof event !== 'object' || event === null) return false
+  const e = event as { type?: unknown; state?: unknown }
+  return e.type === 'command_lifecycle' && e.state === 'started'
 }
