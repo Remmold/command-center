@@ -4,9 +4,9 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Titles: use the CLI/extension title mechanism (per research doc — e.g. a summary event or control request) instead of only the first prompt; keep a manual rename winning
-- [ ] Rename tells the CLI the way the extension does (per research doc), so the title shows in VS Code's history too
-- [ ] Past sessions (Work list menu → Past sessions…) show the extension's entry info (title, time, status dot) and search
-- [ ] Tests: pure title selection (manual > CLI title > first prompt); smoke scenario on the fake CLI
+- [x] Titles: use the CLI/extension title mechanism (per research doc — e.g. a summary event or control request) instead of only the first prompt; keep a manual rename winning
+- [x] Rename tells the CLI the way the extension does (per research doc), so the title shows in VS Code's history too
+- [x] Past sessions (Work list menu → Past sessions…) show the extension's entry info (title, time, status dot) and search
+- [x] Tests: pure title selection (manual > CLI title > first prompt); smoke scenario on the fake CLI
