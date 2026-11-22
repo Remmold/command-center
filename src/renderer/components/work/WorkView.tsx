@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels'
 import { halfShowing, type HalfIndex } from '../../state/chatPair'
 import { useChatPairStore } from '../../state/chatPairStore'
@@ -52,7 +52,7 @@ function Layer({ slot, onActivate, children }: LayerProps) {
   )
 }
 
-export function WorkView({ registerFocus }: { registerFocus: (fn: () => void) => void }) {
+export const WorkView = memo(function WorkView({ registerFocus }: { registerFocus: (fn: () => void) => void }) {
   return (
     <Group orientation="horizontal" id="work" className="h-full">
       <Panel id="session-list" defaultSize="300px" minSize="180px" maxSize="50%">
@@ -64,7 +64,7 @@ export function WorkView({ registerFocus }: { registerFocus: (fn: () => void) =>
       </Panel>
     </Group>
   )
-}
+})
 
 function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }) {
   const pair = useChatPairStore((s) => s.pair)

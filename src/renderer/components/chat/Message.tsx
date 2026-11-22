@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Markdown } from '../ui/Markdown'
 import type { ContentBlock } from '../../../shared/types'
 import type { AssistantMessageItem, ChatItem, ToolResultItem, ResultItem } from './types'
@@ -28,7 +29,7 @@ interface MessageProps {
   thinkingTokens?: number
 }
 
-export function Message({ item, stampAt, streamingFrom, thinkingTokens }: MessageProps) {
+export const Message = memo(function Message({ item, stampAt, streamingFrom, thinkingTokens }: MessageProps) {
   switch (item.kind) {
     case 'user':
       return <UserPrompt text={item.text} at={stampAt} />
@@ -41,7 +42,7 @@ export function Message({ item, stampAt, streamingFrom, thinkingTokens }: Messag
     case 'system':
       return <SystemNote text={item.text} />
   }
-}
+})
 
 function Stamp({ at }: { at: number }) {
   return <TimeStamp at={at} label={stampLabel(at)} title={stampTitle(at)} />

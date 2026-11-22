@@ -51,12 +51,14 @@ export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents
         return (
           <Fragment key={key}>
             {day !== undefined && <LabeledDivider>{dayLabel(day, now)}</LabeledDivider>}
-            <Message
-              item={item}
-              stampAt={stamps[i]}
-              streamingFrom={live ? view.live?.from : undefined}
-              thinkingTokens={live ? thinkingTokens : undefined}
-            />
+            <div className="lazy-render">
+              <Message
+                item={item}
+                stampAt={stamps[i]}
+                streamingFrom={live ? view.live?.from : undefined}
+                thinkingTokens={live ? thinkingTokens : undefined}
+              />
+            </div>
           </Fragment>
         )
       })}

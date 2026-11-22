@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dayBreaks, dayLabel, stampLabel, stampTitle } from './messageTime'
 
 const UTC = 'UTC'
@@ -26,5 +26,23 @@ describe('day lines', () => {
   it('marks the first stamped message and each one where the day changes', () => {
     const times = [undefined, at('2026-11-21T23:00:00Z'), at('2026-11-21T23:30:00Z'), undefined, at('2026-11-22T00:10:00Z')]
     expect(dayBreaks(times, UTC)).toEqual([undefined, times[1], undefined, undefined, times[4]])
+  })
+})
+
+describe('formatters', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  // A long chat formats every stamp on each render; building a DateTimeFormat each time cost about 100 ms per click.
+  it('builds one formatter per format and zone, however many times are formatted', () => {
+    const Real = Intl.DateTimeFormat
+    const built = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation((...args) => new Real(...args))
+    const times = Array.from({ length: 50 }, (_, i) => at('2026-11-22T12:00:00Z') + i * 60_000)
+    for (const t of times) {
+      stampLabel(t, 'Europe/Oslo')
+      stampTitle(t, 'Europe/Oslo')
+    }
+    dayBreaks(times, 'Europe/Oslo')
+    expect(built.mock.calls.length).toBeLessThanOrEqual(3)
+    expect(stampLabel(times[0], 'Europe/Oslo')).toBe('1:00 PM')
   })
 })
