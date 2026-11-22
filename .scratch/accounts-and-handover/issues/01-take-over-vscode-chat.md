@@ -4,7 +4,7 @@
 
 **Blocked by:** None. Build on main after release 0.1.2, which contains the observed-view fix.
 
-**Status:** in-progress
+**Status:** resolved
 
 Decided by Andreas (2026-11-22): a button, not automatic. It hands over once VS Code's agent has finished its turn.
 
