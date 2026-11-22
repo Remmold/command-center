@@ -20,6 +20,7 @@ import { promptContent, terminalSnapshots, type PromptAttachment } from './attac
 import { readTerminal } from '../../state/terminalBuffers'
 import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
+import { takeStartRequest } from '../../state/startRequests'
 import { committedLength, thinkingDurations } from './liveItems'
 import { useFollowOutput } from './useFollowOutput'
 import { noteScroll, saveDraft, savedDraft, savedScroll } from '../../state/restoreStore'
@@ -276,7 +277,7 @@ export const ChatView = memo(function ChatView({
       ])
     })
 
-    if (initialItemsCountRef.current === 0 && !resumeSessionId) {
+    if (takeStartRequest(paneId) || (initialItemsCountRef.current === 0 && !resumeSessionId)) {
       void ensureStarted()
     }
 

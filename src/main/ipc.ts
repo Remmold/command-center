@@ -93,6 +93,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     observed.open(workspaceId, sessionId)
   )
   ipcMain.on(IPC.OBSERVED_CLOSE, () => observed.close())
+  ipcMain.handle(IPC.OBSERVED_TURN, (_e, workspaceId: string, sessionId: string) => observed.turn(workspaceId, sessionId))
+  ipcMain.handle(IPC.OBSERVED_READ, (_e, workspaceId: string, sessionId: string) => observed.items(workspaceId, sessionId))
   unsubscribers.push(() => observed.stop())
 
   const discovery = new DiscoveryService(workspaces.list, (model) => sendAll(IPC.DISCOVERY_CHANGED, model))

@@ -17,6 +17,7 @@ import { useModelStore } from './state/modelStore'
 import { closeSession, focusedTarget, initChatPair, jumpToNextWaiting, paneOnScreen } from './state/sessionNavigation'
 import { useLauncherStore } from './state/launcherStore'
 import { SessionLauncher } from './components/work/SessionLauncher'
+import { Toasts } from './components/ui/Toasts'
 import { openRowAt } from './state/workSessions'
 import { useWorkspacesStore } from './state/workspacesStore'
 import { useProfilesStore } from './state/profilesStore'
@@ -125,6 +126,7 @@ export function App() {
         </div>
       </div>
       <SessionLauncher />
+      <Toasts />
       {settingsSection && (
         <div className="absolute inset-0 z-40">
           <SettingsPage section={settingsSection} />

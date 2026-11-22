@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_PAIR, closeHalf, dropChats, openChat, restorePair, splitPair, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
+import { EMPTY_PAIR, closeHalf, dropChats, openChat, replaceChat, restorePair, splitPair, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
 
 const hosted = (paneId: string): ChatRef => ({ kind: 'hosted', paneId })
 
@@ -70,5 +70,19 @@ describe('chat pair', () => {
     expect(restorePair({ halves: [{ kind: 'hosted' }], focused: 0 })).toEqual(EMPTY_PAIR)
     expect(restorePair({ halves: [hosted('a'), hosted('b'), hosted('c')], focused: 0 })).toEqual(EMPTY_PAIR)
     expect(restorePair({ halves: [hosted('a')], focused: 1 })).toEqual({ halves: [hosted('a')], focused: 0 })
+  })
+})
+
+describe('replaceChat', () => {
+  const observed: ChatRef = { kind: 'observed', workspaceId: 'w', sessionId: 's' }
+  const taken: ChatRef = { kind: 'hosted', paneId: 'new' }
+  const other: ChatRef = { kind: 'hosted', paneId: 'other' }
+
+  it('puts the chat in the half the replaced one used, keeping the focus where it was', () => {
+    expect(replaceChat({ halves: [other, observed], focused: 0 }, observed, taken)).toEqual({ halves: [other, taken], focused: 0 })
+  })
+
+  it('opens it in the focused half when the replaced chat is not on screen', () => {
+    expect(replaceChat({ halves: [other, null], focused: 1 }, observed, taken)).toEqual({ halves: [other, taken], focused: 1 })
   })
 })

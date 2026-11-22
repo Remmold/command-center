@@ -55,6 +55,8 @@ export const IPC = {
   OBSERVED_SET_HOSTED: 'observed:setHosted',
   OBSERVED_OPEN: 'observed:open',
   OBSERVED_CLOSE: 'observed:close',
+  OBSERVED_TURN: 'observed:turn',
+  OBSERVED_READ: 'observed:read',
   OBSERVED_ITEMS: 'observed:items',
   START_WITH_WINDOWS_GET: 'startWithWindows:get',
   START_WITH_WINDOWS_SET: 'startWithWindows:set',

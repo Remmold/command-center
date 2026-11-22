@@ -2,6 +2,7 @@ import type { BuiltinIconChoice, ChooseImageResult, RepoIdentityViews } from './
 import type { ChatItem } from './chatItems'
 import type { AppView } from './views'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
+import type { ObservedTurn } from './takeOver'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
 
@@ -484,6 +485,10 @@ export interface RendererApi {
     open: (workspaceId: string, sessionId: string) => Promise<ObservedOpenResult>
     close: () => void
     onItems: (cb: (event: ObservedItemsEvent) => void) => () => void
+    /** Where VS Code's agent is in its turn, from the transcript and the CLI's process record. */
+    turn: (workspaceId: string, sessionId: string) => Promise<ObservedTurn>
+    /** The last items, read once without following. */
+    read: (workspaceId: string, sessionId: string) => Promise<ObservedOpenResult>
   }
   approval: {
     list: () => Promise<ApprovalRequest[]>

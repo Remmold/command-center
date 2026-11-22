@@ -28,6 +28,10 @@ _Avoid_: Bridge, remote session
 A Claude Code session running somewhere else (the VS Code extension). The command center follows it read-only.
 _Avoid_: External session, VS Code chat
 
+**Take over**:
+Moving an observed session into the command center: it is resumed as a hosted session, once VS Code's agent has finished its turn (at once when it waits on the user). The observed session then leaves the In VS Code list.
+_Avoid_: Handover, import
+
 **Session title**:
 The name a session goes by in lists and headers. It is "New session" before any prompt, then the first prompt, shortened, until Claude names the session (as in the extension). A rename beats both for good, and reaches the CLI, so VS Code's history shows it too.
 _Avoid_: Chat name, label, tab name

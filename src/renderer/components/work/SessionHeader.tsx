@@ -5,6 +5,7 @@ import {
   Copy,
   Download,
   History,
+  Loader2,
   MessageCirclePlus,
   MoreHorizontal,
   PanelLeft,
@@ -35,6 +36,8 @@ import { HeaderRow } from '../ui/HeaderRow'
 import { MenuItem } from '../ui/MenuItem'
 import { Popover, PopoverMenu } from '../ui/Popover'
 import { StatusTag } from '../ui/StatusDot'
+import { StatusPill } from '../ui/StatusPill'
+import { TAKE_OVER_TOOLTIP, useTakeOverStore, type TakeOverTarget } from '../../state/takeOverStore'
 import { Toolbar } from '../ui/Toolbar'
 
 const MODELS: ClaudeModel[] = ['sonnet', 'opus', 'haiku']
@@ -215,18 +218,48 @@ interface ObservedProps {
 }
 
 export function ObservedSessionHeader({ workspace, session, sessionId, place }: ObservedProps) {
+  const title = session?.title ?? sessionId.slice(0, 8)
   return (
     <Toolbar
       highlighted={place.split && place.focused}
       actions={
-<HalfControls place={place} closable />
+        <span className="flex shrink-0 items-center gap-1">
+          <TakeOverControls workspaceId={workspace.id} sessionId={sessionId} title={title} />
+          <HalfControls place={place} closable />
+        </span>
       }
     >
-      <HeaderRow icon={<SessionIdentity workspace={workspace} />} title={session?.title ?? sessionId.slice(0, 8)} note="read-only · reply in VS Code">
+      <HeaderRow icon={<SessionIdentity workspace={workspace} />} title={title} note="read-only · reply in VS Code">
         <Badge>in VS Code</Badge>
         <StatusTag status={session?.status ?? 'quiet'} />
       </HeaderRow>
     </Toolbar>
+  )
+}
+
+/** Take over, or while it waits for VS Code's turn to end, the wait with Now and Cancel. */
+function TakeOverControls({ workspaceId, sessionId, title }: TakeOverTarget) {
+  const waiting = useTakeOverStore((s) => sessionId in s.pending)
+  const request = useTakeOverStore((s) => s.request)
+  const cancel = useTakeOverStore((s) => s.cancel)
+  const target = { workspaceId, sessionId, title }
+  if (!waiting) {
+    return (
+      <Button variant="secondary" onClick={() => request(target)} tooltip={TAKE_OVER_TOOLTIP}>
+        Take over
+      </Button>
+    )
+  }
+  return (
+    <>
+      <StatusPill tone="on" icon={<Loader2 size={11} className="animate-spin" />} label="Taking over when done…" tooltip="Hands over once VS Code's agent finishes its turn" />
+      <Button variant="ghost" onClick={() => request(target, { now: true })} tooltip="Hand over without waiting for the turn to end">
+        Now
+      </Button>
+      <Button variant="ghost" onClick={() => cancel(sessionId)}>
+        Cancel
+      </Button>
+    </>
   )
 }
 

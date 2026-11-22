@@ -174,6 +174,8 @@ const api: RendererApi = {
     open: (workspaceId: string, sessionId: string) =>
       ipcRenderer.invoke(IPC.OBSERVED_OPEN, workspaceId, sessionId),
     close: () => ipcRenderer.send(IPC.OBSERVED_CLOSE),
+    turn: (workspaceId: string, sessionId: string) => ipcRenderer.invoke(IPC.OBSERVED_TURN, workspaceId, sessionId),
+    read: (workspaceId: string, sessionId: string) => ipcRenderer.invoke(IPC.OBSERVED_READ, workspaceId, sessionId),
     onItems: (cb) => {
       const handler = (_e: IpcRendererEvent, event: ObservedItemsEvent) => cb(event)
       ipcRenderer.on(IPC.OBSERVED_ITEMS, handler)

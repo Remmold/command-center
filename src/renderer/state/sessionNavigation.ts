@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { LocalSessionInfo, SessionStatusEntry, Workspace } from '../../shared/types'
 import { needsYouQueue, nextWaiting } from '../../shared/needsYou'
-import { closeHalf, dropChats, focusHalf, openChat, splitPair, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
+import { closeHalf, dropChats, focusHalf, openChat, replaceChat, splitPair, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
 import { useChatPairStore } from './chatPairStore'
 import { chatOnScreen, type ShellOptions } from './projectViewLayout'
 import { useProjectViewsStore, type ProjectView, type ShellTab } from './projectViewsStore'
@@ -127,6 +127,17 @@ export function openSession(paneId: string, { focus = true, beside = false }: Op
 export function openObserved(workspaceId: string, sessionId: string, { beside = false }: Pick<OpenOptions, 'beside'> = {}): void {
   useViewStore.getState().setView('work')
   showPair(openChat(currentPair(), { kind: 'observed', workspaceId, sessionId }, { beside }))
+}
+
+/** Brings a hosted chat on screen in the half that showed `from`, else in the focused half. */
+export function openSessionInPlaceOf(from: ChatRef, paneId: string): void {
+  const views = useProjectViewsStore.getState()
+  const target = hostedSessions(views.views).find((s) => s.paneId === paneId)
+  if (!target) return
+  useViewStore.getState().setView('work')
+  views.setCenterView(target.projectId, 'chat')
+  showPair(replaceChat(currentPair(), from, { kind: 'hosted', paneId }))
+  useFocusRequestStore.getState().requestFocus(paneId)
 }
 
 /** Opens a new chat in the workspace, on its account profile. */

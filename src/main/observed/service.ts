@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { ChatItem } from '../../shared/chatItems'
 import {
   OBSERVED_INITIAL_ITEMS,
@@ -7,6 +7,8 @@ import {
   type ObservedSession,
   type Workspace
 } from '../../shared/types'
+import type { ObservedTurn } from '../../shared/takeOver'
+import { readTurn } from './turn'
 import { listObservedTranscripts } from './listing'
 import { readLastItems, TranscriptFollower } from './tail'
 
@@ -92,13 +94,39 @@ export class ObservedService {
     return this.refreshing
   }
 
+  private async transcriptFile(workspaceId: string, sessionId: string): Promise<string | { error: string }> {
+    if (!SESSION_ID_RE.test(sessionId)) return { error: 'not a session id' }
+    const workspace = (await this.listWorkspaces()).find((w) => w.id === workspaceId)
+    if (!workspace) return { error: 'unknown workspace' }
+    return join(await this.transcriptsDirFor(workspace), `${sessionId}.jsonl`)
+  }
+
+  /** Where VS Code's agent is in its turn; a transcript that cannot be read counts as idle. */
+  async turn(workspaceId: string, sessionId: string): Promise<ObservedTurn> {
+    const file = await this.transcriptFile(workspaceId, sessionId)
+    if (typeof file !== 'string') return 'idle'
+    // Transcripts sit in <config>/projects/<cwd>/; the CLI's process records in <config>/sessions/.
+    const sessionsDir = join(dirname(dirname(dirname(file))), 'sessions')
+    return readTurn(file, sessionsDir, sessionId, Date.now()).catch(() => 'idle' as const)
+  }
+
+  /** The last items, read once without following. */
+  async items(workspaceId: string, sessionId: string): Promise<ObservedOpenResult> {
+    const file = await this.transcriptFile(workspaceId, sessionId)
+    if (typeof file !== 'string') return { ok: false, error: file.error }
+    try {
+      const tail = await readLastItems(file, OBSERVED_INITIAL_ITEMS, INITIAL_MAX_BYTES)
+      return { ok: true, items: tail.items, shortened: tail.shortened }
+    } catch {
+      return { ok: false, error: 'transcript not found' }
+    }
+  }
+
   async open(workspaceId: string, sessionId: string): Promise<ObservedOpenResult> {
     this.close()
     const seq = this.openSeq
-    if (!SESSION_ID_RE.test(sessionId)) return { ok: false, error: 'not a session id' }
-    const workspace = (await this.listWorkspaces()).find((w) => w.id === workspaceId)
-    if (!workspace) return { ok: false, error: 'unknown workspace' }
-    const file = join(await this.transcriptsDirFor(workspace), `${sessionId}.jsonl`)
+    const file = await this.transcriptFile(workspaceId, sessionId)
+    if (typeof file !== 'string') return { ok: false, error: file.error }
     let tail
     try {
       tail = await readLastItems(file, OBSERVED_INITIAL_ITEMS, INITIAL_MAX_BYTES)

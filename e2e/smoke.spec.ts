@@ -2,7 +2,7 @@ import type { ElectronApplication, Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
+import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, prompt, send, startSession, test, transcriptsOf, type FakeLog } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
 const WRITE_DONE = 'Created hello.txt containing hi.'
@@ -757,5 +757,54 @@ test.describe('a VS Code session in Work', () => {
     await expect(pane.getByText('A reply appended while you watch.')).toBeInViewport()
     await expect.poll(() => scroller.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(2)
     await expect(header).toBeInViewport()
+  })
+})
+
+const TAKEN_ID = '7a4e0000-0000-4000-8000-0000000007a4'
+
+function vscodeLine(type: 'user' | 'assistant', n: number, content: unknown, stopReason?: string): string {
+  const message = type === 'user' ? { role: 'user', content } : { id: `msg_t${n}`, role: 'assistant', model: 'claude-opus-4-1', stop_reason: stopReason, content }
+  return JSON.stringify({ type, uuid: `t-${type}-${n}`, entrypoint: 'claude-vscode', timestamp: new Date().toISOString(), message })
+}
+
+const resumedWith = (log: FakeLog, sessionId: string): boolean =>
+  log.entries().some((e) => {
+    if (e.kind !== 'argv') return false
+    const argv = e.argv as string[]
+    return argv[argv.indexOf('--resume') + 1] === sessionId
+  })
+
+test.describe('taking over a VS Code chat', () => {
+  test('waits for the turn to end, then resumes it here in place of the VS Code view and drops it from In VS Code', async ({ launched }) => {
+    const { page, log } = launched
+    const dir = transcriptsOf(launched)
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, `${TAKEN_ID}.jsonl`)
+    writeFileSync(
+      file,
+      [
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Build check', sessionId: TAKEN_ID }),
+        vscodeLine('user', 0, 'Build it?'),
+        vscodeLine('assistant', 1, [{ type: 'tool_use', id: 'toolu_build', name: 'Bash', input: { command: 'pnpm build' } }], 'tool_use')
+      ].join('\n') + '\n'
+    )
+    await page.keyboard.press('Control+2')
+    const row = page.getByTitle(/^Build check .* in VS Code \(read-only\)$/)
+    await expect(row).toBeVisible({ timeout: 20_000 })
+    await row.click()
+    await page.getByRole('button', { name: 'Take over', exact: true }).click()
+    await expect(page.getByText('Taking over when done…')).toBeVisible()
+    await page.waitForTimeout(2500)
+    expect(resumedWith(log, TAKEN_ID)).toBe(false)
+
+    appendFileSync(file, vscodeLine('user', 2, [{ type: 'tool_result', tool_use_id: 'toolu_build', content: 'built' }]) + '\n')
+    appendFileSync(file, vscodeLine('assistant', 3, [{ type: 'text', text: 'The build passed.' }], 'end_turn') + '\n')
+    await expect.poll(() => resumedWith(log, TAKEN_ID)).toBe(true)
+    const pane = page.locator('[data-chat-pane]:visible')
+    await expect(pane.getByText('The build passed.')).toBeVisible()
+    await expect(pane.getByText(/The VS Code panel for this chat is now out of date/)).toBeVisible()
+    await expect(page.getByText('Build check is now in Command Center')).toBeVisible()
+    await expect(page.getByRole('region', { name: 'observed session' })).toHaveCount(0)
+    await expect(row).toHaveCount(0)
   })
 })
