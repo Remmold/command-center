@@ -4,6 +4,8 @@ import { IPC } from '../shared/ipc-channels'
 import type { AppView } from '../shared/types'
 import type { Onscreen } from './attention/attention'
 import { getScreenFocus } from './sessions/screenFocus'
+import { applyZoom, zoomLevel } from './zoom/service'
+import { zoomFactor } from '../shared/zoom'
 
 let mainWindow: BrowserWindow | null = null
 let quitting = false
@@ -27,7 +29,8 @@ export function createMainWindow(options: { show?: boolean } = {}): BrowserWindo
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      zoomFactor: zoomFactor(zoomLevel())
     }
   })
 
@@ -35,6 +38,8 @@ export function createMainWindow(options: { show?: boolean } = {}): BrowserWindo
     shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  win.webContents.on('did-finish-load', () => applyZoom(win))
 
   win.on('close', (event) => {
     if (quitting) return

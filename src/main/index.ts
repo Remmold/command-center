@@ -11,6 +11,7 @@ import { createAppTray } from './tray/tray'
 import { startUpdates } from './update/service'
 import type { StartWithWindowsState } from '../shared/types'
 import { iconPath } from './util/paths'
+import { routeMenuZoom } from './zoom/menu'
 import {
   allowWindowClose,
   createMainWindow,
@@ -77,6 +78,7 @@ if (!app.requestSingleInstanceLock()) {
     const startWithWindows = createStartWithWindowsControl()
     registerIpc({ repoIdentities, startWithWindows })
     startUpdates()
+    routeMenuZoom()
     const win = createMainWindow({ show: !startsHidden(process.argv) })
 
     const tray = createAppTray({

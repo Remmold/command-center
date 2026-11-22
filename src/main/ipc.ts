@@ -44,6 +44,8 @@ import {
 } from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
 import type { StartWithWindowsControl } from './tray/startWithWindows'
+import { onZoomChanged, stepZoom, zoomLevel } from './zoom/service'
+import { isZoomStep } from '../shared/zoom'
 
 let unsubscribers: Array<() => void> = []
 
@@ -79,6 +81,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.START_WITH_WINDOWS_GET, () => startWithWindows.get())
   ipcMain.handle(IPC.START_WITH_WINDOWS_SET, (_e, checked: boolean) => startWithWindows.set(checked === true))
   startWithWindows.onChanged((state) => sendAll(IPC.START_WITH_WINDOWS_CHANGED, state))
+  ipcMain.handle(IPC.ZOOM_GET, () => zoomLevel())
+  ipcMain.handle(IPC.ZOOM_STEP, (_e, step: unknown) => (isZoomStep(step) ? stepZoom(step) : zoomLevel()))
+  onZoomChanged((level) => sendAll(IPC.ZOOM_CHANGED, level))
 
   const observed = new ObservedService(
     workspaces.list,

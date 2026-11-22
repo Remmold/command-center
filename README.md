@@ -13,7 +13,7 @@ Three views, switched in the title bar or with **Ctrl+1** / **Ctrl+2** / **Ctrl+
   - **Now building**: features with work in progress, with their progress bar, the ticket in progress, the session's status and the last progress note. Click one to see that feature on the Board.
   - **Usage per account**: one row per account profile with how full its rate-limit window is, when it resets, and today's tokens.
   - **Live sessions**: a card per session that is Running, Needs approval or Your turn, plus every observed session that is Live, with its last reply and how long ago it last moved. Click one to open it in Work.
-- **Work**: one list of every session across all workspaces, grouped as **Needs you**, **Running**, **Idle** and **In VS Code**, most recent first, beside the open chat. Search filters by title, repo or worktree. **New session** asks which workspace and opens the new chat. A session's title comes from its first prompt; double-click a hosted session's row (or its menu → Rename) to rename it. A row's menu → **Close** stops the session; resume it later from the list menu's **Past sessions…**. **Ctrl+click** a row, its menu → **Open beside**, or **Split** in the chat header shows a second chat beside the first (never more than two). **Ctrl+B** shows the IDE panels (file tree, editor, git) and **Ctrl+`** the shells of the open session's workspace, both hidden by default.
+- **Work**: one list of every session across all workspaces, grouped as **Needs you**, **Running**, **Idle** and **In VS Code**, most recent first, beside the open chat. Search filters by title, repo or worktree. **New session** asks which workspace and opens the new chat. A session's title comes from its first prompt; double-click a hosted session's row (or its menu → Rename) to rename it. A row's menu → **Close** stops the session; resume it later from the list menu's **Past sessions…**. **Ctrl+click** a row, its menu → **Open beside**, or **Split** in the chat header shows a second chat beside the first (never more than two). **Ctrl+B** hides or shows the session list (also the button at the top of the list, and the thin strip that stays in its place), and the chat takes the freed width. **Ctrl+Shift+E** shows the IDE panels (file tree, editor, git) and **Ctrl+`** the shells of the open session's workspace, both hidden by default.
 - **Board**: one kanban of the tickets from all workspaces, in four side-by-side columns: Backlog, Blocked, In progress, Done. Filter by repo and feature, search, and group into swimlanes by feature or repo (each with its progress bar). Done hides the cards of finished features until you show them. Click a card to read the ticket in a resizable side panel (Esc closes, up/down step through the column) and jump from it to its session. Filters, grouping and the finished toggle are remembered.
 
 ## Settings
@@ -24,7 +24,7 @@ A full-window page with five sections (Esc closes it):
 - **Accounts**: the account profiles, with **Log in** and **Rename**, and a field to create a new one.
 - **Apps**: start and stop your local apps.
 - **Board**: the scan roots, and the repos with tickets that aren't added yet.
-- **General**: **Start with Windows**, and how the chat input sends.
+- **General**: **Start with Windows**, **Zoom** (starts at 110%, steps of about 20% as in VS Code, kept across restarts and updates), and how the chat input sends.
 
 ## Needs you
 
@@ -79,6 +79,7 @@ A ticket's column comes from its `**Status:**` word (`needs-triage`, `needs-info
 | --- | --- |
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | Dashboard / Work / Board |
 | Ctrl+, | Open Settings |
+| Ctrl+= (or Ctrl++) / Ctrl+- / Ctrl+0 | Zoom in / out / back to 110%, the whole window, also while typing or in a shell |
 | Ctrl+Shift+J | Jump to the next waiting session |
 | Ctrl+T | New session (asks which workspace) |
 | Ctrl+L | Past sessions (asks which workspace) |
@@ -86,14 +87,15 @@ A ticket's column comes from its `**Status:**` word (`needs-triage`, `needs-info
 | Ctrl+K | Focus the chat input |
 | Alt+1 … Alt+9 | Open row 1 … 9 of the Work list |
 | Ctrl+click a row | Open it beside the current chat (also row menu → Open beside, or Split in the chat header) |
-| Ctrl+B | Show or hide the IDE panels of the open session's workspace |
+| Ctrl+B | Hide or show the Work session list |
+| Ctrl+Shift+E | Show or hide the IDE panels of the open session's workspace |
 | Ctrl+` | Open, show or hide its shells (the key left of 1, on any layout) |
 | Ctrl+S | Save the file in the editor |
 | Enter / Shift+Enter or Ctrl+J | Send / new line in the chat input (Settings → General → **Use Ctrl Enter To Send** swaps Enter and Ctrl+Enter) |
 | ↑ / ↓ in the chat input | Earlier / later prompts of this session (caret at the start / end) |
 | Esc in the chat | Stop Claude (a menu or approval prompt closes first) |
 
-Ctrl+1/2/3, Ctrl+, and Ctrl+Shift+J work in every view; the others act only while Work is on screen.
+Ctrl+1/2/3, Ctrl+,, Ctrl+Shift+J and the zoom keys work in every view; the others act only while Work is on screen.
 
 ## Prerequisites
 

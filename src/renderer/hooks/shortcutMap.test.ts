@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shortcutApplies, shortcutFor, type KeyChord } from './shortcutMap'
+import { beforeFocusedElement, shortcutApplies, shortcutFor, type KeyChord } from './shortcutMap'
 
 const ctrl = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: true, metaKey: false, altKey: false, shiftKey: false })
 const ctrlShift = (key: string, code: string): KeyChord => ({ ...ctrl(key, code), shiftKey: true })
@@ -54,9 +54,58 @@ describe('keyboard shortcuts', () => {
     expect(shortcutFor(ctrlShift('K', 'KeyK'))).toBeNull()
   })
 
-  it('keeps Ctrl+B and Ctrl+` (by position)', () => {
-    expect(shortcutFor(ctrl('b', 'KeyB'))).toEqual({ name: 'toggleIdePanels' })
+  it('Ctrl+B shows or hides the session list, as VS Code does its sidebar', () => {
+    expect(shortcutFor(ctrl('b', 'KeyB'))).toEqual({ name: 'toggleSessionList' })
+  })
+
+  it('Ctrl+Shift+E shows the IDE panels, as VS Code does its Explorer', () => {
+    expect(shortcutFor(ctrlShift('E', 'KeyE'))).toEqual({ name: 'toggleIdePanels' })
+  })
+
+  it('zoom and Ctrl+B go before a focused shell or prompt box, as on the VS Code skip-shell list; the rest leave a shell its keys', () => {
+    const first = [ctrl('=', 'Equal'), ctrl('-', 'Minus'), ctrl('0', 'Digit0'), ctrl('b', 'KeyB')]
+    const after = [ctrl('t', 'KeyT'), ctrl('k', 'KeyK'), ctrlShift('E', 'KeyE'), ctrl('`', 'Backquote'), ctrl('1', 'Digit1')]
+    expect(first.map((c) => beforeFocusedElement(shortcutFor(c)!))).toEqual(first.map(() => true))
+    expect(after.map((c) => beforeFocusedElement(shortcutFor(c)!))).toEqual(after.map(() => false))
+  })
+
+  it('keeps Ctrl+` (by position)', () => {
     expect(shortcutFor(ctrl('§', 'Backquote'))).toEqual({ name: 'toggleShellDrawer' })
+  })
+
+  describe('zoom', () => {
+    it('Ctrl+= and Ctrl++ zoom in, also on the number pad', () => {
+      expect(shortcutFor(ctrl('=', 'Equal'))).toEqual({ name: 'zoom', step: 'in' })
+      expect(shortcutFor(ctrlShift('+', 'Equal'))).toEqual({ name: 'zoom', step: 'in' })
+      expect(shortcutFor(ctrl('+', 'NumpadAdd'))).toEqual({ name: 'zoom', step: 'in' })
+    })
+
+    it('Ctrl+- zooms out, also on the number pad', () => {
+      expect(shortcutFor(ctrl('-', 'Minus'))).toEqual({ name: 'zoom', step: 'out' })
+      expect(shortcutFor(ctrl('-', 'NumpadSubtract'))).toEqual({ name: 'zoom', step: 'out' })
+    })
+
+    it('Ctrl+0 resets, by key or by position', () => {
+      expect(shortcutFor(ctrl('0', 'Digit0'))).toEqual({ name: 'zoom', step: 'reset' })
+      expect(shortcutFor(ctrl('à', 'Digit0'))).toEqual({ name: 'zoom', step: 'reset' })
+      expect(shortcutFor(ctrl('0', 'Numpad0'))).toEqual({ name: 'zoom', step: 'reset' })
+    })
+
+    it('follows the printed key on Nordic layouts: + on the Minus key, - on the Slash key', () => {
+      expect(shortcutFor(ctrl('+', 'Minus'))).toEqual({ name: 'zoom', step: 'in' })
+      expect(shortcutFor(ctrl('-', 'Slash'))).toEqual({ name: 'zoom', step: 'out' })
+    })
+
+    it('AltGr (Ctrl+Alt) is typing, not zoom', () => {
+      expect(shortcutFor({ ...ctrl('+', 'Minus'), altKey: true })).toBeNull()
+      expect(shortcutFor({ ...ctrl('0', 'Digit0'), altKey: true })).toBeNull()
+    })
+
+    it('works on every screen', () => {
+      for (const step of ['in', 'out', 'reset'] as const) {
+        expect(shortcutApplies({ name: 'zoom', step }, { view: 'board', settingsOpen: true })).toBe(true)
+      }
+    })
   })
 
   it('keeps the chat shortcuts', () => {
@@ -72,7 +121,11 @@ describe('keyboard shortcuts', () => {
       ctrl(',', 'Comma'),
       ctrlShift('J', 'KeyJ'),
       ctrl('b', 'KeyB'),
+      ctrlShift('E', 'KeyE'),
       ctrl('`', 'Backquote'),
+      ctrl('=', 'Equal'),
+      ctrl('-', 'Minus'),
+      ctrl('0', 'Digit0'),
       ...['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => alt(d, `Digit${d}`))
     ]
     const names = chords.map((c) => JSON.stringify(shortcutFor(c)))
@@ -81,7 +134,7 @@ describe('keyboard shortcuts', () => {
   })
 
   describe('outside Work', () => {
-    const workOnly = [ctrl('t', 'KeyT'), ctrl('w', 'KeyW'), ctrl('k', 'KeyK'), ctrl('b', 'KeyB'), ctrl('`', 'Backquote'), alt('1', 'Digit1')]
+    const workOnly = [ctrl('t', 'KeyT'), ctrl('w', 'KeyW'), ctrl('k', 'KeyK'), ctrl('b', 'KeyB'), ctrlShift('E', 'KeyE'), ctrl('`', 'Backquote'), alt('1', 'Digit1')]
     const everywhere = [ctrl('1', 'Digit1'), ctrl('2', 'Digit2'), ctrl(',', 'Comma'), ctrlShift('J', 'KeyJ')]
     const applies = (c: KeyChord, screen: Parameters<typeof shortcutApplies>[1]) => shortcutApplies(shortcutFor(c)!, screen)
 

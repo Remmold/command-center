@@ -97,6 +97,8 @@ interface Launched {
   vscodeUserDir: string
   /** The test's temp root, for extra folders. */
   root: string
+  /** Quits the app and starts it again on the same user data, as a restart would; use the returned app and page from then on. */
+  relaunch: () => Promise<{ app: ElectronApplication; page: Page }>
 }
 
 /** The CLI's permission mode as the fake started in `cwd` last heard it: its launch flag, then any later `set_permission_mode`. */
@@ -245,18 +247,27 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
     const root = mkdtempSync(join(tmpdir(), 'cc-e2e-'))
     try {
       const dirs = seedDirs(root, userSettings)
-      const app = await _electron.launch({
-        executablePath: ELECTRON,
-        args: [MAIN, `--user-data-dir=${dirs.userData}`],
-        cwd: REPO,
-        env: appEnv(dirs, script, env)
-      })
-      try {
+      const start = async (): Promise<{ app: ElectronApplication; page: Page }> => {
+        const app = await _electron.launch({
+          executablePath: ELECTRON,
+          args: [MAIN, `--user-data-dir=${dirs.userData}`],
+          cwd: REPO,
+          env: appEnv(dirs, script, env)
+        })
         const page = await app.firstWindow()
         await page.waitForLoadState('domcontentloaded')
-        await use({ app, page, log: new FakeLog(dirs.logFile), workspace: dirs.workspace, configDir: dirs.configDir, vscodeUserDir: dirs.vscodeUserDir, root })
+        return { app, page }
+      }
+      let current = await start()
+      try {
+        const relaunch = async () => {
+          await shutdown(current.app)
+          current = await start()
+          return current
+        }
+        await use({ ...current, log: new FakeLog(dirs.logFile), workspace: dirs.workspace, configDir: dirs.configDir, vscodeUserDir: dirs.vscodeUserDir, root, relaunch })
       } finally {
-        await shutdown(app)
+        await shutdown(current.app)
       }
     } finally {
       rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
