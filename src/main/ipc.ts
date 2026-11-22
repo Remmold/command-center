@@ -30,6 +30,7 @@ import { setScreenFocus } from './sessions/screenFocus'
 import {
   DEFAULT_PROFILE_ID,
   type AddWorkspaceResult,
+  type AdoptResult,
   type ClaudeStartOptions,
   type UserContentBlock,
   type ModelDefaultsPatch,
@@ -169,6 +170,24 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.PROFILES_LIST, () => profiles.list())
   ipcMain.handle(IPC.PROFILES_CREATE, (_e, name: string) => profiles.create(name))
   ipcMain.handle(IPC.PROFILES_RENAME, (_e, id: string, name: string) => profiles.rename(id, name))
+  ipcMain.handle(IPC.PROFILES_SUGGESTIONS, () => profiles.suggestions())
+  const adopted = (result: AdoptResult): AdoptResult => {
+    if (result.ok) usage.refresh()
+    return result
+  }
+  ipcMain.handle(IPC.PROFILES_ADOPT, async (_e, path: string) => adopted(await profiles.adopt(path)))
+  ipcMain.handle(IPC.PROFILES_CHOOSE_FOLDER, async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const options: Electron.OpenDialogOptions = { title: 'Use existing Claude folder', properties: ['openDirectory'] }
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (result.canceled || result.filePaths.length === 0) return null
+    return adopted(await profiles.adopt(result.filePaths[0]))
+  })
+  ipcMain.handle(IPC.PROFILES_REMOVE, async (_e, id: string) => {
+    const removed = await profiles.remove(id)
+    if (removed) usage.refresh()
+    return removed
+  })
 
   const usage = new UsageService({
     listProfiles: profiles.list,

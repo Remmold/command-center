@@ -53,7 +53,11 @@ const api: RendererApi = {
     list: (): Promise<AccountProfile[]> => ipcRenderer.invoke(IPC.PROFILES_LIST),
     create: (name: string): Promise<AccountProfile> => ipcRenderer.invoke(IPC.PROFILES_CREATE, name),
     rename: (id: string, name: string): Promise<AccountProfile | null> =>
-      ipcRenderer.invoke(IPC.PROFILES_RENAME, id, name)
+      ipcRenderer.invoke(IPC.PROFILES_RENAME, id, name),
+    suggestions: () => ipcRenderer.invoke(IPC.PROFILES_SUGGESTIONS),
+    adopt: (path: string) => ipcRenderer.invoke(IPC.PROFILES_ADOPT, path),
+    chooseFolder: () => ipcRenderer.invoke(IPC.PROFILES_CHOOSE_FOLDER),
+    remove: (id: string) => ipcRenderer.invoke(IPC.PROFILES_REMOVE, id)
   },
   usage: {
     list: (): Promise<ProfileUsage[]> => ipcRenderer.invoke(IPC.USAGE_LIST),

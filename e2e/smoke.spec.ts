@@ -1,6 +1,6 @@
 import type { ElectronApplication, Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cliPermissionMode, delayClaudeStart, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
 
@@ -481,5 +481,58 @@ test.describe('session history', () => {
     past = await openPast()
     await expect(past.getByRole('img', { name: /^Open in this window/ })).toHaveCount(1)
     await expect(past.getByRole('listitem').filter({ hasText: 'Old login fix' }).getByRole('img', { name: /^Open in this window/ })).toBeVisible()
+  })
+})
+
+test.describe('accounts from an existing folder', () => {
+  test('a VS Code profile’s folder is offered, adopted logged in, never written to, and only forgotten on Remove', async ({ launched }) => {
+    const { app, page, log, vscodeUserDir, root } = launched
+    const work = join(root, 'claude-work')
+    mkdirSync(work, { recursive: true })
+    writeFileSync(join(work, '.credentials.json'), '{}')
+    writeFileSync(join(work, 'marker.txt'), 'mine')
+    mkdirSync(join(vscodeUserDir, 'profiles', 'abc123'), { recursive: true })
+    writeFileSync(
+      join(vscodeUserDir, 'profiles', 'abc123', 'settings.json'),
+      `{\n  // Work\n  "claudeCode.environmentVariables": [{ "name": "CLAUDE_CONFIG_DIR", "value": ${JSON.stringify(work)} },],\n}`
+    )
+    mkdirSync(join(vscodeUserDir, 'globalStorage'), { recursive: true })
+    writeFileSync(join(vscodeUserDir, 'globalStorage', 'storage.json'), JSON.stringify({ userDataProfiles: [{ location: 'abc123', name: 'Work' }] }))
+    const side = join(root, 'claude-side')
+    mkdirSync(side, { recursive: true })
+
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Accounts', { exact: true }).click()
+    const accounts = page.getByRole('region', { name: 'Account profiles' })
+    const existing = page.getByRole('region', { name: 'Existing folders' })
+    const row = (text: string) => accounts.getByRole('listitem').filter({ hasText: text })
+    await expect(existing.getByText('Found in VS Code profile Work')).toBeVisible()
+    await existing.getByRole('button', { name: 'Add' }).click()
+    await expect(row('Work · logged in · existing folder')).toBeVisible()
+    await expect(existing).toBeHidden()
+    await expect.poll(() => log.entries().some((e) => e.kind === 'argv' && e.configDir === work)).toBe(true)
+
+    const pickFolder = (folder: string) =>
+      app.evaluate(({ dialog }, picked) => {
+        dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog
+      }, folder)
+    await pickFolder(work)
+    await page.getByRole('button', { name: 'Use existing folder…' }).click()
+    await expect(page.getByText('Work already uses this folder.')).toBeVisible()
+    await pickFolder(side)
+    await page.getByRole('button', { name: 'Use existing folder…' }).click()
+    await expect(row('claude-side · not logged in · existing folder')).toBeVisible()
+
+    let confirmText = ''
+    page.once('dialog', (d) => {
+      confirmText = d.message()
+      void d.accept()
+    })
+    await row('Work ·').getByRole('button', { name: 'Remove' }).click()
+    await expect(row('Work ·')).toBeHidden()
+    expect(confirmText).toContain(`the folder ${work} stays on disk, untouched`)
+    expect(readdirSync(work).sort()).toEqual(['.credentials.json', 'marker.txt'])
+    expect(readdirSync(side)).toEqual([])
+    await expect(existing.getByText('Found in VS Code profile Work')).toBeVisible()
   })
 })

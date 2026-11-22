@@ -6,7 +6,7 @@ const NOW = Date.parse('2026-11-21T20:00:00Z')
 const MIN = 60_000
 const UTC = 'UTC'
 
-const profile = (id: string, name: string, loggedIn = true): AccountProfile => ({ id, name, configDir: `C:/p/${id}`, loggedIn })
+const profile = (id: string, name: string, loggedIn = true): AccountProfile => ({ id, name, configDir: `C:/p/${id}`, loggedIn, adopted: false })
 
 const usage = (over: Partial<ProfileUsage> = {}): ProfileUsage => ({
   profileId: 'default',

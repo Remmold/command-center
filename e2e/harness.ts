@@ -91,6 +91,10 @@ interface Launched {
   workspace: string
   /** The temp `CLAUDE_CONFIG_DIR`; transcripts live under its `projects/`. */
   configDir: string
+  /** The temp folder the app reads as VS Code's `%APPDATA%\Code\User`; empty unless a test writes to it. */
+  vscodeUserDir: string
+  /** The test's temp root, for extra folders. */
+  root: string
 }
 
 /** The CLI's permission mode as the fake started in `cwd` last heard it: its launch flag, then any later `set_permission_mode`. */
@@ -125,8 +129,9 @@ export async function delayClaudeStart(app: ElectronApplication, ms: number): Pr
 function seedDirs(
   root: string,
   userSettings: Record<string, unknown> | null
-): { userData: string; workspace: string; configDir: string; home: string; logFile: string } {
+): { userData: string; workspace: string; configDir: string; home: string; logFile: string; vscodeUserDir: string } {
   const dirs = {
+    vscodeUserDir: join(root, 'vscode-user'),
     userData: join(root, 'user-data'),
     workspace: join(root, 'e2e-workspace'),
     configDir: join(root, 'claude-config'),
@@ -153,6 +158,7 @@ function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName): Record<s
     FAKE_CLAUDE_SCRIPT: SCRIPTS[script],
     FAKE_CLAUDE_LOG: dirs.logFile,
     CLAUDE_CONFIG_DIR: dirs.configDir,
+    CC_VSCODE_USER_DIR: dirs.vscodeUserDir,
     USERPROFILE: dirs.home,
     HOME: dirs.home
   })
@@ -223,7 +229,7 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
       try {
         const page = await app.firstWindow()
         await page.waitForLoadState('domcontentloaded')
-        await use({ app, page, log: new FakeLog(dirs.logFile), workspace: dirs.workspace, configDir: dirs.configDir })
+        await use({ app, page, log: new FakeLog(dirs.logFile), workspace: dirs.workspace, configDir: dirs.configDir, vscodeUserDir: dirs.vscodeUserDir, root })
       } finally {
         await shutdown(app)
       }

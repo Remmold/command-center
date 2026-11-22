@@ -25,7 +25,16 @@ export interface AccountProfile {
   configDir: string
   /** True when the profile's credentials file exists. */
   loggedIn: boolean
+  /** An existing folder the app adopted; the app never writes to or deletes it. */
+  adopted: boolean
 }
+
+export interface VsCodeConfigDir {
+  profileName: string
+  configDir: string
+}
+
+export type AdoptResult = { ok: true; profile: AccountProfile } | { ok: false; error: string }
 
 export type SessionStatus = 'running' | 'needs-approval' | 'your-turn' | 'idle'
 
@@ -344,6 +353,13 @@ export interface RendererApi {
     list: () => Promise<AccountProfile[]>
     create: (name: string) => Promise<AccountProfile>
     rename: (id: string, name: string) => Promise<AccountProfile | null>
+    /** CLAUDE_CONFIG_DIR folders found in VS Code profiles that no profile uses yet. */
+    suggestions: () => Promise<VsCodeConfigDir[]>
+    adopt: (path: string) => Promise<AdoptResult>
+    /** Opens a folder picker and adopts the pick; null when cancelled. */
+    chooseFolder: () => Promise<AdoptResult | null>
+    /** Forgets the profile; never deletes its folder. */
+    remove: (id: string) => Promise<boolean>
   }
   usage: {
     list: () => Promise<ProfileUsage[]>

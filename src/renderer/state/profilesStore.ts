@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AccountProfile, Workspace } from '../../shared/types'
+import type { AccountProfile, AdoptResult, VsCodeConfigDir, Workspace } from '../../shared/types'
 
 interface ProfilesState {
   profiles: AccountProfile[]
@@ -7,13 +7,22 @@ interface ProfilesState {
   load: () => Promise<void>
   create: (name: string) => Promise<AccountProfile | null>
   rename: (id: string, name: string) => Promise<void>
+  suggestions: VsCodeConfigDir[]
+  /** The last refused adoption, shown until the next attempt. */
+  adoptError: string | null
+  adopt: (path: string) => Promise<void>
+  chooseFolder: () => Promise<void>
+  remove: (id: string) => Promise<void>
 }
 
 export const useProfilesStore = create<ProfilesState>((set, get) => ({
   profiles: [],
+  suggestions: [],
+  adoptError: null,
   load: async () => {
     try {
-      set({ profiles: await window.api.profiles.list() })
+      const [profiles, suggestions] = await Promise.all([window.api.profiles.list(), window.api.profiles.suggestions()])
+      set({ profiles, suggestions })
     } catch (err) {
       console.error('failed to load profiles', err)
     }
@@ -35,8 +44,31 @@ export const useProfilesStore = create<ProfilesState>((set, get) => ({
     } catch (err) {
       console.error('failed to rename profile', err)
     }
+  },
+  adopt: async (path) => settleAdoption(await window.api.profiles.adopt(path).catch(adoptFailure)),
+  chooseFolder: async () => {
+    const result = await window.api.profiles.chooseFolder().catch(adoptFailure)
+    if (result) await settleAdoption(result)
+  },
+  remove: async (id) => {
+    try {
+      await window.api.profiles.remove(id)
+      await get().load()
+    } catch (err) {
+      console.error('failed to remove profile', err)
+    }
   }
 }))
+
+function adoptFailure(err: unknown): AdoptResult {
+  console.error('failed to add existing folder', err)
+  return { ok: false, error: 'Could not add that folder.' }
+}
+
+async function settleAdoption(result: AdoptResult): Promise<void> {
+  useProfilesStore.setState({ adoptError: result.ok ? null : result.error })
+  if (result.ok) await useProfilesStore.getState().load()
+}
 
 /** Login needs a shell somewhere; prefer a workspace that already uses the profile. */
 export function loginWorkspace(workspaces: readonly Workspace[], profile: AccountProfile): Workspace | undefined {
