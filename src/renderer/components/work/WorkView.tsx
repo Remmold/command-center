@@ -38,11 +38,14 @@ interface LayerProps {
   children: React.ReactNode
 }
 
-/** Kept mounted but out of sight while `slot` is null, so processes, terminals and scroll positions survive. */
+/**
+ * Kept mounted but out of sight while `slot` is null, so processes, terminals and scroll positions survive.
+ * Clipped, because anything sticking out of any layer would make the surrounding panel scrollable and shift every layer.
+ */
 function Layer({ slot, onActivate, children }: LayerProps) {
   return (
     <div
-      className={'absolute flex flex-col ' + (slot ? SLOT[slot] : 'inset-0 invisible')}
+      className={'absolute flex flex-col overflow-clip ' + (slot ? SLOT[slot] : 'inset-0 invisible')}
       aria-hidden={!slot}
       onMouseDownCapture={onActivate}
       onFocusCapture={onActivate}

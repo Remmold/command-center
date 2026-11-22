@@ -1,6 +1,6 @@
 import type { ElectronApplication, Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
 
@@ -694,5 +694,68 @@ test.describe('Remote Control', () => {
       await expect(page.locator('[data-chat-pane]').getByRole('link', { name: 'Remote Control' })).toHaveAttribute('href', FAKE_SESSION)
       expect(log.controlRequests('remote_control').map((r) => r.enabled)).toEqual([true])
     })
+  })
+})
+
+const OBSERVED_ID = '0b5e7e1d-0000-4000-8000-00000000c0de'
+
+function observedLine(type: 'user' | 'assistant', n: number, text: string): string {
+  const message = type === 'user' ? { role: 'user', content: text } : { id: `msg_${n}`, role: 'assistant', model: 'claude-opus-4-1', content: [{ type: 'text', text }] }
+  return JSON.stringify({ type, uuid: `${type}-${n}`, entrypoint: 'claude-vscode', timestamp: new Date().toISOString(), message })
+}
+
+/** A VS Code transcript long enough to scroll, with the record types the reader skips between messages. */
+function observedTranscript(): string {
+  const lines = [JSON.stringify({ type: 'ai-title', aiTitle: 'Observed scroll check', sessionId: OBSERVED_ID })]
+  for (let n = 0; n < 30; n++) {
+    lines.push(observedLine('user', n, `Question ${n}?`))
+    lines.push(JSON.stringify({ type: 'data-flow-records', v: 1, sessionId: OBSERVED_ID, records: [{ n }] }))
+    lines.push(observedLine('assistant', n, `Answer ${n}.\n\nA second paragraph so the transcript grows.`))
+  }
+  lines.push(observedLine('assistant', 30, 'The final reply starts here.\n\nIts middle paragraph.\n\nThe last line of the final reply.'))
+  for (let n = 0; n < 20; n++) lines.push(JSON.stringify({ type: 'data-flow-records', v: 1, sessionId: OBSERVED_ID, records: [{ n }] }))
+  return lines.join('\n') + '\n'
+}
+
+test.describe('a VS Code session in Work', () => {
+  test.use({ script: 'render' })
+
+  test('shows its header and its whole last message, stays put on a wheel past the end, and follows an appended reply', async ({ launched }) => {
+    const { page } = launched
+    const file = join(transcriptsOf(launched), `${OBSERVED_ID}.jsonl`)
+    mkdirSync(transcriptsOf(launched), { recursive: true })
+    writeFileSync(file, observedTranscript())
+    // A hosted chat taller than the pane, kept mounted out of sight behind the observed one.
+    await startSession(launched)
+    const hosted = page.locator('[data-chat-pane]')
+    await send(page, 'long answer please')
+    await expect(hosted.getByText('The second part arrived.')).toBeVisible()
+    await send(page, 'long answer again')
+    await expect(hosted.getByText('The second part arrived.')).toHaveCount(2)
+
+    const row = page.getByTitle(/^Observed scroll check .* in VS Code \(read-only\)$/)
+    await expect(row).toBeVisible({ timeout: 20_000 })
+    await row.click()
+    const pane = page.getByRole('region', { name: 'observed session' })
+    const last = pane.getByText('The last line of the final reply.')
+    await expect(last).toBeVisible()
+    await pane.hover()
+    for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 600)
+
+    const header = page.getByText('read-only · reply in VS Code')
+    await expect(header).toBeInViewport()
+    const scroller = pane.locator('.overflow-y-auto').first()
+    const fits = async (): Promise<boolean> => {
+      const [box, line, head] = await Promise.all([scroller.boundingBox(), last.boundingBox(), header.boundingBox()])
+      return !!box && !!line && !!head && head.y >= 0 && line.y >= box.y && line.y + line.height <= box.y + box.height
+    }
+    await expect.poll(fits).toBe(true)
+    await expect.poll(() => scroller.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(2)
+
+    appendFileSync(file, JSON.stringify({ type: 'data-flow-records', v: 1, sessionId: OBSERVED_ID, records: [] }) + '\n')
+    appendFileSync(file, observedLine('assistant', 31, 'A reply appended while you watch.') + '\n')
+    await expect(pane.getByText('A reply appended while you watch.')).toBeInViewport()
+    await expect.poll(() => scroller.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(2)
+    await expect(header).toBeInViewport()
   })
 })
