@@ -19,7 +19,7 @@ import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import { approvalBroker } from './claude/approvals'
-import { readModelDefaults, saveModelDefaults } from './claude/userSettings'
+import { readDefaultMode, readModelDefaults, saveModelDefaults } from './claude/userSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
 import { UsageService } from './usage/service'
@@ -269,9 +269,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.CLAUDE_START, async (_e, options: ClaudeStartOptions) => {
     const workspace = await workspaces.findByPath(options.cwd)
     if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
-    const { profileId, env } = workspace
-      ? await profiles.prepareSession(workspace.profileId)
-      : { profileId: DEFAULT_PROFILE_ID, env: {} }
+    const { profileId, env } = await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)
     return claudeManager.start({ ...options, profileEnv: env, profileId })
   })
   ipcMain.handle(
@@ -283,6 +281,11 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   // Every profile's settings.json is a hard link to Default's, so Default's file is the one to change.
   const userSettingsFile = (): string => join(profiles.defaultConfigDir(), 'settings.json')
   ipcMain.handle(IPC.CLAUDE_READ_DEFAULTS, () => readModelDefaults(userSettingsFile()))
+  ipcMain.handle(IPC.CLAUDE_DEFAULT_PERMISSION_MODE, async (_e, cwd: string) => {
+    const workspace = await workspaces.findByPath(cwd)
+    const profile = await profiles.get(workspace?.profileId ?? DEFAULT_PROFILE_ID)
+    return readDefaultMode(join(profile.configDir, 'settings.json'))
+  })
   ipcMain.handle(IPC.CLAUDE_SAVE_DEFAULTS, (_e, patch: ModelDefaultsPatch) => saveModelDefaults(userSettingsFile(), patch))
   ipcMain.on(
     IPC.CLAUDE_SEND,

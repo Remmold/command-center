@@ -134,6 +134,7 @@ const api: RendererApi = {
       ipcRenderer.invoke(IPC.CLAUDE_CONTROL, paneId, subtype, fields),
     getInit: (paneId): Promise<SessionInit | null> => ipcRenderer.invoke(IPC.CLAUDE_GET_INIT, paneId),
     readDefaults: (): Promise<ModelDefaults> => ipcRenderer.invoke(IPC.CLAUDE_READ_DEFAULTS),
+    defaultPermissionMode: (cwd: string): Promise<string | null> => ipcRenderer.invoke(IPC.CLAUDE_DEFAULT_PERMISSION_MODE, cwd),
     saveDefaults: (patch): Promise<SaveDefaultsResult> => ipcRenderer.invoke(IPC.CLAUDE_SAVE_DEFAULTS, patch),
     onInit: (cb) => {
       const handler = (_e: IpcRendererEvent, envelope: SessionInitEnvelope) => cb(envelope)

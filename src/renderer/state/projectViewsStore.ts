@@ -10,7 +10,7 @@ import {
   toggleIdePanels,
   type ShellOptions
 } from './projectViewLayout'
-import { migratePermissionModes, type PermissionMode, type SavedModes } from './permissionModes'
+import { migratePermissionModes, unsetStoreDefault, type PermissionMode, type SavedModes } from './permissionModes'
 import { migrateModelChoices, type SavedModelChoices } from './modelPicker'
 import { ATTACHED_MARKER } from '../components/chat/promptHistory'
 import {
@@ -32,7 +32,8 @@ export interface ClaudeChatSession extends SessionTitle {
   /** The session's own effort pick; unset follows the saved or CLI default. */
   effort?: string
   thinking: boolean
-  permissionMode: PermissionMode
+  /** Unset until the session first starts: then the last pick, else the user settings' `permissions.defaultMode`. */
+  permissionMode?: PermissionMode
   /** session_id reported by claude in stream-json events; used for --resume */
   claudeSessionId?: string
 }
@@ -86,7 +87,8 @@ interface ProjectViewsState {
   views: Record<string, ProjectView>
   order: string[]
   activeProjectId: string | null
-  defaultPermissionMode: PermissionMode
+  /** The mode the user last picked for new sessions; unset follows settings.json. */
+  defaultPermissionMode?: PermissionMode
   /** Currently visible side activity (file tree etc.). null = nothing visible. */
   activityView: ActivityView
   setActivityView: (view: ActivityView) => void
@@ -210,7 +212,13 @@ function migrateTitles(views: Record<string, { claudeSessions: unknown[] }>): vo
   }
 }
 
+/** The session's own mode, read fresh: a change made while a launch was awaited must count. */
+export function storedPermissionMode(paneId: string): PermissionMode | undefined {
+  return findSessionByPane(useProjectViewsStore.getState(), paneId)?.session.permissionMode
+}
+
 /** The shell tabs of the workspace a chat session belongs to. */
+
 export function shellTabsOfSession(paneId: string): ShellTab[] {
   const view = Object.values(useProjectViewsStore.getState().views).find((v) => v.claudeSessions.some((c) => c.id === paneId))
   return view?.shellTabs ?? []
@@ -222,7 +230,6 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
       views: {},
       order: [],
       activeProjectId: null,
-      defaultPermissionMode: 'acceptEdits',
       activityView: 'explorer',
       setActivityView: (view) => set({ activityView: view }),
 
@@ -235,7 +242,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         const firstSession: ClaudeChatSession | null =
           options?.firstSession === false
             ? null
-            : { id: makeId(), title: NEW_SESSION_TITLE, thinking: true, permissionMode: get().defaultPermissionMode }
+            : { id: makeId(), title: NEW_SESSION_TITLE, thinking: true }
         const view: ProjectView = {
           projectId: project.id,
           projectName: project.name,
@@ -310,7 +317,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           title: NEW_SESSION_TITLE,
           model: options?.model,
           thinking: true,
-          permissionMode: options?.permissionMode ?? get().defaultPermissionMode
+          permissionMode: options?.permissionMode
         }
         set((s) => {
           const v = s.views[projectId]
@@ -437,7 +444,6 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           ...loadedTitle(info),
           model,
           thinking: true,
-          permissionMode: get().defaultPermissionMode,
           claudeSessionId: info.sessionId
         }
         set((s) => {
@@ -731,6 +737,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         if (fromVersion < 9 && state.views) migrateTitles(state.views)
         if (fromVersion < 10) migratePermissionModes(state as SavedModes)
         if (fromVersion < 11) migrateModelChoices(state as SavedModelChoices)
+        if (fromVersion < 12) unsetStoreDefault(state as SavedModes)
         return persisted as ProjectViewsState
       },
       partialize: (state) => ({

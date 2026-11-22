@@ -3,6 +3,22 @@ import { join, resolve } from 'node:path'
 
 export const FAKE_BIN = join(resolve(__dirname, '..'), 'tools', 'fake-claude', 'fake-claude.mjs')
 
+/**
+ * Before 24.16, Node's libuv calls RtlGetVersion with an uninitialised struct size on every loopback connect
+ * on Windows, which can overrun the stack and kill the process with 0xC0000409. The Playwright worker connects
+ * to each launched app's debug ports, so on those versions a test randomly dies at 0 ms.
+ */
+export function workerCrashWarning(version: string, platform: string): string | undefined {
+  if (platform !== 'win32') return undefined
+  const [major, minor] = version.replace(/^v/, '').split('.').map(Number)
+  const affected = major < 24 || (major === 24 && minor < 16) || major === 25
+  if (!affected) return undefined
+  return (
+    `Node ${version} on Windows has a libuv bug (nodejs/node#63620) that randomly kills the Playwright worker ` +
+    `with code 3221226505 when it connects to the app. Use Node 24.16 or later.`
+  )
+}
+
 /** The suite must never reach the real CLI: anything but this repo's fake stops the run before launch. */
 export function assertFakeClaude(bin: string | undefined): void {
   if (!bin || resolve(bin) !== FAKE_BIN || !existsSync(FAKE_BIN)) {

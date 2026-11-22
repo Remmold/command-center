@@ -8,7 +8,7 @@ Every line it writes is cloned from a recording of the real CLI in `src/main/cla
 
 Set `CC_CLAUDE_BIN` to the path of `fake-claude.mjs`. `locateClaude` then runs it with the app's own binary (`process.execPath`) and `ELECTRON_RUN_AS_NODE=1`, for hosted sessions and the usage check alike. Normal use never sets it. A relative path resolves against the app's working directory.
 
-With `CC_CLAUDE_BIN` set, the app's Default profile reads `CLAUDE_CONFIG_DIR` instead of `~/.claude`. Point it at a temp folder holding an empty `.credentials.json` so the usage check runs.
+With `CC_CLAUDE_BIN` set, the app's Default profile reads `CLAUDE_CONFIG_DIR` instead of `~/.claude`, and passes it on to the CLI processes it starts for Default. Point it at a temp folder holding an empty `.credentials.json` so the usage check runs.
 
 | Variable | Meaning |
 | --- | --- |
@@ -65,6 +65,6 @@ One JSON object per line, each with `t` (ISO time) and `kind`:
 - `{cwd}` and `{sep}` in any string become the fake's working directory and path separator.
 - A user message with a `uuid` gets the CLI's `command_lifecycle` frames: `queued` on arrival, `started` when its turn begins, then `completed` (or `cancelled` when interrupted) after the result. With `--replay-user-messages` the prompt is echoed back as a `user` line with `isReplay: true` once it starts.
 - A message sent during a turn waits in the queue. If the turn then finishes a tool call, the message joins that turn after the tool result (replay, `started`), its matching turn's events play before the one result, and its `completed` comes before that result, as in the recording. Otherwise it starts its own turn after the result, also after an interrupt.
-- `interrupt` stops the running turn: a pending approval gets a `control_cancel_request`, then "[Request interrupted by user]" (or "… for tool use") and an `error_during_execution` result.
+- `interrupt` stops the running turn: a pending approval gets a `control_cancel_request`, then "[Request interrupted by user]" (or "… for tool use") and an `error_during_execution` result. As in the CLI's schema, its reply's `still_queued` lists the uuids of prompts still waiting, which then run; with `cancel_queued: true` they get `cancelled` instead and are listed in the reply's `cancelled`.
 
 Ready scripts: `scripts/basic.json` (one reply per prompt) and `scripts/approval.json` (a Write that needs approval, then a reply). The smoke suite adds `e2e/scripts/slow.json`, `e2e/scripts/context.json` (700k tokens used, so the context pie shows) and `e2e/scripts/render.json` (thinking, two TodoWrite lists and a code block for "plan…"; a long two-part reply for "long…").

@@ -303,14 +303,28 @@ class Fake {
         return ok()
       }
       case 'interrupt':
-        ok(clone(template.interruptReply))
-        return this.running?.abort()
+        return this.interrupt(request.cancel_queued === true, ok)
       default:
         return this.send({
           type: 'control_response',
           response: { subtype: 'error', request_id: requestId, error: recorded.unsupported.replace(/: .*$/, `: ${request.subtype}`) }
         })
     }
+  }
+
+  /** As the CLI's receipt: a plain interrupt leaves queued prompts to run next; `cancel_queued` drops them. */
+  interrupt(cancelQueued, ok) {
+    const uuids = this.queue.flatMap((p) => (p.uuid ? [p.uuid] : []))
+    const reply = clone(template.interruptReply)
+    if (cancelQueued) {
+      const cancelled = this.queue
+      this.queue = []
+      ok({ ...reply, still_queued: [], cancelled: uuids })
+      for (const prompt of cancelled) this.lifecycle(prompt, 'cancelled')
+    } else {
+      ok({ ...reply, still_queued: uuids })
+    }
+    this.running?.abort()
   }
 
   setMode(mode) {

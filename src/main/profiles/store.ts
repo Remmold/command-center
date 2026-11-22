@@ -129,5 +129,5 @@ export async function prepareSession(
       console.error('[profiles] link check failed', profile.name, err)
     }
   }
-  return { profileId: profile.id, env: profileEnv(profile) }
+  return { profileId: profile.id, env: profileEnv(profile, harnessConfigDir()) }
 }

@@ -411,6 +411,8 @@ export interface RendererApi {
     getInit: (paneId: string) => Promise<SessionInit | null>
     /** The model and effort new sessions start with, from the user `settings.json`. */
     readDefaults: () => Promise<ModelDefaults>
+    /** `permissions.defaultMode` from the user settings of the profile the workspace at `cwd` runs on; null when unset. */
+    defaultPermissionMode: (cwd: string) => Promise<string | null>
     saveDefaults: (patch: ModelDefaultsPatch) => Promise<SaveDefaultsResult>
     onInit: (cb: (envelope: SessionInitEnvelope) => void) => () => void
     /** `uuid` names the prompt in the CLI's `command_lifecycle` frames and replay echo. */

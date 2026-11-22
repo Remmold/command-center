@@ -54,3 +54,22 @@ export function migratePermissionModes(state: SavedModes): void {
   }
   if (state.defaultPermissionMode !== undefined) state.defaultPermissionMode = migrateMode(state.defaultPermissionMode)
 }
+
+export interface InitialModeSources {
+  /** The mode the user last picked, saved for new sessions as the extension does. */
+  picked: PermissionMode | undefined
+  /** `permissions.defaultMode` from the profile's user settings, as read. */
+  fromSettings: string | null
+  bypassAllowed: boolean
+}
+
+/** The extension's `getInitialPermissionMode`, with settings.json in the place of the CLI's own fallback. */
+export function initialMode({ picked, fromSettings, bypassAllowed }: InitialModeSources): PermissionMode {
+  const mode = picked ?? (isPermissionMode(fromSettings) ? fromSettings : 'default')
+  return mode === 'bypassPermissions' && !bypassAllowed ? 'default' : mode
+}
+
+/** A saved Edit automatically can't be told from the store's old built-in default, so it is not kept as a pick. */
+export function unsetStoreDefault(state: { defaultPermissionMode?: unknown }): void {
+  if (state.defaultPermissionMode === 'acceptEdits') delete state.defaultPermissionMode
+}

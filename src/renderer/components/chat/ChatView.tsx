@@ -23,11 +23,12 @@ import { useHeldPromptsStore } from '../../state/heldPromptsStore'
 import { committedLength, thinkingDurations } from './liveItems'
 import { useFollowOutput } from './useFollowOutput'
 import { useChatItemsStore } from '../../state/chatItemsStore'
-import { shellTabsOfSession, useProjectViewsStore } from '../../state/projectViewsStore'
+import { shellTabsOfSession, storedPermissionMode, useProjectViewsStore } from '../../state/projectViewsStore'
 import { isFirstPrompt, noteClaudeSessionId, requestClaudeTitle } from '../../state/sessionTitleSync'
 import { useApprovalsStore } from '../../state/approvalsStore'
 import { useAccountSwitchStore } from '../../state/accountSwitchStore'
-import { availableModes, isPermissionMode, migrateMode, nextMode, type PermissionMode } from '../../state/permissionModes'
+import { availableModes, initialMode, isPermissionMode, migrateMode, nextMode, type PermissionMode } from '../../state/permissionModes'
+import { NOT_RUNNING, controlOnceStarted } from './launchGate'
 import type { ApprovalRequest } from '../../../shared/approval'
 import { useFocusRequestStore } from '../../state/sessionNavigation'
 import { useSessionInit } from '../../state/sessionInitStore'
@@ -53,7 +54,6 @@ import type {
 } from '../../../shared/types'
 
 const EMPTY_ITEMS: ChatItem[] = []
-const NOT_RUNNING = 'claude process is not running'
 const EMPTY_REQUESTS: ApprovalRequest[] = []
 const EMPTY_HELD: HeldPrompt[] = []
 
@@ -145,6 +145,9 @@ export function ChatView({
   const focusRequest = useFocusRequestStore((s) => (s.request?.paneId === paneId ? s.request.nonce : null))
   const launchedModeRef = useRef<string | undefined>(undefined)
   const launchedBypassRef = useRef<boolean | null>(null)
+  const startingRef = useRef<Promise<boolean> | null>(null)
+  /** Set on a successful start before `processRunning` renders, so no caller launches twice. */
+  const startedRef = useRef(false)
   const interruptedRef = useRef(false)
   const allowBypassSetting = useGeneralSettingsStore((s) => s.allowDangerouslySkipPermissions)
   const choice = useModelChoice(paneId, { model, effort })
@@ -160,9 +163,12 @@ export function ChatView({
 
   const note = (text: string): void => appendItems(paneId, [{ kind: 'system', id: crypto.randomUUID(), text, at: Date.now() }])
 
+  const control = (subtype: string, fields?: Record<string, unknown>) =>
+    controlOnceStarted(() => window.api.claude.control(paneId, subtype, fields), startingRef.current)
+
   /** False when the running process refused the change; a pane without a process always takes it. */
   const applyFlags = async (settings: Record<string, unknown>): Promise<boolean> => {
-    const res = await window.api.claude.control(paneId, 'apply_flag_settings', { settings })
+    const res = await control('apply_flag_settings', { settings })
     if (res.ok) await useModelStore.getState().refreshApplied(paneId)
     else if (res.error !== NOT_RUNNING) setError(res.error)
     return res.ok || res.error === NOT_RUNNING
@@ -187,7 +193,7 @@ export function ChatView({
 
   const toggleThinking = async (): Promise<void> => {
     const on = !thinking
-    const res = await window.api.claude.control(paneId, 'set_max_thinking_tokens', { max_thinking_tokens: on ? THINKING_BUDGET : 0 })
+    const res = await control('set_max_thinking_tokens', { max_thinking_tokens: on ? THINKING_BUDGET : 0 })
     if (!res.ok && res.error !== NOT_RUNNING) {
       setError(res.error)
       return
@@ -200,7 +206,7 @@ export function ChatView({
     const store = useProjectViewsStore.getState()
     const previous = mode
     store.setSessionPermissionMode(paneId, next)
-    const res = await window.api.claude.control(paneId, 'set_permission_mode', { mode: next })
+    const res = await control('set_permission_mode', { mode: next })
     if (res.ok || res.error === NOT_RUNNING) return true
     store.setSessionPermissionMode(paneId, previous)
     setError(res.error)
@@ -238,6 +244,7 @@ export function ChatView({
     })
     const unsubExit = window.api.claude.onExit(({ paneId: id }) => {
       if (id !== paneId) return
+      startedRef.current = false
       setProcessRunning(false)
       setTurnActive(false)
       setInProgress(null)
@@ -450,10 +457,31 @@ export function ChatView({
     else if (id === 'toggle-thinking') void toggleThinking()
   }
 
-  const ensureStarted = async (): Promise<boolean> => {
-    if (processRunning) return true
+  /** A session's first start fixes its mode: the last pick, else the profile's settings.json, else Manual. */
+  const launchMode = async (): Promise<PermissionMode> => {
+    const own = storedPermissionMode(paneId)
+    if (own) return own
+    const fromSettings = await window.api.claude.defaultPermissionMode(cwd)
+    const pickedMeanwhile = storedPermissionMode(paneId)
+    if (pickedMeanwhile) return pickedMeanwhile
+    const store = useProjectViewsStore.getState()
+    const resolved = initialMode({ picked: store.defaultPermissionMode, fromSettings, bypassAllowed: allowBypassSetting })
+    store.setSessionPermissionMode(paneId, resolved)
+    return resolved
+  }
+
+  const ensureStarted = (): Promise<boolean> => {
+    if (processRunning || startedRef.current) return Promise.resolve(true)
+    startingRef.current ??= launch().finally(() => {
+      startingRef.current = null
+    })
+    return startingRef.current
+  }
+
+  const launch = async (): Promise<boolean> => {
     setError(null)
-    launchedModeRef.current = mode
+    const startMode = await launchMode()
+    launchedModeRef.current = startMode
     launchedBypassRef.current = allowBypassSetting
     const { defaults } = useModelStore.getState()
     const flags = launchChoice({ models: choice.models, defaults, selection: model, effort })
@@ -463,7 +491,7 @@ export function ChatView({
       ...flags,
       thinking,
       resumeSessionId,
-      permissionMode: mode,
+      permissionMode: startMode,
       allowBypass: allowBypassSetting
     })
     if (!res.ok) {
@@ -471,6 +499,7 @@ export function ChatView({
       if (resumeSessionId) useProjectViewsStore.getState().clearClaudeSessionId(paneId)
       return false
     }
+    startedRef.current = true
     setProcessRunning(true)
     void refreshContextUsage()
     return true

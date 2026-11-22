@@ -13,28 +13,12 @@ const BG = (_x, y) => BG_TOP.map((c, i) => c + (BG_BOTTOM[i] - c) * y)
 const FG = [240, 240, 240]
 const BADGE = [239, 68, 68]
 
-function segmentDistance(px, py, ax, ay, bx, by) {
-  const dx = bx - ax
-  const dy = by - ay
-  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
-  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
-}
-
 const roundedRect = (x0, y0, x1, y1, r) => (x, y) => {
   const cx = Math.max(x0 + r, Math.min(x1 - r, x))
   const cy = Math.max(y0 + r, Math.min(y1 - r, y))
   return Math.hypot(x - cx, y - cy) <= r && x >= x0 && x <= x1 && y >= y0 && y <= y1
 }
 const circle = (cx, cy, r) => (x, y) => Math.hypot(x - cx, y - cy) <= r
-const stroke = (points, width) => (x, y) => {
-  for (let i = 0; i < points.length - 1; i++) {
-    const [ax, ay] = points[i]
-    const [bx, by] = points[i + 1]
-    if (segmentDistance(x, y, ax, ay, bx, by) <= width / 2) return true
-  }
-  return false
-}
-
 const DIGITS = {
   0: ['111', '101', '101', '101', '111'],
   1: ['010', '110', '010', '010', '111'],
@@ -154,53 +138,25 @@ function ico(images) {
   return Buffer.concat([head, ...images.map((i) => i.data)])
 }
 
-// Three screens over a keyboard, black and white, with green code rain on the screens.
-const INK = [0, 0, 0]
-const RAIN_HEAD = [200, 255, 200]
-const RAIN = [0, 230, 65]
-const RAIN_DIM = [0, 110, 30]
+// "CC": a white C and a green C side by side on the dark tile.
+const GREEN = [61, 255, 138]
+const C_RADIUS = 29 / 256
+const C_STROKE = 26 / 256
+const MOUTH = (40 * Math.PI) / 180
 
-// Each rain column is [x offset, length, head position], in fractions of the screen.
-const RAIN_COLUMNS = [
-  [0.1, 0.5, 0.58],
-  [0.24, 0.75, 0.86],
-  [0.38, 0.35, 0.42],
-  [0.52, 0.85, 0.94],
-  [0.66, 0.45, 0.52],
-  [0.8, 0.7, 0.78],
-  [0.92, 0.3, 0.36]
-]
-
-function rain(x0, y0, x1, y1) {
-  const w = x1 - x0
-  const h = y1 - y0
-  const stripe = w * 0.06
-  const layers = []
-  for (const [offset, length, head] of RAIN_COLUMNS) {
-    const cx = x0 + w * offset
-    const top = y0 + h * Math.max(0, head - length)
-    const headY = y0 + h * head
-    layers.push([roundedRect(cx - stripe / 2, top, cx + stripe / 2, headY, 0), RAIN_DIM])
-    layers.push([roundedRect(cx - stripe / 2, top + (headY - top) * 0.5, cx + stripe / 2, headY, 0), RAIN])
-    layers.push([roundedRect(cx - stripe / 2, headY - h * 0.07, cx + stripe / 2, headY, 0), RAIN_HEAD])
+const letterC = (cx, cy) => {
+  const ends = [-1, 1].map((s) => [cx + C_RADIUS * Math.cos(MOUTH), cy + s * C_RADIUS * Math.sin(MOUTH)])
+  return (x, y) => {
+    const d = Math.hypot(x - cx, y - cy)
+    if (Math.abs(d - C_RADIUS) <= C_STROKE / 2 && Math.abs(Math.atan2(y - cy, x - cx)) >= MOUTH) return true
+    return ends.some(([ex, ey]) => Math.hypot(x - ex, y - ey) <= C_STROKE / 2)
   }
-  return layers
 }
 
-const BEZEL = 0.014
-const screen = (x0, y0, x1, y1) => [
-  [roundedRect(x0, y0, x1, y1, 0.02), FG],
-  [roundedRect(x0 + BEZEL, y0 + BEZEL, x1 - BEZEL, y1 - BEZEL, 0.01), INK],
-  ...rain(x0 + BEZEL * 2, y0 + BEZEL * 2, x1 - BEZEL * 2, y1 - BEZEL * 2)
-]
 const appLayers = [
   [roundedRect(0.03, 0.03, 0.97, 0.97, 0.22), BG],
-  ...screen(0.09, 0.28, 0.35, 0.5),
-  ...screen(0.65, 0.28, 0.91, 0.5),
-  ...screen(0.31, 0.18, 0.69, 0.55),
-  [roundedRect(0.49, 0.55, 0.51, 0.64, 0), FG],
-  [roundedRect(0.42, 0.635, 0.58, 0.65, 0.006), FG],
-  [roundedRect(0.22, 0.71, 0.78, 0.745, 0.017), FG]
+  [letterC(84 / 256, 126 / 256), FG],
+  [letterC(172 / 256, 126 / 256), GREEN]
 ]
 const trayBadgeLayers = (label) => [
   ...appLayers,

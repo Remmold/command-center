@@ -51,6 +51,15 @@ export function parseModelDefaults(text: string | null): ModelDefaults {
   return typeof settings.model === 'string' ? { model: settings.model, effortByModel } : { effortByModel }
 }
 
+/** `permissions.defaultMode` as the CLI reads it ("manual" is its alias for "default"); null when unset. */
+export function parseDefaultMode(text: string | null): string | null {
+  const parsed = parse(text)
+  if (!parsed.ok || !isObject(parsed.settings.permissions)) return null
+  const mode = parsed.settings.permissions.defaultMode
+  if (typeof mode !== 'string') return null
+  return mode === 'manual' ? 'default' : mode
+}
+
 async function readText(file: string): Promise<string | null> {
   try {
     return await fs.readFile(file, 'utf-8')
@@ -66,6 +75,15 @@ export async function readModelDefaults(file: string): Promise<ModelDefaults> {
   } catch (err) {
     console.error('[settings] could not read', file, (err as Error).message)
     return { effortByModel: {} }
+  }
+}
+
+export async function readDefaultMode(file: string): Promise<string | null> {
+  try {
+    return parseDefaultMode(await readText(file))
+  } catch (err) {
+    console.error('[settings] could not read', file, (err as Error).message)
+    return null
   }
 }
 
