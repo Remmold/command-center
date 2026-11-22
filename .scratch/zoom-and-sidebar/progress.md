@@ -1,0 +1,1 @@
+- 01 resolved: zoom like VS Code at 110% (keys, Settings row, View menu, kept across restarts), Ctrl+B hides the Work session list, IDE panels on Ctrl+Shift+E — f57ac3b, f124fbc
