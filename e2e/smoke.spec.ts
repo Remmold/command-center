@@ -1,6 +1,6 @@
 import type { ElectronApplication, Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cliPermissionMode, delayClaudeStart, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
 
@@ -481,5 +481,155 @@ test.describe('session history', () => {
     past = await openPast()
     await expect(past.getByRole('img', { name: /^Open in this window/ })).toHaveCount(1)
     await expect(past.getByRole('listitem').filter({ hasText: 'Old login fix' }).getByRole('img', { name: /^Open in this window/ })).toBeVisible()
+  })
+})
+
+test.describe('accounts from an existing folder', () => {
+  test('a VS Code profile’s folder is offered, adopted logged in, never written to, and only forgotten on Remove', async ({ launched }) => {
+    const { app, page, log, vscodeUserDir, root } = launched
+    const work = join(root, 'claude-work')
+    mkdirSync(work, { recursive: true })
+    writeFileSync(join(work, '.credentials.json'), '{}')
+    writeFileSync(join(work, 'marker.txt'), 'mine')
+    mkdirSync(join(vscodeUserDir, 'profiles', 'abc123'), { recursive: true })
+    writeFileSync(
+      join(vscodeUserDir, 'profiles', 'abc123', 'settings.json'),
+      `{\n  // Work\n  "claudeCode.environmentVariables": [{ "name": "CLAUDE_CONFIG_DIR", "value": ${JSON.stringify(work)} },],\n}`
+    )
+    mkdirSync(join(vscodeUserDir, 'globalStorage'), { recursive: true })
+    writeFileSync(join(vscodeUserDir, 'globalStorage', 'storage.json'), JSON.stringify({ userDataProfiles: [{ location: 'abc123', name: 'Work' }] }))
+    const side = join(root, 'claude-side')
+    mkdirSync(side, { recursive: true })
+
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Accounts', { exact: true }).click()
+    const accounts = page.getByRole('region', { name: 'Account profiles' })
+    const existing = page.getByRole('region', { name: 'Existing folders' })
+    const row = (text: string) => accounts.getByRole('listitem').filter({ hasText: text })
+    await expect(existing.getByText('Found in VS Code profile Work')).toBeVisible()
+    await existing.getByRole('button', { name: 'Add' }).click()
+    await expect(row('Work · logged in · existing folder')).toBeVisible()
+    await expect(existing).toBeHidden()
+    await expect.poll(() => log.entries().some((e) => e.kind === 'argv' && e.configDir === work)).toBe(true)
+
+    const pickFolder = (folder: string) =>
+      app.evaluate(({ dialog }, picked) => {
+        dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog
+      }, folder)
+    await pickFolder(work)
+    await page.getByRole('button', { name: 'Use existing folder…' }).click()
+    await expect(page.getByText('Work already uses this folder.')).toBeVisible()
+    await pickFolder(side)
+    await page.getByRole('button', { name: 'Use existing folder…' }).click()
+    await expect(row('claude-side · not logged in · existing folder')).toBeVisible()
+
+    let confirmText = ''
+    page.once('dialog', (d) => {
+      confirmText = d.message()
+      void d.accept()
+    })
+    await row('Work ·').getByRole('button', { name: 'Remove' }).click()
+    await expect(row('Work ·')).toBeHidden()
+    expect(confirmText).toContain(`the folder ${work} stays on disk, untouched`)
+    expect(readdirSync(work).sort()).toEqual(['.credentials.json', 'marker.txt'])
+    expect(readdirSync(side)).toEqual([])
+    await expect(existing.getByText('Found in VS Code profile Work')).toBeVisible()
+  })
+})
+
+test.describe('subagents', () => {
+  test.use({ script: 'subagent' })
+
+  test('a subagent’s messages show under its Agent call, and Open transcript reads its own file', async ({ launched }) => {
+    const { page } = launched
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await send(page, 'explore the repo')
+    await expect(pane.getByText('Main agent: the explorer finished.')).toBeVisible()
+
+    const call = pane.locator('[data-agent-call]')
+    await expect(call).toHaveAttribute('data-agent-status', 'finished')
+    const row = call.getByRole('button', { name: /Agent Find the config/ })
+    await expect(row).toContainText('Finished')
+    if ((await row.getAttribute('aria-expanded')) === 'false') await row.click()
+    const inside = call.locator('[data-subagent-items]')
+    await expect(inside.getByText('Subagent says the config lives in settings.ts.')).toBeVisible()
+    await expect(inside.getByRole('button', { name: /Read settings\.ts/ })).toBeVisible()
+    await expect(pane.getByText('Subagent says the config lives in settings.ts.')).toHaveCount(1)
+    await expect(pane.getByRole('button', { name: 'Copy response to clipboard' })).toHaveCount(1)
+
+    await call.getByRole('button', { name: 'Open transcript' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Find the config' })
+    await expect(dialog.getByText('Finished · general-purpose · foreground')).toBeVisible()
+    await expect(dialog.getByText('Subagent says the config lives in settings.ts.')).toBeVisible()
+    await expect(dialog.getByText('Find where the config is read.')).toBeVisible()
+  })
+
+  test('Stop agent sends stop_task with the agent’s task id and the call ends Stopped', async ({ launched }) => {
+    const { page, log } = launched
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await send(page, 'slow agent please')
+    const call = pane.locator('[data-agent-call]')
+    await expect(call.locator('[data-subagent-items]').getByText('Subagent is still looking.')).toBeVisible()
+    await expect(call).toHaveAttribute('data-agent-status', 'working')
+    await call.getByRole('button', { name: 'Stop agent' }).click()
+    await expect.poll(() => log.controlRequests('stop_task').map((r) => r.task_id)).toEqual([expect.stringMatching(/^a[0-9a-f]{16}$/)])
+    await expect(call).toHaveAttribute('data-agent-status', 'stopped')
+    await expect(pane.getByText('Main agent: carried on after the stop.')).toBeVisible()
+    await expect(pane.getByText('Subagent never says this.')).toHaveCount(0)
+  })
+})
+
+test.describe('Remote Control', () => {
+  const FAKE_SESSION = /^https:\/\/claude\.ai\/code\/session_01Fake[0-9a-f]+$/
+
+  test('/remote-control turns it on and shows the link; the menu row turns it off', async ({ launched }) => {
+    const { page, log } = launched
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await expect(pane.getByRole('link', { name: 'Remote Control' })).toHaveCount(0)
+
+    await prompt(page).fill('/remote-control')
+    await prompt(page).press('Enter')
+    const pill = pane.getByRole('link', { name: 'Remote Control' })
+    await expect(pill).toHaveAttribute('href', FAKE_SESSION)
+    await expect(pill).toHaveAttribute('title', 'Remote Control is active · Click to open claude.ai/code · Run /remote-control to turn off')
+    await expect(pane.getByText('Remote Control is active · Continue here, on your phone, or at')).toBeVisible()
+    const link = pane.getByRole('link', { name: 'claude.ai/code' })
+    expect(await link.getAttribute('href')).toBe(await pill.getAttribute('href'))
+
+    await prompt(page).pressSequentially('/remote')
+    await page.getByRole('listbox', { name: 'Actions' }).getByRole('option', { name: /\/remote-control/ }).click()
+    await expect(pane.getByText('Remote Control disabled.')).toBeVisible()
+    await expect(pill).toHaveCount(0)
+    await expect.poll(() => log.controlRequests('remote_control').map((r) => r.enabled)).toEqual([true, false])
+    expect(log.userTexts()).toEqual([])
+  })
+
+  test('turned on while the process is still starting, reaches the CLI once it is up', async ({ launched }) => {
+    const { app, page, log, workspace } = launched
+    await delayClaudeStart(app, 2000)
+    await page.keyboard.press('Control+2')
+    await page.keyboard.press('Control+t')
+    await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+    await prompt(page).fill('/rc')
+    await prompt(page).press('Enter')
+    const pane = page.locator('[data-chat-pane]')
+    await expect(pane.getByRole('status', { name: 'Connecting to claude.ai/code…' })).toBeVisible()
+    expect(log.initializedIn(workspace)).toBe(false)
+    await expect(pane.getByRole('link', { name: 'Remote Control' })).toHaveAttribute('href', FAKE_SESSION)
+    expect(log.controlRequests('remote_control').map((r) => r.enabled)).toEqual([true])
+  })
+
+  test.describe('with remoteControlAtStartup', () => {
+    test.use({ script: 'remoteControl' })
+
+    test('a new chat turns it on by itself once the CLI says so', async ({ launched }) => {
+      const { page, log } = launched
+      await startSession(launched)
+      await expect(page.locator('[data-chat-pane]').getByRole('link', { name: 'Remote Control' })).toHaveAttribute('href', FAKE_SESSION)
+      expect(log.controlRequests('remote_control').map((r) => r.enabled)).toEqual([true])
+    })
   })
 })

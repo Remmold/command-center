@@ -23,7 +23,9 @@ import { useHeldPromptsStore } from '../../state/heldPromptsStore'
 import { committedLength, thinkingDurations } from './liveItems'
 import { useFollowOutput } from './useFollowOutput'
 import { useChatItemsStore } from '../../state/chatItemsStore'
-import { shellTabsOfSession, storedPermissionMode, useProjectViewsStore } from '../../state/projectViewsStore'
+import { useSubagentTasksStore } from '../../state/subagentTasksStore'
+import type { AgentHost } from './toolContext'
+import { findSessionByPane, shellTabsOfSession, storedPermissionMode, useProjectViewsStore } from '../../state/projectViewsStore'
 import { isFirstPrompt, noteClaudeSessionId, requestClaudeTitle } from '../../state/sessionTitleSync'
 import { useApprovalsStore } from '../../state/approvalsStore'
 import { useAccountSwitchStore } from '../../state/accountSwitchStore'
@@ -43,6 +45,9 @@ import { contextIndicator, parseContextUsage, type ContextUsage } from './contex
 import type { LocalAction, OpenTarget } from './slashMenuModel'
 import { useUsagePopoverStore } from '../../state/usagePopoverStore'
 import { Brain } from 'lucide-react'
+import { RemoteControlPill } from './RemoteControlPill'
+import { REMOTE_CONTROL_COMMAND, REMOTE_CONTROL_DESCRIPTION, isRemoteControlCommand, remoteControlOffered } from './remoteControl'
+import { remoteControlOf, useRemoteControlStore } from '../../state/remoteControlStore'
 import { THINKING_BUDGET } from '../../../shared/types'
 import type {
   ClaudeAssistantEvent,
@@ -56,6 +61,8 @@ import type {
 const EMPTY_ITEMS: ChatItem[] = []
 const EMPTY_REQUESTS: ApprovalRequest[] = []
 const EMPTY_HELD: HeldPrompt[] = []
+const NO_TASKS = {}
+const TASK_EVENTS: ReadonlySet<string> = new Set(['task_started', 'task_progress', 'task_notification', 'task_updated'])
 
 /** The extension saves these as the default for new sessions when the user picks them. */
 const DEFAULT_WORTHY: ReadonlySet<PermissionMode> = new Set(['default', 'auto', 'acceptEdits'])
@@ -68,6 +75,15 @@ const LOCAL_ACTIONS: readonly LocalAction[] = [
   { id: 'toggle-thinking', section: 'Model', label: 'Thinking', description: 'Toggle extended thinking mode', keepOpen: true },
   { id: 'account-usage', section: 'Model', label: 'Account & usage…', description: 'View account info and usage' }
 ]
+
+/** Registered only while Remote Control is offered, as the extension's `$u.remoteControl` row. */
+const REMOTE_CONTROL_ACTION: LocalAction = {
+  id: REMOTE_CONTROL_COMMAND,
+  section: 'Slash Commands',
+  label: `/${REMOTE_CONTROL_COMMAND}`,
+  description: REMOTE_CONTROL_DESCRIPTION
+}
+const WITH_REMOTE_CONTROL: readonly LocalAction[] = [...LOCAL_ACTIONS, REMOTE_CONTROL_ACTION]
 
 interface Props {
   paneId: string
@@ -136,6 +152,9 @@ export function ChatView({
   const [initCommandNames, setInitCommandNames] = useState<string[]>([])
   const [modelMenuSignal, setModelMenuSignal] = useState(0)
   const sessionInit = useSessionInit(paneId)
+  const remoteControl = useRemoteControlStore((s) => remoteControlOf(s.byPane, paneId))
+  const remoteControlAvailable = sessionInit?.remoteControl?.available
+  const remoteControlShown = remoteControlOffered(remoteControlAvailable, remoteControl)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const { toBottom } = useFollowOutput(scrollRef, contentRef)
@@ -245,6 +264,7 @@ export function ChatView({
     const unsubExit = window.api.claude.onExit(({ paneId: id }) => {
       if (id !== paneId) return
       startedRef.current = false
+      useSubagentTasksStore.getState().end(paneId)
       setProcessRunning(false)
       setTurnActive(false)
       setInProgress(null)
@@ -351,8 +371,12 @@ export function ChatView({
     if (sessId) noteClaudeSessionId(paneId, sessId)
     if (handleQueueFrame(event)) return
 
+    const parent = (event as { parent_tool_use_id?: unknown }).parent_tool_use_id
+    const parentToolUseId = typeof parent === 'string' && parent !== '' ? parent : undefined
     if (event.type === 'stream_event') {
       const se = event as ClaudeStreamEvent
+      // Only the main agent's message streams in place; a subagent's arrives whole.
+      if (parentToolUseId) return
       handleStreamEvent(se.event as AnthropicStreamInner)
       return
     }
@@ -360,6 +384,10 @@ export function ChatView({
       const sys = event as ClaudeSystemEvent
       if (sys.subtype === 'status' && isPermissionMode(sys.permissionMode)) {
         useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
+        return
+      }
+      if (TASK_EVENTS.has(sys.subtype)) {
+        useSubagentTasksStore.getState().apply(paneId, sys)
         return
       }
       if (sys.subtype === 'thinking_tokens') {
@@ -381,6 +409,10 @@ export function ChatView({
     if (event.type === 'assistant') {
       const ae = event as ClaudeAssistantEvent
       const id = ae.message.id ?? crypto.randomUUID()
+      if (parentToolUseId) {
+        mergeAssistant(paneId, { kind: 'assistant', id, content: ae.message.content, raw: ae, at: Date.now(), parentToolUseId })
+        return
+      }
       const now = Date.now()
       const firstIndex = committedLength(useChatItemsStore.getState().items[paneId] ?? [], id)
       const timing = thinkingStartsRef.current
@@ -393,6 +425,19 @@ export function ChatView({
     if (event.type === 'user') {
       const content = (event as { message?: { content?: ContentBlock[] } }).message?.content
       if (!Array.isArray(content)) return
+      if (parentToolUseId) {
+        const results: ToolResultItem[] = content.filter(isToolResultBlock).map((block) => ({
+          kind: 'tool_result' as const,
+          id: crypto.randomUUID(),
+          toolUseId: block.tool_use_id,
+          content: block.content,
+          isError: block.is_error,
+          at: Date.now(),
+          parentToolUseId
+        }))
+        if (results.length > 0) appendItems(paneId, results)
+        return
+      }
       const notes = content.flatMap((block) => {
         const note = interruptNote(block)
         return note ? [note] : []
@@ -451,8 +496,17 @@ export function ChatView({
     else setContextOpen(true)
   }
 
+  /** As the extension, turning it on starts the chat's process if needed and sends once it is up. */
+  const toggleRemoteControl = (): Promise<void> =>
+    useRemoteControlStore.getState().toggle(paneId, async (enabled) => {
+      if (!enabled) return window.api.claude.control(paneId, 'remote_control', { enabled })
+      if (!(await ensureStarted())) return { ok: false, error: NOT_RUNNING }
+      return control('remote_control', { enabled })
+    })
+
   const runAction = (id: string): void => {
-    if (id === 'model') openTarget('model')
+    if (id === REMOTE_CONTROL_COMMAND) void toggleRemoteControl()
+    else if (id === 'model') openTarget('model')
     else if (id === 'account-usage') openTarget('usage')
     else if (id === 'toggle-thinking') void toggleThinking()
   }
@@ -533,6 +587,10 @@ export function ChatView({
   }, [switchTo, processRunning, turnActive, held.length])
 
   const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []) => {
+    if (attachments.length === 0 && remoteControlShown && isRemoteControlCommand(text)) {
+      void toggleRemoteControl()
+      return
+    }
     const uuid = crypto.randomUUID()
     const userText = userItemText(text, attachments)
     // As the extension's `turnRunningOrQueued`: the CLI queues it and says when it starts.
@@ -575,6 +633,22 @@ export function ChatView({
     await ensureStarted()
   }
 
+  const subagentTasks = useSubagentTasksStore((s) => s.byPane[paneId] ?? NO_TASKS)
+  const claudeSessionId = useProjectViewsStore((s) => findSessionByPane(s, paneId)?.session.claudeSessionId)
+  const transcript = useMemo(() => (claudeSessionId ? { cwd, sessionId: claudeSessionId } : undefined), [cwd, claudeSessionId])
+  const agents = useMemo((): AgentHost => {
+    const stop = async (taskId: string): Promise<string | null> => {
+      const res = await window.api.claude.control(paneId, 'stop_task', { task_id: taskId })
+      return res.ok ? null : res.error
+    }
+    return {
+      tasks: subagentTasks,
+      running: processRunning,
+      stop,
+      ...(transcript ? { transcript } : {})
+    }
+  }, [paneId, subagentTasks, processRunning, transcript])
+
   const indicator = contextUsage ? contextIndicator(contextUsage) : null
   const commands = useMemo(
     () => sessionInit?.commands ?? initCommandNames.map((name) => ({ name, description: '', argumentHint: '', aliases: [], builtin: false })),
@@ -613,7 +687,7 @@ export function ChatView({
                   : 'idle — sending will start a new claude process'}
               </ChatBanner>
             )}
-            <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} />
+            <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} agents={agents} />
             {pendingApprovals.map((req) => (
               <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
             ))}
@@ -635,7 +709,7 @@ export function ChatView({
         onSend={handleSend}
         onInterrupt={handleInterrupt}
         commands={commands}
-        localActions={LOCAL_ACTIONS}
+        localActions={remoteControlShown ? WITH_REMOTE_CONTROL : LOCAL_ACTIONS}
         onAction={runAction}
         onOpen={openTarget}
         menuTrailing={{
@@ -665,6 +739,8 @@ export function ChatView({
         footerEnd={
           <>
             {indicator && <ContextPie indicator={indicator} onCompact={() => void handleSend('/compact')} />}
+            {/* The extension's footer rule: once unavailable, only a connected session keeps its pill. */}
+            {(remoteControl.status === 'connected' || remoteControlAvailable !== false) && <RemoteControlPill state={remoteControl} />}
             <PermissionModePicker
               mode={mode}
               modes={modes}

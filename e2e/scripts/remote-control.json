@@ -1,0 +1,4 @@
+{
+  "remoteControlAtStartup": true,
+  "turns": [{ "match": "", "repeat": true, "events": [{ "type": "text", "text": "Hello from the fake Claude." }] }]
+}

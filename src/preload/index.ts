@@ -53,7 +53,11 @@ const api: RendererApi = {
     list: (): Promise<AccountProfile[]> => ipcRenderer.invoke(IPC.PROFILES_LIST),
     create: (name: string): Promise<AccountProfile> => ipcRenderer.invoke(IPC.PROFILES_CREATE, name),
     rename: (id: string, name: string): Promise<AccountProfile | null> =>
-      ipcRenderer.invoke(IPC.PROFILES_RENAME, id, name)
+      ipcRenderer.invoke(IPC.PROFILES_RENAME, id, name),
+    suggestions: () => ipcRenderer.invoke(IPC.PROFILES_SUGGESTIONS),
+    adopt: (path: string) => ipcRenderer.invoke(IPC.PROFILES_ADOPT, path),
+    chooseFolder: () => ipcRenderer.invoke(IPC.PROFILES_CHOOSE_FOLDER),
+    remove: (id: string) => ipcRenderer.invoke(IPC.PROFILES_REMOVE, id)
   },
   usage: {
     list: (): Promise<ProfileUsage[]> => ipcRenderer.invoke(IPC.USAGE_LIST),
@@ -144,6 +148,7 @@ const api: RendererApi = {
     send: (paneId, content, uuid) => ipcRenderer.send(IPC.CLAUDE_SEND, paneId, content, uuid),
     listLocalSessions: (cwd) => ipcRenderer.invoke(IPC.CLAUDE_LIST_LOCAL_SESSIONS, cwd),
     renameSession: (rename) => ipcRenderer.invoke(IPC.CLAUDE_RENAME_SESSION, rename),
+    subagentTranscript: (request) => ipcRenderer.invoke(IPC.CLAUDE_SUBAGENT_TRANSCRIPT, request),
     interrupt: (paneId) => ipcRenderer.send(IPC.CLAUDE_INTERRUPT, paneId),
     stop: (paneId) => ipcRenderer.send(IPC.CLAUDE_STOP, paneId),
     onEvent: (cb) => {

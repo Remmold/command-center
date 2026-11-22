@@ -15,6 +15,8 @@ import { findMentions } from './files/mentions'
 import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
+import { readSubagentTranscript } from './claude/subagentTranscript'
+import { isTeleportedSession } from './claude/teleport'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
@@ -30,12 +32,14 @@ import { setScreenFocus } from './sessions/screenFocus'
 import {
   DEFAULT_PROFILE_ID,
   type AddWorkspaceResult,
+  type AdoptResult,
   type ClaudeStartOptions,
   type UserContentBlock,
   type ModelDefaultsPatch,
   type ScreenFocus,
   type SessionInitEnvelope,
   type SessionRename,
+  type SubagentTranscriptRequest,
   type RenameResult
 } from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
@@ -169,6 +173,24 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.PROFILES_LIST, () => profiles.list())
   ipcMain.handle(IPC.PROFILES_CREATE, (_e, name: string) => profiles.create(name))
   ipcMain.handle(IPC.PROFILES_RENAME, (_e, id: string, name: string) => profiles.rename(id, name))
+  ipcMain.handle(IPC.PROFILES_SUGGESTIONS, () => profiles.suggestions())
+  const adopted = (result: AdoptResult): AdoptResult => {
+    if (result.ok) usage.refresh()
+    return result
+  }
+  ipcMain.handle(IPC.PROFILES_ADOPT, async (_e, path: string) => adopted(await profiles.adopt(path)))
+  ipcMain.handle(IPC.PROFILES_CHOOSE_FOLDER, async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const options: Electron.OpenDialogOptions = { title: 'Use existing Claude folder', properties: ['openDirectory'] }
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (result.canceled || result.filePaths.length === 0) return null
+    return adopted(await profiles.adopt(result.filePaths[0]))
+  })
+  ipcMain.handle(IPC.PROFILES_REMOVE, async (_e, id: string) => {
+    const removed = await profiles.remove(id)
+    if (removed) usage.refresh()
+    return removed
+  })
 
   const usage = new UsageService({
     listProfiles: profiles.list,
@@ -270,7 +292,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const workspace = await workspaces.findByPath(options.cwd)
     if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
     const { profileId, env } = await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)
-    return claudeManager.start({ ...options, profileEnv: env, profileId })
+    const teleported = options.resumeSessionId ? await isTeleportedSession(await transcriptsDirForCwd(options.cwd), options.resumeSessionId) : false
+    return claudeManager.start({ ...options, profileEnv: env, profileId, teleported })
   })
   ipcMain.handle(
     IPC.CLAUDE_CONTROL,
@@ -278,7 +301,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       claudeManager.control(paneId, subtype, fields)
   )
   ipcMain.handle(IPC.CLAUDE_GET_INIT, (_e, paneId: string) => claudeManager.initOf(paneId))
-  // Every profile's settings.json is a hard link to Default's, so Default's file is the one to change.
+  // App-made profiles hard-link Default's settings.json; an adopted folder keeps its own and is never written to.
   const userSettingsFile = (): string => join(profiles.defaultConfigDir(), 'settings.json')
   ipcMain.handle(IPC.CLAUDE_READ_DEFAULTS, () => readModelDefaults(userSettingsFile()))
   ipcMain.handle(IPC.CLAUDE_DEFAULT_PERMISSION_MODE, async (_e, cwd: string) => {
@@ -299,6 +322,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
 
   ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, async (_e, cwd: string) =>
     listLocalSessions(await transcriptsDirForCwd(cwd))
+  )
+  ipcMain.handle(IPC.CLAUDE_SUBAGENT_TRANSCRIPT, async (_e, request: SubagentTranscriptRequest) =>
+    readSubagentTranscript(await transcriptsDirForCwd(request.cwd), request.sessionId, { agentId: request.agentId, toolUseId: request.toolUseId })
   )
   ipcMain.handle(IPC.CLAUDE_RENAME_SESSION, async (_e, rename: SessionRename): Promise<RenameResult> => {
     const title = cleanSessionTitle(rename.title)

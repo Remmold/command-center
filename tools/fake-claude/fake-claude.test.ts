@@ -95,10 +95,10 @@ class Fake {
 let dirs: string[] = []
 let fakes: Fake[] = []
 
-function start(args: string[] = [], script?: unknown): Fake {
+function start(args: string[] = [], script?: unknown, extraEnv: (dir: string) => Record<string, string> = () => ({})): Fake {
   const dir = mkdtempSync(join(tmpdir(), 'fake-claude-'))
   dirs.push(dir)
-  const env: Record<string, string> = {}
+  const env: Record<string, string> = extraEnv(dir)
   if (script !== undefined) {
     env.FAKE_CLAUDE_SCRIPT = join(dir, 'script.json')
     writeFileSync(env.FAKE_CLAUDE_SCRIPT, JSON.stringify(script))
@@ -202,6 +202,27 @@ describe('control replies', () => {
   it('accepts set_max_thinking_tokens with an empty success', async () => {
     const reply = await start().control('set_max_thinking_tokens', { max_thinking_tokens: 0 })
     expect(reply).toEqual({ subtype: 'success', request_id: reply.request_id })
+  })
+
+  it('answers remote_control as the recorded probe: bridge ready, the same links while on, off always succeeds', async () => {
+    const fake = start()
+    const init = await fake.control('initialize', { hooks: null })
+    expect(init.response).toMatchObject({ remote_control_auto_enable: false, remote_control_available: true })
+    const on = await fake.control('remote_control', { enabled: true })
+    expect(on.subtype).toBe('success')
+    expect(on.response.session_url).toMatch(/^https:\/\/claude\.ai\/code\/session_01Fake/)
+    expect(Object.keys(on.response).sort()).toEqual(['bridge_epoch', 'bridge_session_id', 'connect_url', 'environment_id', 'session_url'])
+    expect(fake.lines.filter((l) => l.subtype === 'bridge_state')).toHaveLength(1)
+    expect((await fake.control('remote_control', { enabled: true })).response.session_url).toBe(on.response.session_url)
+    expect(await fake.control('remote_control', { enabled: false })).toEqual({ subtype: 'success', request_id: expect.any(String) })
+    expect((await fake.control('remote_control', { enabled: true })).response.session_url).not.toBe(on.response.session_url)
+  })
+
+  it("takes Remote Control's start-up verdict, availability and a refusal from the script", async () => {
+    const fake = start([], { turns: [], remoteControlAtStartup: true, remoteControlAvailable: false, remoteControlError: 'Remote Control is not enabled for your account' })
+    const init = await fake.control('initialize', { hooks: null })
+    expect(init.response).toMatchObject({ remote_control_auto_enable: true, remote_control_available: false })
+    expect(await fake.control('remote_control', { enabled: true })).toMatchObject({ subtype: 'error', error: 'Remote Control is not enabled for your account' })
   })
 
   it('rejects an unknown subtype with the recorded error wording', async () => {
@@ -407,6 +428,66 @@ describe('interrupt', () => {
     expect(cancel.request_id).toBe(ask.request_id)
     expect((await fake.next(isResult)).subtype).toBe('error_during_execution')
     expect(toolResults(fake).at(-1)).toEqual({ type: 'text', text: '[Request interrupted by user for tool use]' })
+  })
+})
+
+describe('subagent', () => {
+  const SUBAGENT = {
+    type: 'subagent',
+    description: 'Find the config',
+    prompt: 'Find where the config is read',
+    result: 'It is read in settings.ts.',
+    events: [
+      { type: 'tool_use', name: 'Read', input: { file_path: 'settings.ts' }, approval: false, result: 'export {}' },
+      { type: 'text', text: 'Found it in settings.ts.' }
+    ]
+  }
+
+  it('plays an Agent call, the task events and the subagent’s lines under the call, then the call’s result', async () => {
+    const fake = start(PARTIAL, { turns: [{ match: '', events: [SUBAGENT, { type: 'text', text: 'All done.' }] }] }, (dir) => ({ CLAUDE_CONFIG_DIR: dir }))
+    fake.say('look')
+    const result = await fake.next(isResult)
+    expect(result.result).toBe('All done.')
+    const call = fake.lines.find((l) => l.type === 'assistant' && l.message.content[0]?.name === 'Agent')!
+    const callId = call.message.content[0].id
+    expect(call.parent_tool_use_id).toBeNull()
+    const started = fake.lines.find((l) => l.subtype === 'task_started')!
+    expect(started).toMatchObject({ tool_use_id: callId, task_type: 'local_agent', description: 'Find the config', prompt: 'Find where the config is read' })
+    const children = fake.lines.filter((l) => l.parent_tool_use_id === callId)
+    expect(children.some((l) => l.type === 'stream_event')).toBe(true)
+    expect(children.filter((l) => l.type === 'assistant').map((l) => l.message.content[0].type)).toEqual(['tool_use', 'text'])
+    expect(children.filter((l) => l.type === 'user')).toHaveLength(1)
+    expect(fake.lines.filter((l) => l.subtype === 'task_progress').map((l) => l.usage.tool_uses)).toEqual([1, 1])
+    expect(fake.lines.find((l) => l.subtype === 'task_notification')).toMatchObject({ task_id: started.task_id, status: 'completed', summary: 'It is read in settings.ts.' })
+    const callResult = fake.lines.find((l) => l.type === 'user' && l.parent_tool_use_id === null && l.message.content[0]?.tool_use_id === callId)!
+    expect(callResult.message.content[0].content[0].text).toBe('It is read in settings.ts.')
+  })
+
+  it('writes the subagent’s own transcript beside the session’s, with a meta file naming its call', async () => {
+    let configDir = ''
+    const fake = start([], { turns: [{ match: '', events: [SUBAGENT] }] }, (dir) => ((configDir = dir), { CLAUDE_CONFIG_DIR: dir }))
+    fake.say('look')
+    await fake.next(isResult)
+    const started = fake.lines.find((l) => l.subtype === 'task_started')!
+    const folder = join(configDir, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'), started.session_id, 'subagents')
+    const meta = JSON.parse(readFileSync(join(folder, `agent-${started.task_id}.meta.json`), 'utf-8'))
+    expect(meta.toolUseId).toBe(started.tool_use_id)
+    const lines = readFileSync(join(folder, `agent-${started.task_id}.jsonl`), 'utf-8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+    expect(lines.map((l) => l.type)).toEqual(['user', 'assistant', 'user', 'assistant'])
+    expect(lines.every((l) => l.isSidechain === true)).toBe(true)
+  })
+
+  it('stop_task stops a running subagent: task_notification stopped and an interrupted call result, and the turn goes on', async () => {
+    const slow = { ...SUBAGENT, events: [{ type: 'text', text: 'Looking.' }, { type: 'wait', ms: 5000 }, { type: 'text', text: 'never' }] }
+    const fake = start([], { turns: [{ match: '', events: [slow, { type: 'text', text: 'After the agent.' }] }] })
+    fake.say('look')
+    const started = await fake.next((l) => l.subtype === 'task_started')
+    await fake.next((l) => l.type === 'assistant' && l.parent_tool_use_id === started.tool_use_id)
+    expect((await fake.control('stop_task', { task_id: 'nope' })).subtype).toBe('error')
+    expect((await fake.control('stop_task', { task_id: started.task_id })).subtype).toBe('success')
+    expect(await fake.next((l) => l.subtype === 'task_notification')).toMatchObject({ status: 'stopped' })
+    expect((await fake.next(isResult)).result).toBe('After the agent.')
+    expect(fake.lines.some((l) => l.type === 'assistant' && l.message.content[0]?.text === 'never')).toBe(false)
   })
 })
 

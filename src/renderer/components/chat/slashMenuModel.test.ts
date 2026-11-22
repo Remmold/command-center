@@ -63,6 +63,14 @@ describe('buildMenu and menuSections', () => {
     ])
   })
 
+  it("sorts the app's own slash rows in among the CLI's and runs them locally", () => {
+    const withRc = buildMenu(COMMANDS, [...LOCAL, { id: 'remote-control', section: 'Slash Commands', label: '/remote-control', description: 'View and control this session from claude.ai/code' }])
+    const slash = withRc.sections.find((s) => s.name === 'Slash Commands')!.commands
+    expect(slash.map((c) => c.label)).toEqual(['/clear', '/compact', '/context', '/model', '/remote-control', '/review', '/tdd', '/usage'])
+    const rc = slash.find((c) => c.id === 'remote-control')!
+    expect(selectCommand(rc, false, '/remote', { start: 0, end: 7, query: 'remote' })).toEqual({ kind: 'action', id: 'remote-control', value: '', caret: 0 })
+  })
+
   it('ranks an exact label first, then prefixes, then other fuzzy hits', () => {
     const flat = menuSections(menu, 'co').flatMap((s) => s.commands.map((c) => c.label))
     expect(flat.slice(0, 3).sort()).toEqual(['/compact', '/context', '/usage'])

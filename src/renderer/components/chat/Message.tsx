@@ -13,6 +13,8 @@ import { stampLabel, stampTitle } from './messageTime'
 import { CopyButton } from '../ui/CopyButton'
 import { TimeStamp } from '../ui/TimeStamp'
 import { Checklist, type CheckState } from '../ui/Checklist'
+import { AgentCall, SubagentItemList } from './AgentCall'
+import { AGENT_TOOLS } from './subagents'
 
 const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
 
@@ -83,7 +85,7 @@ interface AssistantProps {
 function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens }: AssistantProps) {
   const { content } = item
   if (content.length === 0) return null
-  const copyable = streamingFrom === undefined && textBlocks(content).length > 0 && !item.raw.parent_tool_use_id
+  const copyable = streamingFrom === undefined && textBlocks(content).length > 0 && !item.parentToolUseId && !item.raw.parent_tool_use_id
   return (
     <div data-assistant-message="" className="group/message relative space-y-2">
       {stampAt !== undefined && (
@@ -164,10 +166,14 @@ function statusOf(result: ToolResultItem | undefined): ToolCallStatus {
 }
 
 function ToolCall({ block }: { block: ToolUse }) {
-  const { pairs, cwd, latestTodoId } = useToolContext()
+  const { pairs, cwd, latestTodoId, subagentItems } = useToolContext()
   const result = pairs.resultFor.get(block.id)
   const { name, target } = toolCallTitle(block.name, block.input, cwd)
   const status = statusOf(result)
+
+  if (AGENT_TOOLS.has(block.name)) {
+    return <AgentCall id={block.id} name={block.name} input={block.input} result={result} resultText={result ? stringifyToolResult(result.content) : ''} />
+  }
 
   const todos = block.name === TODO_TOOL ? parseTodos(block.input) : undefined
   if (todos) {
@@ -205,12 +211,14 @@ function ToolCall({ block }: { block: ToolUse }) {
 
   const resultText = result ? stringifyToolResult(result.content) : ''
   const showsDiff = !!result && !result.isError && isUnifiedDiff(resultText)
+  const woken = subagentItems.get(block.id) ?? []
   return (
     <ToolCallRow name={name} target={target} status={status} defaultOpen={showsDiff}>
       <ToolCallSection label="in">
         <ToolCallText>{inputText(block.input)}</ToolCallText>
       </ToolCallSection>
       {result && <ResultSection result={result} />}
+      {woken.length > 0 && <SubagentItemList items={woken} />}
     </ToolCallRow>
   )
 }

@@ -10,3 +10,7 @@ export function profileEnv(profile: { id: string; configDir: string }, harnessDi
   if (profile.id !== DEFAULT_PROFILE_ID) return { [CONFIG_DIR_VAR]: profile.configDir }
   return harnessDir ? { [CONFIG_DIR_VAR]: harnessDir } : {}
 }
+
+export function removalConfirmText(profile: { name: string; configDir: string }): string {
+  return `Remove ${profile.name}? Command Center forgets this account; the folder ${profile.configDir} stays on disk, untouched. Workspaces that used it go back to Default.`
+}

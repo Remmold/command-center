@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { appendFileSync, readFileSync } from 'node:fs'
-import { randomUUID } from 'node:crypto'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { basename, dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -26,6 +26,9 @@ const recorded = {
     .filter((entry) => entry.direction === 'cli')
     .map((entry) => entry.line),
   control: readLines(join(FIXTURES, 'control-replies.jsonl'))
+    .filter((entry) => entry.direction === 'cli')
+    .map((entry) => entry.line),
+  remoteControl: readLines(join(FIXTURES, 'remote-control-replies.jsonl'))
     .filter((entry) => entry.direction === 'cli')
     .map((entry) => entry.line)
 }
@@ -70,6 +73,8 @@ const template = {
   bypassRefused: clone(recorded.control.find((l) => l.response?.error_code === 'bypass_not_launched').response),
   lifecycle: clone(recorded.queued.find((l) => l.type === 'command_lifecycle')),
   replay: clone(recorded.queued.find((l) => l.type === 'user' && l.isReplay)),
+  bridgeReady: clone(recorded.remoteControl.find((l) => l.subtype === 'bridge_state' && l.state === 'ready')),
+  remoteControlReply: clone(recorded.remoteControl.find((l) => l.response?.response?.session_url).response.response),
   interruptReply: clone(recorded.control.find((l) => l.response?.response && 'still_queued' in l.response.response).response.response)
 }
 
@@ -164,6 +169,7 @@ class Fake {
     this.pendingApprovals = new Map()
     this.counter = 0
     this.title = null
+    this.bridgeSessionId = null
     this.log({ kind: 'argv', argv, cwd: process.cwd(), configDir: process.env.CLAUDE_CONFIG_DIR ?? null })
   }
 
@@ -258,7 +264,15 @@ class Fake {
       this.send({ type: 'control_response', response: { subtype: 'success', request_id: requestId, ...(response ? { response } : {}) } })
     switch (request.subtype) {
       case 'initialize':
-        return ok({ ...clone(recorded.initialize), pid: process.pid, current_permission_mode: this.permissionMode })
+        return ok({
+          ...clone(recorded.initialize),
+          pid: process.pid,
+          current_permission_mode: this.permissionMode,
+          remote_control_auto_enable: this.script.remoteControlAtStartup === true,
+          remote_control_available: this.script.remoteControlAvailable !== false
+        })
+      case 'remote_control':
+        return this.remoteControl(request.enabled === true, ok, fail)
       case 'get_usage':
         return ok(clone(recorded.usage))
       case 'get_context_usage':
@@ -304,12 +318,36 @@ class Fake {
       }
       case 'interrupt':
         return this.interrupt(request.cancel_queued === true, ok)
+      case 'stop_task': {
+        if (typeof request.task_id !== 'string') return fail('stop_task: task_id must be a string')
+        const sub = this.running?.sub
+        if (!sub || sub.taskId !== request.task_id || sub.stopped) return fail(`No running task with ID: ${request.task_id}`)
+        ok()
+        return this.running.stopSubagent()
+      }
       default:
         return this.send({
           type: 'control_response',
           response: { subtype: 'error', request_id: requestId, error: recorded.unsupported.replace(/: .*$/, `: ${request.subtype}`) }
         })
     }
+  }
+
+  /** As the recorded probe: on sends `bridge_state` ready and the session links (the same ones while on); off always succeeds. */
+  remoteControl(enabled, ok, fail) {
+    if (!enabled) {
+      this.bridgeSessionId = null
+      return ok()
+    }
+    if (typeof this.script.remoteControlError === 'string') return fail(this.script.remoteControlError)
+    if (!this.bridgeSessionId) {
+      this.bridgeSessionId = `01Fake${randomBytes(9).toString('hex')}`
+      this.send(this.stamp(clone(template.bridgeReady)))
+    }
+    const reply = clone(template.remoteControlReply)
+    reply.session_url = `https://claude.ai/code/session_${this.bridgeSessionId}`
+    reply.bridge_session_id = `cse_${this.bridgeSessionId}`
+    return ok(reply)
   }
 
   /** As the CLI's receipt: a plain interrupt leaves queued prompts to run next; `cancel_queued` drops them. */
@@ -407,8 +445,18 @@ class Turn {
     for (const wake of this.wakers) wake()
   }
 
+  stopSubagent() {
+    if (!this.sub) return
+    this.sub.stopped = true
+    for (const wake of this.wakers) wake()
+  }
+
+  get halted() {
+    return this.aborted || this.sub?.stopped === true
+  }
+
   sleep(ms) {
-    if (!ms || this.aborted) return Promise.resolve()
+    if (!ms || this.halted) return Promise.resolve()
     return new Promise((resolve) => {
       const done = () => {
         clearTimeout(timer)
@@ -421,7 +469,12 @@ class Turn {
   }
 
   emit(line) {
-    this.fake.send(this.fake.stamp(line))
+    const stamped = this.fake.stamp(line)
+    if (this.sub && 'parent_tool_use_id' in stamped) {
+      stamped.parent_tool_use_id = this.sub.toolUseId
+      this.sub.record(stamped)
+    }
+    this.fake.send(stamped)
   }
 
   stream(line) {
@@ -461,9 +514,9 @@ class Turn {
   async play(events) {
     for (const raw of events) {
       const event = fill(raw)
-      if (this.aborted) return false
+      if (this.halted) return false
       await this.sleep(event.delayMs)
-      if (this.aborted) return false
+      if (this.halted) return false
       switch (event.type) {
         case 'text':
           await this.text(event)
@@ -473,6 +526,9 @@ class Turn {
           break
         case 'rate_limit_event':
           this.rateLimit(event)
+          break
+        case 'subagent':
+          await this.subagent(event)
           break
         case 'result':
           if (event.error) this.endInterrupted(null)
@@ -572,6 +628,78 @@ class Turn {
     this.lastText = event.text ?? sent
     this.emit(this.assistant(messageId, { type: 'text', text: this.lastText }))
     this.endMessage('end_turn', index)
+  }
+
+  /** An assistant message holding one tool call, streamed as the CLI does; returns its tool_use id. */
+  callMessage(name, input) {
+    const messageId = this.fake.id('msg_fake')
+    const toolUseId = this.fake.id('toolu_fake')
+    this.startMessage(messageId)
+    const blockStart = this.at(clone(template.toolBlockStart), 0)
+    blockStart.event.content_block.id = toolUseId
+    blockStart.event.content_block.name = name
+    this.stream(blockStart)
+    const delta = this.at(clone(template.inputDelta), 0)
+    delta.event.delta.partial_json = JSON.stringify(input)
+    this.stream(delta)
+    const block = { ...clone(template.assistant.message.content[0]), type: 'tool_use', id: toolUseId, name, input }
+    const assistant = this.assistant(messageId, block)
+    delete assistant.wire_tool_inputs
+    this.emit(assistant)
+    this.endMessage('tool_use', 0)
+    this.numTurns++
+    return toolUseId
+  }
+
+  /**
+   * An Agent call and its subagent's turn, shaped by the CLI's schema: `task_started`, the subagent's lines with
+   * `parent_tool_use_id` set to the call, a `task_progress` after each of its events, `task_notification`, then the call's result.
+   * With `CLAUDE_CONFIG_DIR` set the subagent's own transcript is written beside the session's, as the CLI does.
+   */
+  async subagent(event) {
+    const fake = this.fake
+    const input = { description: event.description ?? 'Subagent', prompt: event.prompt ?? '', subagent_type: event.subagentType ?? 'general-purpose' }
+    const toolUseId = this.callMessage('Agent', input)
+    const taskId = `a${randomBytes(8).toString('hex')}`
+    const background = event.background === true
+    const system = (fields) => this.emit({ type: 'system', ...fields, task_id: taskId, tool_use_id: toolUseId, uuid: '', session_id: '' })
+    system({
+      subtype: 'task_started',
+      description: input.description,
+      subagent_type: input.subagent_type,
+      task_type: 'local_agent',
+      prompt: input.prompt,
+      is_backgrounded: background
+    })
+    if (background) this.toolResult(toolUseId, `Async agent launched successfully.\nagentId: ${taskId}`, false)
+    const transcript = subagentTranscript(fake.sessionId, taskId, toolUseId, input)
+    const sub = { taskId, toolUseId, stopped: false, record: transcript.record }
+    transcript.record({ type: 'user', message: { role: 'user', content: input.prompt } })
+    const started = Date.now()
+    let toolUses = 0
+    let tokens = 0
+    const usage = () => ({ total_tokens: tokens, tool_uses: toolUses, duration_ms: Date.now() - started })
+    const mainText = this.lastText
+    this.sub = sub
+    for (const child of event.events ?? []) {
+      if (this.halted) break
+      await this.play([child])
+      if (this.halted) break
+      if (child.type === 'tool_use') toolUses++
+      tokens += 1500
+      this.sub = null
+      system({ subtype: 'task_progress', description: input.description, usage: usage(), ...(child.type === 'tool_use' ? { last_tool_name: child.name } : {}) })
+      this.sub = sub
+    }
+    this.sub = null
+    this.lastText = mainText
+    if (this.aborted) return
+    const stopped = sub.stopped
+    const summary = stopped ? '' : (event.result ?? 'Done.')
+    system({ subtype: 'task_notification', status: stopped ? 'stopped' : 'completed', output_file: '', summary, usage: usage() })
+    if (background) return
+    if (stopped) this.toolResult(toolUseId, INTERRUPTED_TOOL, true)
+    else this.userMessage([{ tool_use_id: toolUseId, type: 'tool_result', content: [{ type: 'text', text: summary }, { type: 'text', text: `agentId: ${taskId}` }] }])
   }
 
   /** True when the tool call ended the turn. */
@@ -705,6 +833,24 @@ class Turn {
       for (const window of Object.values(line.rate_limit_info.unifiedWindows ?? {})) window.utilization = event.utilization
     }
     this.emit(line)
+  }
+}
+
+/** The CLI keeps a subagent's lines in `projects/<cwd>/<session>/subagents/agent-<id>.jsonl`, with a `.meta.json` naming its call. */
+function subagentTranscript(sessionId, agentId, toolUseId, input) {
+  const configDir = process.env.CLAUDE_CONFIG_DIR
+  if (!configDir) return { record: () => {} }
+  const dir = join(configDir, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'), sessionId, 'subagents')
+  const file = join(dir, `agent-${agentId}.jsonl`)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, `agent-${agentId}.meta.json`), JSON.stringify({ agentType: input.subagent_type, description: input.description, toolUseId }))
+  writeFileSync(file, '')
+  return {
+    record(line) {
+      if (line.type !== 'user' && line.type !== 'assistant') return
+      const entry = { isSidechain: true, agentId, type: line.type, uuid: randomUUID(), timestamp: new Date().toISOString(), message: line.message }
+      appendFileSync(file, JSON.stringify(entry) + '\n')
+    }
   }
 }
 

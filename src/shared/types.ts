@@ -25,7 +25,16 @@ export interface AccountProfile {
   configDir: string
   /** True when the profile's credentials file exists. */
   loggedIn: boolean
+  /** An existing folder the app adopted; the app never writes to or deletes it. */
+  adopted: boolean
 }
+
+export interface VsCodeConfigDir {
+  profileName: string
+  configDir: string
+}
+
+export type AdoptResult = { ok: true; profile: AccountProfile } | { ok: false; error: string }
 
 export type SessionStatus = 'running' | 'needs-approval' | 'your-turn' | 'idle'
 
@@ -114,6 +123,14 @@ export interface SessionInit {
   account: CliAccount | null
   commands: CliCommand[]
   permissionMode: string
+  remoteControl: RemoteControlInit
+}
+
+export interface RemoteControlInit {
+  /** False when the CLI says Remote Control can't be offered here; unset when it didn't say. */
+  available?: boolean
+  /** Turn it on once the process is up: the CLI's start-up verdict (`remoteControlAtStartup` and rollout). */
+  autoStart: boolean
 }
 
 export interface SessionInitEnvelope {
@@ -272,6 +289,14 @@ export interface SessionRename {
   paneId?: string
 }
 
+/** A subagent of a session, by its agent (task) id or the Agent call that started it. */
+export interface SubagentTranscriptRequest {
+  cwd: string
+  sessionId: string
+  agentId?: string
+  toolUseId?: string
+}
+
 /** `title` is the name as stored: cleaned and cut the way the CLI does it. */
 export type RenameResult = { ok: true; title: string } | { ok: false; error: string }
 
@@ -344,6 +369,13 @@ export interface RendererApi {
     list: () => Promise<AccountProfile[]>
     create: (name: string) => Promise<AccountProfile>
     rename: (id: string, name: string) => Promise<AccountProfile | null>
+    /** CLAUDE_CONFIG_DIR folders found in VS Code profiles that no profile uses yet. */
+    suggestions: () => Promise<VsCodeConfigDir[]>
+    adopt: (path: string) => Promise<AdoptResult>
+    /** Opens a folder picker and adopts the pick; null when cancelled. */
+    chooseFolder: () => Promise<AdoptResult | null>
+    /** Forgets the profile; never deletes its folder. */
+    remove: (id: string) => Promise<boolean>
   }
   usage: {
     list: () => Promise<ProfileUsage[]>
@@ -424,6 +456,8 @@ export interface RendererApi {
     listLocalSessions: (cwd: string) => Promise<LocalSessionInfo[]>
     /** Tells the pane's CLI (`rename_session`), or with no process appends a `custom-title` line to the transcript. */
     renameSession: (rename: SessionRename) => Promise<RenameResult>
+    /** A subagent's own transcript in the session's folder; null when there is none. */
+    subagentTranscript: (request: SubagentTranscriptRequest) => Promise<ChatItem[] | null>
   }
   observed: {
     list: () => Promise<ObservedSession[]>

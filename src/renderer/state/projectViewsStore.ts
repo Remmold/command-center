@@ -149,7 +149,7 @@ function makeId(): string {
   return crypto.randomUUID()
 }
 
-function findSessionByPane(state: ProjectViewsState, paneId: string): {
+export function findSessionByPane(state: ProjectViewsState, paneId: string): {
   projectId: string
   session: ClaudeChatSession
 } | null {

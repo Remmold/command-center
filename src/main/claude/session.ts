@@ -13,6 +13,7 @@ export type InitCallback = (paneId: string, init: SessionInit) => void
 
 export interface ClaudeSessionOptions extends ClaudeStartOptions {
   profileEnv?: Record<string, string>
+  teleported?: boolean
   onEvent: EventCallback
   onExit: ExitCallback
   onInit: InitCallback
@@ -106,7 +107,7 @@ export class ClaudeSession {
     this.handshake = this.control
       .request('initialize', { hooks: null })
       .then((response) => {
-        this.init = parseInitialize(response)
+        this.init = parseInitialize(response, { teleported: options.teleported })
         options.onInit(paneId, this.init)
       })
       .catch((err: Error) => {

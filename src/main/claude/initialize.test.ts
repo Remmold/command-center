@@ -38,7 +38,19 @@ describe('parseInitialize', () => {
       models: [{ value: 'x', resolvedModel: 'x', displayName: 'x', description: '', supportsEffort: false, supportedEffortLevels: [], supportsAutoMode: false }],
       account: null,
       commands: [],
-      permissionMode: 'default'
+      permissionMode: 'default',
+      remoteControl: { autoStart: false }
     })
+  })
+
+  it('reads the Remote Control start-up verdict as the extension does', () => {
+    expect(parseInitialize(initializeReply.response.response).remoteControl).toEqual({ available: true, autoStart: true })
+    const real = { remote_control_auto_enable: true, remote_control_auto_on_by_default: false, remote_control_available: true, ide_rc_auto_enable_gate: true }
+    expect(parseInitialize(real).remoteControl.autoStart).toBe(true)
+    expect(parseInitialize(real, { teleported: true }).remoteControl.autoStart).toBe(false)
+    expect(parseInitialize({ ...real, remote_control_available: false }).remoteControl).toEqual({ available: false, autoStart: false })
+    expect(parseInitialize({ ...real, remote_control_auto_enable: false }).remoteControl.autoStart).toBe(false)
+    expect(parseInitialize({ remote_control_auto_enable: true, remote_control_auto_on_by_default: true }).remoteControl.autoStart).toBe(false)
+    expect(parseInitialize({ remote_control_auto_enable: true, remote_control_auto_on_by_default: true, ide_rc_auto_enable_gate: true }).remoteControl.autoStart).toBe(true)
   })
 })

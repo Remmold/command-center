@@ -28,7 +28,7 @@ export interface LinkRepair {
 
 type Health = 'missing' | 'healthy' | 'broken-link' | 'occupied'
 
-function samePath(a: string, b: string): boolean {
+export function samePath(a: string, b: string): boolean {
   const norm = (p: string): string =>
     resolve(p.replace(/^\\\\\?\\/, '')).replace(/[\\/]+$/, '').toLowerCase()
   return norm(a) === norm(b)

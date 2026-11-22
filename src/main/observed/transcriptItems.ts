@@ -38,6 +38,15 @@ export function createTranscriptParser(): TranscriptParser {
 }
 
 export function lineToItems(raw: string): ChatItem[] {
+  return toItems(raw, false)
+}
+
+/** A line of a subagent's own transcript (`subagents/agent-<id>.jsonl`), where every line is a sidechain one. */
+export function sidechainLineToItems(raw: string): ChatItem[] {
+  return toItems(raw, true)
+}
+
+function toItems(raw: string, sidechain: boolean): ChatItem[] {
   if (!raw.trim()) return []
   let line: TranscriptLine
   try {
@@ -45,7 +54,7 @@ export function lineToItems(raw: string): ChatItem[] {
   } catch {
     return []
   }
-  if (!line.uuid || line.isSidechain || line.isMeta || !line.message) return []
+  if (!line.uuid || (line.isSidechain && !sidechain) || line.isMeta || !line.message) return []
   const items = line.type === 'user' ? userItems(line.uuid, line) : line.type === 'assistant' ? assistantItems(line.uuid, line) : []
   const at = line.timestamp ? Date.parse(line.timestamp) : NaN
   return Number.isFinite(at) ? items.map((item) => ({ ...item, at })) : items

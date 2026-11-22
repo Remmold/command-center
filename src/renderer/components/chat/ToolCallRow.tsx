@@ -1,18 +1,22 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
-export type ToolCallStatus = 'pending' | 'ok' | 'error'
+export type ToolCallStatus = 'pending' | 'running' | 'ok' | 'error' | 'stopped'
 
 const GLYPH: Record<ToolCallStatus, string> = {
   pending: 'border border-faint',
+  running: 'bg-status-running animate-pulse',
   ok: 'bg-success',
-  error: 'bg-error'
+  error: 'bg-error',
+  stopped: 'bg-error'
 }
 
 const GLYPH_LABEL: Record<ToolCallStatus, string> = {
   pending: 'no result yet',
+  running: 'running',
   ok: 'succeeded',
-  error: 'failed'
+  error: 'failed',
+  stopped: 'stopped'
 }
 
 interface Props {

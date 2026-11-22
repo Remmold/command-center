@@ -18,6 +18,8 @@ export interface AssistantMessageItem extends Timed {
   raw: ClaudeAssistantEvent
   /** How long each thinking block took, by its index in `content`; only known for blocks streamed live. */
   thinkingMs?: Record<number, number>
+  /** The Agent (or SendMessage) call this message belongs to, when a subagent sent it. */
+  parentToolUseId?: string
 }
 
 export interface ToolResultItem extends Timed {
@@ -26,6 +28,8 @@ export interface ToolResultItem extends Timed {
   toolUseId: string
   content: unknown
   isError?: boolean
+  /** The Agent (or SendMessage) call whose subagent ran this tool. */
+  parentToolUseId?: string
 }
 
 export interface ResultItem extends Timed {

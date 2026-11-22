@@ -296,6 +296,48 @@ and "Resume conversation" commands.
 session, Ctrl+Alt+F focus view. In the input: Shift+Tab cycles mode, Shift+Enter adds a newline, Tab
 accepts a prompt suggestion, Esc stops Claude or closes menus.
 
+## 8. Subagents (extension 2.1.330, CLI schema in its bundled `claude.exe`)
+
+**CLI events** (`system` lines, zod schemas in the binary):
+- `task_started`: `task_id`, `tool_use_id?`, `description`, `subagent_type?`, `is_backgrounded?`, `task_type?` (`local_agent` for an Agent; `local_bash` and others are shell and MCP tasks), `prompt?`, `parent_task_id?`, `spawn_depth?`, `skip_transcript?`.
+- `task_progress`: `task_id`, `tool_use_id?`, `description`, `usage {total_tokens, tool_uses, duration_ms}`, `last_tool_name?`, `summary?`.
+- `task_notification`: `task_id`, `tool_use_id?`, `status` (`completed` | `failed` | `stopped`), `output_file`, `summary`, `usage?`.
+- `task_updated`: `task_id`, `patch {status? (pending/running/completed/failed/killed/paused), end_time?, error?, is_backgrounded?}`.
+- A subagent's `assistant`, `user` and `stream_event` lines carry `parent_tool_use_id` = the Agent call's id. An agent woken by `SendMessage` answers under that SendMessage call's id (the webview's `wakeToolUseIds`).
+
+**Control requests** (webview → extension host → CLI):
+- `stop_subagent {taskId}` → CLI `stop_task {task_id}` (schema: "Stops a running task."); the host answers `stop_subagent_response` with `error` on failure.
+- `get_task_output {taskId}` → CLI `get_task_output {task_id}` → `{output, total_bytes, truncated}`. The schema describes it for "a shell or Monitor task", and the webview only offers it on a `local_bash` task card, so it is not used for agents.
+- `get_subagent_transcript {sessionId, agentId, after?}` is no CLI request: the host reads `<projects>/<cwd key>/<session>/subagents/agent-<agentId>.jsonl` (ids checked against `/^[A-Za-z0-9_-]{1,128}$/`). Each agent has a `agent-<id>.meta.json` beside it with `toolUseId`, `agentType`, `description`. The task id of a `local_agent` is its agent id. The main transcript holds none of the subagent's lines.
+
+**How it looks:**
+- The Agent tool row: header `Agent:` + the description, body `IN` = the prompt; its output only shows when it is an error.
+- A top-level foreground agent's messages are not nested in the default view: they render in the main list (the subagent's prompt row is hidden, copy buttons are left off). Messages of a nested agent (spawned by a subagent) and of a background agent are hidden from the chat (`hiddenFromChat`) and live in the **Agent map**. "Focus view" (opt-in toggle) folds a turn's agent work into one row: `description: <summary or last tool>` and `12s · 4.5k tokens · 3 tools`.
+- **Agent map** (footer pill `N agents`, dot running/waiting/failed/idle, tooltip "Agents are working · Click to open the agent map"): a tree of agents; each row has a status dot, the description, and `12s · 4.5k tokens` (time so far while working, else the run's length when 1 s or more; tokens as `1.5k`/`1.2M`).
+- An agent's **card**: title dot + description; meta `Working|Waiting for your permission|Finished|Failed|Stopped · <type> · <model> · background|foreground`, "Spawned by <agent or 'the main agent'>", a "Now" activity line, the error (Failed) or summary (Stopped, when it differs from the description), the result, a "Prompt" and a "Tool calls (N)" section, then the buttons **Open transcript** and, while working, **Stop agent** (`Stopping…` while waiting; on failure "The agent could not be stopped. It may have finished already.").
+- Status mapping (`Zj`): `completed` → Finished, `failed` → Failed, `killed`/`stopped` → Stopped. When the process ends, agents still working become Stopped.
+
+**Command Center (ticket 02)** keeps the Agent row and nests the subagent's items inside it (the ticket's choice, decision 69). The row carries the card's status word and the map row's meta, and the card's two buttons. Open transcript is a dialog over the subagent's own file. `get_task_output` is not used.
+
+## 9. Remote Control (extension 2.1.330; CLI 2.1.293 probed, control only)
+
+**Control request.** `query.enableRemoteControl(bool)` sends `remote_control {enabled, name?, reattach_session_id?, keep_session_on_exit?, work_secret?}`; the extension sends only `enabled`.
+- Real reply to `enabled:true` (probe): `{session_url: "https://claude.ai/code/session_…", connect_url: "https://claude.ai/code?environment=", environment_id: "", bridge_epoch: 1, bridge_session_id: "cse_…"}`, after a `system/bridge_state` `state:"ready"` line. A second `enabled:true` while on returns the same links. `enabled:false` answers an empty success, also when already off. A later `bridge_state` `state:"connected"` (with `bridge_epoch`) follows.
+- The CLI refuses with an error when the session is itself remote ("Remote Control cannot be enabled from inside a remote session") and in some modes; a first use may need a one-time confirmation the session can't show ("Run /remote-control from an interactive Claude Code session.").
+
+**Host state** (`remoteControlState` per channel, pushed to the webview): `disconnected` → `connecting` (on toggle) → `connected {sessionUrl, connectUrl, bridgeEpoch}`, or `error {error}`. A reply without `session_url` is the error "Bridge did not return a session URL". Turning off while connecting shows off at once; a refused turn-off is logged and still counts as off. A toggle token drops replies to a superseded toggle. A `bridge_state` of `failed` or `policy_disabled` (same `bridge_epoch`, or none) turns a connected session off.
+
+**Webview.**
+- The toggle is `/remote-control` (alias `/rc`, bare only), answered by the webview, not sent. The menu has a row `/remote-control` · "View and control this session from claude.ai/code" in the **Slash Commands** section. Both exist while `remote_control_available !== false` or the state is not off. Turning on launches the chat's process first if needed (`launchClaude()`); from the error state the same command dismisses (turns off).
+- **Footer pill** after the context indicator, hidden while off: connected = link to `session_url`, tinted, title "Remote Control is active · Click to open claude.ai/code · Run /remote-control to turn off"; connecting = tinted, title "Connecting to claude.ai/code…"; error = plain, title "Remote Control error: <error> · Run /remote-control to dismiss". Label "Remote Control" with a phone icon (icon only when the footer is narrow).
+- **Synthetic assistant messages:** on connect "Remote Control is active · Continue here, on your phone, or at [claude.ai/code](<session_url>)"; on going off from connected or connecting "Remote Control disabled."; on failures "Remote Control failed to connect: <msg>", "Remote Control could not be turned off: <msg>", "Remote Control error could not be dismissed: <msg>".
+- **Settings row** "Enable Remote Control for all sessions" · "Connect all sessions to claude.ai/code automatically so you can view and control them from the web." writes `remoteControlAtStartup` to the user `settings.json`. When `get_settings` reports `remote_control_policy_lock_reason` (`refresh_remote_control_lock` re-reads it), the row is locked and shows that reason; clicking it re-checks ("Remote Control is available again. You can turn it on now.") or, if on, turns it off ("Remote Control turned off. It can't be turned back on while your organization's lock is in place.").
+- **Offer card** for the CLI's `request_user_dialog` kind `send_to_project_remote_control_offer` (only sent to hosts that declare that kind): title "Remote Control is off, so this session can’t be sent", body "This command needs Remote Control so a Claude Project can read this session.", buttons "Turn on Remote Control" ("Turning on Remote Control…") and "Not now"; answers `turned_on`, `already_on`, `declined` or `failed`.
+
+**At start** (each launch, new or resumed): the `initialize` reply carries `remote_control_available`, `remote_control_auto_enable` (the CLI's verdict from `remoteControlAtStartup` → policy → rollout), `remote_control_auto_on_by_default`, `remote_control_auto_connect_default` and `ide_rc_auto_enable_gate`. The host turns Remote Control on when `auto_enable === true && (auto_on_by_default === false || ide_rc_auto_enable_gate === true) && available !== false` (`pze`), unless the resumed session was teleported (its transcript has a `{"type":"teleported-from","remoteSessionId":…}` line; an unreadable transcript also skips). Otherwise a new process starts off: Remote Control does not come back by itself after a restart or resume. On this machine the probe answered `auto_enable: true, auto_on_by_default: false, ide_rc_auto_enable_gate: true` (`remoteControlAtStartup: true` in the user settings), so the extension turns it on for every chat.
+
+**Command Center (ticket 03):** the same command, menu row, pill, messages and start-up rule. Left out: the settings row and its lock, and the offer card (decision 74).
+
 ---
 
 ## Implications for command center
