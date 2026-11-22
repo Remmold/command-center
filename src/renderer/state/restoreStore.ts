@@ -1,4 +1,6 @@
 import type { AppView } from '../../shared/views'
+import { useProjectViewsStore } from './projectViewsStore'
+import { useViewStore } from './viewStore'
 import { EMPTY_SNAPSHOT, parseSnapshot, pruneSnapshot, withDraft, withScroll, type RestoreSnapshot, type SavedScroll } from './restoreSnapshot'
 
 const KEY = 'command-center.restore'
@@ -41,15 +43,19 @@ export function noteScroll(paneId: string, scroll: SavedScroll): void {
   snapshot = withScroll(snapshot, paneId, scroll)
 }
 
-export function savedView(): AppView | null {
-  return snapshot.view
-}
+let started = false
 
-/** Writes the snapshot on unload, dropping chats that are no longer open. */
-export function saveOnUnload(current: () => { view: AppView; openPaneIds: readonly string[] }): void {
+/** Reopens the saved view after a restart to update, and writes the snapshot on unload without sessions that were closed. */
+export function startRestore(): void {
+  if (started) return
+  started = true
+  const view: AppView | null = snapshot.view
+  void window.api.update.status().then((status) => {
+    if (status.afterUpdate && view) useViewStore.getState().setView(view)
+  })
   window.addEventListener('beforeunload', () => {
-    const { view, openPaneIds } = current()
-    snapshot = { ...pruneSnapshot(snapshot, openPaneIds), view }
+    const openPaneIds = Object.values(useProjectViewsStore.getState().views).flatMap((v) => v.claudeSessions.map((c) => c.id))
+    snapshot = { ...pruneSnapshot(snapshot, openPaneIds), view: useViewStore.getState().view }
     write()
   })
 }

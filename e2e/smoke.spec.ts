@@ -155,8 +155,12 @@ test.describe('auto-update', () => {
   test.use({ script: 'slow', env: { CC_UPDATE_IDLE_MS: '1500' } })
 
   type Fake = { restartRequests: number; checks: number; deliver: (version: string) => void }
-  const restartRequests = (app: ElectronApplication): Promise<number> =>
-    app.evaluate(() => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater.restartRequests)
+  /** The main process's fake updater; Playwright sends the function's source, so it must not close over anything. */
+  const fakeCount = (app: ElectronApplication, key: 'restartRequests' | 'checks'): Promise<number> =>
+    app.evaluate((_electron, k) => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater[k], key)
+  const deliverUpdate = (app: ElectronApplication, version: string): Promise<void> =>
+    app.evaluate((_electron, v) => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater.deliver(v), version)
+  const restartRequests = (app: ElectronApplication): Promise<number> => fakeCount(app, 'restartRequests')
 
   test('an update that arrives mid-turn waits for the chat; once it is idle the restart is requested after the timer', async ({ launched }) => {
     const { app, page } = launched
@@ -166,7 +170,7 @@ test.describe('auto-update', () => {
     await expect(page.getByText('Starting a long job.')).toBeVisible()
     await expect(pill).toHaveCount(0)
 
-    await app.evaluate(() => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater.deliver('9.9.9'))
+    await deliverUpdate(app, '9.9.9')
     await expect(pill).toBeVisible()
     await page.waitForTimeout(2500)
     expect(await restartRequests(app)).toBe(0)
@@ -187,7 +191,7 @@ test.describe('auto-update', () => {
 
   test('Settings → General shows the version and the last check, and Check now checks again', async ({ launched }) => {
     const { app, page } = launched
-    const checks = (): Promise<number> => app.evaluate(() => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater.checks)
+    const checks = (): Promise<number> => fakeCount(app, 'checks')
     await expect.poll(checks).toBe(1)
     await page.keyboard.press('Control+,')
     await page.getByRole('button', { name: 'General' }).click()

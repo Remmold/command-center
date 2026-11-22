@@ -1,6 +1,6 @@
-import type { UpdateStatus } from '../../shared/types'
+import type { RestartReply, UpdateStatus } from '../../shared/types'
 import { busyPanes, reduceBusy, type BusyEvent, type BusyState } from './busyGate'
-import { autoRestartAt, clickRestart, INITIAL_RESTART, reduceRestart, type ClickDecision, type RestartState } from './restartPlan'
+import { autoRestartAt, clickRestart, INITIAL_RESTART, reduceRestart, type RestartState } from './restartPlan'
 
 /** What the controller needs from electron-updater; tests and the fake CLI pass a fake. */
 export interface UpdaterPort {
@@ -34,7 +34,7 @@ export interface UpdateController {
   feed(event: BusyEvent): void
   check(): Promise<void>
   /** A click on Restart to update; `force` is the answer to the busy question. */
-  restart(force: boolean): ClickDecision
+  restart(force: boolean): RestartReply
   status(): UpdateStatus
   onChange(cb: (status: UpdateStatus) => void): () => void
 }

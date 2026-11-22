@@ -25,6 +25,7 @@ import { useMainNavigation } from './hooks/useMainNavigation'
 import { useNotificationIcons } from './hooks/useNotificationIcons'
 import { useObservedStore } from './state/observedStore'
 import { useUpdateStore } from './state/updateStore'
+import { startRestore } from './state/restoreStore'
 
 export function App() {
   const initUsage = useUsageStore((s) => s.init)
@@ -59,6 +60,7 @@ export function App() {
     initModels()
     useRemoteControlStore.getState().init()
     useUpdateStore.getState().init()
+    startRestore()
   }, [initSessionStatus, initSessionInit, initModels])
 
   useEffect(() => {

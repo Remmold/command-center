@@ -15,7 +15,7 @@ export function UpdatePill() {
   const confirming = useUpdateStore((s) => s.confirming)
   const restart = useUpdateStore((s) => s.restart)
   const cancel = useUpdateStore((s) => s.cancel)
-  const names = useProjectViewsStore(useShallow((s) => (confirming ?? []).map((paneId) => findSessionByPane(s, paneId)?.session.title || 'Untitled chat')))
+  const names = useProjectViewsStore(useShallow((s) => (confirming ?? []).map((paneId) => findSessionByPane(s, paneId)?.session.title || 'New session')))
 
   if (!downloaded) return null
   return (

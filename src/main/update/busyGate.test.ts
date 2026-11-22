@@ -45,6 +45,18 @@ describe('busy gate', () => {
     expect(busyPanes(reduceBusy(started, result))).toEqual([])
   })
 
+  it('a prompt sent mid-turn counts across the result even before the CLI says it queued it', () => {
+    const state = run([
+      { kind: 'sent', paneId: 'a', uuid: 'u1' },
+      { kind: 'sent', paneId: 'a', uuid: 'u2' },
+      result
+    ])
+    expect(busyPanes(state)).toEqual(['a'])
+    const echoed = reduceBusy(state, { kind: 'claude-event', paneId: 'a', event: { type: 'user', isReplay: true, uuid: 'u2' } })
+    expect(busyPanes(echoed)).toEqual(['a'])
+    expect(busyPanes(reduceBusy(echoed, result))).toEqual([])
+  })
+
   it('the CLI echoing a queued prompt counts as it starting', () => {
     const state = run([
       { kind: 'sent', paneId: 'a', uuid: 'u1' },

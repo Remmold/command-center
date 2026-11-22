@@ -1,8 +1,5 @@
 import { create } from 'zustand'
 import type { UpdateStatus } from '../../shared/types'
-import { useProjectViewsStore } from './projectViewsStore'
-import { saveOnUnload, savedView } from './restoreStore'
-import { useViewStore } from './viewStore'
 
 interface UpdateState {
   status: UpdateStatus | null
@@ -22,15 +19,7 @@ export const useUpdateStore = create<UpdateState>()((set) => ({
   init: () => {
     if (initialized) return
     initialized = true
-    saveOnUnload(() => ({
-      view: useViewStore.getState().view,
-      openPaneIds: Object.values(useProjectViewsStore.getState().views).flatMap((v) => v.claudeSessions.map((c) => c.id))
-    }))
-    void window.api.update.status().then((status) => {
-      set({ status })
-      const view = savedView()
-      if (status.afterUpdate && view) useViewStore.getState().setView(view)
-    })
+    void window.api.update.status().then((status) => set({ status }))
     window.api.update.onChanged((status) => set({ status }))
   },
   check: () => window.api.update.check(),

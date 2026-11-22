@@ -1,3 +1,5 @@
+import type { RestartReply } from '../../shared/types'
+
 export const AUTO_RESTART_IDLE_MS = 5 * 60_000
 
 export interface RestartState {
@@ -11,8 +13,6 @@ export interface RestartState {
 export type RestartEvent =
   | { kind: 'downloaded'; version: string; at: number }
   | { kind: 'busy'; busy: boolean; at: number }
-
-export type ClickDecision = { kind: 'none' } | { kind: 'restart' } | { kind: 'confirm'; busy: string[] }
 
 export const INITIAL_RESTART: RestartState = { downloaded: null, downloadedAt: null, idleSince: 0 }
 
@@ -28,7 +28,7 @@ export function autoRestartAt(state: RestartState, idleMs: number): number | nul
   return Math.max(state.idleSince, state.downloadedAt) + idleMs
 }
 
-export function clickRestart(state: RestartState, busy: readonly string[]): ClickDecision {
+export function clickRestart(state: RestartState, busy: readonly string[]): RestartReply {
   if (state.downloaded === null) return { kind: 'none' }
   return busy.length === 0 ? { kind: 'restart' } : { kind: 'confirm', busy: [...busy] }
 }
