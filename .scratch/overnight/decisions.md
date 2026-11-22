@@ -131,3 +131,9 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: show the ticket file verbatim, as GitHub shows an issue body.
 65. **Now building rows take two lines**: feature name and the ticket in progress on top, progress bar and last note under it, status and time on the right. Live session cards put the status top right beside the time instead of on its own line.
     - Alternative: keep one line and drop the note.
+
+66. **Remove forgets a profile and never deletes any folder**, adopted or app-made (the extension has no account list to copy). An app-made profile folder holds junctions into `~/.claude`, so a recursive delete could reach Default's data; the folder stays under the app's `profiles` folder. Workspaces on a removed profile run on Default (their saved id is left as is; the picker already falls back).
+    - Alternative: delete app-made folders after unlinking the junctions; no Remove for app-made profiles at all.
+67. **Only existing folders are offered from VS Code**, once each, never one a profile uses; VS Code's own default profile is labelled "Default" in the offer, but the adopted profile then takes the folder's name, not "Default". A picked folder is refused when it is inside or around another profile's folder or the app's own `profiles` folder. An adopted profile is named after its VS Code profile, else after the folder.
+    - Alternative: offer missing folders too and let adoption fail.
+68. **Adopted folders are read only to the app**: no shared-item links (they keep their own `settings.json`, so model defaults saved in the app reach only Default and app-made profiles). The CLI itself still writes there (sessions, usage probe, `/login`).

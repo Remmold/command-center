@@ -1,0 +1,1 @@
+- 01 resolved: add an account from an existing Claude folder (Use existing folder…, VS Code profile offers, read-only adopted folders, Remove only forgets) — 33d1ae1, c3532cb
