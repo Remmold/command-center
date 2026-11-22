@@ -20,6 +20,11 @@ import { EmptyState } from '../ui/EmptyState'
 import { EditorTabs } from './EditorTabs'
 import { EmptyHalfHeader, HostedSessionHeader, ObservedSessionHeader, type HalfPlace } from './SessionHeader'
 import { SessionList } from './SessionList'
+import { PanelLeftOpen } from 'lucide-react'
+import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
+import { useSessionListStore } from '../../state/sessionListStore'
+import { IconButton } from '../ui/IconButton'
+import { Rail } from '../ui/Rail'
 
 const DRAWER_OPEN_THRESHOLD_PCT = 1
 
@@ -56,16 +61,31 @@ function Layer({ slot, onActivate, children }: LayerProps) {
 }
 
 export const WorkView = memo(function WorkView({ registerFocus }: { registerFocus: (fn: () => void) => void }) {
+  const listOpen = useSessionListStore((s) => s.open)
+  const toggleList = useSessionListStore((s) => s.toggle)
   return (
-    <Group orientation="horizontal" id="work" className="h-full">
-      <Panel id="session-list" defaultSize="300px" minSize="180px" maxSize="50%">
-        <SessionList />
-      </Panel>
-      <Separator className="w-px bg-subtle hover:w-1 hover:bg-focus" />
-      <Panel id="work-main" minSize="40%">
-        <WorkMain registerFocus={registerFocus} />
-      </Panel>
-    </Group>
+    <div className="flex h-full">
+      {!listOpen && (
+        <Rail label="Sessions hidden">
+          <IconButton onClick={toggleList} label="Show sessions" tooltip={`Show sessions (${SESSION_LIST_SHORTCUT})`}>
+            <PanelLeftOpen size={14} />
+          </IconButton>
+        </Rail>
+      )}
+      <Group orientation="horizontal" id="work" className="h-full min-w-0 flex-1">
+        {listOpen && (
+          <>
+            <Panel id="session-list" defaultSize="300px" minSize="180px" maxSize="50%">
+              <SessionList />
+            </Panel>
+            <Separator className="w-px bg-subtle hover:w-1 hover:bg-focus" />
+          </>
+        )}
+        <Panel id="work-main" minSize="40%">
+          <WorkMain registerFocus={registerFocus} />
+        </Panel>
+      </Group>
+    </div>
   )
 })
 

@@ -1,4 +1,5 @@
 import { APP_VIEWS, type AppView } from '../../shared/views'
+import type { ZoomStep } from '../../shared/zoom'
 
 export type KeyChord = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>
 
@@ -9,6 +10,7 @@ interface PlainShortcut {
     | 'closeActiveChat'
     | 'focusInput'
     | 'toggleIdePanels'
+    | 'toggleSessionList'
     | 'toggleShellDrawer'
     | 'nextWaiting'
     | 'loadPastSession'
@@ -17,19 +19,29 @@ interface PlainShortcut {
 export type ShortcutAction =
   | { name: 'switchView'; view: AppView }
   | { name: 'selectRow'; index: number }
+  | { name: 'zoom'; step: ZoomStep }
   | PlainShortcut
 
 const CTRL_LETTERS: Record<string, PlainShortcut['name']> = {
   t: 'newChat',
   w: 'closeActiveChat',
   k: 'focusInput',
-  b: 'toggleIdePanels',
+  b: 'toggleSessionList',
   l: 'loadPastSession'
 }
 
 /** Ctrl+J is the prompt box's newline, as in the VS Code extension. */
 const CTRL_SHIFT_LETTERS: Record<string, PlainShortcut['name']> = {
-  j: 'nextWaiting'
+  j: 'nextWaiting',
+  e: 'toggleIdePanels'
+}
+
+/** By the printed key, since Nordic layouts put + on the Minus key; Ctrl+0 also by position, for layouts where that key types another character. */
+function zoomStepFor(e: KeyChord): ZoomStep | null {
+  if (e.key === '=' || e.key === '+') return 'in'
+  if (e.key === '-') return 'out'
+  if (e.key === '0' || (e.code === 'Digit0' && !e.shiftKey)) return 'reset'
+  return null
 }
 
 export function shortcutFor(e: KeyChord): ShortcutAction | null {
@@ -40,6 +52,8 @@ export function shortcutFor(e: KeyChord): ShortcutAction | null {
   if (digit && e.altKey && !mod) return { name: 'selectRow', index: Number(digit) - 1 }
   if (!mod) return null
 
+  const zoom = e.altKey ? null : zoomStepFor(e)
+  if (zoom) return { name: 'zoom', step: zoom }
   if (digit) {
     const view = e.altKey ? undefined : APP_VIEWS[Number(digit) - 1]
     return view ? { name: 'switchView', view } : null
@@ -52,14 +66,14 @@ export function shortcutFor(e: KeyChord): ShortcutAction | null {
   return letter ? { name: letter } : null
 }
 
-const EVERYWHERE: ReadonlySet<ShortcutAction['name']> = new Set(['switchView', 'openSettings', 'nextWaiting'])
+const EVERYWHERE: ReadonlySet<ShortcutAction['name']> = new Set(['switchView', 'openSettings', 'nextWaiting', 'zoom'])
 
 export interface ScreenState {
   view: AppView
   settingsOpen: boolean
 }
 
-/** The chat, row, IDE and shell shortcuts act only while Work is on screen. */
+/** The chat, row, session list, IDE and shell shortcuts act only while Work is on screen. */
 export function shortcutApplies(action: ShortcutAction, screen: ScreenState): boolean {
   return EVERYWHERE.has(action.name) || (screen.view === 'work' && !screen.settingsOpen)
 }

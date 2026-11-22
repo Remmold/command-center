@@ -1,6 +1,8 @@
 import { useState, type MouseEvent } from 'react'
 import { useMenu } from '../../hooks/useMenu'
-import { Columns2, History, MoreHorizontal, Pencil, Plus, X } from 'lucide-react'
+import { Columns2, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, X } from 'lucide-react'
+import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
+import { useSessionListStore } from '../../state/sessionListStore'
 import { OBSERVED_STATUS_LABEL } from '../../../shared/types'
 import { STATUS_LABEL } from '../../../shared/needsYou'
 import type { AccountSection, SessionGroup, SessionGroupId, SessionRow } from '../../state/sessionList'
@@ -53,6 +55,9 @@ export function SessionList() {
           </Button>
         </span>
         <ListMenu />
+        <IconButton onClick={useSessionListStore.getState().toggle} label="Hide sessions" tooltip={`Hide sessions (${SESSION_LIST_SHORTCUT})`}>
+          <PanelLeftClose size={14} />
+        </IconButton>
       </div>
       <div className="shrink-0 p-2">
         <SearchField label="Search sessions" placeholder="Search title, repo or worktree" value={search} onChange={setSearch} />

@@ -27,6 +27,8 @@ import { useNotificationIcons } from './hooks/useNotificationIcons'
 import { useObservedStore } from './state/observedStore'
 import { useUpdateStore } from './state/updateStore'
 import { startRestore } from './state/restoreStore'
+import { useSessionListStore } from './state/sessionListStore'
+import { useZoomStore } from './state/zoomStore'
 
 export function App() {
   const initUsage = useUsageStore((s) => s.init)
@@ -61,6 +63,7 @@ export function App() {
     initModels()
     useRemoteControlStore.getState().init()
     useUpdateStore.getState().init()
+    useZoomStore.getState().init()
     startRestore()
   }, [initSessionStatus, initSessionInit, initModels])
 
@@ -100,6 +103,8 @@ export function App() {
       const projectId = openHostedWorkspace()
       if (projectId) useProjectViewsStore.getState().toggleShellDrawer(projectId)
     },
+    toggleSessionList: () => useSessionListStore.getState().toggle(),
+    zoom: (step) => useZoomStore.getState().step(step),
     selectRow: openRowAt
   })
 

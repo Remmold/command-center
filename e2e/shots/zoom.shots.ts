@@ -1,0 +1,93 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { _electron, expect, test, type Page } from '@playwright/test'
+import { shutdown } from '../harness'
+import { env, resize, seed, startIn } from './seed'
+
+/**
+ * Work, Board, Dashboard and Settings at 110%, 125% and 150% zoom on a 1440×900 window, and a check that nothing overflows sideways.
+ * Run: `pnpm build`, then `pnpm exec playwright test -c e2e/shots/playwright.config.ts zoom`.
+ * SHOTS_DIR (default `.scratch/zoom-and-sidebar/shots/`) holds the files.
+ */
+
+const REPO = resolve(__dirname, '..', '..')
+const MAIN = join(REPO, 'out', 'main', 'index.js')
+const ELECTRON = require('electron') as unknown as string
+const OUT = process.env.SHOTS_DIR ?? join(REPO, '.scratch', 'zoom-and-sidebar', 'shots')
+
+// Browser globals of the function that runs inside the page; this project compiles against Node's types.
+interface Box {
+  scrollWidth: number
+  clientWidth: number
+}
+declare const document: { querySelectorAll(selector: string): ArrayLike<Box & { getAttribute(n: string): string | null; tagName: string }> }
+
+/** Elements that clip text on purpose (truncate) are left out; anything else wider than its box overflows. */
+async function overflowing(page: Page, selectors: string[]): Promise<string[]> {
+  return page.evaluate((sels) => {
+    const out: string[] = []
+    for (const sel of sels) {
+      const all = document.querySelectorAll(sel)
+      for (let i = 0; i < all.length; i++) {
+        const el = all[i]
+        if (el.scrollWidth > el.clientWidth + 1) out.push(`${sel} #${i} (${el.scrollWidth} > ${el.clientWidth})`)
+      }
+    }
+    return out
+  }, selectors)
+}
+
+for (const percent of [110, 125, 150]) {
+  test(`layout at ${percent}%`, async () => {
+    const root = mkdtempSync(join(tmpdir(), 'cc-zoom-'))
+    const seeded = seed(root)
+    mkdirSync(OUT, { recursive: true })
+    writeFileSync(join(seeded.userData, 'zoom.json'), JSON.stringify({ level: Math.log(percent / 100) / Math.log(1.2) }))
+    const app = await _electron.launch({
+      executablePath: ELECTRON,
+      args: [MAIN, `--user-data-dir=${seeded.userData}`],
+      cwd: REPO,
+      env: env(seeded, join(root, 'fake.log'))
+    })
+    try {
+      const page = await app.firstWindow()
+      await page.waitForLoadState('domcontentloaded')
+      await resize(app, 1440, 900)
+      await startIn(page, 'atlas-api · auth', 'build the key rotation', 'Refreshing the token store')
+      await startIn(page, 'pixel-forge', 'write the export presets', 'add the export preset file')
+      await startIn(page, 'ledger-web', 'run the onboarding tests', 'Ran the onboarding suite')
+      const shot = async (name: string) => {
+        await page.waitForTimeout(800)
+        // Playwright's page screenshot crops a zoomed page to its CSS viewport, so the window paints itself instead.
+        const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'))
+        writeFileSync(join(OUT, `zoom-${percent}-${name}.png`), Buffer.from(png, 'base64'))
+      }
+      const sideways = ['body', 'header', 'nav[aria-label="Sessions"]', 'nav[aria-label="Sessions"] li']
+
+      await shot('work')
+      expect(await overflowing(page, sideways)).toEqual([])
+
+      await page.keyboard.press('Control+b')
+      await shot('work-list-hidden')
+      await page.keyboard.press('Control+b')
+
+      await page.keyboard.press('Control+3')
+      await expect(page.getByTestId('view-board')).toBeVisible()
+      await shot('board')
+      expect(await overflowing(page, ['body', 'header'])).toEqual([])
+
+      await page.keyboard.press('Control+1')
+      await expect(page.getByTestId('view-dashboard')).toBeVisible()
+      await shot('dashboard')
+      expect(await overflowing(page, ['body', 'header'])).toEqual([])
+
+      await page.keyboard.press('Control+,')
+      await shot('settings')
+      expect(await overflowing(page, ['body', 'header'])).toEqual([])
+    } finally {
+      await shutdown(app)
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    }
+  })
+}

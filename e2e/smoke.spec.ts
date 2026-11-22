@@ -870,3 +870,81 @@ test.describe('grouped by account', () => {
     await expect(page.getByRole('region', { name: homeLabel }).getByRole('listitem', { name: 'e2e-workspace' })).toBeVisible()
   })
 })
+
+test.describe('zoom and the session list', () => {
+  const zoomPercent = (app: ElectronApplication): Promise<number> =>
+    evaluateMain(app, ({ BrowserWindow }) => Math.round(BrowserWindow.getAllWindows()[0].webContents.getZoomFactor() * 100), null)
+
+  test('starts at 110%, steps one level per key from the prompt box and a shell, resets with Ctrl+0 and is kept across a restart', async ({ launched }) => {
+    const { app, page } = launched
+    await expect.poll(() => zoomPercent(app)).toBe(110)
+    await startSession(launched)
+
+    await prompt(page).focus()
+    await page.keyboard.press('Control+=')
+    await expect.poll(() => zoomPercent(app)).toBe(132)
+    await page.keyboard.press('Control+-')
+    await page.keyboard.press('Control+-')
+    await expect.poll(() => zoomPercent(app)).toBe(92)
+    await expect(prompt(page)).toHaveValue('')
+    await page.keyboard.press('Control+0')
+    await expect.poll(() => zoomPercent(app)).toBe(110)
+
+    await page.keyboard.press('Control+`')
+    const terminal = page.locator('.xterm-helper-textarea').first()
+    await expect(terminal).toBeAttached()
+    await terminal.focus()
+    await page.keyboard.press('Control+=')
+    await expect.poll(() => zoomPercent(app)).toBe(132)
+
+    await page.keyboard.press('Control+,')
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByText('General', { exact: true }).click()
+    await expect(page.getByText('132%')).toBeVisible()
+    await page.getByRole('button', { name: 'Zoom in' }).click()
+    await expect(page.getByText('158%')).toBeVisible()
+    await page.getByRole('button', { name: 'Zoom out' }).click()
+    await expect(page.getByText('132%')).toBeVisible()
+
+    const again = await launched.relaunch()
+    await expect.poll(() => zoomPercent(again.app)).toBe(132)
+  })
+
+  test('Ctrl+B hides and shows the session list, Alt+1 and Ctrl+Shift+J still open rows while it is hidden, and it stays hidden across a restart', async ({ launched }) => {
+    const { page, log } = launched
+    await startSession(launched)
+    await send(page, 'say hello')
+    await expect(page.getByText(BASIC_REPLY)).toBeVisible()
+    const list = page.getByRole('navigation', { name: 'Sessions' })
+    const show = page.getByRole('button', { name: 'Show sessions' })
+    await expect(list).toBeVisible()
+
+    await page.keyboard.press('Control+b')
+    await expect(list).toBeHidden()
+    await expect(show).toBeVisible()
+    const reply = page.locator('[data-chat-pane]').getByText(BASIC_REPLY)
+    const openAnother = async () => {
+      await page.keyboard.press('Control+t')
+      await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+      await expect(reply).toBeHidden()
+    }
+    await openAnother()
+    await page.keyboard.press('Alt+1')
+    await expect(reply).toBeVisible()
+    await openAnother()
+    await page.keyboard.press('Control+Shift+J')
+    await expect(reply).toBeVisible()
+
+    await show.click()
+    await expect(list).toBeVisible()
+    await list.getByRole('button', { name: 'Hide sessions' }).click()
+    await expect(list).toBeHidden()
+
+    const again = await launched.relaunch()
+    await again.page.keyboard.press('Control+2')
+    await expect(again.page.getByRole('button', { name: 'Show sessions' })).toBeVisible()
+    await expect(again.page.getByRole('navigation', { name: 'Sessions' })).toBeHidden()
+    await again.page.keyboard.press('Control+b')
+    await expect(again.page.getByRole('navigation', { name: 'Sessions' })).toBeVisible()
+    expect(log.entries().filter((e) => e.kind === 'received' && e.line?.type === 'user').length).toBe(1)
+  })
+})

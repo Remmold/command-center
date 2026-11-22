@@ -553,7 +553,7 @@ export function InputBox({
             )}
           </div>
           <div className="flex items-end justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-1">
+            <div className="flex min-w-0 flex-1 items-center gap-1">
               <button
                 onClick={handleAttachClick}
                 className="rounded p-1.5 text-muted hover:bg-list-hover hover:text-fg"
@@ -563,7 +563,8 @@ export function InputBox({
                 <Paperclip size={14} strokeWidth={2} />
               </button>
               {footerStart}
-              <span className="min-w-0 truncate text-[10px] text-faint">
+              {/* Zero basis: the hints give way before the model pill does. */}
+              <span className="min-w-0 flex-1 truncate text-[10px] text-faint">
                 {ctrlEnterSends ? 'ctrl+enter to send · enter newline' : 'enter to send · shift+enter newline'} · / commands · @ files · paste files
               </span>
             </div>

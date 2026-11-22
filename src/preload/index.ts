@@ -215,6 +215,15 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.START_WITH_WINDOWS_CHANGED, handler)
     }
   },
+  zoom: {
+    get: () => ipcRenderer.invoke(IPC.ZOOM_GET),
+    step: (step) => ipcRenderer.invoke(IPC.ZOOM_STEP, step),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, level: number) => cb(level)
+      ipcRenderer.on(IPC.ZOOM_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.ZOOM_CHANGED, handler)
+    }
+  },
   navigation: {
     onShowView: (cb) => {
       const handler = (_e: IpcRendererEvent, view: AppView) => cb(view)

@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import { Minus, Plus } from 'lucide-react'
+import { zoomPercent } from '../../../shared/zoom'
+import { useZoomStore } from '../../state/zoomStore'
 import type { StartWithWindowsState } from '../../../shared/types'
 import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
 import { useUpdateStore } from '../../state/updateStore'
@@ -36,6 +39,8 @@ export function GeneralSettings() {
   const setCtrlEnterSends = useGeneralSettingsStore((s) => s.setUseCtrlEnterToSend)
   const update = useUpdateStore((s) => s.status)
   const checkNow = useUpdateStore((s) => s.check)
+  const zoomLevel = useZoomStore((s) => s.level)
+  const zoom = useZoomStore((s) => s.step)
 
   return (
     <Page label="General">
@@ -50,6 +55,25 @@ export function GeneralSettings() {
               ? `Not available: ${startWithWindows.reason}.`
               : 'Starts in the tray when you sign in to Windows.'}
           </PageNote>
+        </PageGroup>
+        <PageGroup
+          title="Appearance"
+          actions={
+            <>
+              <Button variant="secondary" label="Zoom out" tooltip="Zoom out (Ctrl+-)" onClick={() => zoom('out')}>
+                <Minus size={12} />
+              </Button>
+              <Button variant="secondary" label="Zoom in" tooltip="Zoom in (Ctrl+=)" onClick={() => zoom('in')}>
+                <Plus size={12} />
+              </Button>
+              <Button variant="secondary" tooltip="Back to 110% (Ctrl+0)" onClick={() => zoom('reset')}>
+                Reset
+              </Button>
+            </>
+          }
+        >
+          <DetailRow label="Zoom" value={`${zoomPercent(zoomLevel)}%`} />
+          <PageNote>The size of all text and icons in the window. Each step is about 20%, as in VS Code.</PageNote>
         </PageGroup>
         <PageGroup
           title="Updates"

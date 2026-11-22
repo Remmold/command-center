@@ -3,6 +3,7 @@ import type { ChatItem } from './chatItems'
 import type { AppView } from './views'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
+import type { ZoomStep } from './zoom'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
 
@@ -507,6 +508,12 @@ export interface RendererApi {
     get: () => Promise<StartWithWindowsState>
     set: (checked: boolean) => Promise<StartWithWindowsState>
     onChanged: (cb: (state: StartWithWindowsState) => void) => () => void
+  }
+  /** The whole window's zoom level (Chromium levels, 1.2^level); main keeps it across restarts. */
+  zoom: {
+    get: () => Promise<number>
+    step: (step: ZoomStep) => Promise<number>
+    onChanged: (cb: (level: number) => void) => () => void
   }
   /** Requests from main (tray menu, notification clicks) to bring something on screen. */
   navigation: {
