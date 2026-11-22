@@ -4,16 +4,16 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Research first:
+- [x] Research first:
   - Find out how the extension renders Agent tool calls and subagent messages (`parent_tool_use_id`): collapsed and expanded state, wording, status (running, done, error, stopped), and whether background agents differ.
   - Find out what `stop_subagent`, `get_subagent_transcript` and `get_task_output` send to the CLI (control request subtypes and fields).
   - Record it in `docs/research/vscode-extension-controls.md`.
-- [ ] Messages with `parent_tool_use_id` render inside their parent Agent call, not in the main flow, live while streaming. The main chat's scroll-follow, copy buttons and "Thought for Ns" behave as before for the main agent.
-- [ ] Status, the stop action and the transcript view as in the extension, using the same CLI requests.
-- [ ] Resumed sessions (loaded from the transcript `.jsonl`) group the same way.
-- [ ] Tests:
+- [x] Messages with `parent_tool_use_id` render inside their parent Agent call, not in the main flow, live while streaming. The main chat's scroll-follow, copy buttons and "Thought for Ns" behave as before for the main agent.
+- [x] Status, the stop action and the transcript view as in the extension, using the same CLI requests.
+- [x] Resumed sessions (loaded from the transcript `.jsonl`) group the same way.
+- [x] Tests:
   - pure grouping and status;
   - fake CLI script support for a subagent turn, cloned from a real recording, with the shape taken from the CLI or extension bundle rather than a real prompt where possible;
   - a smoke scenario: a subagent's messages appear under its call, and stop sends the right request.
