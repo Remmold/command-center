@@ -297,7 +297,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       claudeManager.control(paneId, subtype, fields)
   )
   ipcMain.handle(IPC.CLAUDE_GET_INIT, (_e, paneId: string) => claudeManager.initOf(paneId))
-  // Every profile's settings.json is a hard link to Default's, so Default's file is the one to change.
+  // App-made profiles hard-link Default's settings.json; an adopted folder keeps its own and is never written to.
   const userSettingsFile = (): string => join(profiles.defaultConfigDir(), 'settings.json')
   ipcMain.handle(IPC.CLAUDE_READ_DEFAULTS, () => readModelDefaults(userSettingsFile()))
   ipcMain.handle(IPC.CLAUDE_DEFAULT_PERMISSION_MODE, async (_e, cwd: string) => {

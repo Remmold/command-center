@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { DEFAULT_PROFILE_ID, type AccountProfile, type AdoptResult } from '../../shared/types'
 import { profileEnv } from '../../shared/profiles'
@@ -145,7 +145,8 @@ export async function suggestions(): Promise<VsCodeConfigDir[]> {
 }
 
 /** Adds a profile on an existing folder; the folder itself is only read, never written to. */
-export async function adopt(path: string): Promise<AdoptResult> {
+export async function adopt(picked: string): Promise<AdoptResult> {
+  const path = isAbsolute(picked) ? resolve(picked) : picked
   const found = await vscodeFolders()
   const kind = await pathKind(path)
   return serial(async () => {

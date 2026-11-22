@@ -8,6 +8,7 @@ import { useWorkspacesStore } from '../../state/workspacesStore'
 import { Button } from '../ui/Button'
 import { DrawerList } from '../ui/Drawer'
 import { ListItem, ListRowMeta, ListRowText } from '../ui/ListRow'
+import { NoticeLine } from '../ui/NoticeLine'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
 import { TextField } from '../ui/TextField'
 
@@ -50,7 +51,7 @@ export function AccountsSettings() {
           }
         >
           <TextField label="new profile name" placeholder="Profile name, then Enter" onSubmit={(name) => void create(name)} />
-          {adoptError && <PageNote>{adoptError}</PageNote>}
+          {adoptError && <NoticeLine>{adoptError}</NoticeLine>}
         </PageGroup>
         {suggestions.length > 0 && (
           <PageGroup title="Existing folders">

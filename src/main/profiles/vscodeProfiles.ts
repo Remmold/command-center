@@ -13,6 +13,12 @@ function stringEnd(text: string, start: number): number {
   return i
 }
 
+function closesNext(text: string, from: number): boolean {
+  let i = from
+  while (i < text.length && /\s/.test(text[i])) i++
+  return text[i] === '}' || text[i] === ']'
+}
+
 function withoutTrailingCommas(text: string): string {
   let out = ''
   for (let i = 0; i < text.length; i++) {
@@ -20,7 +26,7 @@ function withoutTrailingCommas(text: string): string {
       const end = stringEnd(text, i)
       out += text.slice(i, end + 1)
       i = end
-    } else if (text[i] !== ',' || !/^\s*[}\]]/.test(text.slice(i + 1))) {
+    } else if (text[i] !== ',' || !closesNext(text, i + 1)) {
       out += text[i]
     }
   }
@@ -57,8 +63,8 @@ function configDirIn(settings: unknown): string | null {
   if (!isRecord(settings)) return null
   const vars = settings['claudeCode.environmentVariables']
   if (!Array.isArray(vars)) return null
-  const entry = vars.find((v) => isRecord(v) && v.name === CONFIG_DIR_VAR && typeof v.value === 'string')
-  const value = isRecord(entry) ? (entry.value as string).trim() : ''
+  const entry = vars.find((v): v is { name: string; value: string } => isRecord(v) && v.name === CONFIG_DIR_VAR && typeof v.value === 'string')
+  const value = entry?.value.trim() ?? ''
   return value && isAbsolute(value) ? value : null
 }
 

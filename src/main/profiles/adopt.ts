@@ -20,8 +20,12 @@ interface UsedFolder {
 
 function isInside(path: string, root: string): boolean {
   if (samePath(path, root)) return true
-  const rel = relative(root, path)
+  const rel = relative(root.toLowerCase(), path.toLowerCase())
   return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+function overlaps(a: string, b: string): boolean {
+  return isInside(a, b) || isInside(b, a)
 }
 
 /** Why `path` cannot become a profile's folder, or null when it can. */
@@ -35,7 +39,9 @@ export function adoptionProblem(input: {
   if (!isAbsolute(path)) return 'Pick a full path.'
   const owner = used.find((u) => samePath(u.configDir, path))
   if (owner) return `${owner.name} already uses this folder.`
-  if (isInside(path.toLowerCase(), appProfilesRoot.toLowerCase())) return 'That folder belongs to a profile the app made.'
+  if (overlaps(path, appProfilesRoot)) return 'That folder belongs to a profile the app made.'
+  const overlapped = used.find((u) => overlaps(path, u.configDir))
+  if (overlapped) return `That folder overlaps the folder of ${overlapped.name}.`
   if (kind === 'missing') return 'That folder does not exist.'
   if (kind === 'file') return 'That is a file, not a folder.'
   return null
@@ -53,7 +59,7 @@ export function suggestionsFrom(found: readonly VsCodeConfigDir[], used: readonl
 }
 
 export function adoptedName(path: string, found: readonly VsCodeConfigDir[]): string {
-  const match = found.find((f) => samePath(f.configDir, path))
+  const match = found.find((f) => samePath(f.configDir, path) && f.profileName !== 'Default')
   return match?.profileName ?? basename(path.replace(/[\\/]+$/, ''))
 }
 

@@ -12,6 +12,10 @@ _Avoid_: Project (in new UI text), folder, repo
 A named Claude login that a workspace uses. Every workspace uses exactly one. "Default" is the login Andreas already has.
 _Avoid_: Licence, account, user
 
+**Adopted folder**:
+An existing Claude config folder (such as one a VS Code profile uses) that an account profile runs on instead of a folder the app made. The app only reads it: no shared-item links, no writes, and removing the profile never deletes it.
+_Avoid_: Imported profile
+
 **Hosted session**:
 A Claude Code session started and controlled from the command center.
 _Avoid_: Chat, pane

@@ -21,6 +21,11 @@ describe('adoptionProblem', () => {
     expect(check('c:/users/me/.claude/')).toBe('Default already uses this folder.')
   })
 
+  it('refuses a folder inside or around another profile’s folder', () => {
+    expect(check('C:\\Users\\me\\.claude\\projects')).toBe('That folder overlaps the folder of Default.')
+    expect(check('C:\\Users\\me')).toBe('That folder overlaps the folder of Default.')
+  })
+
   it('refuses a missing folder, a file, a relative path and the app’s own profile folders', () => {
     expect(check('C:\\nope', 'missing')).toBe('That folder does not exist.')
     expect(check('C:\\a.txt', 'file')).toBe('That is a file, not a folder.')
@@ -46,6 +51,10 @@ describe('adoptedName', () => {
     const found = [{ profileName: 'Work', configDir: 'C:\\Users\\me\\.claude-work' }]
     expect(adoptedName('c:/users/me/.claude-work', found)).toBe('Work')
     expect(adoptedName('D:\\accounts\\side-project\\', found)).toBe('side-project')
+  })
+
+  it('never names it Default, which the built-in profile already is', () => {
+    expect(adoptedName('C:\\cfg\\vs-default', [{ profileName: 'Default', configDir: 'C:\\cfg\\vs-default' }])).toBe('vs-default')
   })
 })
 
