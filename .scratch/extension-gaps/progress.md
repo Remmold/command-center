@@ -1,2 +1,3 @@
 - 01 resolved: add an account from an existing Claude folder (Use existing folder…, VS Code profile offers, read-only adopted folders, Remove only forgets) — 33d1ae1, c3532cb
 - 02 resolved: subagent messages grouped under their Agent call with status, Stop agent (stop_task) and Open transcript (the agent's own file); fake CLI subagent turns — aee690d, 9513a47
+- 03 resolved: Remote Control per chat (/remote-control and /rc, Slash Commands row, footer pill with link, start-up auto-enable from the CLI's verdict, teleport skip, fake CLI remote_control) — 4ebaf53
