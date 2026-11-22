@@ -1,4 +1,8 @@
 import { defineConfig } from '@playwright/test'
+import { workerCrashWarning } from './guard'
+
+const warning = process.env.TEST_WORKER_INDEX === undefined ? workerCrashWarning(process.version, process.platform) : undefined
+if (warning) console.warn(`\n${warning}\n`)
 
 export default defineConfig({
   testDir: '.',
