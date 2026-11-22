@@ -1,1 +1,2 @@
 - 01 resolved: Take over a VS Code chat (header button, wait/now/cancel, resume in place, Past conversations offer) — 6d1296f
+- 02 resolved: Group projects by account (Work sections with Needs you badge, Dashboard account tags, Board By account, Settings workspaces by account with drag order) — 164b44f
