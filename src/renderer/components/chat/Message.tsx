@@ -1,19 +1,25 @@
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import { Markdown } from '../ui/Markdown'
 import type { ContentBlock } from '../../../shared/types'
-import type { AssistantMessageItem, ChatItem, ToolResultItem, ResultItem } from './types'
+import { fileBaseName } from '../../../shared/fileLinks'
+import type { AssistantMessageItem, ChatItem, ToolResultItem, ResultItem, SystemItem } from './types'
 import { computeUnifiedDiff, trimContext, type DiffSegment } from './diff'
 import { UnifiedDiffView, isUnifiedDiff } from './UnifiedDiffView'
 import { DiffLines } from './DiffLines'
-import { ToolCallRow, ToolCallSection, ToolCallText, type ToolCallStatus } from './ToolCallRow'
+import { ToolCallBody, ToolCallRow, ToolCallSection, type ToolCallStatus } from './ToolCallRow'
 import { toolCallTitle } from './toolCall'
+import { mcpToolTitle } from './mcpTool'
 import { useToolContext } from './toolContext'
 import { ThinkingBlock } from './ThinkingBlock'
+import { CompactLine } from './CompactLine'
+import { FileLink } from './fileOpener'
+import { visibleBlocks } from './timelineRows'
 import { parseTodos, TODO_TOOL, type Todo } from './todos'
 import { stampLabel, stampTitle } from './messageTime'
 import { CopyButton } from '../ui/CopyButton'
 import { TimeStamp } from '../ui/TimeStamp'
 import { Checklist, type CheckState } from '../ui/Checklist'
+import { TimelinePlaceProvider, TimelineRow, timelinePlace } from '../ui/Timeline'
 import { AgentCall, SubagentItemList } from './AgentCall'
 import { AGENT_TOOLS } from './subagents'
 
@@ -27,20 +33,42 @@ interface MessageProps {
   streamingFrom?: number
   /** The CLI's running thinking-token estimate for a streaming thinking block. */
   thinkingTokens?: number
+  /** Whether the timeline line runs on into the item drawn above, and the one below. */
+  joinAbove?: boolean
+  joinBelow?: boolean
+  /** A compaction boundary's summary, written in the item after it. */
+  compactSummary?: string
 }
 
-export const Message = memo(function Message({ item, stampAt, streamingFrom, thinkingTokens }: MessageProps) {
+export const Message = memo(function Message({ item, stampAt, streamingFrom, thinkingTokens, joinAbove = false, joinBelow = false, compactSummary }: MessageProps) {
   switch (item.kind) {
     case 'user':
       return <UserPrompt text={item.text} at={stampAt} />
     case 'assistant':
-      return <AssistantMessage item={item} stampAt={stampAt} streamingFrom={streamingFrom} thinkingTokens={thinkingTokens} />
+      return (
+        <AssistantMessage
+          item={item}
+          stampAt={stampAt}
+          streamingFrom={streamingFrom}
+          thinkingTokens={thinkingTokens}
+          joinAbove={joinAbove}
+          joinBelow={joinBelow}
+        />
+      )
     case 'tool_result':
-      return <LooseToolResult item={item} />
+      return (
+        <TimelinePlaceProvider value={timelinePlace(joinAbove, joinBelow)}>
+          <LooseToolResult item={item} />
+        </TimelinePlaceProvider>
+      )
     case 'result':
       return <TurnFooter item={item} />
     case 'system':
-      return <SystemNote text={item.text} />
+      return (
+        <TimelinePlaceProvider value={timelinePlace(joinAbove, joinBelow)}>
+          <SystemNote item={item} compactSummary={compactSummary} />
+        </TimelinePlaceProvider>
+      )
   }
 })
 
@@ -51,7 +79,7 @@ function Stamp({ at }: { at: number }) {
 /** `queued` is a prompt still waiting on the CLI; it looks the same, as in the extension, and only reads differently. */
 export function UserPrompt({ text, queued = false, at }: { text: string; queued?: boolean; at?: number }) {
   return (
-    <div>
+    <div className="py-1.5">
       {at !== undefined && !queued && (
         <div className="flex justify-end pb-0.5">
           <Stamp at={at} />
@@ -81,35 +109,38 @@ interface AssistantProps {
   stampAt?: number
   streamingFrom?: number
   thinkingTokens?: number
+  joinAbove: boolean
+  joinBelow: boolean
 }
 
-function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens }: AssistantProps) {
+/** A reply drawn as the extension does: each thinking, text and tool block its own step on the timeline. */
+function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens, joinAbove, joinBelow }: AssistantProps) {
   const { content } = item
-  if (content.length === 0) return null
+  const shown = visibleBlocks(content)
+  if (shown.length === 0) return null
   const copyable = streamingFrom === undefined && textBlocks(content).length > 0 && !item.parentToolUseId && !item.raw.parent_tool_use_id
+  const firstText = shown.find((i) => content[i].type === 'text')
+  const lastText = [...shown].reverse().find((i) => content[i].type === 'text')
   return (
-    <div data-assistant-message="" className="group/message relative space-y-2">
-      {stampAt !== undefined && (
-        <div className="absolute right-0 top-0">
-          <Stamp at={stampAt} />
-        </div>
-      )}
-      <div className={`space-y-2 ${stampAt !== undefined ? 'pr-16' : ''}`}>
-        {content.map((block, i) => (
+    <div data-assistant-message="" className="group/message">
+      {shown.map((i, n) => (
+        <TimelinePlaceProvider key={i} value={timelinePlace(n > 0 || joinAbove, n < shown.length - 1 || joinBelow)}>
           <ContentBlockView
-            key={i}
-            block={block}
+            block={content[i]}
             streaming={streamingFrom !== undefined && i >= streamingFrom}
             durationMs={item.thinkingMs?.[i]}
             thinkingTokens={thinkingTokens}
+            stamp={i === firstText && stampAt !== undefined ? <Stamp at={stampAt} /> : undefined}
+            footer={
+              i === lastText && copyable ? (
+                <div className="flex h-5 items-center">
+                  <CopyButton getText={() => textBlocks(content).join(PARAGRAPH)} label="Copy response" reveal="message" />
+                </div>
+              ) : undefined
+            }
           />
-        ))}
-      </div>
-      {copyable && (
-        <div className="flex h-5 items-center px-1">
-          <CopyButton getText={() => textBlocks(content).join(PARAGRAPH)} label="Copy response" reveal="message" />
-        </div>
-      )}
+        </TimelinePlaceProvider>
+      ))}
     </div>
   )
 }
@@ -119,10 +150,19 @@ interface BlockProps {
   streaming: boolean
   durationMs: number | undefined
   thinkingTokens?: number
+  stamp?: ReactNode
+  footer?: ReactNode
 }
 
-function ContentBlockView({ block, streaming, durationMs, thinkingTokens }: BlockProps) {
-  if (block.type === 'text') return <Markdown text={(block as { text: string }).text} />
+function ContentBlockView({ block, streaming, durationMs, thinkingTokens, stamp, footer }: BlockProps) {
+  if (block.type === 'text') {
+    return (
+      <TimelineRow dot="neutral" stamp={stamp}>
+        <Markdown text={(block as { text: string }).text} />
+        {footer}
+      </TimelineRow>
+    )
+  }
   if (block.type === 'tool_use') return <ToolCall block={block as ToolUse} />
   if (block.type === 'thinking') {
     const text = typeof block.thinking === 'string' ? block.thinking : ''
@@ -149,6 +189,12 @@ interface WriteInput {
   content: string
 }
 
+interface ReadInput {
+  file_path: string
+  offset?: number
+  limit?: number
+}
+
 function isEditInput(input: unknown): input is EditInput {
   if (!input || typeof input !== 'object') return false
   const o = input as Record<string, unknown>
@@ -161,9 +207,34 @@ function isWriteInput(input: unknown): input is WriteInput {
   return typeof o.file_path === 'string' && typeof o.content === 'string'
 }
 
+function isReadInput(input: unknown): input is ReadInput {
+  return !!input && typeof input === 'object' && typeof (input as Record<string, unknown>).file_path === 'string'
+}
+
 function statusOf(result: ToolResultItem | undefined): ToolCallStatus {
   if (!result) return 'pending'
   return result.isError ? 'error' : 'ok'
+}
+
+/** Tools whose header already says what they did; the extension shows only their output (or only an error). */
+const OUTPUT_ONLY: ReadonlySet<string> = new Set(['Glob', 'Grep', 'WebFetch', 'WebSearch'])
+const ERROR_ONLY: ReadonlySet<string> = new Set(['Skill'])
+
+/** The extension's `(lines a-b)` / `(from line a)` after a Read's file name. */
+function readRange(input: ReadInput): string {
+  const start = input.offset ?? 1
+  if (input.offset !== undefined && input.limit !== undefined) return ` (lines ${start}-${start + input.limit - 1})`
+  if (input.offset !== undefined) return ` (from line ${start})`
+  return ''
+}
+
+function FileTarget({ path, suffix = '' }: { path: string; suffix?: string }) {
+  return (
+    <>
+      <FileLink path={path}>{fileBaseName(path)}</FileLink>
+      {suffix}
+    </>
+  )
 }
 
 function ToolCall({ block }: { block: ToolUse }) {
@@ -176,13 +247,42 @@ function ToolCall({ block }: { block: ToolUse }) {
     return <AgentCall id={block.id} name={block.name} input={block.input} result={result} resultText={result ? stringifyToolResult(result.content) : ''} />
   }
 
+  const mcp = mcpToolTitle(block.name, block.input)
+  if (mcp) {
+    return (
+      <ToolCallRow name={`${mcp.server} [${mcp.tool}]`} target={mcp.detail ?? ''} status={status}>
+        {result ? (
+          <ToolCallBody>
+            <ResultSection result={result} />
+          </ToolCallBody>
+        ) : undefined}
+      </ToolCallRow>
+    )
+  }
+
   const todos = block.name === TODO_TOOL ? parseTodos(block.input) : undefined
   if (todos) {
     const current = block.id === latestTodoId
     return (
-      <ToolCallRow key={current ? 'current' : 'earlier'} name="Update Todos" target="" status={status} defaultOpen={current}>
+      <ToolCallRow key={current ? 'current' : 'earlier'} name="Update Todos" target="" status={status} foldable={{ defaultOpen: current }}>
         <Checklist entries={todos.map((t) => ({ label: t.content, state: TODO_CHECK[t.status] }))} />
-        {result?.isError && <ResultSection result={result} />}
+        {result?.isError && (
+          <ToolCallBody>
+            <ResultSection result={result} />
+          </ToolCallBody>
+        )}
+      </ToolCallRow>
+    )
+  }
+
+  if (block.name === 'Read' && isReadInput(block.input)) {
+    return (
+      <ToolCallRow name="Read" target={<FileTarget path={block.input.file_path} suffix={readRange(block.input)} />} status={status}>
+        {result?.isError ? (
+          <ToolCallBody>
+            <ResultSection result={result} />
+          </ToolCallBody>
+        ) : undefined}
       </ToolCallRow>
     )
   }
@@ -190,62 +290,74 @@ function ToolCall({ block }: { block: ToolUse }) {
   if (block.name === 'Edit' && isEditInput(block.input)) {
     const segments = trimContext(computeUnifiedDiff(block.input.old_string, block.input.new_string))
     return (
-      <ToolCallRow name={name} target={target} status={status} meta={<DiffCounts adds={countSegmentLines(segments, 'add')} dels={countSegmentLines(segments, 'remove')} replaceAll={block.input.replace_all} />} defaultOpen>
-        <ToolCallSection label="diff">
-          <DiffLines segments={segments} />
-        </ToolCallSection>
-        {result?.isError && <ResultSection result={result} />}
+      <ToolCallRow
+        name={name}
+        target={<FileTarget path={block.input.file_path} />}
+        status={status}
+        meta={<DiffCounts adds={countSegmentLines(segments, 'add')} dels={countSegmentLines(segments, 'remove')} replaceAll={block.input.replace_all} />}
+      >
+        <ToolCallBody>
+          <ToolCallSection label="diff">
+            <DiffLines segments={segments} />
+          </ToolCallSection>
+          {result?.isError && <ResultSection result={result} />}
+        </ToolCallBody>
       </ToolCallRow>
     )
   }
 
   if (block.name === 'Write' && isWriteInput(block.input)) {
     return (
-      <ToolCallRow name={name} target={target} status={status} meta={<DiffCounts adds={countLines(block.input.content)} />}>
-        <ToolCallSection label="in">
-          <ToolCallText>{block.input.content}</ToolCallText>
-        </ToolCallSection>
-        {result && <ResultSection result={result} />}
+      <ToolCallRow name={name} target={<FileTarget path={block.input.file_path} />} status={status} meta={<DiffCounts adds={countLines(block.input.content)} />}>
+        <ToolCallBody>
+          <ToolCallSection label="in" text={block.input.content} />
+          {result && <ResultSection result={result} />}
+        </ToolCallBody>
       </ToolCallRow>
     )
   }
 
-  const resultText = result ? stringifyToolResult(result.content) : ''
-  const showsDiff = !!result && !result.isError && isUnifiedDiff(resultText)
   const woken = subagentItems.get(block.id) ?? []
+  const showsInput = !OUTPUT_ONLY.has(block.name) && !ERROR_ONLY.has(block.name)
+  const showsResult = !!result && (!ERROR_ONLY.has(block.name) || result.isError)
+  const hasBody = showsInput || showsResult || woken.length > 0
   return (
-    <ToolCallRow name={name} target={target} status={status} defaultOpen={showsDiff}>
-      <ToolCallSection label="in">
-        <ToolCallText>{inputText(block.input)}</ToolCallText>
-      </ToolCallSection>
-      {result && <ResultSection result={result} />}
-      {woken.length > 0 && <SubagentItemList items={woken} />}
+    <ToolCallRow name={name} target={target} status={status}>
+      {hasBody ? (
+        <>
+          {(showsInput || showsResult) && (
+            <ToolCallBody>
+              {showsInput && <ToolCallSection label="in" text={inputText(block.input)} />}
+              {showsResult && result && <ResultSection result={result} />}
+            </ToolCallBody>
+          )}
+          {woken.length > 0 && <SubagentItemList items={woken} />}
+        </>
+      ) : undefined}
     </ToolCallRow>
   )
 }
 
 function ResultSection({ result }: { result: ToolResultItem }) {
   const text = stringifyToolResult(result.content)
-  const tone = result.isError ? 'error' : 'normal'
-  return (
-    <ToolCallSection label="out" tone={tone}>
-      {!result.isError && isUnifiedDiff(text) ? (
+  if (!result.isError && isUnifiedDiff(text)) {
+    return (
+      <ToolCallSection label="out">
         <UnifiedDiffView text={text} className="py-1" />
-      ) : (
-        <ToolCallText>{text || '(no output)'}</ToolCallText>
-      )}
-    </ToolCallSection>
-  )
+      </ToolCallSection>
+    )
+  }
+  return <ToolCallSection label="out" tone={result.isError ? 'error' : 'normal'} text={text || '(no output)'} />
 }
 
 /** A result whose call is not in the chat, e.g. cut off by a shortened transcript. */
 function LooseToolResult({ item }: { item: ToolResultItem }) {
-  const { pairs } = useToolContext()
-  if (pairs.isPaired(item)) return null
   const text = stringifyToolResult(item.content)
   return (
-    <ToolCallRow name="Result" target={oneLine(text)} status={statusOf(item)} defaultOpen={!item.isError && isUnifiedDiff(text)}>
-      <ResultSection result={item} />
+    <ToolCallRow name="Result" target={oneLine(text)} status={statusOf(item)}>
+      <ToolCallBody>
+        <ResultSection result={item} />
+      </ToolCallBody>
     </ToolCallRow>
   )
 }
@@ -260,19 +372,20 @@ function DiffCounts({ adds, dels, replaceAll }: { adds: number; dels?: number; r
   )
 }
 
-
 function TurnFooter({ item }: { item: ResultItem }) {
   const parts = [item.isError ? 'turn error' : 'turn complete']
   if (item.durationMs !== undefined) parts.push(`${(item.durationMs / 1000).toFixed(1)}s`)
   if (item.costUsd !== undefined) parts.push(`$${item.costUsd.toFixed(4)}`)
   if (item.numTurns !== undefined) parts.push(`${item.numTurns} turn${item.numTurns === 1 ? '' : 's'}`)
-  return <div className={`px-1.5 text-[11px] ${item.isError ? 'text-error' : 'text-faint'}`}>{parts.join(' · ')}</div>
+  return <div className={`px-1.5 py-1.5 text-[11px] ${item.isError ? 'text-error' : 'text-faint'}`}>{parts.join(' · ')}</div>
 }
 
-function SystemNote({ text }: { text: string }) {
-  return <div className="px-1.5 text-[11px] text-faint">{text}</div>
+function SystemNote({ item, compactSummary }: { item: SystemItem; compactSummary?: string }) {
+  if (item.compact || item.compactSummary !== undefined) {
+    return <CompactLine meta={item.compact} summary={compactSummary ?? item.compactSummary} />
+  }
+  return <div className="px-1.5 py-1.5 text-[11px] text-faint">{item.text}</div>
 }
-
 
 function inputText(input: unknown): string {
   if (input && typeof input === 'object') {

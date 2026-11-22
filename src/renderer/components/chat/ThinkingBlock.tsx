@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Markdown } from '../ui/Markdown'
 import { DisclosureSummary } from '../ui/DisclosureSummary'
+import { TimelineRow } from '../ui/Timeline'
 import { thinkingLabel, thinkingTokensLabel } from './thinking'
 
 interface Props {
@@ -17,16 +18,18 @@ export function ThinkingBlock({ text, streaming, durationMs, tokens }: Props) {
   const estimate = streaming ? thinkingTokensLabel(tokens) : null
   const expandable = text.trim() !== ''
   return (
-    <div data-thinking="">
-      <DisclosureSummary open={open} onToggle={expandable ? () => setOpen((o) => !o) : undefined}>
-        <span>{thinkingLabel({ streaming, durationMs })}</span>
-        {estimate && <span className="whitespace-nowrap tabular-nums">· {estimate}</span>}
-      </DisclosureSummary>
-      {expandable && open && (
-        <div className="mt-1 px-1.5">
-          <Markdown text={text} tone="muted" />
-        </div>
-      )}
-    </div>
+    <TimelineRow dot="neutral">
+      <div data-thinking="" className="-ml-1.5">
+        <DisclosureSummary open={open} onToggle={expandable ? () => setOpen((o) => !o) : undefined}>
+          <span>{thinkingLabel({ streaming, durationMs })}</span>
+          {estimate && <span className="whitespace-nowrap tabular-nums">· {estimate}</span>}
+        </DisclosureSummary>
+        {expandable && open && (
+          <div className="mt-1 px-1.5">
+            <Markdown text={text} tone="muted" />
+          </div>
+        )}
+      </div>
+    </TimelineRow>
   )
 }

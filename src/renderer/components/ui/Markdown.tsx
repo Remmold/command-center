@@ -1,8 +1,10 @@
-import ReactMarkdown, { type Components, type Options } from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform, type Components, type Options } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { memo, useRef, type ReactNode } from 'react'
 import { CopyButton } from './CopyButton'
+import { linkedFile } from '../../../shared/fileLinks'
+import { useFileOpener } from './fileOpenerContext'
 
 /** What "Copy code" copies, as the extension's `F8n`: a diff whole, anything else without trailing whitespace. */
 export function codeCopyText(text: string, codeClass: string | undefined): string {
@@ -24,6 +26,38 @@ function CodeBlock({ children }: { children: ReactNode }) {
   )
 }
 
+/** A link to a file opens it in the app, as the extension's `O8n`; any other link opens in the browser. */
+function MarkdownLink({ href, children }: { href: string | undefined; children: ReactNode }) {
+  const opener = useFileOpener()
+  const file = href ? linkedFile(href) : null
+  if (file && opener) {
+    return (
+      <a
+        href={href}
+        data-file-link=""
+        title={href}
+        onClick={(e) => {
+          e.preventDefault()
+          opener.open(file.path)
+        }}
+        className="text-link hover:underline"
+      >
+        {children}
+      </a>
+    )
+  }
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="text-link hover:underline">
+      {children}
+    </a>
+  )
+}
+
+/** Keeps a Windows drive path as the href, which the default treats as an unsafe protocol (the extension's `M8n`). */
+function urlTransform(url: string): string {
+  return /^(?:file:\/\/\/)?[a-z]:(?:[\\/]|%5c)/i.test(url) && linkedFile(url) ? url : defaultUrlTransform(url)
+}
+
 const REMARK_PLUGINS = [remarkGfm]
 const REHYPE_PLUGINS: Options['rehypePlugins'] = [[rehypeHighlight, { detect: true, ignoreMissing: true }]]
 
@@ -38,11 +72,7 @@ const COMPONENTS: Components = {
   h3: ({ children }) => <h3 className="mb-1.5 mt-3 text-[13px] font-semibold first:mt-0">{children}</h3>,
   h4: ({ children }) => <h4 className="mb-1 mt-3 text-[13px] font-semibold text-muted first:mt-0">{children}</h4>,
   hr: () => <hr className="my-3 border-subtle" />,
-  a: ({ children, href }) => (
-    <a href={href} target="_blank" rel="noreferrer" className="text-link hover:underline">
-      {children}
-    </a>
-  ),
+  a: ({ children, href }) => <MarkdownLink href={href}>{children}</MarkdownLink>,
   code: ({ className, children, ...props }) => {
     const isBlock = (className ?? '').includes('language-') || (className ?? '').includes('hljs')
     if (isBlock) {
@@ -69,7 +99,7 @@ const COMPONENTS: Components = {
 export const Markdown = memo(function Markdown({ text, tone = 'normal' }: { text: string; tone?: 'normal' | 'muted' }) {
   return (
     <div className={`markdown break-words text-[13px] leading-[1.6] ${tone === 'muted' ? 'text-muted' : 'text-fg'}`}>
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={COMPONENTS}>
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={COMPONENTS} urlTransform={urlTransform}>
         {text}
       </ReactMarkdown>
     </div>

@@ -108,6 +108,9 @@ const api: RendererApi = {
     }
   },
   files: {
+    resolveLink: (cwd, path) => ipcRenderer.invoke(IPC.FILES_RESOLVE_LINK, cwd, path),
+    readImage: (path) => ipcRenderer.invoke(IPC.FILES_READ_IMAGE, path),
+    openWithSystem: (path) => ipcRenderer.invoke(IPC.FILES_OPEN_WITH_SYSTEM, path),
     list: (cwd: string): Promise<string[]> => ipcRenderer.invoke(IPC.FILES_LIST, cwd),
     mentions: (cwd: string, query: string): Promise<MentionEntry[]> => ipcRenderer.invoke(IPC.FILES_MENTIONS, cwd, query),
     saveAs: (suggestedName: string, content: string) =>

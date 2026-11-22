@@ -601,6 +601,50 @@ test.describe('accounts from an existing folder', () => {
   })
 })
 
+const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+test.describe('transcript look', () => {
+  test.use({ script: 'look' })
+
+  test('an MCP call reads "Server [tool]" with an OUT box, compaction and thinking read as in the extension, and an image path opens the preview', async ({ launched }) => {
+    const { page, workspace } = launched
+    mkdirSync(join(workspace, 'refs'), { recursive: true })
+    writeFileSync(join(workspace, 'refs', 'shot.png'), Buffer.from(TINY_PNG, 'base64'))
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await send(page, 'render the references')
+    await expect(pane.getByText('Rendered')).toBeVisible()
+
+    const meshy = pane.locator('[data-timeline-row]', { hasText: 'Meshy [meshy_check_balance]' })
+    await expect(meshy).toHaveCount(1)
+    const out = meshy.locator('[data-tool-section="out"]')
+    await expect(out).toContainText('"balance":1932')
+    await expect(out).toHaveAttribute('aria-expanded', 'false')
+    await out.click()
+    await expect(out).toHaveAttribute('aria-expanded', 'true')
+    await expect(meshy.locator('[data-tool-section="in"]')).toHaveCount(0)
+    await expect(pane.getByText('Blender [execute_blender_code]')).toBeVisible()
+    await expect(pane.getByText('mcp__meshy__meshy_check_balance')).toHaveCount(0)
+
+    await expect(pane.getByText(/^Thought for \ds$/)).toHaveCount(2)
+
+    await pane.locator('[data-compaction]').getByRole('button', { name: 'Compacted chat · auto · 974k tokens freed' }).click()
+    await expect(pane.getByText('Summary: checked the Meshy balance.')).toBeVisible()
+
+    const read = pane.locator('[data-timeline-row]', { hasText: /^Read/ })
+    await read.getByRole('link', { name: 'shot.png' }).click()
+    const preview = page.getByRole('dialog', { name: 'shot.png' })
+    await expect(preview.locator('img')).toHaveAttribute('src', /^data:image\/png;base64,/)
+    await page.keyboard.press('Escape')
+    await expect(preview).toHaveCount(0)
+
+    await pane.getByRole('link', { name: 'the reference' }).click()
+    await expect(preview).toBeVisible()
+    await preview.getByRole('button', { name: 'Close preview' }).click()
+    await expect(preview).toHaveCount(0)
+  })
+})
+
 test.describe('subagents', () => {
   test.use({ script: 'subagent' })
 
@@ -618,7 +662,7 @@ test.describe('subagents', () => {
     if ((await row.getAttribute('aria-expanded')) === 'false') await row.click()
     const inside = call.locator('[data-subagent-items]')
     await expect(inside.getByText('Subagent says the config lives in settings.ts.')).toBeVisible()
-    await expect(inside.getByRole('button', { name: /Read settings\.ts/ })).toBeVisible()
+    await expect(inside.locator('[data-timeline-row]', { hasText: /^Read/ }).getByRole('link', { name: 'settings.ts' })).toBeVisible()
     await expect(pane.getByText('Subagent says the config lives in settings.ts.')).toHaveCount(1)
     await expect(pane.getByRole('button', { name: 'Copy response to clipboard' })).toHaveCount(1)
 

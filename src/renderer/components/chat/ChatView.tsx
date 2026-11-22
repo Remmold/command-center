@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { compactMetadata } from './compaction'
 import { ChatItems } from './ChatItems'
 import { MessageColumn } from './MessageColumn'
 import { ChatBanner } from './ChatBanner'
@@ -170,6 +171,7 @@ export const ChatView = memo(function ChatView({
   /** Set on a successful start before `processRunning` renders, so no caller launches twice. */
   const startedRef = useRef(false)
   const interruptedRef = useRef(false)
+  const awaitingSummaryRef = useRef(false)
   const allowBypassSetting = useGeneralSettingsStore((s) => s.allowDangerouslySkipPermissions)
   const choice = useModelChoice(paneId, { model, effort })
   const mode = migrateMode(permissionMode)
@@ -398,6 +400,10 @@ export const ChatView = memo(function ChatView({
       }
       if (sys.subtype === 'compact_boundary') {
         setContextUsage((u) => (u ? { ...u, totalTokens: 0 } : u))
+        if (!parentToolUseId) {
+          appendItems(paneId, [{ kind: 'system', id: crypto.randomUUID(), text: '', compact: compactMetadata(sys.compact_metadata), at: Date.now() }])
+          awaitingSummaryRef.current = true
+        }
         return
       }
       if (sys.subtype === 'init') {
@@ -425,7 +431,14 @@ export const ChatView = memo(function ChatView({
       return
     }
     if (event.type === 'user') {
-      const content = (event as { message?: { content?: ContentBlock[] } }).message?.content
+      const user = event as { isSynthetic?: boolean; message?: { content?: ContentBlock[] | string } }
+      const content = user.message?.content
+      // The extension's `pendingCompactMessage`: the first synthetic prompt after a boundary is its summary.
+      if (awaitingSummaryRef.current && !parentToolUseId && user.isSynthetic && typeof content === 'string') {
+        awaitingSummaryRef.current = false
+        appendItems(paneId, [{ kind: 'system', id: crypto.randomUUID(), text: '', compactSummary: content, at: Date.now() }])
+        return
+      }
       if (!Array.isArray(content)) return
       if (parentToolUseId) {
         const results: ToolResultItem[] = content.filter(isToolResultBlock).map((block) => ({

@@ -1,6 +1,6 @@
 import { promises as fs, watch, type FSWatcher } from 'node:fs'
 import type { ChatItem } from '../../shared/chatItems'
-import { createTranscriptParser, lineToItems } from './transcriptItems'
+import { createTranscriptParser, transcriptLinesToItems } from './transcriptItems'
 
 const CHUNK_BYTES = 512 * 1024
 const NEWLINE = 0x0a
@@ -40,7 +40,7 @@ export async function readLastItems(file: string, maxItems: number, maxBytes: nu
       const firstNewline = position > 0 ? buf.indexOf(NEWLINE) : -1
       carry = buf.subarray(0, firstNewline + 1)
       const complete = buf.subarray(firstNewline + 1).toString('utf-8')
-      items = [...complete.split('\n').flatMap(lineToItems), ...items]
+      items = [...transcriptLinesToItems(complete.split('\n')), ...items]
     }
     const shortened = position > 0 || items.length > maxItems
     // A last line still unterminated after maxBytes: follow from where reading stopped; its fragment fails to parse and is skipped.

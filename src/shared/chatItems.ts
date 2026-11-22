@@ -42,10 +42,20 @@ export interface ResultItem extends Timed {
   raw: ClaudeResultEvent
 }
 
+/** What a `compact_boundary` reports: what started the compaction and the context size before it. */
+export interface CompactMetadata {
+  trigger: string
+  preTokens: number
+}
+
 export interface SystemItem extends Timed {
   kind: 'system'
   id: string
   text: string
+  /** Set on a compaction boundary. */
+  compact?: CompactMetadata
+  /** The summary the CLI wrote after a compaction, drawn inside the boundary's line. */
+  compactSummary?: string
 }
 
 export type ChatItem =
