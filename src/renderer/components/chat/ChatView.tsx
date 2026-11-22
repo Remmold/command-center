@@ -18,6 +18,8 @@ import { pickUp, type HeldPrompt } from './heldPrompts'
 import { historyEntries, userItemText } from './promptHistory'
 import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
+import { committedLength, thinkingDurations } from './liveItems'
+import { useFollowOutput } from './useFollowOutput'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { useApprovalsStore } from '../../state/approvalsStore'
@@ -98,7 +100,7 @@ interface AnthropicStreamInner {
   type: string
   index?: number
   content_block?: ContentBlock
-  delta?: { type?: string; text?: string; partial_json?: string }
+  delta?: { type?: string; text?: string; thinking?: string; partial_json?: string }
   message?: { id?: string }
 }
 
@@ -114,6 +116,7 @@ export function ChatView({
 }: Props) {
   const items = useChatItemsStore((s) => s.items[paneId] ?? EMPTY_ITEMS)
   const appendItems = useChatItemsStore((s) => s.appendItems)
+  const mergeAssistant = useChatItemsStore((s) => s.mergeAssistant)
   const setClaudeSessionId = useProjectViewsStore((s) => s.setClaudeSessionId)
   const pendingApprovals = useApprovalsStore((s) => s.byPane[paneId] ?? EMPTY_REQUESTS)
   const held = useHeldPromptsStore((s) => s.byPane[paneId] ?? EMPTY_HELD)
@@ -123,6 +126,8 @@ export function ChatView({
   const [turnActive, setTurnActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inProgress, setInProgress] = useState<AssistantMessageItem | null>(null)
+  const [thinkingTokens, setThinkingTokens] = useState<number | undefined>(undefined)
+  const thinkingStartsRef = useRef(new Map<number, number>())
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [contextOpen, setContextOpen] = useState(false)
   const closeContext = useCallback(() => setContextOpen(false), [])
@@ -130,7 +135,8 @@ export function ChatView({
   const [modelMenuSignal, setModelMenuSignal] = useState(0)
   const sessionInit = useSessionInit(paneId)
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const itemsLenRef = useRef(0)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const { toBottom } = useFollowOutput(scrollRef, contentRef)
   const initialItemsCountRef = useRef(items.length)
   const focusInputRef = useRef<(() => void) | null>(null)
   const paneRef = useRef<HTMLDivElement | null>(null)
@@ -150,7 +156,7 @@ export function ChatView({
     bypassAvailable: bypassAllowed || launchedModeRef.current === 'bypassPermissions' || mode === 'bypassPermissions'
   })
 
-  const note = (text: string): void => appendItems(paneId, [{ kind: 'system', id: crypto.randomUUID(), text }])
+  const note = (text: string): void => appendItems(paneId, [{ kind: 'system', id: crypto.randomUUID(), text, at: Date.now() }])
 
   /** False when the running process refused the change; a pane without a process always takes it. */
   const applyFlags = async (settings: Record<string, unknown>): Promise<boolean> => {
@@ -236,7 +242,7 @@ export function ChatView({
       release(useHeldPromptsStore.getState().byPane[paneId] ?? [])
       useHeldPromptsStore.getState().set(paneId, [])
       appendItems(paneId, [
-        { kind: 'system', id: crypto.randomUUID(), text: 'claude process exited' }
+        { kind: 'system', id: crypto.randomUUID(), text: 'claude process exited', at: Date.now() }
       ])
     })
 
@@ -251,18 +257,10 @@ export function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId])
 
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const len = items.length + (inProgress ? 1 : 0) + held.length
-    if (len !== itemsLenRef.current) {
-      itemsLenRef.current = len
-      el.scrollTop = el.scrollHeight
-    }
-  }, [items, inProgress, held.length])
-
   const handleStreamEvent = (inner: AnthropicStreamInner) => {
     if (inner.type === 'message_start') {
+      thinkingStartsRef.current = new Map()
+      setThinkingTokens(undefined)
       setInProgress({
         kind: 'assistant',
         id: inner.message?.id ?? crypto.randomUUID(),
@@ -274,6 +272,10 @@ export function ChatView({
     if (inner.type === 'content_block_start' && inner.content_block && typeof inner.index === 'number') {
       const idx = inner.index
       const block = inner.content_block
+      if (block.type === 'thinking') {
+        thinkingStartsRef.current.set(idx, Date.now())
+        setThinkingTokens(undefined)
+      }
       setInProgress((prev) => {
         if (!prev) return prev
         const content = [...prev.content]
@@ -298,13 +300,16 @@ export function ChatView({
         if (!block) return prev
         if (delta.type === 'text_delta' && block.type === 'text' && typeof delta.text === 'string') {
           content[idx] = { type: 'text', text: (block as { text: string }).text + delta.text }
+        } else if (delta.type === 'thinking_delta' && block.type === 'thinking' && typeof delta.thinking === 'string') {
+          content[idx] = { ...block, thinking: (typeof block.thinking === 'string' ? block.thinking : '') + delta.thinking }
         }
         return { ...prev, content }
       })
       return
     }
     if (inner.type === 'message_stop') {
-      // Do nothing — final 'assistant' event will commit the canonical message.
+      // Each block was committed by its own 'assistant' event already.
+      setInProgress(null)
       return
     }
   }
@@ -314,8 +319,8 @@ export function ChatView({
     appendItems(
       paneId,
       prompts.flatMap((p): ChatItem[] => [
-        { kind: 'user', id: p.uuid, text: p.text },
-        ...(p.notice ? [{ kind: 'system' as const, id: crypto.randomUUID(), text: p.notice }] : [])
+        { kind: 'user', id: p.uuid, text: p.text, at: Date.now() },
+        ...(p.notice ? [{ kind: 'system' as const, id: crypto.randomUUID(), text: p.notice, at: Date.now() }] : [])
       ])
     )
   }
@@ -348,6 +353,10 @@ export function ChatView({
         useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
         return
       }
+      if (sys.subtype === 'thinking_tokens') {
+        if (typeof sys.estimated_tokens === 'number') setThinkingTokens(sys.estimated_tokens)
+        return
+      }
       if (sys.subtype === 'compact_boundary') {
         setContextUsage((u) => (u ? { ...u, totalTokens: 0 } : u))
         return
@@ -355,21 +364,20 @@ export function ChatView({
       if (sys.subtype === 'init') {
         if (Array.isArray(sys.slash_commands)) setInitCommandNames(sys.slash_commands.filter((n): n is string => typeof n === 'string'))
         appendItems(paneId, [
-          { kind: 'system', id: crypto.randomUUID(), text: formatInitNote(sys) }
+          { kind: 'system', id: crypto.randomUUID(), text: formatInitNote(sys), at: Date.now() }
         ])
       }
       return
     }
     if (event.type === 'assistant') {
       const ae = event as ClaudeAssistantEvent
-      const item: AssistantMessageItem = {
-        kind: 'assistant',
-        id: ae.message.id ?? crypto.randomUUID(),
-        content: ae.message.content,
-        raw: ae
-      }
-      appendItems(paneId, [item])
-      setInProgress(null)
+      const id = ae.message.id ?? crypto.randomUUID()
+      const now = Date.now()
+      const firstIndex = committedLength(useChatItemsStore.getState().items[paneId] ?? [], id)
+      const thinkingMs = thinkingDurations(thinkingStartsRef.current, firstIndex, ae.message.content, now)
+      mergeAssistant(paneId, { kind: 'assistant', id, content: ae.message.content, raw: ae, at: now, ...(thinkingMs ? { thinkingMs } : {}) })
+      // A message from a subagent, or one sent without stream events, is not the one streaming.
+      setInProgress((prev) => (prev && prev.id === id ? prev : null))
       return
     }
     if (event.type === 'user') {
@@ -381,14 +389,15 @@ export function ChatView({
       })
       if (notes.length > 0) {
         interruptedRef.current = true
-        appendItems(paneId, notes.map((text) => ({ kind: 'system' as const, id: crypto.randomUUID(), text })))
+        appendItems(paneId, notes.map((text) => ({ kind: 'system' as const, id: crypto.randomUUID(), text, at: Date.now() })))
       }
       const results: ToolResultItem[] = content.filter(isToolResultBlock).map((block) => ({
         kind: 'tool_result' as const,
         id: crypto.randomUUID(),
         toolUseId: block.tool_use_id,
         content: block.content,
-        isError: block.is_error
+        isError: block.is_error,
+        at: Date.now()
       }))
       if (results.length > 0) appendItems(paneId, results)
       return
@@ -409,7 +418,8 @@ export function ChatView({
         costUsd: re.total_cost_usd,
         numTurns: re.num_turns,
         isError: re.is_error,
-        raw: re
+        raw: re,
+        at: Date.now()
       }
       appendItems(paneId, [item])
       setTurnActive(false)
@@ -496,7 +506,8 @@ export function ChatView({
     // As the extension's `turnRunningOrQueued`: the CLI queues it and says when it starts.
     const queued = turnActive || held.length > 0
     if (queued) useHeldPromptsStore.getState().hold(paneId, { uuid, text: userText })
-    else appendItems(paneId, [{ kind: 'user', id: uuid, text: userText }])
+    else appendItems(paneId, [{ kind: 'user', id: uuid, text: userText, at: Date.now() }])
+    toBottom()
     useProjectViewsStore.getState().notePrompt(paneId, text)
     const ok = await ensureStarted()
     if (!ok) {
@@ -543,7 +554,8 @@ export function ChatView({
 
   return (
     <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col" onKeyDown={handlePaneKeyDown}>
-      <div ref={scrollRef} tabIndex={-1} className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
+      <div ref={scrollRef} tabIndex={-1} data-transcript="" className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
+        <div ref={contentRef}>
         <MessageColumn className="space-y-3">
           {error && (
             <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
@@ -566,7 +578,7 @@ export function ChatView({
                 : 'idle — sending will start a new claude process'}
             </ChatBanner>
           )}
-          <ChatItems items={items} cwd={cwd} streaming={inProgress} />
+          <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} />
           {pendingApprovals.map((req) => (
             <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
           ))}
@@ -580,6 +592,7 @@ export function ChatView({
             {held.length > 0 ? 'Message queued.' : ''}
           </div>
         </MessageColumn>
+        </div>
       </div>
       <InputBox
         busy={turnActive}

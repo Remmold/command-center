@@ -18,6 +18,9 @@ export interface ClaudeSessionOptions extends ClaudeStartOptions {
   onInit: InitCallback
 }
 
+/** Set by the extension for its CLI: with tasks off the CLI keeps TodoWrite, which the chat draws as a checklist. */
+const EXTENSION_ENV: Readonly<Record<string, string>> = { CLAUDE_CODE_ENABLE_TASKS: '0' }
+
 export class ClaudeSession {
   readonly paneId: string
   readonly cwd: string
@@ -74,7 +77,7 @@ export class ClaudeSession {
     this.child = spawn(launch.command, args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: childEnv(process.env, { ...profileEnv, ...launch.env }),
+      env: childEnv(process.env, { ...EXTENSION_ENV, ...profileEnv, ...launch.env }),
       shell: false,
       windowsHide: true
     })

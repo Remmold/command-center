@@ -21,6 +21,7 @@ const recorded = {
   context: readJson(join(FIXTURES, 'get-context-usage-reply.json')).response.response,
   unsupported: readJson(join(FIXTURES, 'error-reply.json')).response.error,
   turn: readLines(join(FIXTURES, 'turn-write-approval.jsonl')),
+  thinking: readLines(join(FIXTURES, 'turn-thinking.jsonl')),
   queued: readLines(join(FIXTURES, 'turn-queued-message.jsonl'))
     .filter((entry) => entry.direction === 'cli')
     .map((entry) => entry.line),
@@ -37,6 +38,12 @@ function recordedLine(match) {
 
 const isStream = (type, extra = () => true) => (l) => l.type === 'stream_event' && l.event.type === type && extra(l.event)
 
+function thinkingLine(match) {
+  const hit = recorded.thinking.find(match)
+  if (!hit) throw new Error('fake-claude: thinking fixture line missing')
+  return clone(hit)
+}
+
 const template = {
   init: recordedLine((l) => l.type === 'system' && l.subtype === 'init'),
   requesting: recordedLine((l) => l.type === 'system' && l.subtype === 'status'),
@@ -50,6 +57,11 @@ const template = {
   messageStop: recordedLine(isStream('message_stop')),
   assistant: recordedLine((l) => l.type === 'assistant'),
   rateLimit: recordedLine((l) => l.type === 'rate_limit_event'),
+  thinkingBlockStart: thinkingLine(isStream('content_block_start', (e) => e.content_block.type === 'thinking')),
+  thinkingDelta: thinkingLine(isStream('content_block_delta', (e) => e.delta.type === 'thinking_delta')),
+  signatureDelta: thinkingLine(isStream('content_block_delta', (e) => e.delta.type === 'signature_delta')),
+  thinkingTokens: thinkingLine((l) => l.type === 'system' && l.subtype === 'thinking_tokens'),
+  thinkingAssistant: thinkingLine((l) => l.type === 'assistant' && l.message.content[0]?.type === 'thinking'),
   canUseTool: recordedLine((l) => l.type === 'control_request').request,
   toolResult: recordedLine((l) => l.type === 'user'),
   result: recordedLine((l) => l.type === 'result'),
@@ -66,6 +78,11 @@ const INTERRUPTED_TOOL = '[Request interrupted by user for tool use]'
 const REJECTED =
   "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+/** Tools the CLI runs without asking, with the result it gives them. */
+const NO_APPROVAL_RESULTS = {
+  TodoWrite:
+    'Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable'
+}
 const BOOLEAN_FLAGS = new Set([
   '--print',
   '-p',
@@ -447,8 +464,8 @@ class Turn {
     this.stream(start)
   }
 
-  endMessage(stopReason) {
-    this.stream(clone(template.blockStop))
+  endMessage(stopReason, index = 0) {
+    this.stream(this.at(clone(template.blockStop), index))
     const delta = clone(template.messageDelta)
     delta.event.delta.stop_reason = stopReason
     this.stream(delta)
@@ -464,22 +481,62 @@ class Turn {
     return line
   }
 
+  /** Sets a stream line's block index. */
+  at(line, index) {
+    line.event.index = index
+    return line
+  }
+
+  /** A thinking block at index 0, as the real CLI streams it: tokens estimates and empty thinking deltas, then the signature. */
+  async thinkingBlock(messageId, thinking) {
+    const spec = typeof thinking === 'object' && thinking !== null ? thinking : {}
+    this.stream(this.at(clone(template.thinkingBlockStart), 0))
+    const text = typeof spec.text === 'string' ? spec.text : ''
+    const pieces = text ? chunk(text) : ['']
+    const tokens = spec.tokens ?? 50
+    const step = (spec.ms ?? 0) / pieces.length
+    for (const [i, piece] of pieces.entries()) {
+      const estimate = Math.round((tokens * (i + 1)) / pieces.length)
+      const sys = clone(template.thinkingTokens)
+      sys.estimated_tokens = estimate
+      sys.estimated_tokens_delta = Math.round(tokens / pieces.length)
+      this.emit(sys)
+      const delta = this.at(clone(template.thinkingDelta), 0)
+      delta.event.delta.thinking = piece
+      delta.event.delta.estimated_tokens = estimate
+      this.stream(delta)
+      await this.sleep(step)
+      if (this.aborted) return
+    }
+    this.stream(this.at(clone(template.signatureDelta), 0))
+    const block = clone(template.thinkingAssistant.message.content[0])
+    block.thinking = text
+    this.emit(this.assistant(messageId, block))
+    this.stream(this.at(clone(template.blockStop), 0))
+  }
+
   async text(event) {
     const messageId = this.fake.id('msg_fake')
     this.startMessage(messageId)
-    this.stream(clone(template.textBlockStart))
+    let index = 0
+    if (event.thinking) {
+      await this.thinkingBlock(messageId, event.thinking)
+      if (this.aborted) return
+      index = 1
+    }
+    this.stream(this.at(clone(template.textBlockStart), index))
     let sent = ''
     for (const piece of event.deltas ?? chunk(event.text ?? '')) {
       await this.sleep(event.deltaDelayMs ?? this.script.deltaDelayMs)
       if (this.aborted) return
-      const delta = clone(template.textDelta)
+      const delta = this.at(clone(template.textDelta), index)
       delta.event.delta.text = piece
       this.stream(delta)
       sent += piece
     }
     this.lastText = event.text ?? sent
     this.emit(this.assistant(messageId, { type: 'text', text: this.lastText }))
-    this.endMessage('end_turn')
+    this.endMessage('end_turn', index)
   }
 
   /** True when the tool call ended the turn. */
@@ -489,28 +546,35 @@ class Turn {
     const toolUseId = fake.id('toolu_fake')
     const input = event.input ?? {}
     this.startMessage(messageId)
-    const blockStart = clone(template.toolBlockStart)
+    let index = 0
+    if (event.thinking) {
+      await this.thinkingBlock(messageId, event.thinking)
+      if (this.aborted) return false
+      index = 1
+    }
+    const blockStart = this.at(clone(template.toolBlockStart), index)
     blockStart.event.content_block.id = toolUseId
     blockStart.event.content_block.name = event.name
     this.stream(blockStart)
-    const delta = clone(template.inputDelta)
+    const delta = this.at(clone(template.inputDelta), index)
     delta.event.delta.partial_json = JSON.stringify(input)
     this.stream(delta)
     const block = { ...clone(template.assistant.message.content[0]), type: 'tool_use', id: toolUseId, name: event.name, input }
     const assistant = this.assistant(messageId, block)
     delete assistant.wire_tool_inputs
     this.emit(assistant)
-    this.endMessage('tool_use')
+    this.endMessage('tool_use', index)
     this.numTurns++
 
     let decision = { behavior: 'allow', updatedInput: input }
-    if (event.approval !== false && !fake.autoAllowed(event.name)) {
+    const asks = event.approval ?? !(event.name in NO_APPROVAL_RESULTS)
+    if (asks !== false && !fake.autoAllowed(event.name)) {
       decision = await this.ask(event, toolUseId, input)
       if (this.aborted) return false
     }
     if (decision.behavior === 'allow') {
       fake.remember(decision.updatedPermissions)
-      this.toolResult(toolUseId, event.result ?? 'Done.', false)
+      this.toolResult(toolUseId, event.result ?? NO_APPROVAL_RESULTS[event.name] ?? 'Done.', false)
       this.foldQueued()
       return false
     }

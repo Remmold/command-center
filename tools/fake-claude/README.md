@@ -2,7 +2,7 @@
 
 A stand-in `claude` for tests. It speaks stream-json and the control protocol, replays a scripted conversation and logs what it receives. It costs no tokens and needs no login.
 
-Every line it writes is cloned from a recording of the real CLI in `src/main/claude/fixtures/`: `initialize-reply.json`, `get-usage-reply.json`, `get-context-usage-reply.json` (control-only probe; personal paths and MCP/skill names replaced), `error-reply.json`, `control-replies.jsonl` (control-only probe), `turn-write-approval.jsonl` (one real Haiku turn with a Write approval) and `turn-queued-message.jsonl` (the queue frames of a prompt sent during a real Haiku turn). The one exception is the interrupted result, built from the CLI's own result schema because no real interrupt mid-turn was recorded.
+Every line it writes is cloned from a recording of the real CLI in `src/main/claude/fixtures/`: `initialize-reply.json`, `get-usage-reply.json`, `get-context-usage-reply.json` (control-only probe; personal paths and MCP/skill names replaced), `error-reply.json`, `control-replies.jsonl` (control-only probe), `turn-write-approval.jsonl` (one real Haiku turn with a Write approval), `turn-thinking.jsonl` (a real Haiku turn with thinking on; init line dropped, MCP name replaced) and `turn-queued-message.jsonl` (the queue frames of a prompt sent during a real Haiku turn). The one exception is the interrupted result, built from the CLI's own result schema because no real interrupt mid-turn was recorded.
 
 ## Running it in the app
 
@@ -54,7 +54,8 @@ One JSON object per line, each with `t` (ISO time) and `kind`:
 - Every turn starts with `system/init`, and each message with a `status: requesting` line. A turn without a `result` event ends with a success result carrying the last text.
 - Events (all take an optional `delayMs` before them):
   - `text`: one assistant message, streamed in 3-word deltas (or `deltas: [...]`), `deltaDelayMs` between them (event or turn level).
-  - `tool_use`: a tool call. Unless `approval: false`, the permission mode allows it, or an earlier "allow" saved a matching rule or mode, it sends `can_use_tool` and waits. Allow → `tool_result` with `result` (default "Done."). Deny → error `tool_result` with the deny message, then `onDeny` events (and a success result) if given, else the remaining events. Deny with `interrupt: true` ends the turn as interrupted. `suggestions` overrides `permission_suggestions` (default for edit tools: the recorded "accept edits this session").
+  - `thinking` (on a `text` or `tool_use` event): a thinking block streamed first in the same message, as the real CLI does: `thinking_tokens` estimates, `thinking_delta`s and a `signature_delta`. `true` or `{ "ms": 1200, "tokens": 258, "text": "…" }`; the text defaults to empty, as Haiku sends it.
+  - `tool_use`: a tool call. TodoWrite runs without asking and gets the CLI's own result text. Unless `approval: false`, the permission mode allows it, or an earlier "allow" saved a matching rule or mode, it sends `can_use_tool` and waits. Allow → `tool_result` with `result` (default "Done."). Deny → error `tool_result` with the deny message, then `onDeny` events (and a success result) if given, else the remaining events. Deny with `interrupt: true` ends the turn as interrupted. `suggestions` overrides `permission_suggestions` (default for edit tools: the recorded "accept edits this session").
   - `rate_limit_event`: the recorded event; `utilization` (0–1) overrides each window.
   - `result`: ends the turn; `text` overrides the result text, `error: true` sends the interrupted result.
   - `wait`: pauses `ms`.
@@ -65,4 +66,4 @@ One JSON object per line, each with `t` (ISO time) and `kind`:
 - A message sent during a turn waits in the queue. If the turn then finishes a tool call, the message joins that turn after the tool result (replay, `started`), its matching turn's events play before the one result, and its `completed` comes before that result, as in the recording. Otherwise it starts its own turn after the result, also after an interrupt.
 - `interrupt` stops the running turn: a pending approval gets a `control_cancel_request`, then "[Request interrupted by user]" (or "… for tool use") and an `error_during_execution` result.
 
-Ready scripts: `scripts/basic.json` (one reply per prompt) and `scripts/approval.json` (a Write that needs approval, then a reply). The smoke suite adds `e2e/scripts/slow.json` and `e2e/scripts/context.json` (700k tokens used, so the context pie shows).
+Ready scripts: `scripts/basic.json` (one reply per prompt) and `scripts/approval.json` (a Write that needs approval, then a reply). The smoke suite adds `e2e/scripts/slow.json`, `e2e/scripts/context.json` (700k tokens used, so the context pie shows) and `e2e/scripts/render.json` (thinking, two TodoWrite lists and a code block for "plan…"; a long two-part reply for "long…").

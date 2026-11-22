@@ -246,6 +246,35 @@ describe('scripts', () => {
   })
 })
 
+describe('thinking and todos', () => {
+  const stream = (fake: Fake): Line[] => fake.lines.filter((l) => l.type === 'stream_event').map((l) => l.event)
+
+  it('streams a thinking block before the text of the same message, as the recording does', async () => {
+    const fake = start(PARTIAL, { turns: [{ match: '', events: [{ type: 'text', text: 'Done.', thinking: { tokens: 258 } }] }] })
+    fake.say('hi')
+    await fake.next(isResult)
+    const events = stream(fake)
+    expect(events.find((e) => e.type === 'content_block_start' && e.index === 0)?.content_block).toEqual({ type: 'thinking', thinking: '', signature: '' })
+    expect(events.find((e) => e.type === 'content_block_start' && e.index === 1)?.content_block.type).toBe('text')
+    expect(events.some((e) => e.type === 'content_block_delta' && e.delta.type === 'signature_delta' && e.index === 0)).toBe(true)
+    const assistants = fake.lines.filter((l) => l.type === 'assistant')
+    expect(new Set(assistants.map((l) => l.message.id)).size).toBe(1)
+    expect(assistants.map((l) => l.message.content[0].type)).toEqual(['thinking', 'text'])
+    const estimate = fake.lines.filter((l) => l.type === 'system' && l.subtype === 'thinking_tokens').at(-1)
+    expect(estimate?.estimated_tokens).toBe(258)
+  })
+
+  it('runs TodoWrite without asking and answers with the CLI’s own result', async () => {
+    const todos = [{ content: 'Plan', status: 'in_progress', activeForm: 'Planning' }]
+    const fake = start(PARTIAL, { turns: [{ match: '', events: [{ type: 'tool_use', name: 'TodoWrite', input: { todos } }, { type: 'text', text: 'ok' }] }] })
+    fake.say('hi')
+    await fake.next(isResult)
+    expect(fake.lines.some(isApproval)).toBe(false)
+    const [result] = fake.lines.filter((l) => l.type === 'user').flatMap((l) => l.message.content)
+    expect(result.content).toMatch(/^Todos have been modified successfully\./)
+  })
+})
+
 const WRITE = { type: 'tool_use', name: 'Write', input: { file_path: 'C:\\work\\hello.txt', content: 'hi' }, result: 'File created successfully' }
 const isApproval = (l: Line): boolean => l.type === 'control_request' && l.request.subtype === 'can_use_tool'
 const toolResults = (fake: Fake): Line[] => fake.lines.filter((l) => l.type === 'user').flatMap((l) => l.message.content)

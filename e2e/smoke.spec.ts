@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { ElectronApplication, Page } from '@playwright/test'
 import { chooseMode, expect, prompt, send, startSession, test } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
@@ -243,5 +243,64 @@ test.describe('tool approval', () => {
     expect(log.approvalReplies()).toEqual([
       expect.objectContaining({ behavior: 'allow', updatedPermissions: [expect.objectContaining({ type: 'setMode', mode: 'acceptEdits' })] })
     ])
+  })
+})
+
+/** The system clipboard, with Windows line ends turned back into the plain newlines the app copied. */
+async function clipboardText(app: ElectronApplication): Promise<string> {
+  return (await app.evaluate(({ clipboard }) => clipboard.readText())).replace(/\r\n/g, '\n')
+}
+
+test.describe('chat rendering', () => {
+  test.use({ script: 'render' })
+
+  test('thinking, the todo checklist, copy buttons and timestamps render as in the extension', async ({ launched }) => {
+    const { app, page } = launched
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await send(page, 'plan the work')
+    await expect(pane.getByText('All planned.')).toBeVisible()
+
+    await expect(pane.getByText(/^Thought for \ds$/)).toBeVisible()
+
+    const lists = pane.getByRole('button', { name: /Update Todos/ })
+    await expect(lists).toHaveCount(2)
+    await expect(lists.nth(0)).toHaveAttribute('aria-expanded', 'false')
+    await expect(lists.nth(1)).toHaveAttribute('aria-expanded', 'true')
+    const items = pane.locator('li[data-state]')
+    await expect(items).toHaveCount(2)
+    await expect(items.nth(0)).toHaveAttribute('data-state', 'checked')
+    await expect(items.nth(1)).toHaveAttribute('data-state', 'mixed')
+
+    await pane.locator('pre').hover()
+    await pane.getByRole('button', { name: 'Copy code to clipboard' }).click()
+    await expect.poll(() => clipboardText(app)).toBe("console.log('copied')")
+
+    await pane.getByText('All planned.').hover()
+    await pane.getByRole('button', { name: 'Copy response to clipboard' }).click()
+    await expect.poll(() => clipboardText(app)).toBe("Here is the snippet:\n\n```js\nconsole.log('copied')\n```\n\nAll planned.")
+
+    await expect(pane.locator('[data-message-stamp]').first()).toHaveText(/^\d{1,2}:\d{2} [AP]M$/)
+    await expect(pane.getByRole('separator').first()).toHaveText(/^[A-Z][a-z]{2}, [A-Z][a-z]{2} \d{1,2}$/)
+  })
+
+  test('scrolling up holds the view while output arrives; sending follows again', async ({ launched }) => {
+    const { page } = launched
+    const pane = page.locator('[data-chat-pane]')
+    const transcript = pane.locator('[data-transcript]')
+    await startSession(launched)
+    await page.setViewportSize({ width: 900, height: 420 })
+    await send(page, 'a long answer')
+    await expect(pane.getByText('End of the first part.')).toBeVisible()
+
+    await transcript.evaluate((el) => (el.scrollTop = 0))
+    await expect(pane.getByText('The second part arrived.')).toBeAttached({ timeout: 10_000 })
+    expect(await transcript.evaluate((el) => el.scrollTop)).toBe(0)
+
+    await send(page, 'another long answer')
+    await expect(pane.getByText('End of the first part.').nth(1)).toBeVisible()
+    await expect
+      .poll(() => transcript.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
+      .toBeLessThan(50)
   })
 })

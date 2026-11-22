@@ -1,19 +1,35 @@
 import { Markdown } from '../ui/Markdown'
 import type { ContentBlock } from '../../../shared/types'
-import type { ChatItem, ToolResultItem, ResultItem } from './types'
+import type { AssistantMessageItem, ChatItem, ToolResultItem, ResultItem } from './types'
 import { computeUnifiedDiff, trimContext, type DiffSegment } from './diff'
 import { UnifiedDiffView, isUnifiedDiff } from './UnifiedDiffView'
 import { DiffLines } from './DiffLines'
 import { ToolCallRow, ToolCallSection, ToolCallText, type ToolCallStatus } from './ToolCallRow'
 import { toolCallTitle } from './toolCall'
 import { useToolContext } from './toolContext'
+import { ThinkingBlock } from './ThinkingBlock'
+import { parseTodos, TODO_TOOL, type Todo } from './todos'
+import { stampLabel, stampTitle } from './messageTime'
+import { CopyButton } from '../ui/CopyButton'
+import { TimeStamp } from '../ui/TimeStamp'
+import { Checklist, type CheckState } from '../ui/Checklist'
 
-export function Message({ item }: { item: ChatItem }) {
+const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
+
+interface MessageProps {
+  item: ChatItem
+  /** Set while this message streams: the index of its first block not committed yet. */
+  streamingFrom?: number
+  /** The CLI's running thinking-token estimate for a streaming thinking block. */
+  thinkingTokens?: number
+}
+
+export function Message({ item, streamingFrom, thinkingTokens }: MessageProps) {
   switch (item.kind) {
     case 'user':
-      return <UserPrompt text={item.text} />
+      return <UserPrompt text={item.text} at={item.at} />
     case 'assistant':
-      return <AssistantMessage content={item.content} />
+      return <AssistantMessage item={item} streamingFrom={streamingFrom} thinkingTokens={thinkingTokens} />
     case 'tool_result':
       return <LooseToolResult item={item} />
     case 'result':
@@ -23,37 +39,88 @@ export function Message({ item }: { item: ChatItem }) {
   }
 }
 
+function Stamp({ at }: { at: number }) {
+  return <TimeStamp at={at} label={stampLabel(at)} title={stampTitle(at)} />
+}
+
 /** `queued` is a prompt still waiting on the CLI; it looks the same, as in the extension, and only reads differently. */
-export function UserPrompt({ text, queued = false }: { text: string; queued?: boolean }) {
+export function UserPrompt({ text, queued = false, at }: { text: string; queued?: boolean; at?: number }) {
   return (
-    <div
-      role={queued ? 'article' : undefined}
-      aria-label={queued ? 'You, queued' : undefined}
-      data-queued={queued || undefined}
-      className="whitespace-pre-wrap break-words rounded-md border border-strong bg-input px-3 py-2 text-[13px] leading-relaxed text-fg"
-    >
-      {text}
+    <div>
+      {at !== undefined && !queued && (
+        <div className="flex justify-end pb-0.5">
+          <Stamp at={at} />
+        </div>
+      )}
+      <div
+        role={queued ? 'article' : undefined}
+        aria-label={queued ? 'You, queued' : undefined}
+        data-queued={queued || undefined}
+        data-user-prompt=""
+        className="whitespace-pre-wrap break-words rounded-md border border-strong bg-input px-3 py-2 text-[13px] leading-relaxed text-fg"
+      >
+        {text}
+      </div>
     </div>
   )
 }
 
-function AssistantMessage({ content }: { content: ContentBlock[] }) {
+const PARAGRAPH = '\n\n'
+
+function textBlocks(content: ContentBlock[]): string[] {
+  return content.flatMap((b) => (b.type === 'text' && typeof b.text === 'string' ? [b.text] : []))
+}
+
+function AssistantMessage({ item, streamingFrom, thinkingTokens }: { item: AssistantMessageItem; streamingFrom?: number; thinkingTokens?: number }) {
+  const { content } = item
   if (content.length === 0) return null
+  const partial = streamingFrom !== undefined && streamingFrom < content.length
+  const settled = textBlocks(content).length > 0 && !partial
+  const stamped = settled && item.at !== undefined
+  const copyable = settled && !item.raw.parent_tool_use_id
   return (
-    <div className="space-y-2">
-      {content.map((block, i) => (
-        <ContentBlockView key={i} block={block} />
-      ))}
+    <div data-assistant-message="" className="group/message relative space-y-2">
+      {stamped && (
+        <div className="absolute right-0 top-0">
+          <Stamp at={item.at as number} />
+        </div>
+      )}
+      <div className={`space-y-2 ${stamped ? 'pr-16' : ''}`}>
+        {content.map((block, i) => (
+          <ContentBlockView
+            key={i}
+            block={block}
+            streaming={streamingFrom !== undefined && i >= streamingFrom}
+            durationMs={item.thinkingMs?.[i]}
+            thinkingTokens={thinkingTokens}
+          />
+        ))}
+      </div>
+      {copyable && (
+        <div className="flex h-5 items-center px-1">
+          <CopyButton getText={() => textBlocks(content).join(PARAGRAPH)} label="Copy response" reveal="message" />
+        </div>
+      )}
     </div>
   )
 }
 
-function ContentBlockView({ block }: { block: ContentBlock }) {
+interface BlockProps {
+  block: ContentBlock
+  streaming: boolean
+  durationMs: number | undefined
+  thinkingTokens?: number
+}
+
+function ContentBlockView({ block, streaming, durationMs, thinkingTokens }: BlockProps) {
   if (block.type === 'text') return <Markdown text={(block as { text: string }).text} />
   if (block.type === 'tool_use') return <ToolCall block={block as ToolUse} />
+  if (block.type === 'thinking') {
+    const text = typeof block.thinking === 'string' ? block.thinking : ''
+    return <ThinkingBlock text={text} streaming={streaming} durationMs={durationMs} tokens={streaming ? thinkingTokens : undefined} />
+  }
   return null
 }
-
 
 interface ToolUse {
   id: string
@@ -91,10 +158,21 @@ function statusOf(result: ToolResultItem | undefined): ToolCallStatus {
 }
 
 function ToolCall({ block }: { block: ToolUse }) {
-  const { pairs, cwd } = useToolContext()
+  const { pairs, cwd, latestTodoId } = useToolContext()
   const result = pairs.resultFor.get(block.id)
   const { name, target } = toolCallTitle(block.name, block.input, cwd)
   const status = statusOf(result)
+
+  const todos = block.name === TODO_TOOL ? parseTodos(block.input) : undefined
+  if (todos) {
+    const current = block.id === latestTodoId
+    return (
+      <ToolCallRow key={current ? 'current' : 'earlier'} name="Update Todos" target="" status={status} defaultOpen={current}>
+        <Checklist entries={todos.map((t) => ({ label: t.content, state: TODO_CHECK[t.status] }))} />
+        {result?.isError && <ResultSection result={result} />}
+      </ToolCallRow>
+    )
+  }
 
   if (block.name === 'Edit' && isEditInput(block.input)) {
     const segments = trimContext(computeUnifiedDiff(block.input.old_string, block.input.new_string))
