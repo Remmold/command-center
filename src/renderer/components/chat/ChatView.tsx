@@ -23,7 +23,9 @@ import { useHeldPromptsStore } from '../../state/heldPromptsStore'
 import { committedLength, thinkingDurations } from './liveItems'
 import { useFollowOutput } from './useFollowOutput'
 import { useChatItemsStore } from '../../state/chatItemsStore'
-import { shellTabsOfSession, storedPermissionMode, useProjectViewsStore } from '../../state/projectViewsStore'
+import { useSubagentTasksStore } from '../../state/subagentTasksStore'
+import type { AgentHost } from './toolContext'
+import { findSessionByPane, shellTabsOfSession, storedPermissionMode, useProjectViewsStore } from '../../state/projectViewsStore'
 import { isFirstPrompt, noteClaudeSessionId, requestClaudeTitle } from '../../state/sessionTitleSync'
 import { useApprovalsStore } from '../../state/approvalsStore'
 import { useAccountSwitchStore } from '../../state/accountSwitchStore'
@@ -56,6 +58,8 @@ import type {
 const EMPTY_ITEMS: ChatItem[] = []
 const EMPTY_REQUESTS: ApprovalRequest[] = []
 const EMPTY_HELD: HeldPrompt[] = []
+const NO_TASKS = {}
+const TASK_EVENTS: ReadonlySet<string> = new Set(['task_started', 'task_progress', 'task_notification', 'task_updated'])
 
 /** The extension saves these as the default for new sessions when the user picks them. */
 const DEFAULT_WORTHY: ReadonlySet<PermissionMode> = new Set(['default', 'auto', 'acceptEdits'])
@@ -245,6 +249,7 @@ export function ChatView({
     const unsubExit = window.api.claude.onExit(({ paneId: id }) => {
       if (id !== paneId) return
       startedRef.current = false
+      useSubagentTasksStore.getState().end(paneId)
       setProcessRunning(false)
       setTurnActive(false)
       setInProgress(null)
@@ -351,8 +356,12 @@ export function ChatView({
     if (sessId) noteClaudeSessionId(paneId, sessId)
     if (handleQueueFrame(event)) return
 
+    const parent = (event as { parent_tool_use_id?: unknown }).parent_tool_use_id
+    const parentToolUseId = typeof parent === 'string' && parent !== '' ? parent : undefined
     if (event.type === 'stream_event') {
       const se = event as ClaudeStreamEvent
+      // Only the main agent's message streams in place; a subagent's arrives whole.
+      if (parentToolUseId) return
       handleStreamEvent(se.event as AnthropicStreamInner)
       return
     }
@@ -360,6 +369,10 @@ export function ChatView({
       const sys = event as ClaudeSystemEvent
       if (sys.subtype === 'status' && isPermissionMode(sys.permissionMode)) {
         useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
+        return
+      }
+      if (TASK_EVENTS.has(sys.subtype)) {
+        useSubagentTasksStore.getState().apply(paneId, sys)
         return
       }
       if (sys.subtype === 'thinking_tokens') {
@@ -381,6 +394,10 @@ export function ChatView({
     if (event.type === 'assistant') {
       const ae = event as ClaudeAssistantEvent
       const id = ae.message.id ?? crypto.randomUUID()
+      if (parentToolUseId) {
+        mergeAssistant(paneId, { kind: 'assistant', id, content: ae.message.content, raw: ae, at: Date.now(), parentToolUseId })
+        return
+      }
       const now = Date.now()
       const firstIndex = committedLength(useChatItemsStore.getState().items[paneId] ?? [], id)
       const timing = thinkingStartsRef.current
@@ -393,6 +410,19 @@ export function ChatView({
     if (event.type === 'user') {
       const content = (event as { message?: { content?: ContentBlock[] } }).message?.content
       if (!Array.isArray(content)) return
+      if (parentToolUseId) {
+        const results: ToolResultItem[] = content.filter(isToolResultBlock).map((block) => ({
+          kind: 'tool_result' as const,
+          id: crypto.randomUUID(),
+          toolUseId: block.tool_use_id,
+          content: block.content,
+          isError: block.is_error,
+          at: Date.now(),
+          parentToolUseId
+        }))
+        if (results.length > 0) appendItems(paneId, results)
+        return
+      }
       const notes = content.flatMap((block) => {
         const note = interruptNote(block)
         return note ? [note] : []
@@ -575,6 +605,21 @@ export function ChatView({
     await ensureStarted()
   }
 
+  const subagentTasks = useSubagentTasksStore((s) => s.byPane[paneId] ?? NO_TASKS)
+  const claudeSessionId = useProjectViewsStore((s) => findSessionByPane(s, paneId)?.session.claudeSessionId)
+  const agents = useMemo((): AgentHost => {
+    const stop = async (taskId: string): Promise<string | null> => {
+      const res = await window.api.claude.control(paneId, 'stop_task', { task_id: taskId })
+      return res.ok ? null : res.error
+    }
+    return {
+      tasks: subagentTasks,
+      running: processRunning,
+      stop,
+      ...(claudeSessionId ? { transcript: { cwd, sessionId: claudeSessionId } } : {})
+    }
+  }, [paneId, subagentTasks, processRunning, claudeSessionId, cwd])
+
   const indicator = contextUsage ? contextIndicator(contextUsage) : null
   const commands = useMemo(
     () => sessionInit?.commands ?? initCommandNames.map((name) => ({ name, description: '', argumentHint: '', aliases: [], builtin: false })),
@@ -613,7 +658,7 @@ export function ChatView({
                   : 'idle — sending will start a new claude process'}
               </ChatBanner>
             )}
-            <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} />
+            <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} agents={agents} />
             {pendingApprovals.map((req) => (
               <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
             ))}

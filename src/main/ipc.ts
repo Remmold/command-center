@@ -15,6 +15,7 @@ import { findMentions } from './files/mentions'
 import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
+import { readSubagentTranscript } from './claude/subagentTranscript'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
@@ -37,6 +38,7 @@ import {
   type ScreenFocus,
   type SessionInitEnvelope,
   type SessionRename,
+  type SubagentTranscriptRequest,
   type RenameResult
 } from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
@@ -318,6 +320,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
 
   ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, async (_e, cwd: string) =>
     listLocalSessions(await transcriptsDirForCwd(cwd))
+  )
+  ipcMain.handle(IPC.CLAUDE_SUBAGENT_TRANSCRIPT, async (_e, request: SubagentTranscriptRequest) =>
+    readSubagentTranscript(await transcriptsDirForCwd(request.cwd), request.sessionId, { agentId: request.agentId, toolUseId: request.toolUseId })
   )
   ipcMain.handle(IPC.CLAUDE_RENAME_SESSION, async (_e, rename: SessionRename): Promise<RenameResult> => {
     const title = cleanSessionTitle(rename.title)

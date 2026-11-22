@@ -46,6 +46,7 @@ export const IPC = {
   CLAUDE_SAVE_DEFAULTS: 'claude:saveDefaults',
   CLAUDE_LIST_LOCAL_SESSIONS: 'claude:listLocalSessions',
   CLAUDE_RENAME_SESSION: 'claude:renameSession',
+  CLAUDE_SUBAGENT_TRANSCRIPT: 'claude:subagentTranscript',
   SESSION_STATUS_LIST: 'sessionStatus:list',
   SESSION_STATUS_CHANGED: 'sessionStatus:changed',
   SESSION_SCREEN_FOCUS: 'sessionStatus:screenFocus',

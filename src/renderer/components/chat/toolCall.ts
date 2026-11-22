@@ -33,7 +33,7 @@ function targetOf(o: Record<string, unknown>, cwd: string | undefined): string {
     const folder = stringField(o, 'path')
     return folder ? `${pattern} in ${workspaceRelative(folder, cwd)}` : pattern
   }
-  return stringField(o, 'description') ?? stringField(o, 'url') ?? stringField(o, 'query') ?? ''
+  return stringField(o, 'description') ?? stringField(o, 'url') ?? stringField(o, 'query') ?? stringField(o, 'to') ?? ''
 }
 
 /** The one-line "ToolName target" shown on a collapsed tool call row. */

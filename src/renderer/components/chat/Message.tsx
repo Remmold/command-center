@@ -13,6 +13,8 @@ import { stampLabel, stampTitle } from './messageTime'
 import { CopyButton } from '../ui/CopyButton'
 import { TimeStamp } from '../ui/TimeStamp'
 import { Checklist, type CheckState } from '../ui/Checklist'
+import { AgentCall } from './AgentCall'
+import { AGENT_TOOLS } from './subagents'
 
 const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
 
@@ -164,10 +166,14 @@ function statusOf(result: ToolResultItem | undefined): ToolCallStatus {
 }
 
 function ToolCall({ block }: { block: ToolUse }) {
-  const { pairs, cwd, latestTodoId } = useToolContext()
+  const { pairs, cwd, latestTodoId, subagentItems } = useToolContext()
   const result = pairs.resultFor.get(block.id)
   const { name, target } = toolCallTitle(block.name, block.input, cwd)
   const status = statusOf(result)
+
+  if (AGENT_TOOLS.has(block.name)) {
+    return <AgentCall id={block.id} name={block.name} input={block.input} result={result} resultText={result ? stringifyToolResult(result.content) : ''} />
+  }
 
   const todos = block.name === TODO_TOOL ? parseTodos(block.input) : undefined
   if (todos) {
@@ -205,12 +211,20 @@ function ToolCall({ block }: { block: ToolUse }) {
 
   const resultText = result ? stringifyToolResult(result.content) : ''
   const showsDiff = !!result && !result.isError && isUnifiedDiff(resultText)
+  const woken = subagentItems.get(block.id) ?? []
   return (
     <ToolCallRow name={name} target={target} status={status} defaultOpen={showsDiff}>
       <ToolCallSection label="in">
         <ToolCallText>{inputText(block.input)}</ToolCallText>
       </ToolCallSection>
       {result && <ResultSection result={result} />}
+      {woken.length > 0 && (
+        <div data-subagent-items="" className="space-y-2 py-1">
+          {woken.map((item, i) => (
+            <Message key={`${item.id}#${i}`} item={item} />
+          ))}
+        </div>
+      )}
     </ToolCallRow>
   )
 }

@@ -536,3 +536,47 @@ test.describe('accounts from an existing folder', () => {
     await expect(existing.getByText('Found in VS Code profile Work')).toBeVisible()
   })
 })
+
+test.describe('subagents', () => {
+  test.use({ script: 'subagent' })
+
+  test('a subagent’s messages show under its Agent call, and Open transcript reads its own file', async ({ launched }) => {
+    const { page } = launched
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await send(page, 'explore the repo')
+    await expect(pane.getByText('Main agent: the explorer finished.')).toBeVisible()
+
+    const call = pane.locator('[data-agent-call]')
+    await expect(call).toHaveAttribute('data-agent-status', 'finished')
+    const row = call.getByRole('button', { name: /Agent Find the config/ })
+    await expect(row).toContainText('Finished')
+    if ((await row.getAttribute('aria-expanded')) === 'false') await row.click()
+    const inside = call.locator('[data-subagent-items]')
+    await expect(inside.getByText('Subagent says the config lives in settings.ts.')).toBeVisible()
+    await expect(inside.getByRole('button', { name: /Read settings\.ts/ })).toBeVisible()
+    await expect(pane.getByText('Subagent says the config lives in settings.ts.')).toHaveCount(1)
+    await expect(pane.getByRole('button', { name: 'Copy response to clipboard' })).toHaveCount(1)
+
+    await call.getByRole('button', { name: 'Open transcript' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Find the config' })
+    await expect(dialog.getByText('Finished · general-purpose · foreground')).toBeVisible()
+    await expect(dialog.getByText('Subagent says the config lives in settings.ts.')).toBeVisible()
+    await expect(dialog.getByText('Find where the config is read.')).toBeVisible()
+  })
+
+  test('Stop agent sends stop_task with the agent’s task id and the call ends Stopped', async ({ launched }) => {
+    const { page, log } = launched
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await send(page, 'slow agent please')
+    const call = pane.locator('[data-agent-call]')
+    await expect(call.locator('[data-subagent-items]').getByText('Subagent is still looking.')).toBeVisible()
+    await expect(call).toHaveAttribute('data-agent-status', 'working')
+    await call.getByRole('button', { name: 'Stop agent' }).click()
+    await expect.poll(() => log.controlRequests('stop_task').map((r) => r.task_id)).toEqual([expect.stringMatching(/^a[0-9a-f]{16}$/)])
+    await expect(call).toHaveAttribute('data-agent-status', 'stopped')
+    await expect(pane.getByText('Main agent: carried on after the stop.')).toBeVisible()
+    await expect(pane.getByText('Subagent never says this.')).toHaveCount(0)
+  })
+})

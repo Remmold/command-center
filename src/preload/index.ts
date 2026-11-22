@@ -148,6 +148,7 @@ const api: RendererApi = {
     send: (paneId, content, uuid) => ipcRenderer.send(IPC.CLAUDE_SEND, paneId, content, uuid),
     listLocalSessions: (cwd) => ipcRenderer.invoke(IPC.CLAUDE_LIST_LOCAL_SESSIONS, cwd),
     renameSession: (rename) => ipcRenderer.invoke(IPC.CLAUDE_RENAME_SESSION, rename),
+    subagentTranscript: (request) => ipcRenderer.invoke(IPC.CLAUDE_SUBAGENT_TRANSCRIPT, request),
     interrupt: (paneId) => ipcRenderer.send(IPC.CLAUDE_INTERRUPT, paneId),
     stop: (paneId) => ipcRenderer.send(IPC.CLAUDE_STOP, paneId),
     onEvent: (cb) => {

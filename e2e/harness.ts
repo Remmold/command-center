@@ -14,7 +14,8 @@ export const SCRIPTS = {
   approval: join(REPO, 'tools', 'fake-claude', 'scripts', 'approval.json'),
   slow: join(__dirname, 'scripts', 'slow.json'),
   context: join(__dirname, 'scripts', 'context.json'),
-  render: join(__dirname, 'scripts', 'render.json')
+  render: join(__dirname, 'scripts', 'render.json'),
+  subagent: join(__dirname, 'scripts', 'subagent.json')
 } as const
 
 export type ScriptName = keyof typeof SCRIPTS

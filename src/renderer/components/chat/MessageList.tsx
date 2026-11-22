@@ -3,9 +3,10 @@ import type { ChatItem } from './types'
 import { ChatItems } from './ChatItems'
 import { MessageColumn } from './MessageColumn'
 import { useFollowOutput } from './useFollowOutput'
+import type { AgentHost } from './toolContext'
 
 /** Scrolling list of chat items that follows new items while the reader is at the bottom. */
-export function MessageList({ items, cwd, children }: { items: ChatItem[]; cwd: string | undefined; children?: ReactNode }) {
+export function MessageList({ items, cwd, agents, children }: { items: ChatItem[]; cwd: string | undefined; agents?: AgentHost; children?: ReactNode }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   useFollowOutput(scrollRef, contentRef)
@@ -15,7 +16,7 @@ export function MessageList({ items, cwd, children }: { items: ChatItem[]; cwd: 
       <div ref={contentRef}>
         <MessageColumn className="space-y-3">
           {children}
-          <ChatItems items={items} cwd={cwd} />
+          <ChatItems items={items} cwd={cwd} agents={agents} />
         </MessageColumn>
       </div>
     </div>

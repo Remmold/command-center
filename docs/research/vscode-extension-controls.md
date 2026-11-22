@@ -296,6 +296,29 @@ and "Resume conversation" commands.
 session, Ctrl+Alt+F focus view. In the input: Shift+Tab cycles mode, Shift+Enter adds a newline, Tab
 accepts a prompt suggestion, Esc stops Claude or closes menus.
 
+## 8. Subagents (extension 2.1.330, CLI schema in its bundled `claude.exe`)
+
+**CLI events** (`system` lines, zod schemas in the binary):
+- `task_started`: `task_id`, `tool_use_id?`, `description`, `subagent_type?`, `is_backgrounded?`, `task_type?` (`local_agent` for an Agent; `local_bash` and others are shell and MCP tasks), `prompt?`, `parent_task_id?`, `spawn_depth?`, `skip_transcript?`.
+- `task_progress`: `task_id`, `tool_use_id?`, `description`, `usage {total_tokens, tool_uses, duration_ms}`, `last_tool_name?`, `summary?`.
+- `task_notification`: `task_id`, `tool_use_id?`, `status` (`completed` | `failed` | `stopped`), `output_file`, `summary`, `usage?`.
+- `task_updated`: `task_id`, `patch {status? (pending/running/completed/failed/killed/paused), end_time?, error?, is_backgrounded?}`.
+- A subagent's `assistant`, `user` and `stream_event` lines carry `parent_tool_use_id` = the Agent call's id. An agent woken by `SendMessage` answers under that SendMessage call's id (the webview's `wakeToolUseIds`).
+
+**Control requests** (webview → extension host → CLI):
+- `stop_subagent {taskId}` → CLI `stop_task {task_id}` (schema: "Stops a running task."); the host answers `stop_subagent_response` with `error` on failure.
+- `get_task_output {taskId}` → CLI `get_task_output {task_id}` → `{output, total_bytes, truncated}`. The schema describes it for "a shell or Monitor task", and the webview only offers it on a `local_bash` task card, so it is not used for agents.
+- `get_subagent_transcript {sessionId, agentId, after?}` is no CLI request: the host reads `<projects>/<cwd key>/<session>/subagents/agent-<agentId>.jsonl` (ids checked against `/^[A-Za-z0-9_-]{1,128}$/`). Each agent has a `agent-<id>.meta.json` beside it with `toolUseId`, `agentType`, `description`. The task id of a `local_agent` is its agent id. The main transcript holds none of the subagent's lines.
+
+**How it looks:**
+- The Agent tool row: header `Agent:` + the description, body `IN` = the prompt; its output only shows when it is an error.
+- A top-level foreground agent's messages are not nested in the default view: they render in the main list (the subagent's prompt row is hidden, copy buttons are left off). Messages of a nested agent (spawned by a subagent) and of a background agent are hidden from the chat (`hiddenFromChat`) and live in the **Agent map**. "Focus view" (opt-in toggle) folds a turn's agent work into one row: `description: <summary or last tool>` and `12s · 4.5k tokens · 3 tools`.
+- **Agent map** (footer pill `N agents`, dot running/waiting/failed/idle, tooltip "Agents are working · Click to open the agent map"): a tree of agents; each row has a status dot, the description, and `12s · 4.5k tokens` (time so far while working, else the run's length when 1 s or more; tokens as `1.5k`/`1.2M`).
+- An agent's **card**: title dot + description; meta `Working|Waiting for your permission|Finished|Failed|Stopped · <type> · <model> · background|foreground`, "Spawned by <agent or 'the main agent'>", a "Now" activity line, the error (Failed) or summary (Stopped, when it differs from the description), the result, a "Prompt" and a "Tool calls (N)" section, then the buttons **Open transcript** and, while working, **Stop agent** (`Stopping…` while waiting; on failure "The agent could not be stopped. It may have finished already.").
+- Status mapping (`Zj`): `completed` → Finished, `failed` → Failed, `killed`/`stopped` → Stopped. When the process ends, agents still working become Stopped.
+
+**Command Center (ticket 02)** keeps the Agent row and nests the subagent's items inside it (the ticket's choice, decision 69). The row carries the card's status word and the map row's meta, and the card's two buttons. Open transcript is a dialog over the subagent's own file. `get_task_output` is not used.
+
 ---
 
 ## Implications for command center
