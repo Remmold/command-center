@@ -16,12 +16,14 @@ import { interruptNote } from './interrupt'
 import { UserPrompt } from './Message'
 import { pickUp, type HeldPrompt } from './heldPrompts'
 import { historyEntries, userItemText } from './promptHistory'
+import { promptContent, terminalSnapshots, type PromptAttachment } from './attachments'
+import { readTerminal } from '../../state/terminalBuffers'
 import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
 import { committedLength, thinkingDurations } from './liveItems'
 import { useFollowOutput } from './useFollowOutput'
 import { useChatItemsStore } from '../../state/chatItemsStore'
-import { useProjectViewsStore } from '../../state/projectViewsStore'
+import { shellTabsOfSession, useProjectViewsStore } from '../../state/projectViewsStore'
 import { useApprovalsStore } from '../../state/approvalsStore'
 import { useAccountSwitchStore } from '../../state/accountSwitchStore'
 import { availableModes, isPermissionMode, migrateMode, nextMode, type PermissionMode } from '../../state/permissionModes'
@@ -46,8 +48,7 @@ import type {
   ClaudeResultEvent,
   ClaudeStreamEvent,
   ClaudeSystemEvent,
-  ContentBlock,
-  ImageAttachment
+  ContentBlock
 } from '../../../shared/types'
 
 const EMPTY_ITEMS: ChatItem[] = []
@@ -502,9 +503,9 @@ export function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [switchTo, processRunning, turnActive, held.length])
 
-  const handleSend = async (text: string, images?: ImageAttachment[]) => {
+  const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []) => {
     const uuid = crypto.randomUUID()
-    const userText = userItemText(text, images?.length ?? 0)
+    const userText = userItemText(text, attachments)
     // As the extension's `turnRunningOrQueued`: the CLI queues it and says when it starts.
     const queued = turnActive || held.length > 0
     if (queued) useHeldPromptsStore.getState().hold(paneId, { uuid, text: userText })
@@ -520,7 +521,8 @@ export function ChatView({
       return
     }
     if (!queued) setTurnActive(true)
-    window.api.claude.send(paneId, text, images, uuid)
+    const terminals = terminalSnapshots(text, shellTabsOfSession(paneId), readTerminal)
+    window.api.claude.send(paneId, promptContent(text, attachments, terminals), uuid)
   }
 
   /** Esc anywhere in the chat stops Claude, as the extension's document-level handler; menus and approvals take it first. */

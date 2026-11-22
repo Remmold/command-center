@@ -12,6 +12,7 @@ import {
 } from './projectViewLayout'
 import { migratePermissionModes, type PermissionMode, type SavedModes } from './permissionModes'
 import { migrateModelChoices, type SavedModelChoices } from './modelPicker'
+import { ATTACHED_MARKER } from '../components/chat/promptHistory'
 import { NEW_SESSION_TITLE, migratedTitle, titleAfterPrompt, titleAfterRename, type SessionTitle } from './sessionTitle'
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku' | string
@@ -177,8 +178,6 @@ function updateSession(set: SetState, paneId: string, change: Partial<ClaudeChat
   })
 }
 
-/** What ChatView appends to a sent prompt that carried images; never part of a title. */
-const IMAGES_NOTE = /\n\n_\[\d+ images? attached\]_$/
 
 /** Titles for sessions saved before they had one, from the user messages already in their chat. */
 function migrateTitles(views: Record<string, { claudeSessions: unknown[] }>): void {
@@ -187,10 +186,16 @@ function migrateTitles(views: Record<string, { claudeSessions: unknown[] }>): vo
     v.claudeSessions = v.claudeSessions.map((raw) => {
       const { label: _label, ...c } = raw as ClaudeChatSession & { label?: string }
       if (typeof c.title === 'string') return c
-      const prompts = (items[c.id] ?? []).flatMap((i) => (i.kind === 'user' ? [i.text.replace(IMAGES_NOTE, '')] : []))
+      const prompts = (items[c.id] ?? []).flatMap((i) => (i.kind === 'user' ? [i.text.replace(ATTACHED_MARKER, '')] : []))
       return { ...c, title: migratedTitle(prompts) }
     })
   }
+}
+
+/** The shell tabs of the workspace a chat session belongs to. */
+export function shellTabsOfSession(paneId: string): ShellTab[] {
+  const view = Object.values(useProjectViewsStore.getState().views).find((v) => v.claudeSessions.some((c) => c.id === paneId))
+  return view?.shellTabs ?? []
 }
 
 export const useProjectViewsStore = create<ProjectViewsState>()(

@@ -11,8 +11,8 @@ describe('prompt history entries', () => {
     expect(historyEntries(items, [{ uuid: 'q', text: 'queued' }])).toEqual(['queued', 'two', 'one'])
   })
 
-  it('leave out the attached-images marker and image-only sends', () => {
-    expect(historyEntries([user(userItemText('look at this', 2)), user(userItemText('', 1))], [])).toEqual(['look at this'])
+  it('leave out the attachments marker and image-only sends', () => {
+    expect(historyEntries([user(userItemText('look at this', [{ kind: 'image' }, { kind: 'image' }])), user(userItemText('', [{ kind: 'pdf' }]))], [])).toEqual(['look at this'])
   })
 
   it('trim the prompt and skip blank ones', () => {

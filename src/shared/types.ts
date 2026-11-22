@@ -227,9 +227,18 @@ export interface ClaudeExitEnvelope {
   exitCode: number | null
 }
 
-export interface ImageAttachment {
-  media_type: string
-  data: string
+/** One block of a user message's `content`, as the extension writes it to the CLI's stdin. */
+export type UserContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string }; title: string }
+  | { type: 'document'; source: { type: 'text'; media_type: 'text/plain'; data: string }; title: string }
+
+/** A row of the @ menu; folders end in `/`. */
+export interface MentionEntry {
+  path: string
+  name: string
+  type: 'file' | 'directory'
 }
 
 export interface GitFile {
@@ -363,6 +372,8 @@ export interface RendererApi {
   }
   files: {
     list: (cwd: string) => Promise<string[]>
+    /** The @ menu's rows for the text typed after `@`: ripgrep's listing, fuzzy-ranked. */
+    mentions: (cwd: string, query: string) => Promise<MentionEntry[]>
     saveAs: (
       suggestedName: string,
       content: string
@@ -386,7 +397,7 @@ export interface RendererApi {
     saveDefaults: (patch: ModelDefaultsPatch) => Promise<SaveDefaultsResult>
     onInit: (cb: (envelope: SessionInitEnvelope) => void) => () => void
     /** `uuid` names the prompt in the CLI's `command_lifecycle` frames and replay echo. */
-    send: (paneId: string, text: string, images: ImageAttachment[] | undefined, uuid: string) => void
+    send: (paneId: string, content: UserContentBlock[], uuid: string) => void
     interrupt: (paneId: string) => void
     stop: (paneId: string) => void
     onEvent: (cb: (envelope: ClaudeEventEnvelope) => void) => () => void

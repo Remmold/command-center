@@ -1,4 +1,7 @@
 import type { ElectronApplication, Page } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { chooseMode, expect, prompt, send, startSession, test } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
@@ -302,5 +305,64 @@ test.describe('chat rendering', () => {
     await expect
       .poll(() => transcript.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
       .toBeLessThan(50)
+  })
+})
+
+/** A git workspace with an ignored file, a folder with a space in its name and a source file. */
+function seedMentionWorkspace(workspace: string): void {
+  execFileSync('git', ['init', '-q'], { cwd: workspace })
+  writeFileSync(join(workspace, '.gitignore'), 'secret.log\n')
+  writeFileSync(join(workspace, 'secret.log'), 'hidden')
+  mkdirSync(join(workspace, 'my folder'))
+  writeFileSync(join(workspace, 'my folder', 'notes.md'), '# notes')
+  mkdirSync(join(workspace, 'src'))
+  writeFileSync(join(workspace, 'src', 'app.ts'), 'export {}')
+}
+
+test.describe('mentions and attachments', () => {
+  test('the @ menu lists folders but not ignored files, and quotes a path with a space', async ({ launched }) => {
+    const { page } = launched
+    seedMentionWorkspace(launched.workspace)
+    await startSession(launched)
+    const menu = page.getByRole('listbox', { name: 'Suggestions' })
+
+    await prompt(page).fill('@')
+    await expect(menu.getByRole('option', { name: 'my folder/' })).toBeVisible()
+    await expect(menu.getByRole('option', { name: 'src/' })).toBeVisible()
+    await expect(menu.getByRole('option', { name: /secret\.log/ })).toHaveCount(0)
+
+    await prompt(page).fill('@secret')
+    await expect(menu.getByText('No files found')).toBeVisible()
+
+    await prompt(page).fill('@notes')
+    await expect(menu.getByRole('option', { name: /notes\.md/ })).toBeVisible()
+    await prompt(page).press('Enter')
+    await expect(prompt(page)).toHaveValue('@"my folder/notes.md"  ')
+    await expect(menu).toHaveCount(0)
+  })
+
+  test('text and PDF files go as document blocks before the prompt; an over-long prompt is refused', async ({ launched }) => {
+    const { page, log } = launched
+    await startSession(launched)
+    await page.locator('[data-chat-pane] input[type="file"]').setInputFiles([
+      { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello notes') },
+      { name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') },
+      { name: 'archive.zip', mimeType: 'application/zip', buffer: Buffer.from('PK') }
+    ])
+    await expect(page.getByText(/^Unsupported file type: archive\.zip\. /)).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Remove notes.txt' })).toBeVisible()
+    await send(page, 'read these')
+    await expect.poll(() => log.entries().filter((e) => e.kind === 'received' && e.line?.type === 'user').length).toBe(1)
+    const user = log.entries().find((e) => e.kind === 'received' && e.line?.type === 'user')
+    expect((user?.line?.message as { content: unknown }).content).toEqual([
+      { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'hello notes' }, title: 'notes.txt' },
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from('%PDF-1.4').toString('base64') }, title: 'paper.pdf' },
+      { type: 'text', text: 'read these' }
+    ])
+
+    await prompt(page).fill('x'.repeat(50_001))
+    await prompt(page).press('Enter')
+    await expect(page.getByText('Your prompt is 1 character over the limit of 50000 · shorten it to send')).toBeVisible()
+    expect(log.userTexts()).toHaveLength(1)
   })
 })

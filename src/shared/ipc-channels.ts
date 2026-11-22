@@ -55,6 +55,7 @@ export const IPC = {
   NAVIGATION_SHOW_VIEW: 'navigation:showView',
   NAVIGATION_OPEN_SESSION: 'navigation:openSession',
   FILES_LIST: 'files:list',
+  FILES_MENTIONS: 'files:mentions',
   FILES_SAVE_AS: 'files:saveAs',
   FILES_READ: 'files:read',
   FILES_WRITE: 'files:write',

@@ -11,6 +11,7 @@ import { appManager } from './apps/manager'
 import { ptyManager } from './pty/manager'
 import { claudeManager } from './claude/manager'
 import { listProjectFiles } from './files/lister'
+import { findMentions } from './files/mentions'
 import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { listLocalSessions } from './claude/local-sessions'
@@ -30,7 +31,7 @@ import {
   DEFAULT_PROFILE_ID,
   type AddWorkspaceResult,
   type ClaudeStartOptions,
-  type ImageAttachment,
+  type UserContentBlock,
   type ModelDefaultsPatch,
   type ScreenFocus,
   type SessionInitEnvelope
@@ -190,6 +191,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
 
   ipcMain.handle(IPC.FILES_LIST, (_event, cwd: string) => listProjectFiles(cwd))
+  ipcMain.handle(IPC.FILES_MENTIONS, (_event, cwd: string, query: string) => findMentions(cwd, query))
 
   // Managed apps (machine-wide launchers/servers — independent of any project)
   ipcMain.handle(IPC.APPS_LIST, () => apps.list())
@@ -285,10 +287,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     (
       _e,
       paneId: string,
-      text: string,
-      images: ImageAttachment[] | undefined,
+      content: UserContentBlock[],
       uuid: string
-    ) => claudeManager.send(paneId, text, images, uuid)
+    ) => claudeManager.send(paneId, content, uuid)
   )
 
   ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, async (_e, cwd: string) =>

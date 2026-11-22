@@ -23,7 +23,7 @@ export class ClaudeNotFoundError extends Error {
 
 let cached: ClaudeLaunch | null = null
 
-function where(name: string): string[] {
+export function where(name: string): string[] {
   const cmd = process.platform === 'win32' ? 'where' : 'which'
   const result = spawnSync(cmd, [name], { encoding: 'utf-8', shell: false })
   if (result.status !== 0 || !result.stdout) return []
@@ -96,7 +96,12 @@ export function harnessConfigDir(env: Record<string, string | undefined> = proce
 export function locateClaude(): ClaudeLaunch {
   const fake = process.env[FAKE_CLAUDE_VAR]
   if (fake) return { command: process.execPath, args: [resolve(fake)], env: { ELECTRON_RUN_AS_NODE: '1' } }
-  if (cached) return cached
-  cached = process.platform === 'win32' ? resolveWindowsLaunch() : resolveUnixLaunch()
+  return locateInstalledClaude()
+}
+
+/** The real CLI on PATH, even under the fake one; throws ClaudeNotFoundError. */
+export function locateInstalledClaude(): ClaudeLaunch {
+  cached ??= process.platform === 'win32' ? resolveWindowsLaunch() : resolveUnixLaunch()
   return cached
 }
+

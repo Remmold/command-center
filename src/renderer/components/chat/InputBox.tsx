@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ArrowUp, Image as ImageIcon, Paperclip, Square, X } from 'lucide-react'
-import { AutocompletePopup, type AutocompleteItem } from './AutocompletePopup'
+import { ArrowUp, FileText, Paperclip, Square, X } from 'lucide-react'
 import { SlashMenu } from './SlashMenu'
+import { MentionMenu } from './MentionMenu'
+import { FileChip, FileChipRow } from '../ui/FileChip'
+import { IconButton } from '../ui/IconButton'
+import { NoticeLine } from '../ui/NoticeLine'
+import { insertMention, mentionText, mentionTrigger, unmentionableNotice, type MentionTrigger } from './mentions'
+import { attachmentKind, overLimitBy, overLimitNotice, unsupportedNotice, type PromptAttachment } from './attachments'
 import {
   argumentHint,
   buildMenu,
@@ -18,7 +23,7 @@ import {
 import { MessageColumn } from './MessageColumn'
 import { NO_RECALL, stepHistory, type HistoryCursor } from './promptHistory'
 import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
-import type { CliCommand, ImageAttachment } from '../../../shared/types'
+import type { CliCommand, MentionEntry } from '../../../shared/types'
 
 interface Props {
   /** Claude is working: sending still works (the prompt is queued) and Stop replaces Send while the input is empty. */
@@ -26,7 +31,7 @@ interface Props {
   /** This session's earlier prompts, newest first, for ↑/↓. */
   history?: readonly string[]
   placeholder?: string
-  onSend: (text: string, images?: ImageAttachment[]) => void
+  onSend: (text: string, attachments?: PromptAttachment[]) => void
   onInterrupt?: () => void
   /** The session's CLI commands, from its `initialize` reply. */
   commands?: readonly CliCommand[]
@@ -45,8 +50,11 @@ interface Props {
 }
 
 interface MentionState {
-  triggerStart: number
-  query: string
+  trigger: MentionTrigger
+  entries: readonly MentionEntry[]
+  /** The query `entries` answer; null before the first answer. */
+  answered: string | null
+  active: number
 }
 
 interface SlashState {
@@ -55,79 +63,61 @@ interface SlashState {
   picked: { id: string; query: string } | null
 }
 
-interface PendingImage {
+interface PendingFile extends PromptAttachment {
   id: string
-  filename: string
   size: number
   width: number
   height: number
-  media_type: string
-  data: string
   previewUrl: string
 }
+
+const MENTION_DEBOUNCE_MS = 200
 
 const NO_COMMANDS: readonly CliCommand[] = []
 const NO_ACTIONS: readonly LocalAction[] = []
 
-function detectMention(value: string, cursor: number): MentionState | null {
-  for (let i = cursor - 1; i >= 0; i--) {
-    const ch = value[i]
-    if (ch === '@') {
-      const before = i === 0 ? '' : value[i - 1]
-      if (i === 0 || /\s/.test(before)) {
-        const query = value.slice(i + 1, cursor)
-        if (!/\s/.test(query)) {
-          return { triggerStart: i, query }
-        }
-      }
-      break
-    }
-    if (/\s/.test(ch)) break
-  }
-  return null
-}
-
-function fuzzyRank(item: string, query: string): number {
-  if (!query) return 0
-  const lowerItem = item.toLowerCase()
-  const lowerQuery = query.toLowerCase()
-  if (lowerItem.startsWith(lowerQuery)) return 0
-  const idx = lowerItem.indexOf(lowerQuery)
-  if (idx >= 0) return 100 + idx
-  return 999
-}
-
-function fuzzyMatch(item: string, query: string): boolean {
-  if (!query) return true
-  return item.toLowerCase().includes(query.toLowerCase())
-}
-
-function readFileAsImage(file: File): Promise<PendingImage> {
+function readDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      const comma = dataUrl.indexOf(',')
-      const data = dataUrl.slice(comma + 1)
-      const img = new Image()
-      const finish = (w: number, h: number) =>
-        resolve({
-          id: crypto.randomUUID(),
-          filename: file.name || 'pasted-image.png',
-          size: file.size,
-          width: w,
-          height: h,
-          media_type: file.type || 'image/png',
-          data,
-          previewUrl: dataUrl
-        })
-      img.onload = () => finish(img.naturalWidth, img.naturalHeight)
-      img.onerror = () => finish(0, 0)
-      img.src = dataUrl
-    }
+    reader.onload = () => resolve(reader.result as string)
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
+}
+
+function imageSize(url: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+    img.onerror = () => resolve({ width: 0, height: 0 })
+    img.src = url
+  })
+}
+
+/** The extension's `aq`: supported files become attachments, empty ones are skipped, the rest are named. */
+async function readFiles(files: readonly File[]): Promise<{ read: PendingFile[]; unsupported: string[] }> {
+  const read: PendingFile[] = []
+  const unsupported: string[] = []
+  for (const file of files) {
+    const name = file.name
+    if (attachmentKind(file.type.toLowerCase(), name) === 'unsupported') {
+      unsupported.push(name)
+      continue
+    }
+    if (file.size === 0) continue
+    try {
+      const url = await readDataUrl(file)
+      const [header, base64] = url.split(',')
+      const mediaType = /data:([^;]+)/.exec(header)?.[1]?.toLowerCase() ?? 'application/octet-stream'
+      const kind = attachmentKind(mediaType, name)
+      if (kind === 'unsupported' || base64 === undefined) continue
+      const size = kind === 'image' ? await imageSize(url) : { width: 0, height: 0 }
+      read.push({ id: crypto.randomUUID(), kind, mediaType, base64, name, size: file.size, ...size, previewUrl: url })
+    } catch {
+      continue
+    }
+  }
+  return { read, unsupported }
 }
 
 /** Shift+Enter, or Ctrl+J as in the extension. */
@@ -162,9 +152,8 @@ export function InputBox({
   const [value, setValue] = useState('')
   const [mention, setMention] = useState<MentionState | null>(null)
   const [slash, setSlash] = useState<SlashState | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [allFiles, setAllFiles] = useState<string[]>([])
-  const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [recall, setRecall] = useState<HistoryCursor>(NO_RECALL)
   const ctrlEnterSends = useGeneralSettingsStore((s) => s.useCtrlEnterToSend)
@@ -190,19 +179,23 @@ export function InputBox({
     }
   }, [registerFocus])
 
+  const mentionQuery = mention?.trigger.query ?? null
   useEffect(() => {
-    if (mention && cwd && allFiles.length === 0) {
-      void window.api.files.list(cwd).then((files) => setAllFiles(files))
+    if (mentionQuery === null || !cwd) return
+    let stale = false
+    const timer = setTimeout(() => {
+      void window.api.files
+        .mentions(cwd, mentionQuery)
+        .catch(() => [])
+        .then((entries) => {
+          if (!stale) setMention((m) => (m && m.trigger.query === mentionQuery ? { ...m, entries, answered: mentionQuery, active: 0 } : m))
+        })
+    }, MENTION_DEBOUNCE_MS)
+    return () => {
+      stale = true
+      clearTimeout(timer)
     }
-  }, [mention, cwd, allFiles.length])
-
-  const mentionItems: AutocompleteItem[] = mention
-    ? allFiles
-        .filter((path) => fuzzyMatch(path, mention.query))
-        .sort((a, b) => fuzzyRank(a, mention.query) - fuzzyRank(b, mention.query))
-        .slice(0, 30)
-        .map((path) => ({ id: path, primary: path }))
-    : []
+  }, [mentionQuery, cwd])
 
   const sections = useMemo(() => (slash ? menuSections(menu, slash.trigger.query) : []), [menu, slash])
   const flat = useMemo(() => sections.flatMap((s) => s.commands), [sections])
@@ -210,14 +203,13 @@ export function InputBox({
   const pickedId = slash?.picked && slash.picked.query === slashQuery && flat.some((c) => c.id === slash.picked?.id) ? slash.picked.id : null
   const activeId = pickedId ?? initialActive(sections, slashQuery)
 
-  useEffect(() => {
-    setSelectedIndex(0)
-  }, [mention?.query])
+  const openMention = (trigger: MentionTrigger | null) =>
+    setMention((prev) => (trigger ? { entries: [], answered: null, active: 0, ...prev, trigger } : null))
 
   const detect = (v: string, caret: number) => {
     const trigger = hasMenu ? slashTrigger(v, caret) : null
     setSlash((prev) => (trigger ? { trigger, picked: prev?.picked ?? null } : null))
-    setMention(trigger ? null : detectMention(v, caret))
+    openMention(trigger ? null : mentionTrigger(v, caret))
   }
 
   const closeMenus = () => {
@@ -239,11 +231,17 @@ export function InputBox({
 
   const send = () => {
     const trimmed = value.trim()
-    if (!trimmed && pendingImages.length === 0) return
-    const images = pendingImages.map((p) => ({ media_type: p.media_type, data: p.data }))
-    onSend(trimmed, images.length > 0 ? images : undefined)
+    if (!trimmed && pendingFiles.length === 0) return
+    const over = overLimitBy(trimmed)
+    if (over > 0) {
+      setNotice(overLimitNotice('Your prompt', over, 'shorten it to send'))
+      return
+    }
+    const attachments = pendingFiles.map(({ kind, mediaType, base64, name }) => ({ kind, mediaType, base64, name }))
+    onSend(trimmed, attachments.length > 0 ? attachments : undefined)
     setValue('')
-    setPendingImages([])
+    setPendingFiles([])
+    setNotice(null)
     closeMenus()
   }
 
@@ -253,14 +251,20 @@ export function InputBox({
       ta.setSelectionRange(pos, pos)
     }, 0)
 
-  const applyMention = (item: AutocompleteItem) => {
+  /** The extension's `Bd`: Tab on a folder drills in with no space; anything else adds the mention and a space. */
+  const applyMention = (entry: MentionEntry, drill: boolean) => {
     const ta = textareaRef.current
     if (!mention || !ta) return
-    const before = value.slice(0, mention.triggerStart)
-    const inserted = '@' + item.primary
-    setValue(before + inserted + ' ' + value.slice(ta.selectionStart))
-    setMention(null)
-    placeCaret(ta, before.length + inserted.length + 1)
+    const text = mentionText(entry.path, entry.type)
+    if (text === null) {
+      setNotice(unmentionableNotice(entry.path))
+      return
+    }
+    const intoFolder = drill && entry.type === 'directory'
+    const next = insertMention(value, mention.trigger, text, !intoFolder)
+    setValue(next.value)
+    openMention(intoFolder ? mentionTrigger(next.value, next.caret) : null)
+    placeCaret(ta, next.caret)
   }
 
   const runLocal = (id: string, ta: HTMLTextAreaElement, nextValue: string, caret: number) => {
@@ -268,7 +272,7 @@ export function InputBox({
     if (id === 'mention-file') {
       const inserted = nextValue.slice(0, caret) + '@' + nextValue.slice(caret)
       setValue(inserted)
-      setMention({ triggerStart: caret, query: '' })
+      openMention(mentionTrigger(inserted, caret + 1))
       return placeCaret(ta, caret + 1)
     }
     onAction?.(id)
@@ -310,6 +314,28 @@ export function InputBox({
     return true
   }
 
+  /** The extension's suggestion keys: arrows wrap, Enter or Tab pick (Tab drills into a folder), Esc closes. */
+  const handleMentionKey = (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!mention || mention.answered === null) return false
+    const { entries, active } = mention
+    if (e.key === 'Escape') {
+      setMention(null)
+      return true
+    }
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && entries.length > 1) {
+      const step = e.key === 'ArrowDown' ? 1 : -1
+      setMention((m) => m && { ...m, active: (active + step + entries.length) % entries.length })
+      return true
+    }
+    if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
+      const entry = entries[active]
+      if (!entry) return false
+      if (!e.repeat) applyMention(entry, e.key === 'Tab')
+      return true
+    }
+    return false
+  }
+
   /** The extension's menu keys: arrows wrap, Enter or Tab pick, Esc closes. True when the key was the menu's. */
   const handleSlashKey = (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
     if (!slash) return false
@@ -346,32 +372,14 @@ export function InputBox({
       e.preventDefault()
       return
     }
-    if (e.key === 'Escape' && mention && mentionItems.length > 0) {
+    if (handleMentionKey(e)) {
       e.preventDefault()
-      setMention(null)
       return
     }
     if (isNewlineKey(e)) {
       e.preventDefault()
       insertAtCaret(ta, '\n')
       return
-    }
-    if (mention && mentionItems.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setSelectedIndex((i) => Math.min(i + 1, mentionItems.length - 1))
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setSelectedIndex((i) => Math.max(i - 1, 0))
-        return
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault()
-        applyMention(mentionItems[selectedIndex])
-        return
-      }
     }
     const bare = !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
     if (bare && e.key === 'ArrowUp' && ta.selectionStart === 0 && recallPrompt(ta, 'older')) {
@@ -392,41 +400,38 @@ export function InputBox({
 
   const hint = argumentHint(menu, value)
 
-  const ingestFiles = async (files: File[]) => {
-    const imgs = files.filter((f) => f.type.startsWith('image/'))
-    if (imgs.length === 0) return
-    const newImages: PendingImage[] = []
-    for (const f of imgs) {
-      try {
-        newImages.push(await readFileAsImage(f))
-      } catch {
-        // ignore
-      }
-    }
-    if (newImages.length > 0) setPendingImages((prev) => [...prev, ...newImages])
+  const addFiles = async (files: readonly File[]) => {
+    const { read, unsupported } = await readFiles(files)
+    if (read.length > 0) setPendingFiles((prev) => [...prev, ...read])
+    const refused = unsupportedNotice(unsupported)
+    if (refused) setNotice(refused)
   }
 
-  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items
-    if (!items) return
-    const imageFiles: File[] = []
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
-        const file = item.getAsFile()
-        if (file) imageFiles.push(file)
-      }
-    }
-    if (imageFiles.length > 0) {
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData?.items ?? [])
+    const files = items.flatMap((item) => {
+      if (item.kind !== 'file' && !item.type.startsWith('image/')) return []
+      const file = item.getAsFile()
+      return file ? [file] : []
+    })
+    if (files.length > 0) {
       e.preventDefault()
-      await ingestFiles(imageFiles)
+      void addFiles(files)
+      return
+    }
+    const pasted = (e.clipboardData?.getData('text/plain') ?? '').replace(/\r\n?/g, '\n').trim()
+    const over = overLimitBy(pasted)
+    if (over > 0) {
+      e.preventDefault()
+      setNotice(overLimitNotice('That paste', over, 'nothing was added, paste less of it'))
     }
   }
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
     const files = Array.from(e.dataTransfer?.files ?? [])
-    await ingestFiles(files)
+    if (files.length > 0) void addFiles(files)
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -438,18 +443,17 @@ export function InputBox({
 
   const handleDragLeave = () => setIsDragging(false)
 
-  const removeImage = (id: string) =>
-    setPendingImages((prev) => prev.filter((p) => p.id !== id))
+  const removeFile = (id: string) => setPendingFiles((prev) => prev.filter((p) => p.id !== id))
 
   const handleAttachClick = () => fileInputRef.current?.click()
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    await ingestFiles(files)
     e.target.value = ''
+    await addFiles(files)
   }
 
-  const canSend = value.trim().length > 0 || pendingImages.length > 0
+  const canSend = value.trim().length > 0 || pendingFiles.length > 0
 
   return (
     <div
@@ -465,7 +469,7 @@ export function InputBox({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="*/*"
           multiple
           className="hidden"
           onChange={handleFileInput}
@@ -481,46 +485,38 @@ export function InputBox({
             trailing={menuTrailing}
           />
         )}
-        {mention && mentionItems.length > 0 && (
-          <AutocompletePopup
-            items={mentionItems}
-            selectedIndex={selectedIndex}
-            onSelect={applyMention}
-            onHoverIndex={setSelectedIndex}
-            header="mention a file"
+        {mention && mention.answered !== null && (
+          <MentionMenu
+            entries={mention.entries}
+            activeIndex={mention.active}
+            onHover={(active) => setMention((m) => m && { ...m, active })}
+            onPick={applyMention}
           />
         )}
-        {pendingImages.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {pendingImages.map((img) => (
-              <div
-                key={img.id}
-                className="group flex items-center gap-2 rounded-md border border-subtle bg-sidebar py-1.5 pl-1.5 pr-2"
-              >
-                <img
-                  src={img.previewUrl}
-                  alt={img.filename}
-                  className="h-9 w-9 shrink-0 rounded object-cover"
-                />
-                <div className="min-w-0 max-w-[200px]">
-                  <div className="truncate text-[12px] text-fg" title={img.filename}>
-                    {img.filename}
-                  </div>
-                  <div className="truncate text-[10px] text-muted">
-                    {img.width > 0 && `${img.width}×${img.height} · `}
-                    {formatBytes(img.size)}
-                  </div>
-                </div>
-                <button
-                  onClick={() => removeImage(img.id)}
-                  className="rounded p-0.5 text-muted hover:bg-list-hover hover:text-error"
-                  aria-label="remove image"
-                >
-                  <X size={12} strokeWidth={2.25} />
-                </button>
-              </div>
+        {notice && (
+          <NoticeLine
+            action={
+              <IconButton label="Close" onClick={() => setNotice(null)}>
+                <X size={12} strokeWidth={2.25} />
+              </IconButton>
+            }
+          >
+            <span title={notice}>{notice}</span>
+          </NoticeLine>
+        )}
+        {pendingFiles.length > 0 && (
+          <FileChipRow>
+            {pendingFiles.map((file) => (
+              <FileChip
+                key={file.id}
+                name={file.name}
+                meta={(file.width > 0 ? `${file.width}×${file.height} · ` : '') + formatBytes(file.size)}
+                thumbnail={file.kind === 'image' ? file.previewUrl : undefined}
+                icon={<FileText size={16} strokeWidth={1.75} />}
+                onRemove={() => removeFile(file.id)}
+              />
             ))}
-          </div>
+          </FileChipRow>
         )}
         <div className="flex flex-col gap-1.5 rounded-md border border-strong bg-input px-3 py-2 focus-within:border-focus">
           <div className="relative flex">
@@ -550,20 +546,14 @@ export function InputBox({
               <button
                 onClick={handleAttachClick}
                 className="rounded p-1.5 text-muted hover:bg-list-hover hover:text-fg"
-                title="attach image"
+                title="Attach file"
                 type="button"
               >
                 <Paperclip size={14} strokeWidth={2} />
               </button>
               {footerStart}
               <span className="min-w-0 truncate text-[10px] text-faint">
-                {ctrlEnterSends ? 'ctrl+enter to send · enter newline' : 'enter to send · shift+enter newline'} · / commands · @ files ·{' '}
-                <ImageIcon
-                  size={10}
-                  strokeWidth={2}
-                  className="inline-block align-text-bottom"
-                />{' '}
-                paste images
+                {ctrlEnterSends ? 'ctrl+enter to send · enter newline' : 'enter to send · shift+enter newline'} · / commands · @ files · paste files
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-1">

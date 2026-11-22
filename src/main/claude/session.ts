@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { locateClaude } from '../pty/claude-locator'
 import { CONFIG_DIR_VAR } from '../../shared/profiles'
-import { THINKING_BUDGET, type ClaudeStartOptions, type ImageAttachment, type SessionInit } from '../../shared/types'
+import { THINKING_BUDGET, type ClaudeStartOptions, type UserContentBlock, type SessionInit } from '../../shared/types'
 import { childEnv } from '../util/childEnv'
 import { ControlChannel, type ControlPayload, type IncomingHandler } from './controlChannel'
 import { parseInitialize } from './initialize'
@@ -142,25 +142,8 @@ export class ClaudeSession {
     }
   }
 
-  send(
-    text: string,
-    images: ImageAttachment[] | undefined,
-    uuid: string
-  ): void {
-    if (!this.alive) return
-    const content: Array<unknown> = []
-    if (images && images.length > 0) {
-      for (const img of images) {
-        content.push({
-          type: 'image',
-          source: { type: 'base64', media_type: img.media_type, data: img.data }
-        })
-      }
-    }
-    if (text && text.length > 0) {
-      content.push({ type: 'text', text })
-    }
-    if (content.length === 0) return
+  send(content: UserContentBlock[], uuid: string): void {
+    if (!this.alive || !Array.isArray(content) || content.length === 0) return
     const line = JSON.stringify({ type: 'user', uuid, message: { role: 'user', content } }) + '\n'
     void this.handshake.then(() => this.writeLine(line))
   }

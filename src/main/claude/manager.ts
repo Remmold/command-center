@@ -2,7 +2,7 @@ import {
   DEFAULT_PROFILE_ID,
   type ClaudeStartOptions,
   type ControlResult,
-  type ImageAttachment,
+  type UserContentBlock,
   type SessionInit
 } from '../../shared/types'
 import { ClaudeSession } from './session'
@@ -103,13 +103,12 @@ class ClaudeManager {
 
   send(
     paneId: string,
-    text: string,
-    images: ImageAttachment[] | undefined,
+    content: UserContentBlock[],
     uuid: string
   ): void {
     const session = this.sessions.get(paneId)
     if (!session?.isAlive()) return
-    session.send(text, images, uuid)
+    session.send(content, uuid)
     for (const cb of this.sendListeners) cb(paneId)
   }
 

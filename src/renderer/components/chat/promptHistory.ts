@@ -1,18 +1,22 @@
 import type { ChatItem } from './types'
 import type { HeldPrompt } from './heldPrompts'
 
-const IMAGES_MARKER = /\n\n_\[\d+ images? attached\]_$/
+/** What `userItemText` appends; never part of a title or a recalled prompt. */
+export const ATTACHED_MARKER = /\n\n_\[\d+ (?:images?|files?) attached\]_$/
 
-export function userItemText(text: string, imageCount: number): string {
-  if (imageCount === 0) return text
-  return `${text}\n\n_[${imageCount} image${imageCount === 1 ? '' : 's'} attached]_`
+/** The prompt as the transcript shows it: a note counts the attachments (all images, else files). */
+export function userItemText(text: string, attachments: readonly { kind: string }[]): string {
+  const count = attachments.length
+  if (count === 0) return text
+  const noun = attachments.every((a) => a.kind === 'image') ? 'image' : 'file'
+  return `${text}\n\n_[${count} ${noun}${count === 1 ? '' : 's'} attached]_`
 }
 
 /** This session's prompts, newest first, queued ones included, as in the extension. */
 export function historyEntries(items: readonly ChatItem[], held: readonly HeldPrompt[]): string[] {
   const texts = [...items.flatMap((item) => (item.kind === 'user' ? [item.text] : [])), ...held.map((p) => p.text)]
   return texts
-    .map((t) => t.replace(IMAGES_MARKER, '').trim())
+    .map((t) => t.replace(ATTACHED_MARKER, '').trim())
     .filter((t) => t.length > 0)
     .reverse()
 }
