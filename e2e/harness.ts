@@ -93,7 +93,39 @@ interface Launched {
   configDir: string
 }
 
-function seedDirs(root: string): { userData: string; workspace: string; configDir: string; home: string; logFile: string } {
+/** The CLI's permission mode as the fake started in `cwd` last heard it: its launch flag, then any later `set_permission_mode`. */
+export function cliPermissionMode(log: FakeLog, cwd: string): string | undefined {
+  const entries = log.entries()
+  const start = entries.map((e) => e.kind === 'argv' && e.cwd === cwd).lastIndexOf(true)
+  if (start === -1) return undefined
+  const argv = entries[start].argv as string[]
+  const flag = argv.indexOf('--permission-mode')
+  const sets = entries.slice(start).flatMap((e) => {
+    const request = e.kind === 'received' ? bodyOf(e, 'control_request') : undefined
+    return request?.subtype === 'set_permission_mode' ? [request.mode as string] : []
+  })
+  return sets.at(-1) ?? (flag === -1 ? undefined : argv[flag + 1])
+}
+
+/** Holds every `claude:start` in the app's main process for `ms`, to open the window before a chat's process exists. */
+export async function delayClaudeStart(app: ElectronApplication, ms: number): Promise<void> {
+  await app.evaluate(({ ipcMain }, wait) => {
+    type Handler = (...args: unknown[]) => unknown
+    const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, Handler> })._invokeHandlers
+    const original = handlers.get('claude:start')
+    if (!original) throw new Error('claude:start is not registered')
+    ipcMain.removeHandler('claude:start')
+    ipcMain.handle('claude:start', async (...args: unknown[]) => {
+      await new Promise((r) => setTimeout(r, wait))
+      return original(...args)
+    })
+  }, ms)
+}
+
+function seedDirs(
+  root: string,
+  userSettings: Record<string, unknown> | null
+): { userData: string; workspace: string; configDir: string; home: string; logFile: string } {
   const dirs = {
     userData: join(root, 'user-data'),
     workspace: join(root, 'e2e-workspace'),
@@ -103,6 +135,7 @@ function seedDirs(root: string): { userData: string; workspace: string; configDi
   }
   for (const dir of [dirs.userData, dirs.workspace, dirs.configDir, dirs.home]) mkdirSync(dir, { recursive: true })
   writeFileSync(join(dirs.configDir, '.credentials.json'), '{}')
+  if (userSettings) writeFileSync(join(dirs.configDir, 'settings.json'), JSON.stringify(userSettings))
   writeFileSync(
     join(dirs.userData, 'projects.json'),
     JSON.stringify([{ id: 'e2e-workspace', name: 'e2e-workspace', path: dirs.workspace, createdAt: Date.now() }])
@@ -173,12 +206,14 @@ async function shutdown(app: ElectronApplication): Promise<void> {
   }
 }
 
-export const test = base.extend<{ script: ScriptName; launched: Launched }>({
+export const test = base.extend<{ script: ScriptName; userSettings: Record<string, unknown> | null; launched: Launched }>({
   script: ['basic', { option: true }],
-  launched: async ({ script }, use) => {
+  /** Written as the temp profile's `settings.json` before launch. */
+  userSettings: [null, { option: true }],
+  launched: async ({ script, userSettings }, use) => {
     const root = mkdtempSync(join(tmpdir(), 'cc-e2e-'))
     try {
-      const dirs = seedDirs(root)
+      const dirs = seedDirs(root, userSettings)
       const app = await _electron.launch({
         executablePath: ELECTRON,
         args: [MAIN, `--user-data-dir=${dirs.userData}`],
@@ -221,10 +256,4 @@ export function prompt(page: Page) {
 export async function send(page: Page, text: string): Promise<void> {
   await prompt(page).fill(text)
   await prompt(page).press('Enter')
-}
-
-/** Picks a permission mode from the footer's mode menu. */
-export async function chooseMode(page: Page, current: string, next: string): Promise<void> {
-  await page.locator('[data-chat-pane]').getByRole('button', { name: current, exact: true }).click()
-  await page.getByRole('menuitemradio', { name: new RegExp(`^${next}`) }).click()
 }

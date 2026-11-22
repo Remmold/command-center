@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MODE_INFO, availableModes, migrateMode, migratePermissionModes, nextMode } from './permissionModes'
+import { MODE_INFO, availableModes, initialMode, migrateMode, migratePermissionModes, nextMode, unsetStoreDefault } from './permissionModes'
 
 describe('permission modes', () => {
   it('offers Manual, Edit automatically and Plan, then Auto and Bypass when the CLI allows them', () => {
@@ -58,5 +58,35 @@ describe('permission modes', () => {
       views: { w: { claudeSessions: [{ id: 'a', permissionMode: 'default' }, { id: 'b', permissionMode: 'plan' }] } },
       defaultPermissionMode: 'default'
     })
+  })
+
+  describe('a new session starts', () => {
+    it('in Manual when nothing is saved or set', () => {
+      expect(initialMode({ picked: undefined, fromSettings: null, bypassAllowed: false })).toBe('default')
+    })
+
+    it("in the user settings' permissions.defaultMode", () => {
+      expect(initialMode({ picked: undefined, fromSettings: 'plan', bypassAllowed: false })).toBe('plan')
+      expect(initialMode({ picked: undefined, fromSettings: 'acceptEdits', bypassAllowed: false })).toBe('acceptEdits')
+    })
+
+    it('in the mode the user last picked, which wins over settings.json as in the extension', () => {
+      expect(initialMode({ picked: 'acceptEdits', fromSettings: 'plan', bypassAllowed: false })).toBe('acceptEdits')
+    })
+
+    it('in Manual for an unknown mode, or bypass while bypass is not allowed', () => {
+      expect(initialMode({ picked: undefined, fromSettings: 'yolo', bypassAllowed: false })).toBe('default')
+      expect(initialMode({ picked: undefined, fromSettings: 'bypassPermissions', bypassAllowed: false })).toBe('default')
+      expect(initialMode({ picked: undefined, fromSettings: 'bypassPermissions', bypassAllowed: true })).toBe('bypassPermissions')
+    })
+  })
+
+  it("drops the store's old built-in default for new sessions, Edit automatically, and keeps other picks", () => {
+    const old = { defaultPermissionMode: 'acceptEdits' }
+    unsetStoreDefault(old)
+    expect(old).toEqual({})
+    const picked = { defaultPermissionMode: 'default' }
+    unsetStoreDefault(picked)
+    expect(picked).toEqual({ defaultPermissionMode: 'default' })
   })
 })

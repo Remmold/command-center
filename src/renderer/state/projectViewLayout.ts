@@ -1,7 +1,7 @@
 import type { PtyKind } from '../../shared/types'
 import type { ProjectView, ShellTab } from './projectViewsStore'
 
-export const LAYOUT_VERSION = 11
+export const LAYOUT_VERSION = 12
 
 interface SavedLayout {
   idePanelsOpen?: unknown

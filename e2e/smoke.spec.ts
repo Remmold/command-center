@@ -2,7 +2,7 @@ import type { ElectronApplication, Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { chooseMode, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
+import { cliPermissionMode, delayClaudeStart, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
 const WRITE_DONE = 'Created hello.txt containing hi.'
@@ -13,6 +13,8 @@ test('a new session streams the fake reply', async ({ launched }) => {
   await send(page, 'say hello')
   await expect(page.getByText(BASIC_REPLY)).toBeVisible()
   await expect.poll(() => log.entries().filter((e) => e.kind === 'received' && e.line?.type === 'user').length).toBe(1)
+  const launch = log.entries().find((e) => e.kind === 'argv' && e.cwd === launched.workspace)
+  expect(launch?.configDir).toBe(launched.configDir)
 })
 
 test('Ctrl+1/2/3 switch Dashboard, Work and Board', async ({ launched }) => {
@@ -49,8 +51,44 @@ test('Shift+Tab sends set_permission_mode', async ({ launched }) => {
   const { page, log } = launched
   await startSession(launched)
   await prompt(page).press('Shift+Tab')
-  await expect(page.locator('[data-chat-pane]').getByRole('button', { name: 'Plan', exact: true })).toBeVisible()
-  await expect.poll(() => log.controlRequests('set_permission_mode').map((r) => r.mode)).toContain('plan')
+  await expect(page.locator('[data-chat-pane]').getByRole('button', { name: 'Edit automatically', exact: true })).toBeVisible()
+  await expect.poll(() => log.controlRequests('set_permission_mode').map((r) => r.mode)).toContain('acceptEdits')
+})
+
+test.describe('the mode a new session starts in', () => {
+  const modeButton = (page: Page, label: string) => page.locator('[data-chat-pane]').getByRole('button', { name: label, exact: true })
+
+  test('is Manual when settings.json sets no default mode', async ({ launched }) => {
+    const { page, log, workspace } = launched
+    await startSession(launched)
+    await expect(modeButton(page, 'Manual')).toBeVisible()
+    expect(cliPermissionMode(log, workspace)).toBe('default')
+  })
+
+  test.describe('with permissions.defaultMode in settings.json', () => {
+    test.use({ userSettings: { permissions: { defaultMode: 'plan' } } })
+
+    test("is the settings' mode", async ({ launched }) => {
+      const { page, log, workspace } = launched
+      await startSession(launched)
+      await expect(modeButton(page, 'Plan')).toBeVisible()
+      expect(cliPermissionMode(log, workspace)).toBe('plan')
+    })
+  })
+
+  test('picked while the process is still starting, reaches the CLI', async ({ launched }) => {
+    const { app, page, log, workspace } = launched
+    await delayClaudeStart(app, 2000)
+    await page.keyboard.press('Control+2')
+    await page.keyboard.press('Control+t')
+    await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+    await page.locator('[data-chat-pane]').getByRole('button', { name: /^(Manual|Edit automatically)$/ }).click()
+    await page.getByRole('menuitemradio', { name: /^Plan/ }).click()
+    expect(log.initializedIn(workspace)).toBe(false)
+    await expect.poll(() => log.initializedIn(workspace)).toBe(true)
+    await expect.poll(() => cliPermissionMode(log, workspace)).toBe('plan')
+    await expect(modeButton(page, 'Plan')).toBeVisible()
+  })
 })
 
 test('a model and effort change send apply_flag_settings', async ({ launched }) => {
@@ -204,8 +242,8 @@ test.describe('tool approval', () => {
   test.beforeEach(async ({ launched }) => {
     const { page, log } = launched
     await startSession(launched)
-    await chooseMode(page, 'Edit automatically', 'Manual')
-    await expect.poll(() => log.controlRequests('set_permission_mode').map((r) => r.mode)).toContain('default')
+    await expect(page.locator('[data-chat-pane]').getByRole('button', { name: 'Manual', exact: true })).toBeVisible()
+    expect(cliPermissionMode(log, launched.workspace)).toBe('default')
   })
 
   test('1 approves and the tool runs', async ({ launched }) => {

@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { DEFAULT_PROFILE_ID, type AccountProfile, type ProfileUsage } from '../../shared/types'
+import type { AccountProfile, ProfileUsage } from '../../shared/types'
 import { RefreshPlan } from './refreshPlan'
 import { applyRateLimitEvent, readUsage, type RateLimitInfo } from './usageReply'
 import type { ProbeReplies } from './probe'
@@ -123,7 +123,7 @@ export class UsageService {
     this.update(profile.id, { refreshing: true })
     try {
       await fs.mkdir(this.deps.probeDir, { recursive: true })
-      const env = profile.id === DEFAULT_PROFILE_ID ? {} : await this.deps.envFor(profile.id)
+      const env = await this.deps.envFor(profile.id)
       const { init, usage } = await this.deps.probe(this.deps.probeDir, env)
       const reading = readUsage(init, usage)
       const loggedIn = Object.keys(reading.account ?? {}).length > 0

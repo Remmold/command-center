@@ -515,4 +515,39 @@ describe('queued prompts', () => {
     expect(fake.lines.filter(isResult)).toHaveLength(1)
     expect(fake.lines.find(isResult)!.result).toBe('PONG')
   })
+
+  const SLOW_THEN_QUICK = {
+    turns: [
+      { match: 'slow', events: [{ type: 'text', text: 'Starting.' }, { type: 'wait', ms: 60000 }, { type: 'text', text: 'Done.' }] },
+      { match: 'quick', events: [{ type: 'text', text: 'Quick.' }] }
+    ]
+  }
+
+  it('a plain interrupt keeps queued prompts, lists them in still_queued and runs them next, as the CLI schema says', async () => {
+    const fake = start(REPLAY, SLOW_THEN_QUICK)
+    ask(fake, 'slow', 'a')
+    await fake.next((l) => l.type === 'assistant')
+    ask(fake, 'quick', 'b')
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'b')
+    const answer = await fake.control('interrupt')
+    expect(answer.response).toEqual({ still_queued: ['b'] })
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'b' && l.state === 'completed')
+    expect(frames(fake)).toEqual([
+      'a queued', 'a started', 'a replay', 'b queued', 'result', 'a cancelled',
+      'b started', 'b replay', 'result', 'b completed'
+    ])
+  })
+
+  it('an interrupt with cancel_queued cancels queued prompts and lists them in cancelled', async () => {
+    const fake = start(REPLAY, SLOW_THEN_QUICK)
+    ask(fake, 'slow', 'a')
+    await fake.next((l) => l.type === 'assistant')
+    ask(fake, 'quick', 'b')
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'b')
+    const answer = await fake.control('interrupt', { cancel_queued: true })
+    expect(answer.response).toEqual({ still_queued: [], cancelled: ['b'] })
+    await fake.next((l) => l.type === 'command_lifecycle' && l.command_uuid === 'a' && l.state === 'cancelled')
+    expect(frames(fake)).toEqual(['a queued', 'a started', 'a replay', 'b queued', 'b cancelled', 'result', 'a cancelled'])
+    expect(fake.lines.filter((l) => l.type === 'assistant' && JSON.stringify(l).includes('Quick.'))).toHaveLength(0)
+  })
 })

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mergeModelDefaults, parseModelDefaults, readModelDefaults, saveModelDefaults } from './userSettings'
+import { mergeModelDefaults, parseDefaultMode, parseModelDefaults, readDefaultMode, readModelDefaults, saveModelDefaults } from './userSettings'
 
 describe('mergeModelDefaults', () => {
   it('sets the model and keeps every other key', () => {
@@ -89,5 +89,39 @@ describe('saving to the settings file', () => {
       saveModelDefaults(file, { effort: { resolvedModel: 'claude-opus-5-5', level: 'low' } })
     ])
     expect(await readModelDefaults(file)).toEqual({ model: 'opus', effortByModel: { 'claude-opus-5-5': 'low' } })
+  })
+})
+
+describe('parseDefaultMode', () => {
+  it('reads permissions.defaultMode', () => {
+    expect(parseDefaultMode(JSON.stringify({ permissions: { defaultMode: 'plan', allow: ['Read'] } }))).toBe('plan')
+  })
+
+  it("reads the CLI's alias manual as default", () => {
+    expect(parseDefaultMode('{"permissions":{"defaultMode":"manual"}}')).toBe('default')
+  })
+
+  it('is null when unset, not a string, or the file is missing or broken', () => {
+    expect(parseDefaultMode('{"permissions":{"allow":[]}}')).toBeNull()
+    expect(parseDefaultMode('{"permissions":{"defaultMode":3}}')).toBeNull()
+    expect(parseDefaultMode('{"permissions":"plan"}')).toBeNull()
+    expect(parseDefaultMode(null)).toBeNull()
+    expect(parseDefaultMode('{not json')).toBeNull()
+  })
+})
+
+describe('readDefaultMode', () => {
+  it('reads the file without changing it, and is null when it is missing', async () => {
+    const dir = await fs.mkdtemp(join(tmpdir(), 'cc-default-mode-'))
+    try {
+      const file = join(dir, 'settings.json')
+      expect(await readDefaultMode(file)).toBeNull()
+      const text = '{ "permissions": { "defaultMode": "acceptEdits" } }'
+      await fs.writeFile(file, text, 'utf-8')
+      expect(await readDefaultMode(file)).toBe('acceptEdits')
+      expect(await fs.readFile(file, 'utf-8')).toBe(text)
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
   })
 })
