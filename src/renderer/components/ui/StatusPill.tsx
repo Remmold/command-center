@@ -9,13 +9,15 @@ interface Props {
   tone?: 'on' | 'plain'
   /** Makes the pill a link that opens in the browser. */
   href?: string
+  /** Makes the pill a button. */
+  onClick?: () => void
 }
 
 const BASE = 'inline-flex min-w-0 shrink items-center gap-1 rounded-full px-2 py-0.5 text-[11px] focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus'
 const TONES = { on: 'bg-clay text-fg', plain: 'bg-input text-fg' }
 
 /** A rounded footer pill that shows a state, like the extension's Remote Control pill. */
-export function StatusPill({ label, icon, tooltip, tone = 'plain', href }: Props) {
+export function StatusPill({ label, icon, tooltip, tone = 'plain', href, onClick }: Props) {
   const body = (
     <>
       {icon}
@@ -27,6 +29,13 @@ export function StatusPill({ label, icon, tooltip, tone = 'plain', href }: Props
       <a href={href} target="_blank" rel="noopener noreferrer" title={tooltip} aria-label={label} className={`${BASE} ${TONES[tone]} hover:brightness-110`}>
         {body}
       </a>
+    )
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} title={tooltip} className={`${BASE} ${TONES[tone]} hover:brightness-110`}>
+        {body}
+      </button>
     )
   }
   return (

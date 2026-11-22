@@ -20,6 +20,7 @@ import type {
   RendererApi,
   ScreenFocus,
   SessionStatusEntry,
+  UpdateStatus,
   SpawnResult,
   StartWithWindowsState,
   Workspace,
@@ -227,6 +228,16 @@ const api: RendererApi = {
     status: (cwd: string) => ipcRenderer.invoke(IPC.GIT_STATUS, cwd),
     diff: (cwd: string, path: string, staged: boolean, untracked?: boolean) =>
       ipcRenderer.invoke(IPC.GIT_DIFF, cwd, path, staged, untracked)
+  },
+  update: {
+    status: () => ipcRenderer.invoke(IPC.UPDATE_STATUS),
+    check: () => ipcRenderer.invoke(IPC.UPDATE_CHECK),
+    restart: (force: boolean) => ipcRenderer.invoke(IPC.UPDATE_RESTART, force),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, status: UpdateStatus) => cb(status)
+      ipcRenderer.on(IPC.UPDATE_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.UPDATE_CHANGED, handler)
+    }
   }
 }
 

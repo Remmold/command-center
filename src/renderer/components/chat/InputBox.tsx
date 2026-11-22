@@ -47,6 +47,9 @@ interface Props {
   footerStart?: ReactNode
   footerEnd?: ReactNode
   onShiftTab?: () => void
+  /** The unsent text the input opens with. */
+  initialDraft?: string
+  onDraftChange?: (text: string) => void
 }
 
 interface MentionState {
@@ -147,9 +150,11 @@ export function InputBox({
   registerFocus,
   footerStart,
   footerEnd,
-  onShiftTab
+  onShiftTab,
+  initialDraft = '',
+  onDraftChange
 }: Props) {
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState(initialDraft)
   const [mention, setMention] = useState<MentionState | null>(null)
   const [slash, setSlash] = useState<SlashState | null>(null)
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
@@ -171,6 +176,12 @@ export function InputBox({
 
   useEffect(() => {
     if (value === '') setRecall(NO_RECALL)
+  }, [value])
+
+  const draftChangeRef = useRef(onDraftChange)
+  draftChangeRef.current = onDraftChange
+  useEffect(() => {
+    draftChangeRef.current?.(value)
   }, [value])
 
   useEffect(() => {

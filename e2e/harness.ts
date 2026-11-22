@@ -113,10 +113,30 @@ export function cliPermissionMode(log: FakeLog, cwd: string): string | undefined
   return sets.at(-1) ?? (flag === -1 ? undefined : argv[flag + 1])
 }
 
+type MainFn<A, R> = (electron: typeof import('electron'), arg: A) => R | Promise<R>
+
+/**
+ * `app.evaluate` that retries Playwright's "Resulting promise was garbage collected", which Electron's main
+ * process throws now and then under load. The function may already have run when it is thrown, so it must
+ * be safe to run twice.
+ */
+export async function evaluateMain<A, R>(app: ElectronApplication, fn: MainFn<A, R>, arg: A): Promise<R> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return (await app.evaluate(fn as never, arg)) as R
+    } catch (error) {
+      if (attempt >= 5 || !String(error).includes('garbage collected')) throw error
+    }
+  }
+}
+
 /** Holds every `claude:start` in the app's main process for `ms`, to open the window before a chat's process exists. */
 export async function delayClaudeStart(app: ElectronApplication, ms: number): Promise<void> {
-  await app.evaluate(({ ipcMain }, wait) => {
+  await evaluateMain(app, ({ ipcMain }, wait: number) => {
     type Handler = (...args: unknown[]) => unknown
+    const marked = globalThis as unknown as { __ccClaudeStartDelayed?: boolean }
+    if (marked.__ccClaudeStartDelayed) return
+    marked.__ccClaudeStartDelayed = true
     const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, Handler> })._invokeHandlers
     const original = handlers.get('claude:start')
     if (!original) throw new Error('claude:start is not registered')
@@ -150,7 +170,7 @@ function seedDirs(
   return dirs
 }
 
-function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName): Record<string, string> {
+function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName, extra: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
   delete env.ELECTRON_RUN_AS_NODE
@@ -164,6 +184,7 @@ function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName): Record<s
     USERPROFILE: dirs.home,
     HOME: dirs.home
   })
+  Object.assign(env, extra)
   assertFakeClaude(env.CC_CLAUDE_BIN)
   return env
 }
@@ -214,11 +235,13 @@ export async function shutdown(app: ElectronApplication): Promise<void> {
   }
 }
 
-export const test = base.extend<{ script: ScriptName; userSettings: Record<string, unknown> | null; launched: Launched }>({
+export const test = base.extend<{ script: ScriptName; userSettings: Record<string, unknown> | null; env: Record<string, string>; launched: Launched }>({
   script: ['basic', { option: true }],
   /** Written as the temp profile's `settings.json` before launch. */
   userSettings: [null, { option: true }],
-  launched: async ({ script, userSettings }, use) => {
+  /** Extra app environment, e.g. `CC_UPDATE_IDLE_MS`; the fake CLI guard still runs after it. */
+  env: [{}, { option: true }],
+  launched: async ({ script, userSettings, env }, use) => {
     const root = mkdtempSync(join(tmpdir(), 'cc-e2e-'))
     try {
       const dirs = seedDirs(root, userSettings)
@@ -226,7 +249,7 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
         executablePath: ELECTRON,
         args: [MAIN, `--user-data-dir=${dirs.userData}`],
         cwd: REPO,
-        env: appEnv(dirs, script)
+        env: appEnv(dirs, script, env)
       })
       try {
         const page = await app.firstWindow()

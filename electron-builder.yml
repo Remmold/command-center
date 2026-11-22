@@ -16,6 +16,11 @@ nodeGypRebuild: false
 win:
   target: nsis
   icon: resources/icons/icon.ico
+publish:
+  provider: github
+  owner: Remmold
+  repo: command-center
+  releaseType: release
 nsis:
   oneClick: true
   perMachine: false

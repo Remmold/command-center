@@ -79,7 +79,11 @@ export const IPC = {
   APPS_STOP: 'apps:stop',
   APPS_STATUS: 'apps:status',
   APPS_OUTPUT: 'apps:output',
-  APPS_EXIT: 'apps:exit'
+  APPS_EXIT: 'apps:exit',
+  UPDATE_STATUS: 'update:status',
+  UPDATE_CHECK: 'update:check',
+  UPDATE_RESTART: 'update:restart',
+  UPDATE_CHANGED: 'update:changed'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

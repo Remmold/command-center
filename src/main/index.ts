@@ -8,6 +8,7 @@ import { createRepoIdentityService } from './repoIdentity/service'
 import { startsHidden } from './tray/autostart'
 import { createStartWithWindowsControl } from './tray/startWithWindows'
 import { createAppTray } from './tray/tray'
+import { startUpdates } from './update/service'
 import type { StartWithWindowsState } from '../shared/types'
 import { iconPath } from './util/paths'
 import {
@@ -75,6 +76,7 @@ if (!app.requestSingleInstanceLock()) {
     const repoIdentities = createRepoIdentityService(app.getPath('userData'), iconPath('icon.png'), workspaces.list)
     const startWithWindows = createStartWithWindowsControl()
     registerIpc({ repoIdentities, startWithWindows })
+    startUpdates()
     const win = createMainWindow({ show: !startsHidden(process.argv) })
 
     const tray = createAppTray({

@@ -11,7 +11,7 @@ import type { ControlPayload, IncomingHandler } from './controlChannel'
 type EventCallback = (paneId: string, event: unknown) => void
 type ExitCallback = (paneId: string, code: number | null) => void
 type SpawnCallback = (paneId: string, cwd: string) => void
-type SendCallback = (paneId: string) => void
+type SendCallback = (paneId: string, uuid: string) => void
 type InitCallback = (paneId: string, init: SessionInit) => void
 
 export interface StartOptions extends ClaudeStartOptions {
@@ -112,7 +112,7 @@ class ClaudeManager {
     const session = this.sessions.get(paneId)
     if (!session?.isAlive()) return
     session.send(content, uuid)
-    for (const cb of this.sendListeners) cb(paneId)
+    for (const cb of this.sendListeners) cb(paneId, uuid)
   }
 
   interrupt(paneId: string): void {

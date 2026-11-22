@@ -22,6 +22,7 @@ import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
 import { committedLength, thinkingDurations } from './liveItems'
 import { useFollowOutput } from './useFollowOutput'
+import { noteScroll, saveDraft, savedDraft, savedScroll } from '../../state/restoreStore'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { useSubagentTasksStore } from '../../state/subagentTasksStore'
 import type { AgentHost } from './toolContext'
@@ -157,7 +158,7 @@ export function ChatView({
   const remoteControlShown = remoteControlOffered(remoteControlAvailable, remoteControl)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const { toBottom } = useFollowOutput(scrollRef, contentRef)
+  const { toBottom } = useFollowOutput(scrollRef, contentRef, { saved: savedScroll(paneId), onScrolled: (s) => noteScroll(paneId, s) })
   const initialItemsCountRef = useRef(items.length)
   const focusInputRef = useRef<(() => void) | null>(null)
   const paneRef = useRef<HTMLDivElement | null>(null)
@@ -705,6 +706,8 @@ export function ChatView({
       </div>
       <InputBox
         busy={turnActive}
+        initialDraft={savedDraft(paneId)}
+        onDraftChange={(text) => saveDraft(paneId, text)}
         history={history}
         onSend={handleSend}
         onInterrupt={handleInterrupt}

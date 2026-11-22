@@ -2,7 +2,7 @@ import type { ElectronApplication, Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { cliPermissionMode, delayClaudeStart, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
+import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
 const WRITE_DONE = 'Created hello.txt containing hi.'
@@ -151,6 +151,69 @@ test.describe('slow turn', () => {
   })
 })
 
+test.describe('auto-update', () => {
+  test.use({ script: 'slow', env: { CC_UPDATE_IDLE_MS: '1500' } })
+
+  type Fake = { restartRequests: number; checks: number; deliver: (version: string) => void }
+  /** The main process's fake updater; Playwright sends the function's source, so it must not close over anything. */
+  const fakeCount = (app: ElectronApplication, key: 'restartRequests' | 'checks'): Promise<number> =>
+    evaluateMain(app, (_electron, k: string) => (globalThis as unknown as { __ccFakeUpdater: Record<string, number> }).__ccFakeUpdater[k], key)
+  const deliverUpdate = (app: ElectronApplication, version: string): Promise<void> =>
+    evaluateMain(app, (_electron, v: string) => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater.deliver(v), version)
+  const restartRequests = (app: ElectronApplication): Promise<number> => fakeCount(app, 'restartRequests')
+
+  test('an update that arrives mid-turn waits for the chat; once it is idle the restart is requested after the timer', async ({ launched }) => {
+    const { app, page } = launched
+    const pill = page.getByRole('button', { name: 'Restart to update' })
+    await startSession(launched)
+    await send(page, 'run the long job')
+    await expect(page.getByText('Starting a long job.')).toBeVisible()
+    await expect(pill).toHaveCount(0)
+
+    await deliverUpdate(app, '9.9.9')
+    await expect(pill).toBeVisible()
+    await page.waitForTimeout(2500)
+    expect(await restartRequests(app)).toBe(0)
+
+    await pill.click()
+    const dialog = page.getByRole('dialog', { name: 'Restart to update' })
+    await expect(dialog.getByText('1 chat is working. Restart anyway?')).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(dialog).toHaveCount(0)
+    expect(await restartRequests(app)).toBe(0)
+
+    await page.locator('[data-chat-pane]').getByRole('button', { name: 'Stop' }).click()
+    await expect(page.getByText('Interrupted', { exact: true })).toBeVisible()
+    await expect(pill).toBeVisible()
+    await expect.poll(() => restartRequests(app), { timeout: 10_000 }).toBe(1)
+  })
+
+  test('Settings → General shows the version and the last check, and Check now checks again', async ({ launched }) => {
+    const { app, page } = launched
+    const checks = (): Promise<number> => fakeCount(app, 'checks')
+    await expect.poll(checks).toBe(1)
+    await page.keyboard.press('Control+,')
+    await page.getByRole('button', { name: 'General' }).click()
+    const updates = page.getByRole('region', { name: 'Updates' })
+    await expect(updates.getByText('Current version')).toBeVisible()
+    await expect(updates.getByText(/^Last checked /)).toBeVisible()
+    await updates.getByRole('button', { name: 'Check now' }).click()
+    await expect.poll(checks).toBe(2)
+  })
+})
+
+test('an unsent draft survives the window reloading', async ({ launched }) => {
+  const { page } = launched
+  await startSession(launched)
+  await send(page, 'say hello')
+  await expect(page.getByText(BASIC_REPLY)).toBeVisible()
+  await prompt(page).fill('half a thought')
+  await page.reload()
+  await page.keyboard.press('Control+2')
+  await expect(prompt(page)).toHaveValue('half a thought')
+})
+
 test('↑/↓ recall earlier prompts and Ctrl+J adds a line', async ({ launched }) => {
   const { page } = launched
   await startSession(launched)
@@ -289,7 +352,7 @@ test.describe('tool approval', () => {
 
 /** The system clipboard, with Windows line ends turned back into the plain newlines the app copied. */
 async function clipboardText(app: ElectronApplication): Promise<string> {
-  return (await app.evaluate(({ clipboard }) => clipboard.readText())).replace(/\r\n/g, '\n')
+  return (await evaluateMain(app, ({ clipboard }) => clipboard.readText(), undefined)).replace(/\r\n/g, '\n')
 }
 
 test.describe('chat rendering', () => {
