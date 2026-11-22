@@ -896,6 +896,10 @@ test.describe('zoom and the session list', () => {
     await terminal.focus()
     await page.keyboard.press('Control+=')
     await expect.poll(() => zoomPercent(app)).toBe(132)
+    await page.keyboard.press('Control+b')
+    await expect(page.getByRole('navigation', { name: 'Sessions' })).toBeHidden()
+    await page.keyboard.press('Control+b')
+    await expect(page.getByRole('navigation', { name: 'Sessions' })).toBeVisible()
 
     await page.keyboard.press('Control+,')
     await page.getByRole('navigation', { name: 'Settings sections' }).getByText('General', { exact: true }).click()
@@ -907,6 +911,17 @@ test.describe('zoom and the session list', () => {
 
     const again = await launched.relaunch()
     await expect.poll(() => zoomPercent(again.app)).toBe(132)
+    const clickViewMenu = (label: string) =>
+      evaluateMain(again.app, ({ Menu }, name: string) => {
+        const view = Menu.getApplicationMenu()?.items.find((i) => i.label === 'View')
+        view?.submenu?.items.find((i) => i.label === name)?.click()
+      }, label)
+    await clickViewMenu('Zoom Out')
+    await expect.poll(() => zoomPercent(again.app)).toBe(110)
+    await clickViewMenu('Zoom In')
+    await expect.poll(() => zoomPercent(again.app)).toBe(132)
+    await clickViewMenu('Actual Size')
+    await expect.poll(() => zoomPercent(again.app)).toBe(110)
   })
 
   test('Ctrl+B hides and shows the session list, Alt+1 and Ctrl+Shift+J still open rows while it is hidden, and it stays hidden across a restart', async ({ launched }) => {

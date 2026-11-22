@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { AppView } from '../state/viewStore'
 import { useViewStore } from '../state/viewStore'
 import type { ZoomStep } from '../../shared/zoom'
-import { shortcutApplies, shortcutFor, type ShortcutAction } from './shortcutMap'
+import { beforeFocusedElement, shortcutApplies, shortcutFor, type ShortcutAction } from './shortcutMap'
 
 export const IDE_PANELS_SHORTCUT = 'Ctrl+Shift+E'
 export const SESSION_LIST_SHORTCUT = 'Ctrl+B'
@@ -46,23 +46,23 @@ function run(action: ShortcutAction, handlers: ShortcutHandlers): boolean {
 
 export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const handle = (e: KeyboardEvent, capturing: boolean): boolean => {
       const action = shortcutFor(e)
-      if (!action || action.name === 'zoom') return
+      if (!action || beforeFocusedElement(action) !== capturing) return false
       const { view, settings } = useViewStore.getState()
-      if (shortcutApplies(action, { view, settingsOpen: settings !== null }) && run(action, handlers)) e.preventDefault()
-    }
-    // Zoom runs before any focused element sees the key, so a terminal or the prompt box can't take it.
-    const onZoomKey = (e: KeyboardEvent) => {
-      const action = shortcutFor(e)
-      if (action?.name !== 'zoom' || !run(action, handlers)) return
+      if (!shortcutApplies(action, { view, settingsOpen: settings !== null }) || !run(action, handlers)) return false
       e.preventDefault()
-      e.stopPropagation()
+      return true
     }
-    window.addEventListener('keydown', onZoomKey, true)
+    // In the capture phase, so a terminal (xterm cancels the keys it sends) never sees the key.
+    const onKeyFirst = (e: KeyboardEvent) => {
+      if (handle(e, true)) e.stopPropagation()
+    }
+    const onKey = (e: KeyboardEvent) => void handle(e, false)
+    window.addEventListener('keydown', onKeyFirst, true)
     window.addEventListener('keydown', onKey)
     return () => {
-      window.removeEventListener('keydown', onZoomKey, true)
+      window.removeEventListener('keydown', onKeyFirst, true)
       window.removeEventListener('keydown', onKey)
     }
   }, [handlers])

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shortcutApplies, shortcutFor, type KeyChord } from './shortcutMap'
+import { beforeFocusedElement, shortcutApplies, shortcutFor, type KeyChord } from './shortcutMap'
 
 const ctrl = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: true, metaKey: false, altKey: false, shiftKey: false })
 const ctrlShift = (key: string, code: string): KeyChord => ({ ...ctrl(key, code), shiftKey: true })
@@ -60,6 +60,13 @@ describe('keyboard shortcuts', () => {
 
   it('Ctrl+Shift+E shows the IDE panels, as VS Code does its Explorer', () => {
     expect(shortcutFor(ctrlShift('E', 'KeyE'))).toEqual({ name: 'toggleIdePanels' })
+  })
+
+  it('zoom and Ctrl+B go before a focused shell or prompt box, as on the VS Code skip-shell list; the rest leave a shell its keys', () => {
+    const first = [ctrl('=', 'Equal'), ctrl('-', 'Minus'), ctrl('0', 'Digit0'), ctrl('b', 'KeyB')]
+    const after = [ctrl('t', 'KeyT'), ctrl('k', 'KeyK'), ctrlShift('E', 'KeyE'), ctrl('`', 'Backquote'), ctrl('1', 'Digit1')]
+    expect(first.map((c) => beforeFocusedElement(shortcutFor(c)!))).toEqual(first.map(() => true))
+    expect(after.map((c) => beforeFocusedElement(shortcutFor(c)!))).toEqual(after.map(() => false))
   })
 
   it('keeps Ctrl+` (by position)', () => {

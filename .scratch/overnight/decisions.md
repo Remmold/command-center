@@ -207,3 +207,7 @@ Each entry records what was decided, why, and the alternative. Review these in t
 102. **The hidden session list leaves a 28px strip with a "Show sessions (Ctrl+B)" button; the list header gets a "Hide sessions (Ctrl+B)" button.** Reopening restores the default 300px width, not the last dragged one. Shown/hidden is kept across restarts.
     - Alternative: no strip, as VS Code (Ctrl+B or the layout button only). Not taken: the ticket asks for a strip or icon.
 103. **At 150% the prompt footer's hint line now gives way before the model pill**, which was cut to "Op…". Settings → Workspaces still shortens long paths with "…" by design.
+104. **Ctrl+B, like the zoom keys, is taken before a focused shell sees it** (VS Code's terminal skips the sidebar toggle too), so a shell no longer receives ^B. Every other shortcut still leaves a shell its keys.
+105. **The native View menu's Zoom In / Zoom Out / Actual Size step the saved level** instead of zooming the page around it (Actual Size goes to 110%, like Ctrl+0); the rest of Electron's default menu is unchanged. The keys stay with the renderer, and the menu only shows them.
+106. **Alt+1..9 on a hidden list count the rows the list would show, search filter included**, the same as when it is visible; Ctrl+Shift+J still ignores the search.
+    - Alternative: clear the search when the list hides. Not taken: hiding would then lose the search.

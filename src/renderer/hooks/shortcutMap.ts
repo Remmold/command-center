@@ -68,6 +68,13 @@ export function shortcutFor(e: KeyChord): ShortcutAction | null {
 
 const EVERYWHERE: ReadonlySet<ShortcutAction['name']> = new Set(['switchView', 'openSettings', 'nextWaiting', 'zoom'])
 
+const BEFORE_FOCUSED: ReadonlySet<ShortcutAction['name']> = new Set(['zoom', 'toggleSessionList'])
+
+/** Taken before a focused shell or prompt box sees the key, as VS Code's terminal skips these commands; the rest leave a shell its keys. */
+export function beforeFocusedElement(action: ShortcutAction): boolean {
+  return BEFORE_FOCUSED.has(action.name)
+}
+
 export interface ScreenState {
   view: AppView
   settingsOpen: boolean

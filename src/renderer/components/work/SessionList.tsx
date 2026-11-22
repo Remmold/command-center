@@ -55,7 +55,7 @@ export function SessionList() {
           </Button>
         </span>
         <ListMenu />
-        <IconButton onClick={useSessionListStore.getState().toggle} label="Hide sessions" tooltip={`Hide sessions (${SESSION_LIST_SHORTCUT})`}>
+        <IconButton onClick={() => useSessionListStore.getState().toggle()} label="Hide sessions" tooltip={`Hide sessions (${SESSION_LIST_SHORTCUT})`}>
           <PanelLeftClose size={14} />
         </IconButton>
       </div>
