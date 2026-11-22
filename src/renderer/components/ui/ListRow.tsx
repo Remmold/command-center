@@ -83,6 +83,16 @@ export function ListRowNote({ children }: { children: string | null }) {
   )
 }
 
+/** Two stacked lines that take the row's free space: the row's identity, then its detail in smaller muted text. */
+export function ListRowLines({ primary, secondary }: { primary: ReactNode; secondary?: ReactNode }) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="flex min-w-0 items-center gap-2">{primary}</span>
+      {secondary && <span className="flex min-w-0 items-center gap-2 text-[11px] text-muted">{secondary}</span>}
+    </span>
+  )
+}
+
 export function ListRowMeta({ children }: { children: ReactNode }) {
   return <span className="shrink-0 text-[10px] tabular-nums text-muted">{children}</span>
 }

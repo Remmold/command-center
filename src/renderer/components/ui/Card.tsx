@@ -45,7 +45,7 @@ export function Card({ children, tooltip, onClick, selected = false, muted = fal
 }
 
 export function CardMeta({ children }: { children: ReactNode }) {
-  return <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted">{children}</div>
+  return <div className="flex w-full min-w-0 items-center gap-1.5 text-[10px] text-muted">{children}</div>
 }
 
 /** Text in a CardMeta that takes the free space; `trailing` sits at the far end. */

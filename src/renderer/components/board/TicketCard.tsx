@@ -2,9 +2,10 @@ import { memo } from 'react'
 import type { Workspace } from '../../../shared/types'
 import type { SpecOnlyBoardCard, TicketBoardCard } from '../../state/boardLayout'
 import { useWorkspacesStatus } from '../../state/sessionStatusStore'
+import { showsSessionStatus, statusRepeatsColumn } from '../../state/ticketPresentation'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
-import { Card, CardMeta, CardNote, CardTitle } from '../ui/Card'
+import { Card, CardMeta, CardMetaText, CardNote, CardTitle } from '../ui/Card'
 import { StatusDot } from '../ui/StatusDot'
 import { statusText, TicketStatusBadge } from './TicketStatusBadge'
 
@@ -33,21 +34,26 @@ export const TicketCard = memo(function TicketCard({ card, workspaces, selected,
   const note = statusText(ticket)
   const copies = ticket.sightings.length
 
+  const showStatus = !statusRepeatsColumn(ticket)
+  const details = showStatus || card.blockers.length > 0
+
   return (
     <Card anchorId={cardAnchorId(card.key)} tooltip={ticket.sightings[0]?.filePath} onClick={() => onOpen(card)} selected={selected}>
       <CardMeta>
         <RepoIcon repoGroupKey={card.repoGroupKey} repoName={card.repoName} size="sm" />
         {tag && <Badge tooltip="Only seen in this worktree">{tag}</Badge>}
-        <Badge tooltip={card.feature.name}>{card.feature.name}</Badge>
-        <span className="flex-1" />
-        {copies > 1 && <span title="Seen in more than one worktree">{copies} copies</span>}
-        {status && <StatusDot status={status} />}
+        <CardMetaText trailing={copies > 1 ? <span title="Seen in more than one worktree">{copies} copies</span> : undefined}>
+          {card.feature.name} #{ticket.number}
+        </CardMetaText>
+        {status && showsSessionStatus(ticket.column) && <StatusDot status={status} />}
       </CardMeta>
-      <CardTitle prefix={`#${ticket.number}`}>{ticket.title}</CardTitle>
-      <CardMeta>
-        <TicketStatusBadge ticket={ticket} />
-        {card.blockers.length > 0 && <span className="truncate">blocked by {card.blockers.join(', ')}</span>}
-      </CardMeta>
+      <CardTitle>{ticket.title}</CardTitle>
+      {details && (
+        <CardMeta>
+          {showStatus && <TicketStatusBadge ticket={ticket} />}
+          {card.blockers.length > 0 && <span className="truncate">blocked by {card.blockers.join(', ')}</span>}
+        </CardMeta>
+      )}
       {note && <CardNote>{note}</CardNote>}
     </Card>
   )
