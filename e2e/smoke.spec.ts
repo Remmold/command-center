@@ -2,7 +2,7 @@ import type { ElectronApplication, Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { cliPermissionMode, delayClaudeStart, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
+import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, prompt, send, startSession, test, transcriptsOf } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
 const WRITE_DONE = 'Created hello.txt containing hi.'
@@ -157,9 +157,9 @@ test.describe('auto-update', () => {
   type Fake = { restartRequests: number; checks: number; deliver: (version: string) => void }
   /** The main process's fake updater; Playwright sends the function's source, so it must not close over anything. */
   const fakeCount = (app: ElectronApplication, key: 'restartRequests' | 'checks'): Promise<number> =>
-    app.evaluate((_electron, k) => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater[k], key)
+    evaluateMain(app, (_electron, k: string) => (globalThis as unknown as { __ccFakeUpdater: Record<string, number> }).__ccFakeUpdater[k], key)
   const deliverUpdate = (app: ElectronApplication, version: string): Promise<void> =>
-    app.evaluate((_electron, v) => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater.deliver(v), version)
+    evaluateMain(app, (_electron, v: string) => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater.deliver(v), version)
   const restartRequests = (app: ElectronApplication): Promise<number> => fakeCount(app, 'restartRequests')
 
   test('an update that arrives mid-turn waits for the chat; once it is idle the restart is requested after the timer', async ({ launched }) => {
@@ -352,7 +352,7 @@ test.describe('tool approval', () => {
 
 /** The system clipboard, with Windows line ends turned back into the plain newlines the app copied. */
 async function clipboardText(app: ElectronApplication): Promise<string> {
-  return (await app.evaluate(({ clipboard }) => clipboard.readText())).replace(/\r\n/g, '\n')
+  return (await evaluateMain(app, ({ clipboard }) => clipboard.readText(), undefined)).replace(/\r\n/g, '\n')
 }
 
 test.describe('chat rendering', () => {
