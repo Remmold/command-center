@@ -83,7 +83,7 @@ export function GeneralSettings() {
             </Button>
           }
         >
-          <DetailRow label="Current version" value={update?.version ?? '…'} />
+          <DetailRow label="Current version" value={update?.version ?? 'â€¦'} />
           {update && <PageNote>{lastCheckLabel(update)}</PageNote>}
         </PageGroup>
         <PageGroup title="Sessions">
