@@ -163,3 +163,5 @@ Each entry records what was decided, why, and the alternative. Review these in t
 77. **Review follow-ups for 03.** A refused turn-off is logged and shown as off, with no chat line (the extension's "could not be turned off" line only comes from a failed launch). A teleported session is found by the `teleported-from` line in its transcript only; the extension also reads its own teleport metadata, which the app does not keep. The pill keeps the extension's footer rule (unavailable hides it unless connected), which differs slightly from when the `/remote-control` row shows.
 
 78. **Subagents stay nested (Andreas, 2026-11-22).** Asked whether to keep decision 69 (subagent messages inside their Agent call) or match the extension (flat in the main chat), Andreas chose "keep nested for now". Alternative: flat, as VS Code 2.1.330 shows foreground subagents.
+
+79. **Remote Control at start stays on (Andreas, 2026-11-22).** Every hosted chat turns Remote Control on at start because his settings have `remoteControlAtStartup: true` (decision 76). He chose to keep it. Alternative: the app ignores that setting.
