@@ -191,7 +191,7 @@ function treeOf(root: number, table: ProcessRow[]): ProcessRow[] {
  * The app hides to the tray on close, so quit it, then kill whatever of its tree outlived the quit.
  * Rows match on start time too, so a reused PID is never killed.
  */
-async function shutdown(app: ElectronApplication): Promise<void> {
+export async function shutdown(app: ElectronApplication): Promise<void> {
   const pid = app.process().pid
   const tree = pid === undefined ? [] : treeOf(pid, processTable())
   await Promise.race([app.close().catch(() => undefined), new Promise((r) => setTimeout(r, 5000))])

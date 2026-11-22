@@ -6,12 +6,13 @@ import { openWorkspace } from '../../state/sessionNavigation'
 import { RepoIcon, RepoName } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { CardMeta, CardTitle } from '../ui/Card'
-import { Drawer, DrawerList, DrawerSection, DrawerText } from '../ui/Drawer'
+import { CardMeta, CardMetaText, CardTitle } from '../ui/Card'
+import { Drawer, DrawerList, DrawerSection } from '../ui/Drawer'
 import { ListItem, ListRow, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { Markdown } from '../ui/Markdown'
 import { EmptyHint } from '../ui/Section'
-import { TicketStatusBadge } from './TicketStatusBadge'
+import { statusRepeatsColumn, ticketBody } from '../../state/ticketPresentation'
+import { statusText, TicketStatusBadge } from './TicketStatusBadge'
 
 /** undefined while loading; re-reads whenever the board model changes so the drawer follows edits on disk. */
 function useBoardFile(path: string | null, model: BoardModel): string | null | undefined {
@@ -47,6 +48,7 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose, shar
   const notesPath = ticket.sightings.find((s) => s.progressPath !== null)?.progressPath ?? null
   const ticketText = useBoardFile(ticket.sightings[0]?.filePath ?? null, model)
   const notesText = useBoardFile(notesPath, model)
+  const note = statusText(ticket)
 
   return (
     <Drawer
@@ -66,14 +68,12 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose, shar
           <CardTitle prefix={`#${ticket.number}`}>{ticket.title}</CardTitle>
           <CardMeta>
             <Badge>{COLUMN_TITLE[ticket.column]}</Badge>
-            <TicketStatusBadge ticket={ticket} />
+            {!statusRepeatsColumn(ticket) && <TicketStatusBadge ticket={ticket} />}
+            {note && <CardMetaText>{note}</CardMetaText>}
           </CardMeta>
         </>
       }
     >
-      <DrawerSection title="Status line">
-        <DrawerText>{ticket.statusLine ?? 'No status line.'}</DrawerText>
-      </DrawerSection>
       <BlockersSection ticket={ticket} feature={feature} onSelect={(t) => onSelect(refOf(group.repoGroupKey, feature, t))} />
       <DrawerSection title="Seen in">
         <DrawerList>
@@ -82,7 +82,7 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose, shar
             return (
               <ListItem key={s.workspaceId} tooltip={s.filePath}>
                 <ListRowText primary={workspace?.name ?? s.workspaceId} secondary={worktreeLabel(workspace)} />
-                <Badge>{COLUMN_TITLE[s.column]}</Badge>
+                {ticket.sightings.length > 1 && <Badge>{COLUMN_TITLE[s.column]}</Badge>}
                 {workspace && (
                   <Button onClick={() => openWorkspace(workspace)} tooltip={`Switch to Sessions on ${workspace.name}`}>
                     <SquareTerminal size={12} />
@@ -95,7 +95,7 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose, shar
         </DrawerList>
       </DrawerSection>
       <DrawerSection title="Ticket">
-        <FileBody text={ticketText} />
+        <FileBody text={ticketText && ticketBody(ticketText)} />
       </DrawerSection>
       {notesPath && (
         <DrawerSection title="Progress notes">
@@ -120,30 +120,27 @@ interface BlockersProps {
 
 function BlockersSection({ ticket, feature, onSelect }: BlockersProps) {
   const numbers = [...new Set(ticket.sightings.flatMap((s) => s.blockedBy))]
+  if (numbers.length === 0) return null
   return (
     <DrawerSection title="Blocked by">
-      {numbers.length === 0 ? (
-        <EmptyHint>Nothing.</EmptyHint>
-      ) : (
-        <DrawerList>
-          {numbers.flatMap((n) => {
-            const matches = feature.tickets.filter((t) => t.number === n)
-            if (matches.length === 0) {
-              return [
-                <ListItem key={n}>
-                  <ListRowText primary={n} secondary="not in this feature" />
-                </ListItem>
-              ]
-            }
-            return matches.map((t) => (
-              <ListRow key={t.fileName} onClick={() => onSelect(t)} tooltip={t.fileName}>
-                <ListRowText primary={`${t.number} ${t.title}`} />
-                <ListRowMeta>{COLUMN_TITLE[t.column]}</ListRowMeta>
-              </ListRow>
-            ))
-          })}
-        </DrawerList>
-      )}
+      <DrawerList>
+        {numbers.flatMap((n) => {
+          const matches = feature.tickets.filter((t) => t.number === n)
+          if (matches.length === 0) {
+            return [
+              <ListItem key={n}>
+                <ListRowText primary={n} secondary="not in this feature" />
+              </ListItem>
+            ]
+          }
+          return matches.map((t) => (
+            <ListRow key={t.fileName} onClick={() => onSelect(t)} tooltip={t.fileName}>
+              <ListRowText primary={`#${t.number} ${t.title}`} />
+              <ListRowMeta>{COLUMN_TITLE[t.column]}</ListRowMeta>
+            </ListRow>
+          ))
+        })}
+      </DrawerList>
     </DrawerSection>
   )
 }

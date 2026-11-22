@@ -32,9 +32,9 @@ export function Column({ title, count, children, footer, scroll = true }: Props)
 
 function ColumnHeader({ title, count }: { title: string; count: number }) {
   return (
-    <header className="flex shrink-0 items-center justify-between px-3 pt-2">
+    <header className="flex shrink-0 items-center gap-1.5 px-3 pt-2">
       <SectionLabel as="h2">{title}</SectionLabel>
-      <span className="text-[10px] tabular-nums text-muted">{count}</span>
+      <span className="text-[10px] tabular-nums text-faint">{count}</span>
     </header>
   )
 }

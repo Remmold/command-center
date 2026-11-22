@@ -14,6 +14,7 @@ import type {
   Workspace
 } from '../../shared/types'
 import { groupByRepo } from '../../shared/repoGroups'
+import { wordColumn } from '../../shared/ticketWords'
 
 export interface DirEntry {
   name: string
@@ -28,23 +29,6 @@ export interface BoardFileReader {
   modifiedAt(path: string): Promise<number | null>
 }
 
-const COLUMN_OF_WORD: Record<string, BoardColumn> = {
-  'needs-triage': 'backlog',
-  'needs-info': 'backlog',
-  'ready-for-agent': 'backlog',
-  'ready-for-human': 'backlog',
-  'in-progress': 'in-progress',
-  blocked: 'blocked',
-  resolved: 'done',
-  wontfix: 'done',
-  done: 'done',
-  complete: 'done',
-  completed: 'done',
-  closed: 'done',
-  claimed: 'in-progress',
-  doing: 'in-progress',
-  wip: 'in-progress'
-}
 const COLUMN_RANK: Record<BoardColumn, number> = { backlog: 0, blocked: 1, 'in-progress': 2, done: 3 }
 const TICKET_FILE = /^(\d+[a-z]?)-(.+)\.md$/i
 const PROGRESS_SUFFIX = '.progress.md'
@@ -95,9 +79,6 @@ function parseStatus(markdown: string): TicketStatus {
   return { status, statusNote: note || null, statusLine: line, statusKnown: wordColumn(status) !== null }
 }
 
-function wordColumn(status: string | null): BoardColumn | null {
-  return status !== null && Object.hasOwn(COLUMN_OF_WORD, status) ? COLUMN_OF_WORD[status] : null
-}
 
 function parseTitle(markdown: string, fallback: string): string {
   const heading = markdown.match(/^#\s+(.+)$/m)?.[1]

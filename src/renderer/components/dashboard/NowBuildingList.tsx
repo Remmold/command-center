@@ -4,7 +4,7 @@ import { plainNote } from '../../state/plainNote'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { ListRow, ListRowLabel, ListRowMeta, ListRowNote } from '../ui/ListRow'
+import { ListRow, ListRowLabel, ListRowLines, ListRowMeta, ListRowNote } from '../ui/ListRow'
 import { ProgressBar } from '../ui/ProgressBar'
 import { StatusTag } from '../ui/StatusDot'
 
@@ -46,17 +46,27 @@ function FeatureRow({ row, now, onOpen }: { row: NowBuildingRow; now: number; on
   return (
     <ListRow onClick={onOpen} tooltip={`Show ${row.featureName} on the board`}>
       <RepoIcon repoGroupKey={row.repoGroupKey} repoName={row.repoName} size="sm" />
-      {row.worktreeTag && <Badge>{row.worktreeTag}</Badge>}
-      <ListRowLabel>{row.featureName}</ListRowLabel>
-      {total > 0 && <ProgressBar value={done} max={total} label={`${row.featureName}: ${done} of ${total} done`} />}
-      {row.finished && <Badge>finished</Badge>}
-      {tickets && (
-        <ListRowLabel tone="secondary" tooltip={row.inProgress.map((t) => `#${t.number} ${t.title}`).join('\n')}>
-          {tickets}
-        </ListRowLabel>
-      )}
+      <ListRowLines
+        primary={
+          <>
+            {row.worktreeTag && <Badge>{row.worktreeTag}</Badge>}
+            <ListRowLabel>{row.featureName}</ListRowLabel>
+            {row.finished && <Badge>finished</Badge>}
+            {tickets && (
+              <ListRowLabel tone="secondary" tooltip={row.inProgress.map((t) => `#${t.number} ${t.title}`).join('\n')}>
+                {tickets}
+              </ListRowLabel>
+            )}
+          </>
+        }
+        secondary={
+          <>
+            {total > 0 && <ProgressBar value={done} max={total} label={`${row.featureName}: ${done} of ${total} done`} />}
+            <ListRowNote>{lastNote && plainNote(lastNote)}</ListRowNote>
+          </>
+        }
+      />
       {row.status && <StatusTag status={row.status} />}
-      <ListRowNote>{lastNote && plainNote(lastNote)}</ListRowNote>
       {row.lastActivity !== null && <ListRowMeta>{timeAgo(row.lastActivity, now)}</ListRowMeta>}
     </ListRow>
   )

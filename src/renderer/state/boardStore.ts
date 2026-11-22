@@ -39,7 +39,7 @@ export const useBoardStore = create<BoardState>()(
       filter: { repoGroupKeys: [], featureKeys: [], search: '' },
       groupBy: 'none',
       showFinished: false,
-      panelShare: 0.5,
+      panelShare: 0.4,
       collapsedLanes: [],
       selected: null,
       init: () => {

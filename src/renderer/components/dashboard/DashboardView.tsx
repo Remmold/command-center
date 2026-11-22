@@ -104,9 +104,9 @@ function LiveSessionCard({ card, now }: { card: LiveCard; now: number }) {
         <RepoIcon repoGroupKey={row.workspace.repoGroupKey} repoName={row.workspace.repoName} size="sm" />
         <WorktreeTag row={row} />
         <CardMetaText trailing={timeAgo(card.lastEventAt, now)}>{row.repoName}</CardMetaText>
+        <StatusTag status={row.status} />
       </CardMeta>
       <CardTitle>{row.title}</CardTitle>
-      <StatusTag status={row.status} />
       <CardNote>{snippetOf(card)}</CardNote>
     </Card>
   )

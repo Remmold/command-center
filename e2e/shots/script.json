@@ -1,0 +1,36 @@
+{
+  "turns": [
+    {
+      "match": "approve|write",
+      "flags": "i",
+      "repeat": true,
+      "events": [
+        { "type": "text", "text": "I'll add the export preset file next to the pipeline config." },
+        {
+          "type": "tool_use",
+          "name": "Write",
+          "input": { "file_path": "{cwd}{sep}presets.json", "content": "{}" },
+          "result": "File created successfully at: {cwd}{sep}presets.json"
+        },
+        { "type": "text", "text": "Added the preset file." }
+      ]
+    },
+    {
+      "match": "build|long",
+      "flags": "i",
+      "repeat": true,
+      "events": [
+        { "type": "text", "text": "Refreshing the token store and rerunning the auth tests; this takes a minute." },
+        { "type": "wait", "ms": 600000 },
+        { "type": "text", "text": "Done." }
+      ]
+    },
+    {
+      "match": "",
+      "repeat": true,
+      "events": [
+        { "type": "text", "text": "Ran the onboarding suite: 42 passed, 0 failed. The welcome step now redirects to the workspace picker after sign-up, and the empty state copy matches the design." }
+      ]
+    }
+  ]
+}
