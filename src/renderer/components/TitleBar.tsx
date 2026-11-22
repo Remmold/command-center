@@ -5,6 +5,7 @@ import { useViewStore, type AppView } from '../state/viewStore'
 import { SegmentedControl } from './ui/SegmentedControl'
 import { TitleBarButton } from './ui/TitleBarButton'
 import { UsageStrip } from './UsageStrip'
+import { UpdatePill } from './UpdatePill'
 
 const VIEW_LABELS: Record<AppView, string> = { dashboard: 'Dashboard', work: 'Work', board: 'Board' }
 
@@ -27,6 +28,7 @@ export function TitleBar() {
         <SegmentedControl<AppView> label="view" value={view} onChange={setView} options={VIEW_OPTIONS} />
       </div>
       <span className="flex-1" />
+      <UpdatePill />
       <UsageStrip />
       <TitleBarButton label="Settings" tooltip={`Settings (${SETTINGS_SHORTCUT})`} pressed={settingsOpen} onClick={() => (settingsOpen ? closeSettings() : openSettings())}>
         <Settings size={14} strokeWidth={2} />

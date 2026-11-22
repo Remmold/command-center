@@ -150,7 +150,7 @@ function seedDirs(
   return dirs
 }
 
-function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName): Record<string, string> {
+function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName, extra: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
   delete env.ELECTRON_RUN_AS_NODE
@@ -164,6 +164,7 @@ function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName): Record<s
     USERPROFILE: dirs.home,
     HOME: dirs.home
   })
+  Object.assign(env, extra)
   assertFakeClaude(env.CC_CLAUDE_BIN)
   return env
 }
@@ -214,11 +215,13 @@ export async function shutdown(app: ElectronApplication): Promise<void> {
   }
 }
 
-export const test = base.extend<{ script: ScriptName; userSettings: Record<string, unknown> | null; launched: Launched }>({
+export const test = base.extend<{ script: ScriptName; userSettings: Record<string, unknown> | null; env: Record<string, string>; launched: Launched }>({
   script: ['basic', { option: true }],
   /** Written as the temp profile's `settings.json` before launch. */
   userSettings: [null, { option: true }],
-  launched: async ({ script, userSettings }, use) => {
+  /** Extra app environment, e.g. `CC_UPDATE_IDLE_MS`; the fake CLI guard still runs after it. */
+  env: [{}, { option: true }],
+  launched: async ({ script, userSettings, env }, use) => {
     const root = mkdtempSync(join(tmpdir(), 'cc-e2e-'))
     try {
       const dirs = seedDirs(root, userSettings)
@@ -226,7 +229,7 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
         executablePath: ELECTRON,
         args: [MAIN, `--user-data-dir=${dirs.userData}`],
         cwd: REPO,
-        env: appEnv(dirs, script)
+        env: appEnv(dirs, script, env)
       })
       try {
         const page = await app.firstWindow()

@@ -346,6 +346,22 @@ export interface AppExitEvent {
 
 export type AddWorkspaceResult = { ok: true; workspace: Workspace } | { ok: false; error: string }
 
+export interface UpdateStatus {
+  /** The running app's version. */
+  version: string
+  /** Epoch ms of the last finished check; null before the first. */
+  lastCheck: number | null
+  checking: boolean
+  /** A downloaded version waiting for a restart. */
+  downloaded: string | null
+  /** The last check's failure, cleared by the next good one. */
+  error: string | null
+  /** This launch follows a restart to update. */
+  afterUpdate: boolean
+}
+
+export type RestartReply = { kind: 'none' } | { kind: 'restart' } | { kind: 'confirm'; busy: string[] }
+
 export interface RendererApi {
   workspaces: {
     list: () => Promise<Workspace[]>
@@ -498,6 +514,13 @@ export interface RendererApi {
       staged: boolean,
       untracked?: boolean
     ) => Promise<GitDiffResult>
+  }
+  update: {
+    status: () => Promise<UpdateStatus>
+    check: () => Promise<void>
+    /** Restart to update; `force` answers the busy question. */
+    restart: (force: boolean) => Promise<RestartReply>
+    onChanged: (cb: (status: UpdateStatus) => void) => () => void
   }
 }
 

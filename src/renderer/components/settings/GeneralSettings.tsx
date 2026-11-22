@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { StartWithWindowsState } from '../../../shared/types'
 import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
+import { useUpdateStore } from '../../state/updateStore'
+import { lastCheckLabel } from '../../state/updateLabels'
+import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DetailRow } from '../ui/DetailRow'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
 
 function useStartWithWindows(): [StartWithWindowsState | null, (checked: boolean) => void] {
@@ -30,6 +34,8 @@ export function GeneralSettings() {
   const setAllowBypass = useGeneralSettingsStore((s) => s.setAllowDangerouslySkipPermissions)
   const ctrlEnterSends = useGeneralSettingsStore((s) => s.useCtrlEnterToSend)
   const setCtrlEnterSends = useGeneralSettingsStore((s) => s.setUseCtrlEnterToSend)
+  const update = useUpdateStore((s) => s.status)
+  const checkNow = useUpdateStore((s) => s.check)
 
   return (
     <Page label="General">
@@ -44,6 +50,17 @@ export function GeneralSettings() {
               ? `Not available: ${startWithWindows.reason}.`
               : 'Starts in the tray when you sign in to Windows.'}
           </PageNote>
+        </PageGroup>
+        <PageGroup
+          title="Updates"
+          actions={
+            <Button variant="secondary" disabled={!update || update.checking} onClick={() => void checkNow()}>
+              Check now
+            </Button>
+          }
+        >
+          <DetailRow label="Current version" value={update?.version ?? '…'} />
+          {update && <PageNote>{lastCheckLabel(update)}</PageNote>}
         </PageGroup>
         <PageGroup title="Sessions">
           <Checkbox checked={allowBypass} onChange={setAllowBypass}>
