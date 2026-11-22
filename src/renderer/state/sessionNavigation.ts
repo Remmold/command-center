@@ -1,11 +1,9 @@
 import { create } from 'zustand'
-import type { LocalSessionInfo, SessionStatusEntry, Workspace } from '../../shared/types'
-import { needsYouQueue, nextWaiting } from '../../shared/needsYou'
-import { closeHalf, dropChats, focusHalf, openChat, splitPair, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
+import type { LocalSessionInfo, Workspace } from '../../shared/types'
+import { closeHalf, dropChats, focusHalf, openChat, replaceChat, splitPair, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
 import { useChatPairStore } from './chatPairStore'
 import { chatOnScreen, type ShellOptions } from './projectViewLayout'
 import { useProjectViewsStore, type ProjectView, type ShellTab } from './projectViewsStore'
-import { useSessionStatusStore } from './sessionStatusStore'
 import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
 
@@ -129,6 +127,17 @@ export function openObserved(workspaceId: string, sessionId: string, { beside = 
   showPair(openChat(currentPair(), { kind: 'observed', workspaceId, sessionId }, { beside }))
 }
 
+/** Brings a hosted chat on screen in the half that showed `from`, else in the focused half. */
+export function openSessionInPlaceOf(from: ChatRef, paneId: string): void {
+  const views = useProjectViewsStore.getState()
+  const target = hostedSessions(views.views).find((s) => s.paneId === paneId)
+  if (!target) return
+  useViewStore.getState().setView('work')
+  views.setCenterView(target.projectId, 'chat')
+  showPair(replaceChat(currentPair(), from, { kind: 'hosted', paneId }))
+  useFocusRequestStore.getState().requestFocus(paneId)
+}
+
 /** Opens a new chat in the workspace, on its account profile. */
 export function startSession(workspace: Workspace): boolean {
   const views = useProjectViewsStore.getState()
@@ -193,26 +202,4 @@ export function initChatPair(): void {
     const next = dropChats(currentPair(), hostedExists)
     if (next !== currentPair()) showPair(next)
   })
-}
-
-export interface QueuedSession extends HostedSessionRef {
-  entry: SessionStatusEntry
-}
-
-export function waitingQueue(
-  views: Record<string, ProjectView>,
-  byPane: Record<string, SessionStatusEntry>
-): QueuedSession[] {
-  const hosted = new Map(hostedSessions(views).map((s) => [s.paneId, s]))
-  const entries = Object.values(byPane).filter((e) => hosted.has(e.paneId))
-  return needsYouQueue(entries).map((entry) => ({ ...hosted.get(entry.paneId)!, entry }))
-}
-
-export function jumpToNextWaiting(): void {
-  const queue = waitingQueue(useProjectViewsStore.getState().views, useSessionStatusStore.getState().byPane)
-  const next = nextWaiting(
-    queue.map((q) => q.entry),
-    paneOnScreen()
-  )
-  if (next) openSession(next.paneId)
 }

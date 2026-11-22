@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
-import type { SessionInit } from '../../shared/types'
+import type { CliAccount, SessionInit } from '../../shared/types'
 
 interface SessionInitState {
   byPane: Record<string, SessionInit>
+  /** The account each profile's latest `initialize` reply named. */
+  accountByProfile: Record<string, CliAccount>
   initialized: boolean
   init: () => void
   load: (paneId: string) => void
@@ -11,12 +13,16 @@ interface SessionInitState {
 
 export const useSessionInitStore = create<SessionInitState>((set, get) => ({
   byPane: {},
+  accountByProfile: {},
   initialized: false,
   init: () => {
     if (get().initialized) return
     set({ initialized: true })
-    window.api.claude.onInit(({ paneId, init }) =>
-      set((s) => ({ byPane: { ...s.byPane, [paneId]: init } }))
+    window.api.claude.onInit(({ paneId, profileId, init }) =>
+      set((s) => ({
+        byPane: { ...s.byPane, [paneId]: init },
+        accountByProfile: init.account ? { ...s.accountByProfile, [profileId]: init.account } : s.accountByProfile
+      }))
     )
   },
   load: (paneId) => {

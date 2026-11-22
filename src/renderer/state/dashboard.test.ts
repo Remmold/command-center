@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatItem } from '../../shared/chatItems'
-import type { ObservedSession, SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
+import type { BoardFeature, ObservedSession, SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
 import { dashboard, type DashboardInput } from './dashboard'
+import type { Account } from './accounts'
 import type { HostedSessionInput } from './sessionList'
 
 const NOW = 1_800_000_000_000
@@ -215,5 +216,58 @@ describe('dashboard: empty', () => {
   it('has every section empty when nothing is going on', () => {
     const d = dashboard(input({ hosted: [hosted('idle', 'idle')], observed: [observed('q', 'quiet', 'quiet')] }))
     expect([d.needsYou, d.nowBuilding.rows, d.nowBuilding.hidden, d.live, d.usage]).toEqual([[], [], [], [], []])
+  })
+})
+
+describe('dashboard: accounts', () => {
+  const ACCOUNTS: Account[] = [
+    { profileId: 'default', name: 'a@home.com', plan: 'Max', label: 'a@home.com · Max' },
+    { profileId: 'p-work', name: 'Work', plan: 'Team', label: 'Work · Team' }
+  ]
+  const WS = [workspace('wk', 'work-repo', '', 'p-work'), ...WORKSPACES]
+  const active = (name: string, workspaceId: string, at: number): BoardFeature => ({
+    name,
+    state: 'active',
+    progress: { done: 0, total: 1, lastNote: null },
+    lastActivity: at,
+    tickets: [],
+    sightings: [{ workspaceId, specPath: null, progressPath: null, lastActivity: at }]
+  })
+  const d = dashboard(
+    input({
+      workspaces: WS,
+      accounts: ACCOUNTS,
+      hosted: [hosted('w', 'work waits longest', 'wk'), hosted('h', 'home waits', 'cc'), hosted('wr', 'work running', 'wk'), hosted('hr', 'home running', 'mm')],
+      statuses: [status('w', 'your-turn', 100), status('h', 'needs-approval', 200), status('wr', 'running', 900), status('hr', 'running', 300)],
+      board: {
+        repoGroups: [
+          { repoGroupKey: 'key-work-repo', repoName: 'work-repo', features: [active('payroll', 'wk', NOW - 1_000)] },
+          { repoGroupKey: 'key-mmorpg', repoName: 'mmorpg', features: [active('combat', 'mm', NOW - 60_000)] }
+        ]
+      }
+    })
+  )
+
+  it('orders Needs you by account, longest wait first within each', () => {
+    expect(d.needsYou.map((r) => r.title)).toEqual(['home waits', 'work waits longest'])
+  })
+
+  it('orders Live sessions by account, newest first within each', () => {
+    expect(d.live.map((c) => c.row.title)).toEqual(['home running', 'home waits', 'work running', 'work waits longest'])
+  })
+
+  it("orders Now building by account, a feature's account being that of its repo's workspace", () => {
+    expect(d.nowBuilding.rows.map((r) => r.featureName)).toEqual(['combat', 'payroll'])
+  })
+
+  it('tags every row with its account', () => {
+    expect(d.accountTags['hosted:w']).toBe('Work · Team')
+    expect(d.accountTags['hosted:hr']).toBe('a@home.com · Max')
+    expect(d.accountTags['key-work-repo/payroll']).toBe('Work · Team')
+  })
+
+  it('shows no tags when there is only one account', () => {
+    const one = dashboard(input({ accounts: ACCOUNTS.slice(0, 1), hosted: [hosted('h', 'home', 'cc')], statuses: [status('h', 'your-turn', 1)] }))
+    expect(one.accountTags).toEqual({})
   })
 })

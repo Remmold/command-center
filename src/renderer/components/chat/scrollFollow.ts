@@ -14,10 +14,23 @@ export function isAtBottom(box: ScrollBox): boolean {
 /**
  * Whether output is followed after a scroll event. Only a scroll up leaves the bottom on purpose: the
  * app's own scroll to the bottom can be reported after more output already arrived, which would
- * otherwise look like the reader having scrolled away.
+ * otherwise look like the reader having scrolled away. `ownTop` is where the app last put the box
+ * itself; lazily rendered messages can shrink the content, clamping that position lower before the
+ * scroll event reports it, so landing exactly there is never the reader's doing.
  */
-export function followsAfterScroll({ following, previousTop, box }: { following: boolean; previousTop: number; box: ScrollBox }): boolean {
+export function followsAfterScroll({
+  following,
+  previousTop,
+  box,
+  ownTop
+}: {
+  following: boolean
+  previousTop: number
+  box: ScrollBox
+  ownTop?: number
+}): boolean {
   if (isAtBottom(box)) return true
+  if (ownTop !== undefined && box.scrollTop === ownTop) return following
   if (box.scrollTop < previousTop) return false
   return following
 }

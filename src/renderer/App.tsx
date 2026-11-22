@@ -14,10 +14,11 @@ import { useSessionStatusStore } from './state/sessionStatusStore'
 import { useSessionInitStore } from './state/sessionInitStore'
 import { useRemoteControlStore } from './state/remoteControlStore'
 import { useModelStore } from './state/modelStore'
-import { closeSession, focusedTarget, initChatPair, jumpToNextWaiting, paneOnScreen } from './state/sessionNavigation'
+import { closeSession, focusedTarget, initChatPair, paneOnScreen } from './state/sessionNavigation'
 import { useLauncherStore } from './state/launcherStore'
 import { SessionLauncher } from './components/work/SessionLauncher'
-import { openRowAt } from './state/workSessions'
+import { Toasts } from './components/ui/Toasts'
+import { jumpToNextWaiting, openRowAt } from './state/workSessions'
 import { useWorkspacesStore } from './state/workspacesStore'
 import { useProfilesStore } from './state/profilesStore'
 import { useReportScreenFocus } from './hooks/useReportScreenFocus'
@@ -125,6 +126,7 @@ export function App() {
         </div>
       </div>
       <SessionLauncher />
+      <Toasts />
       {settingsSection && (
         <div className="absolute inset-0 z-40">
           <SettingsPage section={settingsSection} />

@@ -1,10 +1,12 @@
 import { useEffect, useMemo } from 'react'
-import { FolderPlus, Trash2 } from 'lucide-react'
+import { FolderPlus, Trash2, UserRound } from 'lucide-react'
 import type { Workspace } from '../../../shared/types'
 import { groupByRepo, type RepoGroupView } from '../../../shared/repoGroups'
+import { workspacesByAccount, type AccountWorkspaces } from '../../state/accounts'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { useProfilesStore } from '../../state/profilesStore'
 import { useRepoDisplayName } from '../../state/repoIdentitiesStore'
+import { useAccounts } from '../../state/useAccounts'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { ProfilePicker } from '../ProfilePicker'
 import { RepoIcon } from '../RepoIcon'
@@ -12,8 +14,9 @@ import { RepoIdentityEditor } from '../RepoIdentityEditor'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { DrawerList } from '../ui/Drawer'
-import { ListItem, ListRowText } from '../ui/ListRow'
+import { ListRowLabel, ListRowText } from '../ui/ListRow'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
+import { SortableItem } from '../ui/SortableItem'
 
 export function WorkspacesSettings() {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
@@ -21,7 +24,9 @@ export function WorkspacesSettings() {
   const add = useWorkspacesStore((s) => s.add)
   const openProject = useProjectViewsStore((s) => s.openProject)
   const loadProfiles = useProfilesStore((s) => s.load)
-  const groups = useMemo(() => groupByRepo(workspaces), [workspaces])
+  const accounts = useAccounts()
+  const byAccount = useMemo(() => workspacesByAccount(workspaces, accounts), [workspaces, accounts])
+  const repoGroups = useMemo(() => new Map(groupByRepo(workspaces).map((g) => [g.repoGroupKey, g])), [workspaces])
 
   useEffect(() => {
     void load()
@@ -37,7 +42,7 @@ export function WorkspacesSettings() {
     <Page label="Workspaces">
       <PageHeader
         title="Workspaces"
-        description="Every workspace, grouped by repo, with the account profile its sessions use."
+        description="Every workspace under the account its sessions use. Drag a workspace to change its place; every list follows this order."
         actions={
           <Button onClick={() => void handleAdd()}>
             <FolderPlus size={12} />
@@ -46,42 +51,51 @@ export function WorkspacesSettings() {
         }
       />
       <PageBody>
-        {groups.length === 0 && <PageNote>No workspaces yet.</PageNote>}
-        {groups.map((group) => (
-          <RepoGroupBlock key={group.repoGroupKey} group={group} />
+        {byAccount.length === 0 && <PageNote>No workspaces yet.</PageNote>}
+        {byAccount.map((group) => (
+          <AccountBlock key={group.account.profileId} group={group} repoGroups={repoGroups} />
         ))}
       </PageBody>
     </Page>
   )
 }
 
-function RepoGroupBlock({ group }: { group: RepoGroupView }) {
-  const title = useRepoDisplayName(group.repoGroupKey, group.repoName)
+function AccountBlock({ group, repoGroups }: { group: AccountWorkspaces; repoGroups: Map<string, RepoGroupView> }) {
+  const move = useWorkspacesStore((s) => s.move)
   return (
-    <PageGroup
-      title={title}
-      icon={<RepoIcon repoGroupKey={group.repoGroupKey} repoName={group.repoName} size="sm" />}
-      actions={<RepoIdentityEditor group={group} revealOnHover={false} />}
-    >
+    <PageGroup title={group.account.label} icon={<UserRound size={12} className="text-muted" />}>
       <DrawerList>
         {group.workspaces.map((w) => (
-          <WorkspaceItem key={w.id} workspace={w} />
+          <SortableItem
+            key={w.id}
+            id={w.id}
+            group={group.account.profileId}
+            onMove={(moved, target) => void move(moved, target)}
+            label={w.name}
+            tooltip={w.path}
+          >
+            <WorkspaceItem workspace={w} repoGroup={repoGroups.get(w.repoGroupKey)} />
+          </SortableItem>
         ))}
       </DrawerList>
     </PageGroup>
   )
 }
 
-function WorkspaceItem({ workspace }: { workspace: Workspace }) {
+function WorkspaceItem({ workspace, repoGroup }: { workspace: Workspace; repoGroup: RepoGroupView | undefined }) {
   const remove = useWorkspacesStore((s) => s.remove)
   const closeProject = useProjectViewsStore((s) => s.closeProject)
+  const repoName = useRepoDisplayName(workspace.repoGroupKey, workspace.repoName)
   const handleRemove = (): void => {
     closeProject(workspace.id)
     void remove(workspace.id)
   }
 
   return (
-    <ListItem tooltip={workspace.path}>
+    <>
+      <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
+      <ListRowLabel>{repoName}</ListRowLabel>
+      {repoGroup && <RepoIdentityEditor group={repoGroup} />}
       {workspace.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
       <ListRowText primary={workspace.name} secondary={workspace.path} />
       <ProfilePicker workspace={workspace} labelled />
@@ -89,6 +103,6 @@ function WorkspaceItem({ workspace }: { workspace: Workspace }) {
         <Trash2 size={12} />
         Remove
       </Button>
-    </ListItem>
+    </>
   )
 }

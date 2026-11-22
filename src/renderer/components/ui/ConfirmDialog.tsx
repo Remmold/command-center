@@ -9,11 +9,13 @@ interface Props {
   items?: readonly string[]
   confirmLabel: string
   onConfirm: () => void
+  /** A second way to go ahead, shown after the first. */
+  alternative?: { label: string; onClick: () => void }
   onCancel: () => void
 }
 
 /** A yes/no question where Cancel is the default: it holds the focus, and Escape or a click outside cancels. */
-export function ConfirmDialog({ title, message, items = [], confirmLabel, onConfirm, onCancel }: Props) {
+export function ConfirmDialog({ title, message, items = [], confirmLabel, onConfirm, alternative, onCancel }: Props) {
   const cancelRef = useRef<HTMLButtonElement>(null)
   useEffect(() => cancelRef.current?.focus(), [])
   return (
@@ -32,6 +34,11 @@ export function ConfirmDialog({ title, message, items = [], confirmLabel, onConf
         <Button variant="secondary" onClick={onConfirm}>
           {confirmLabel}
         </Button>
+        {alternative && (
+          <Button variant="secondary" onClick={alternative.onClick}>
+            {alternative.label}
+          </Button>
+        )}
         <Button ref={cancelRef} onClick={onCancel}>
           Cancel
         </Button>

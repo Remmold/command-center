@@ -6,6 +6,7 @@ import { useObservedStore } from './observedStore'
 import { useProfilesStore } from './profilesStore'
 import { useUsageStore } from './usageStore'
 import { useSessionSources } from './workSessions'
+import { useAccounts } from './useAccounts'
 
 function useObservedTail(): ObservedTail | null {
   const viewing = useObservedStore((s) => s.viewing)
@@ -20,6 +21,7 @@ export function useDashboard(now: number): Dashboard {
   const usage = useUsageStore((s) => s.byProfile)
   const chatItems = useChatItemsStore((s) => s.items)
   const observedTail = useObservedTail()
+  const accounts = useAccounts()
   return useMemo(
     () =>
       dashboard({
@@ -29,8 +31,9 @@ export function useDashboard(now: number): Dashboard {
         usage,
         chatItems,
         observedTail,
-        now
+        now,
+        accounts
       }),
-    [sources, board, profiles, usage, chatItems, observedTail, now]
+    [sources, board, profiles, usage, chatItems, observedTail, now, accounts]
   )
 }

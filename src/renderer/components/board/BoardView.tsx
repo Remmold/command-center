@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
+import { UserRound } from 'lucide-react'
 import type { Workspace } from '../../../shared/types'
 import {
   cardKeyOf,
@@ -6,6 +7,7 @@ import {
   findTicket,
   layoutBoard,
   neighbourCard,
+  type BoardAccounts,
   type BoardCard,
   type BoardLane,
   type LaneColumn,
@@ -15,6 +17,8 @@ import {
 import { PANEL_MIN_WIDTH, useBoardStore } from '../../state/boardStore'
 import { useRepoDisplayName } from '../../state/repoIdentitiesStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
+import { repoAccounts } from '../../state/accounts'
+import { useAccounts } from '../../state/useAccounts'
 import { RepoIcon } from '../RepoIcon'
 import { Button } from '../ui/Button'
 import { Column, ColumnRow } from '../ui/Column'
@@ -43,13 +47,25 @@ export function BoardView() {
   const panelShare = useBoardStore((s) => s.panelShare)
   const setPanelShare = useBoardStore((s) => s.setPanelShare)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
+  const accountList = useAccounts()
+  const accounts = useMemo<BoardAccounts>(
+    () => ({
+      order: accountList,
+      byRepo: repoAccounts(workspaces, accountList),
+      repoOrder: [...new Set(workspaces.map((w) => w.repoGroupKey))]
+    }),
+    [workspaces, accountList]
+  )
 
   useEffect(() => {
     init()
     rescan()
   }, [init, rescan])
 
-  const layout = useMemo(() => layoutBoard(model, { filter, groupBy, showFinished }), [model, filter, groupBy, showFinished])
+  const layout = useMemo(
+    () => layoutBoard(model, { filter, groupBy, showFinished, accounts }),
+    [model, filter, groupBy, showFinished, accounts]
+  )
   const workspaceById = useMemo(() => new Map<string, Workspace>(workspaces.map((w) => [w.id, w])), [workspaces])
   const found = selected ? findTicket(model, selected) : null
   const closePanel = useCallback(() => select(null), [select])
@@ -116,7 +132,7 @@ function BoardLanes({ layout, grouped, workspaces, selectedKey }: LanesProps) {
       {layout.map((lane) => (
         <Swimlane
           key={lane.key}
-          label={lane.header?.featureName ?? lane.header?.repoName ?? lane.key}
+          label={lane.header?.account?.label ?? lane.header?.featureName ?? lane.header?.repoName ?? lane.key}
           header={lane.header && <LaneTitle header={lane.header} />}
           open={!collapsed.includes(lane.key)}
           onToggle={() => toggleLane(lane.key)}
@@ -131,10 +147,10 @@ function BoardLanes({ layout, grouped, workspaces, selectedKey }: LanesProps) {
 function LaneTitle({ header }: { header: LaneHeader }) {
   const displayName = useRepoDisplayName(header.repoGroupKey, header.repoName)
   const { done, total, lastNote } = header.progress
-  const title = header.featureName ?? displayName
+  const title = header.account?.label ?? header.featureName ?? displayName
   return (
     <HeaderRow
-      icon={<RepoIcon repoGroupKey={header.repoGroupKey} repoName={header.repoName} size="sm" />}
+      icon={header.account ? <UserRound size={14} /> : <RepoIcon repoGroupKey={header.repoGroupKey} repoName={header.repoName} size="sm" />}
       subtitle={header.featureName ? displayName : undefined}
       title={title}
       note={lastNote === null ? null : plainNote(lastNote)}

@@ -1,4 +1,5 @@
 import { isWaiting } from '../../shared/needsYou'
+import { accountOf, accountRank, type Account } from './accounts'
 import { repoDisplayName, type RepoIdentityViews } from '../../shared/repoIdentity'
 import type { ObservedSession, ObservedStatus, SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
 
@@ -121,4 +122,44 @@ export function sessionList(input: SessionListInput): SessionGroup[] {
       .filter((row) => matches(row, words))
       .sort(id === 'needs-you' ? byLongestWait : byRecentActivity)
   })).filter((g) => g.rows.length > 0)
+}
+
+export interface AccountSection {
+  account: Account
+  groups: SessionGroup[]
+  /** Waiting sessions in the section, shown on its header even when it is collapsed. */
+  needsYou: number
+}
+
+/** The status groups split by the account of each row's workspace, accounts in Settings order. */
+export function accountSections(groups: readonly SessionGroup[], accounts: readonly Account[]): AccountSection[] {
+  const rank = accountRank(accounts)
+  const byAccount = new Map<string, SessionGroup[]>()
+  for (const group of groups) {
+    const split = new Map<string, SessionRow[]>()
+    for (const row of group.rows) {
+      const id = accountOf(accounts, row.workspace.profileId).profileId
+      split.set(id, [...(split.get(id) ?? []), row])
+    }
+    for (const [id, rows] of split) byAccount.set(id, [...(byAccount.get(id) ?? []), { id: group.id, rows }])
+  }
+  return [...byAccount]
+    .sort(([a], [b]) => rank(a) - rank(b))
+    .map(([id, groups]) => ({
+      account: accountOf(accounts, id),
+      groups,
+      needsYou: groups.find((g) => g.id === 'needs-you')?.rows.length ?? 0
+    }))
+}
+
+/** The rows on screen, top to bottom; collapsed sections show none. */
+export function shownRows(sections: readonly AccountSection[], collapsed: readonly string[]): SessionRow[] {
+  return sections.filter((s) => !collapsed.includes(s.account.profileId)).flatMap((s) => s.groups.flatMap((g) => g.rows))
+}
+
+/** Waiting hosted sessions in the order the list shows them, collapsed sections included. */
+export function waitingRows(sections: readonly AccountSection[]): HostedRow[] {
+  return sections.flatMap((s) =>
+    (s.groups.find((g) => g.id === 'needs-you')?.rows ?? []).filter((r): r is HostedRow => r.kind === 'hosted')
+  )
 }

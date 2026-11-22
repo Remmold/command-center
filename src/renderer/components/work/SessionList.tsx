@@ -3,15 +3,17 @@ import { useMenu } from '../../hooks/useMenu'
 import { Columns2, History, MoreHorizontal, Pencil, Plus, X } from 'lucide-react'
 import { OBSERVED_STATUS_LABEL } from '../../../shared/types'
 import { STATUS_LABEL } from '../../../shared/needsYou'
-import type { SessionGroupId, SessionRow } from '../../state/sessionList'
+import type { AccountSection, SessionGroup, SessionGroupId, SessionRow } from '../../state/sessionList'
 import { useChatPairStore } from '../../state/chatPairStore'
 import { useLauncherStore } from '../../state/launcherStore'
 import { closeSession } from '../../state/sessionNavigation'
 import { renameHostedSession } from '../../state/sessionTitleSync'
-import { isShown, openRow, useSessionGroups, useWorkSearchStore } from '../../state/workSessions'
+import { isShown, openRow, useAccountSectionsStore, useSessionSections, useWorkSearchStore } from '../../state/workSessions'
+import type { ChatPair } from '../../state/chatPair'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
+import { CollapsibleSection } from '../ui/CollapsibleSection'
 import { IconButton } from '../ui/IconButton'
 import { ListGroup } from '../ui/ListGroup'
 import { ListRow, ListRowLabel, ListRowText } from '../ui/ListRow'
@@ -30,11 +32,16 @@ const GROUP_TITLE: Record<SessionGroupId, string> = {
 }
 
 export function SessionList() {
-  const groups = useSessionGroups()
+  const { sections, headed } = useSessionSections()
   const pair = useChatPairStore((s) => s.pair)
   const search = useWorkSearchStore((s) => s.search)
   const setSearch = useWorkSearchStore((s) => s.setSearch)
+  const collapsed = useAccountSectionsStore((s) => s.collapsed)
+  const toggle = useAccountSectionsStore((s) => s.toggle)
   const [renaming, setRenaming] = useState<string | null>(null)
+  const groups = (section: AccountSection) => (
+    <StatusGroups groups={section.groups} pair={pair} renaming={renaming} setRenaming={setRenaming} />
+  )
 
   return (
     <nav aria-label="Sessions" className="flex h-full min-h-0 flex-col bg-sidebar">
@@ -51,26 +58,56 @@ export function SessionList() {
         <SearchField label="Search sessions" placeholder="Search title, repo or worktree" value={search} onChange={setSearch} />
       </div>
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto pb-2">
-        {groups.length === 0 && <EmptyHint>{search.trim() ? 'No session matches.' : 'No sessions yet.'}</EmptyHint>}
-        {groups.map((g) => (
-          <ListGroup key={g.id} title={GROUP_TITLE[g.id]} count={g.rows.length}>
-            {g.rows.map((row) =>
-              row.key === renaming && row.kind === 'hosted' ? (
-                <RenameRow key={row.key} paneId={row.paneId} title={row.title} onDone={() => setRenaming(null)} />
-              ) : (
-                <SessionListRow
-                  key={row.key}
-                  row={row}
-                  active={isShown(row, pair)}
-                  onRename={row.kind === 'hosted' ? () => setRenaming(row.key) : undefined}
-                />
-              )
-            )}
-          </ListGroup>
-        ))}
+        {sections.length === 0 && <EmptyHint>{search.trim() ? 'No session matches.' : 'No sessions yet.'}</EmptyHint>}
+        {headed
+          ? sections.map((section) => (
+              <CollapsibleSection
+                key={section.account.profileId}
+                title={section.account.label}
+                open={!collapsed.includes(section.account.profileId)}
+                onToggle={() => toggle(section.account.profileId)}
+                tooltip={`Sessions on the account ${section.account.label}`}
+                badge={
+                  section.needsYou > 0 && (
+                    <Badge tone="count" tooltip={`${section.needsYou} ${section.needsYou === 1 ? 'session needs' : 'sessions need'} you`}>
+                      {section.needsYou}
+                    </Badge>
+                  )
+                }
+              >
+                {groups(section)}
+              </CollapsibleSection>
+            ))
+          : sections.map((section) => <div key={section.account.profileId}>{groups(section)}</div>)}
       </div>
     </nav>
   )
+}
+
+interface StatusGroupsProps {
+  groups: SessionGroup[]
+  pair: ChatPair
+  renaming: string | null
+  setRenaming: (key: string | null) => void
+}
+
+function StatusGroups({ groups, pair, renaming, setRenaming }: StatusGroupsProps) {
+  return groups.map((g) => (
+    <ListGroup key={g.id} title={GROUP_TITLE[g.id]} count={g.rows.length}>
+      {g.rows.map((row) =>
+        row.key === renaming && row.kind === 'hosted' ? (
+          <RenameRow key={row.key} paneId={row.paneId} title={row.title} onDone={() => setRenaming(null)} />
+        ) : (
+          <SessionListRow
+            key={row.key}
+            row={row}
+            active={isShown(row, pair)}
+            onRename={row.kind === 'hosted' ? () => setRenaming(row.key) : undefined}
+          />
+        )
+      )}
+    </ListGroup>
+  ))
 }
 
 function rowTooltip(row: SessionRow): string {

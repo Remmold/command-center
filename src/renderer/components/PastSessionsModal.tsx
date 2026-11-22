@@ -4,7 +4,9 @@ import type { LocalSessionInfo, SessionStatus } from '../../shared/types'
 import { useObservedStore } from '../state/observedStore'
 import { matchesSearch, pastSessionDot, sessionAge, type PastSessionDotState } from '../state/pastSessions'
 import { useProjectViewsStore } from '../state/projectViewsStore'
-import { openSession } from '../state/sessionNavigation'
+import { useTakeOverStore, type TakeOverTarget } from '../state/takeOverStore'
+import { ConfirmDialog } from './ui/ConfirmDialog'
+import { openObserved, openSession } from '../state/sessionNavigation'
 import { useSessionStatusStore } from '../state/sessionStatusStore'
 import { renameHostedSession } from '../state/sessionTitleSync'
 import { Dialog } from './ui/Dialog'
@@ -43,6 +45,7 @@ export function PastSessionsModal({ cwd, onClose, onLoad }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [renaming, setRenaming] = useState<string | null>(null)
+  const [takingOver, setTakingOver] = useState<TakeOverTarget | null>(null)
   const openPanes = useOpenPanes(cwd)
   const statusByPane = useSessionStatusStore((s) => s.byPane)
   const observed = useObservedStore((s) => s.sessions)
@@ -67,7 +70,20 @@ export function PastSessionsModal({ cwd, onClose, onLoad }: Props) {
 
   const open = (info: LocalSessionInfo) => {
     const paneId = openPanes.get(info.sessionId)
+    const inVsCode = !paneId && observed.find((o) => o.sessionId === info.sessionId)
+    if (inVsCode) {
+      setTakingOver({ workspaceId: inVsCode.workspaceId, sessionId: info.sessionId, title: info.title })
+      return
+    }
     if (!paneId || !openSession(paneId)) onLoad(info)
+    onClose()
+  }
+
+  const takeOver = (now: boolean) => {
+    if (takingOver) {
+      openObserved(takingOver.workspaceId, takingOver.sessionId)
+      useTakeOverStore.getState().request(takingOver, { now })
+    }
     onClose()
   }
 
@@ -87,6 +103,19 @@ export function PastSessionsModal({ cwd, onClose, onLoad }: Props) {
       retitle(info.sessionId, info)
       setError(`Rename failed: ${result.error}`)
     }
+  }
+
+  if (takingOver) {
+    return (
+      <ConfirmDialog
+        title="Open in VS Code"
+        message={`"${takingOver.title}" is open in VS Code. Opening it here as well would split it into two copies. Take it over instead?`}
+        confirmLabel="Take over when done"
+        onConfirm={() => takeOver(false)}
+        alternative={{ label: 'Take over now', onClick: () => takeOver(true) }}
+        onCancel={() => setTakingOver(null)}
+      />
+    )
   }
 
   return (

@@ -20,14 +20,30 @@ interface ObservedState {
   init: () => void
   open: (workspaceId: string, sessionId: string) => Promise<void>
   close: () => void
+  /** The session now runs in the app; it stays out of the list even if the CLI gives the resumed chat a new id. */
+  markTakenOver: (sessionId: string) => void
 }
+
+/** Session ids taken over from VS Code in this run of the app. */
+const takenOver = new Set<string>()
+const notTakenOver = (sessions: ObservedSession[]): ObservedSession[] => sessions.filter((o) => !takenOver.has(o.sessionId))
 
 function hostedSessionIds(): string[] {
   const ids = new Set<string>()
   for (const view of Object.values(useProjectViewsStore.getState().views)) {
     for (const s of view.claudeSessions) if (s.claudeSessionId) ids.add(s.claudeSessionId)
   }
+  for (const id of takenOver) ids.add(id)
   return [...ids].sort()
+}
+
+let hosted = ''
+
+function syncHosted(): void {
+  const next = hostedSessionIds()
+  if (next.join(',') === hosted) return
+  hosted = next.join(',')
+  window.api.observed.setHosted(next)
 }
 
 const isViewing = (v: Viewing | null, workspaceId: string, sessionId: string): boolean =>
@@ -45,25 +61,18 @@ export const useObservedStore = create<ObservedState>((set, get) => ({
   init: () => {
     if (get().initialized) return
     set({ initialized: true })
-    window.api.observed.onChanged((sessions) => set({ sessions }))
+    window.api.observed.onChanged((sessions) => set({ sessions: notTakenOver(sessions) }))
     window.api.observed.onItems(({ workspaceId, sessionId, items }) => {
       if (!isViewing(get().viewing, workspaceId, sessionId)) return
       set((s) => ({ items: [...s.items, ...items] }))
     })
     window.api.observed
       .list()
-      .then((sessions) => set({ sessions }))
+      .then((sessions) => set({ sessions: notTakenOver(sessions) }))
       .catch((err) => console.error('failed to load observed sessions', err))
 
-    let hosted = hostedSessionIds().join(',')
-    window.api.observed.setHosted(hostedSessionIds())
-    useProjectViewsStore.subscribe(() => {
-      const nextHosted = hostedSessionIds()
-      if (nextHosted.join(',') !== hosted) {
-        hosted = nextHosted.join(',')
-        window.api.observed.setHosted(nextHosted)
-      }
-    })
+    syncHosted()
+    useProjectViewsStore.subscribe(syncHosted)
   },
 
   open: async (workspaceId, sessionId) => {
@@ -73,6 +82,12 @@ export const useObservedStore = create<ObservedState>((set, get) => ({
     if (get().viewing !== viewing) return
     if (res.ok) set((s) => ({ items: [...res.items, ...s.items], shortened: res.shortened, loading: false }))
     else set({ loading: false, error: res.error })
+  },
+
+  markTakenOver: (sessionId) => {
+    takenOver.add(sessionId)
+    set((s) => ({ sessions: notTakenOver(s.sessions) }))
+    syncHosted()
   },
 
   close: () => {

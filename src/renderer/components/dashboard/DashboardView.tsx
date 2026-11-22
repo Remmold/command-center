@@ -12,6 +12,7 @@ import type { UsageEntry } from '../../state/usageModel'
 import { UsageMeters } from '../AccountUsage'
 import { useViewStore } from '../../state/viewStore'
 import { openRow } from '../../state/workSessions'
+import { AccountTag } from '../AccountTag'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Card, CardGrid, CardMeta, CardMetaText, CardNote, CardTitle } from '../ui/Card'
@@ -42,14 +43,14 @@ export function DashboardView() {
         <Panel title="Needs you" count={dash.needsYou.length} empty="Nobody is waiting on you" boxed>
           <ul>
             {dash.needsYou.map((row) => (
-              <NeedsYouRow key={row.key} row={row} now={now} />
+              <NeedsYouRow key={row.key} row={row} now={now} account={dash.accountTags[row.key]} />
             ))}
           </ul>
         </Panel>
         <PanelColumns
           main={
             <Panel title="Now building" count={dash.nowBuilding.count} empty="Nothing in progress" boxed>
-              <NowBuildingList building={dash.nowBuilding} now={now} onOpen={openOnBoard} />
+              <NowBuildingList building={dash.nowBuilding} now={now} onOpen={openOnBoard} accountTags={dash.accountTags} />
             </Panel>
           }
           side={
@@ -65,7 +66,7 @@ export function DashboardView() {
         <Panel title="Live sessions" count={dash.live.length} empty="No live sessions">
           <CardGrid label="Live sessions">
             {dash.live.map((card) => (
-              <LiveSessionCard key={card.row.key} card={card} now={now} />
+              <LiveSessionCard key={card.row.key} card={card} now={now} account={dash.accountTags[card.row.key]} />
             ))}
           </CardGrid>
         </Panel>
@@ -78,13 +79,14 @@ function WorktreeTag({ row }: { row: SessionRow }) {
   return row.workspace.worktreeTag ? <Badge>{row.workspace.worktreeTag}</Badge> : null
 }
 
-function NeedsYouRow({ row, now }: { row: HostedRow; now: number }) {
+function NeedsYouRow({ row, now, account }: { row: HostedRow; now: number; account?: string }) {
   const waited = elapsed(row.statusSince, now)
   return (
     <ListRow onClick={() => openSession(row.paneId)} tooltip={`${row.title} · ${row.repoName} · ${STATUS_LABEL[row.status]}`}>
       <RepoIcon repoGroupKey={row.workspace.repoGroupKey} repoName={row.workspace.repoName} size="sm" />
       <WorktreeTag row={row} />
       <ListRowText primary={row.title} secondary={row.repoName} />
+      <AccountTag label={account} />
       <StatusTag status={row.status} />
       <ListRowMeta>{waited ? `waiting ${waited}` : 'just now'}</ListRowMeta>
     </ListRow>
@@ -96,7 +98,7 @@ function snippetOf({ row, snippet }: LiveCard): string {
   return row.kind === 'observed' ? `in VS Code · ${OBSERVED_STATUS_LABEL[row.status].toLowerCase()}` : 'No reply yet'
 }
 
-function LiveSessionCard({ card, now }: { card: LiveCard; now: number }) {
+function LiveSessionCard({ card, now, account }: { card: LiveCard; now: number; account?: string }) {
   const { row } = card
   return (
     <Card surface="widget" onClick={() => openRow(row)} tooltip={`Open ${row.title} in Work`}>
@@ -104,6 +106,7 @@ function LiveSessionCard({ card, now }: { card: LiveCard; now: number }) {
         <RepoIcon repoGroupKey={row.workspace.repoGroupKey} repoName={row.workspace.repoName} size="sm" />
         <WorktreeTag row={row} />
         <CardMetaText trailing={timeAgo(card.lastEventAt, now)}>{row.repoName}</CardMetaText>
+        <AccountTag label={account} />
         <StatusTag status={row.status} />
       </CardMeta>
       <CardTitle>{row.title}</CardTitle>

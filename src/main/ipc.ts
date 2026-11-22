@@ -93,6 +93,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     observed.open(workspaceId, sessionId)
   )
   ipcMain.on(IPC.OBSERVED_CLOSE, () => observed.close())
+  ipcMain.handle(IPC.OBSERVED_TURN, (_e, workspaceId: string, sessionId: string) => observed.turn(workspaceId, sessionId))
+  ipcMain.handle(IPC.OBSERVED_READ, (_e, workspaceId: string, sessionId: string) => observed.items(workspaceId, sessionId))
   unsubscribers.push(() => observed.stop())
 
   const discovery = new DiscoveryService(workspaces.list, (model) => sendAll(IPC.DISCOVERY_CHANGED, model))
@@ -149,6 +151,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     void observed.workspacesChanged()
     return updated
   })
+
+  ipcMain.handle(IPC.WORKSPACES_REORDER, (_e, ids: unknown) =>
+    workspaces.reorder(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])
+  )
 
   ipcMain.handle(IPC.REPO_IDENTITIES_LIST, () => repoIdentities.list())
   ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, (_e, key: string, name: string) =>

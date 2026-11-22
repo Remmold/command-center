@@ -46,6 +46,13 @@ export function openChat(pair: ChatPair, ref: ChatRef, { beside = false }: { bes
   return { halves: placeIn(pair, other(pair.focused), ref), focused: pair.focused }
 }
 
+/** `to` takes the half showing `from`, or opens as any chat would when `from` is not on screen. */
+export function replaceChat(pair: ChatPair, from: ChatRef, to: ChatRef): ChatPair {
+  const half = halfShowing(pair, from)
+  if (half === null) return openChat(pair, to)
+  return { halves: placeIn(pair, half, to), focused: pair.focused }
+}
+
 export function splitPair(pair: ChatPair): ChatPair {
   if (pair.halves.length === 2) return pair
   return { halves: [pair.halves[0], null], focused: 1 }

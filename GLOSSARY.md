@@ -12,6 +12,10 @@ _Avoid_: Project (in new UI text), folder, repo
 A named Claude login that a workspace uses. Every workspace uses exactly one. "Default" is the login Andreas already has.
 _Avoid_: Licence, account, user
 
+**Account**:
+How an account profile is shown: its name and plan, e.g. "Work · Team". Default goes by its login's email. Projects and their sessions are grouped by account in Work, the Dashboard, the Board and Settings.
+_Avoid_: Subscription, licence
+
 **Adopted folder**:
 An existing Claude config folder (such as one a VS Code profile uses) that an account profile runs on instead of a folder the app made. The app only reads it: no shared-item links, no writes, and removing the profile never deletes it.
 _Avoid_: Imported profile
@@ -27,6 +31,10 @@ _Avoid_: Bridge, remote session
 **Observed session**:
 A Claude Code session running somewhere else (the VS Code extension). The command center follows it read-only.
 _Avoid_: External session, VS Code chat
+
+**Take over**:
+Moving an observed session into the command center: it is resumed as a hosted session, once VS Code's agent has finished its turn (at once when it waits on the user). The observed session then leaves the In VS Code list.
+_Avoid_: Handover, import
 
 **Session title**:
 The name a session goes by in lists and headers. It is "New session" before any prompt, then the first prompt, shortened, until Claude names the session (as in the extension). A rename beats both for good, and reaches the CLI, so VS Code's history shows it too.
