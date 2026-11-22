@@ -665,7 +665,8 @@ export const ChatView = memo(function ChatView({
   return (
     <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col" onKeyDown={handlePaneKeyDown}>
       <div ref={scrollRef} tabIndex={-1} data-transcript="" className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
-        <div ref={contentRef}>
+        {/* Positioned so the screen-reader status below stays inside the scroll box instead of stretching the Layer stack. */}
+        <div ref={contentRef} className="relative">
           <MessageColumn className="space-y-3">
             {error && (
               <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
