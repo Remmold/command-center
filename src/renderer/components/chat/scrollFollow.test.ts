@@ -32,6 +32,17 @@ describe('following after a scroll', () => {
     expect(followsAfterScroll({ following: true, previousTop: 300, box: box(680) })).toBe(true)
   })
 
+  it('keeps following when lazy messages clamped the app’s own scroll lower before it was reported', () => {
+    // Seen in the smoke run: set to 936, content shrank so the box clamped to 793, then grew to 1361.
+    const clamped = { scrollHeight: 1361, scrollTop: 793, clientHeight: 252 }
+    expect(followsAfterScroll({ following: true, previousTop: 936, box: clamped, ownTop: 793 })).toBe(true)
+  })
+
+  it('still stops following when the reader scrolls up past where the app put the box', () => {
+    const read = { scrollHeight: 1361, scrollTop: 500, clientHeight: 252 }
+    expect(followsAfterScroll({ following: true, previousTop: 936, box: read, ownTop: 793 })).toBe(false)
+  })
+
   it('starts following again once the reader scrolls back to the bottom', () => {
     expect(followsAfterScroll({ following: false, previousTop: 900, box: box(1390) })).toBe(true)
   })

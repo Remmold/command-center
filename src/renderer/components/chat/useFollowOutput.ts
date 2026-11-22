@@ -18,11 +18,15 @@ export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: R
   const pending = useRef(restore.saved && !restore.saved.following ? restore.saved : undefined)
   const scrolledRef = useRef(restore.onScrolled)
   scrolledRef.current = restore.onScrolled
+  // Where the app itself last put the box, as the browser clamped it.
+  const ownTop = useRef<number | undefined>(undefined)
 
   const toBottom = useCallback(() => {
     const el = scrollRef.current
     following.current = true
-    if (el) el.scrollTop = el.scrollHeight
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    ownTop.current = el.scrollTop
   }, [scrollRef])
 
   useEffect(() => {
@@ -35,7 +39,8 @@ export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: R
     const onScroll = (): void => {
       // A hidden pane reports zero sizes; its last real position still counts.
       if (el.clientHeight === 0 || pending.current) return
-      following.current = followsAfterScroll({ following: following.current, previousTop, box: el })
+      following.current = followsAfterScroll({ following: following.current, previousTop, box: el, ownTop: ownTop.current })
+      ownTop.current = undefined
       previousTop = el.scrollTop
       scrolledRef.current?.({ top: el.scrollTop, following: following.current })
     }
@@ -48,7 +53,10 @@ export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: R
         delete content.dataset.restoring
         return
       }
-      if (following.current) el.scrollTop = el.scrollHeight
+      if (following.current) {
+        el.scrollTop = el.scrollHeight
+        ownTop.current = el.scrollTop
+      }
     })
     el.addEventListener('scroll', onScroll, { passive: true })
     observer.observe(content)
