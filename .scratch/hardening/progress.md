@@ -1,1 +1,2 @@
 - 01 blocked: start mode from settings.json/last pick (else Manual), changes during launch resent, fake Default gets CLAUDE_CONFIG_DIR, fake interrupt receipt lists still_queued — ac2b48b; e2e worker crash 0xC0000409 still open
+- 01 resolved: start mode from settings, changes during launch re-sent, fake config dir, interrupt receipt — ac2b48b (e2e worker crash split to 02)
