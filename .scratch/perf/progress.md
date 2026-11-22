@@ -1,0 +1,1 @@
+- 01 resolved: click latency with long chats (memoised chat rendering, cached time formatters, lazily rendered messages; 3.4 s -> 30 ms view switch) — 0291bc4

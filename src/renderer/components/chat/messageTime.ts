@@ -2,8 +2,16 @@
 
 const LOCALE = 'en-US'
 
+const formatters = new Map<string, Intl.DateTimeFormat>()
+
 function formatter(options: Intl.DateTimeFormatOptions, timeZone: string | undefined): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat(LOCALE, timeZone ? { ...options, timeZone } : options)
+  const key = `${timeZone ?? ''}|${JSON.stringify(options)}`
+  let made = formatters.get(key)
+  if (!made) {
+    made = new Intl.DateTimeFormat(LOCALE, timeZone ? { ...options, timeZone } : options)
+    formatters.set(key, made)
+  }
+  return made
 }
 
 function format(at: number, options: Intl.DateTimeFormatOptions, timeZone: string | undefined): Intl.DateTimeFormatPart[] {

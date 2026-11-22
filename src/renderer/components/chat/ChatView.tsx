@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ChatItems } from './ChatItems'
 import { MessageColumn } from './MessageColumn'
 import { ChatBanner } from './ChatBanner'
@@ -123,7 +123,7 @@ interface AnthropicStreamInner {
   message?: { id?: string }
 }
 
-export function ChatView({
+export const ChatView = memo(function ChatView({
   paneId,
   cwd,
   model,
@@ -757,4 +757,4 @@ export function ChatView({
       {contextOpen && <ContextDialog paneId={paneId} onClose={closeContext} />}
     </div>
   )
-}
+})

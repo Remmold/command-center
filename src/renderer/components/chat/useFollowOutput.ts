@@ -30,6 +30,8 @@ export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: R
     const content = contentRef.current
     if (!el || !content) return
     let previousTop = el.scrollTop
+    // Lazily rendered messages only have an estimated height; render them all once so the saved place is exact.
+    if (pending.current) content.dataset.restoring = ''
     const onScroll = (): void => {
       // A hidden pane reports zero sizes; its last real position still counts.
       if (el.clientHeight === 0 || pending.current) return
@@ -43,6 +45,7 @@ export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: R
         el.scrollTop = restoredScrollTop(pending.current, el)
         previousTop = el.scrollTop
         pending.current = undefined
+        delete content.dataset.restoring
         return
       }
       if (following.current) el.scrollTop = el.scrollHeight

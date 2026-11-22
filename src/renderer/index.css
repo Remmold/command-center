@@ -54,3 +54,15 @@ code, kbd, pre, samp {
   scrollbar-width: thin;
   scrollbar-color: rgb(var(--cc-scrollbar)) transparent;
 }
+
+/* A long chat lays out and paints only the messages near the viewport; the rest keep their last measured height. */
+@layer utilities {
+  .lazy-render {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 160px;
+  }
+
+  [data-restoring] .lazy-render {
+    content-visibility: visible;
+  }
+}
