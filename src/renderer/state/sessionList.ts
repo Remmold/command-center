@@ -1,7 +1,7 @@
-import { isWaiting } from '../../shared/needsYou'
+import { isWaiting, STATUS_LABEL } from '../../shared/needsYou'
 import { accountOf, accountRank, type Account } from './accounts'
 import { repoDisplayName, type RepoIdentityViews } from '../../shared/repoIdentity'
-import type { ObservedSession, ObservedStatus, SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
+import { OBSERVED_STATUS_LABEL, type ObservedSession, type ObservedStatus, type SessionStatus, type SessionStatusEntry, type Workspace } from '../../shared/types'
 
 export interface HostedSessionInput {
   paneId: string
@@ -150,6 +150,21 @@ export function accountSections(groups: readonly SessionGroup[], accounts: reado
       groups,
       needsYou: groups.find((g) => g.id === 'needs-you')?.rows.length ?? 0
     }))
+}
+
+/** A folded section's header pill; an open one already shows the Needs you group. */
+export function waitingBadge(section: AccountSection, open: boolean): { text: string; tooltip: string } | null {
+  const n = section.needsYou
+  if (open || n === 0) return null
+  const chats = n === 1 ? 'chat' : 'chats'
+  return { text: `${n} waiting`, tooltip: `${n} ${chats} in ${section.account.name} ${n === 1 ? 'is' : 'are'} waiting on you` }
+}
+
+export function sessionRowTooltip(row: SessionRow): string {
+  const where = [row.repoName, row.workspace.worktreeTag].filter(Boolean).join(' · ')
+  if (row.kind === 'observed') return `${row.title} · ${where} · ${OBSERVED_STATUS_LABEL[row.status]} in VS Code (read-only)`
+  const model = row.modelTag ? `${row.modelTag} · ` : ''
+  return `${row.title} · ${where} · ${model}${STATUS_LABEL[row.status]} · double-click to rename, Ctrl+click to open beside`
 }
 
 /** The rows on screen, top to bottom; collapsed sections show none. */

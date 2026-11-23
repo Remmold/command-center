@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ObservedSession, SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
-import { accountSections, sessionList, shownRows, waitingRows, type HostedSessionInput, type SessionListInput } from './sessionList'
+import { accountSections, sessionList, sessionRowTooltip, shownRows, waitingBadge, waitingRows, type HostedSessionInput, type SessionListInput } from './sessionList'
 import type { Account } from './accounts'
 
 const workspace = (id: string, repoName: string, worktreeTag = ''): Workspace => ({
@@ -169,6 +169,14 @@ describe('account sections', () => {
     expect(sections().map((s) => s.needsYou)).toEqual([1, 1])
   })
 
+  it("shows a folded section's waiting chats as N waiting, and nothing on an open one or without waiting chats", () => {
+    const [home, work] = sections()
+    expect(waitingBadge(work, false)).toEqual({ text: '1 waiting', tooltip: '1 chat in Work is waiting on you' })
+    expect(waitingBadge(work, true)).toBeNull()
+    expect(waitingBadge({ ...home, needsYou: 2 }, false)).toEqual({ text: '2 waiting', tooltip: '2 chats in a@home.com are waiting on you' })
+    expect(waitingBadge({ ...home, needsYou: 0 }, false)).toBeNull()
+  })
+
   it('leaves out accounts without sessions and puts sessions of a removed profile under the default account', () => {
     const orphan = { ...workspace('or', 'orphan'), profileId: 'gone' }
     const list = sessionList(input({ workspaces: [...WORKSPACES, orphan], hosted: [hosted('x', 'orphan one', 0, 'or')] }))
@@ -184,5 +192,19 @@ describe('account sections', () => {
     const more = { ...sessions, statuses: [...sessions.statuses!, status('w2', 'your-turn', 0)] }
     const list = accountSections(sessionList(input(more)), ACCOUNTS)
     expect(waitingRows(list).map((r) => r.title)).toEqual(['home waiting', 'work idle', 'work waiting'])
+  })
+})
+
+describe('sessionRowTooltip', () => {
+  it('keeps the full title, model and effort of a hosted row, since a narrow list hides the model', () => {
+    const [row] = sessionList(input({ hosted: [{ ...hosted('a', 'Repo icons for every workspace'), modelTag: 'Opus 5.5 · Medium' }], statuses: [status('a', 'your-turn', 1)] }))[0].rows
+    expect(sessionRowTooltip(row)).toBe('Repo icons for every workspace · command-center · Opus 5.5 · Medium · Your turn · double-click to rename, Ctrl+click to open beside')
+  })
+
+  it('reads the same without a model tag, and marks a VS Code row read-only', () => {
+    const [row] = sessionList(input({ hosted: [hosted('a', 'New session')] }))[0].rows
+    expect(sessionRowTooltip(row)).toBe('New session · command-center · Idle · double-click to rename, Ctrl+click to open beside')
+    const [vs] = sessionList(input({ observed: [observed('o', 'home vscode', 1)] }))[0].rows
+    expect(sessionRowTooltip(vs)).toMatch(/^home vscode · .* in VS Code \(read-only\)$/)
   })
 })

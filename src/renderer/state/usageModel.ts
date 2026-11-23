@@ -4,6 +4,15 @@ import { elapsedShare, pace, type Pace } from './usagePace'
 export type WindowTone = 'ok' | 'warn' | 'limit'
 export type WindowKey = 'fiveHour' | 'sevenDay'
 
+export interface UsageLine {
+  /** e.g. "Week 62%". */
+  head: string
+  /** e.g. "ahead of pace by 14%"; null without a reset time. */
+  verdict: string | null
+  /** e.g. "resets Mon 23:59"; null when unknown. */
+  reset: string | null
+}
+
 export interface UsageBarView {
   key: WindowKey
   label: string
@@ -17,8 +26,7 @@ export interface UsageBarView {
   pace: Pace | null
   /** e.g. "48% of the week passed · on track"; null without a reset time. */
   paceNote: string | null
-  /** One short line, e.g. "Week 62% · ahead by 14% · resets Mon 23:59". */
-  line: string
+  line: UsageLine
   tooltip: string
 }
 
@@ -120,11 +128,11 @@ function barView(
   const parts = [`${percent}% used`]
   if (paceNote) parts.push(paceNote)
   if (at !== null) parts.push(`resets ${spec.showDay ? resetDayShort(at, timeZone) : `in ${resetIn(at, now)}`}`)
-  const line = [
-    `${spec.short} ${percent}%`,
-    ...(verdict ? [verdict.ahead ? `ahead by ${verdict.by}%` : verdict.text] : []),
-    ...(at === null ? [] : [`resets ${spec.showDay ? resetDayShort(at, timeZone) : clockShort(at, timeZone)}`])
-  ].join(' · ')
+  const line: UsageLine = {
+    head: `${spec.short} ${percent}%`,
+    verdict: verdict?.text ?? null,
+    reset: at === null ? null : `resets ${spec.showDay ? resetDayShort(at, timeZone) : clockShort(at, timeZone)}`
+  }
   return {
     key: spec.key,
     label: spec.label,

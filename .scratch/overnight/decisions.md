@@ -273,3 +273,7 @@ Each entry records what was decided, why, and the alternative. Review these in t
 145. **The generic-exe check compares against the icon Windows gives a zero-byte `.exe` written to the temp folder** (never run, deleted right after). Unity icons stored as PSD/TGA are left out, since Electron can't read them. A vanished automatic icon is noticed on the next start or workspace change, or on Detect again, not while the app runs.
     - Alternative: watch every repo's chosen file.
 146. **A popover that opens below an anchor low in the window moves up until it fits**: the icon picker grew past the window's bottom edge in Settings → Workspaces.
+147. **The Work list's usage line words the verdict in full ("ahead of pace by 38%") at every width**, as the tooltip and Account & Usage dialog do; under 360 px the verdict and reset drop to a second line, and only the reset may be cut.
+    - Alternative: keep "ahead by 38%" on the wide one-line layout and switch wording by width.
+148. **"Narrow" is one container query on the whole Work list (360 px)** for both the row model text and the usage layout, so both switch together.
+    - Alternative: each usage block queries its own width.

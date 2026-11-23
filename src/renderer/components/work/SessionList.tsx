@@ -8,9 +8,7 @@ import { useMenu } from '../../hooks/useMenu'
 import { Columns2, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, X } from 'lucide-react'
 import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useSessionListStore } from '../../state/sessionListStore'
-import { OBSERVED_STATUS_LABEL } from '../../../shared/types'
-import { STATUS_LABEL } from '../../../shared/needsYou'
-import type { AccountSection, SessionGroup, SessionGroupId, SessionRow } from '../../state/sessionList'
+import { sessionRowTooltip, waitingBadge, type AccountSection, type SessionGroup, type SessionGroupId, type SessionRow } from '../../state/sessionList'
 import { useChatPairStore } from '../../state/chatPairStore'
 import { useLauncherStore } from '../../state/launcherStore'
 import { closeSession } from '../../state/sessionNavigation'
@@ -51,7 +49,7 @@ export function SessionList() {
   )
 
   return (
-    <nav aria-label="Sessions" className="flex h-full min-h-0 flex-col bg-sidebar">
+    <nav aria-label="Sessions" className="work-list flex h-full min-h-0 flex-col bg-sidebar">
       <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
         <span className="min-w-0 flex-1">
           <Button onClick={() => useLauncherStore.getState().pickWorkspace('new-session')} tooltip="Start a session in a workspace (Ctrl+T)">
@@ -79,13 +77,7 @@ export function SessionList() {
                 tooltip={`Sessions on the account ${section.account.label}`}
                 marker={<AccountMarker profileId={section.account.profileId} />}
                 detail={<SectionUsage profileId={section.account.profileId} />}
-                badge={
-                  section.needsYou > 0 && (
-                    <Badge tone="count" tooltip={`${section.needsYou} ${section.needsYou === 1 ? 'session needs' : 'sessions need'} you`}>
-                      {section.needsYou}
-                    </Badge>
-                  )
-                }
+                badge={<WaitingBadge section={section} open={!collapsed.includes(section.account.profileId)} />}
               >
                 {groups(section)}
               </CollapsibleSection>
@@ -120,12 +112,6 @@ function StatusGroups({ groups, pair, renaming, setRenaming }: StatusGroupsProps
       )}
     </ListGroup>
   ))
-}
-
-function rowTooltip(row: SessionRow): string {
-  const where = [row.repoName, row.workspace.worktreeTag].filter(Boolean).join(' · ')
-  if (row.kind === 'observed') return `${row.title} · ${where} · ${OBSERVED_STATUS_LABEL[row.status]} in VS Code (read-only)`
-  return `${row.title} · ${where} · ${STATUS_LABEL[row.status]} · double-click to rename, Ctrl+click to open beside`
 }
 
 function ListMenu() {
@@ -170,7 +156,7 @@ function SessionListRow({ row, active, onRename }: { row: SessionRow; active: bo
       onClick={(e) => openRow(row, { focus: false, beside: e.ctrlKey || e.metaKey })}
       onDoubleClick={onRename}
       onContextMenu={onContextMenu}
-      tooltip={rowTooltip(row)}
+      tooltip={sessionRowTooltip(row)}
       actionsPinned={menu.open}
       actions={
         <>
@@ -197,7 +183,7 @@ function SessionListRow({ row, active, onRename }: { row: SessionRow; active: bo
       <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
       {workspace.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
       <ListRowText primary={row.title} />
-      {row.kind === 'hosted' && row.modelTag && <ListRowLabel tone="secondary">{row.modelTag}</ListRowLabel>}
+      {row.kind === 'hosted' && row.modelTag && <ListRowLabel tone="secondary" hideWhenNarrow>{row.modelTag}</ListRowLabel>}
       <StatusDot status={row.status} />
     </ListRow>
   )
@@ -219,6 +205,11 @@ function RenameRow({ paneId, title, onDone }: { paneId: string; title: string; o
       />
     </li>
   )
+}
+
+function WaitingBadge({ section, open }: { section: AccountSection; open: boolean }) {
+  const badge = waitingBadge(section, open)
+  return badge && <Badge tone="waiting" tooltip={badge.tooltip}>{badge.text}</Badge>
 }
 
 function AccountMarker({ profileId }: { profileId: string }) {

@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
 
-type Tone = 'neutral' | 'warning' | 'count'
+type Tone = 'neutral' | 'warning' | 'waiting'
 
 const TONES: Record<Tone, string> = {
-  neutral: 'bg-list-selected text-muted',
-  warning: 'bg-amber-500/15 text-amber-300',
-  /** VS Code's activity badge: a number that asks for attention. */
-  count: 'bg-accent font-semibold tabular-nums text-accent-fg'
+  neutral: 'min-w-0 truncate rounded bg-list-selected text-muted',
+  warning: 'min-w-0 truncate rounded bg-amber-500/15 text-amber-300',
+  /** In the Needs-you amber; never cut. */
+  waiting: 'shrink-0 whitespace-nowrap rounded-full bg-status-approval/15 font-medium tabular-nums text-status-approval'
 }
 
 interface Props {
@@ -17,7 +17,7 @@ interface Props {
 
 export function Badge({ children, tone = 'neutral', tooltip }: Props) {
   return (
-    <span title={tooltip} className={`min-w-0 truncate rounded px-1.5 py-px text-[10px] leading-4 ${TONES[tone]}`}>
+    <span title={tooltip} className={`px-1.5 py-px text-[10px] leading-4 ${TONES[tone]}`}>
       {children}
     </span>
   )
