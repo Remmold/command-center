@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog, session } from 'electron'
 import { registerIpc } from './ipc'
 import { removeLegacyHook } from './permission/legacyHook'
 import { sessionStatusTracker } from './sessions/tracker'
@@ -73,6 +73,8 @@ if (!app.requestSingleInstanceLock()) {
     if (app.isReady()) showMainWindow()
   })
   app.on('before-quit', allowWindowClose)
+  // Chromium writes local storage lazily; a quit or update restart right after a change (a hidden list, a draft) would lose it.
+  app.on('before-quit', () => session.defaultSession.flushStorageData())
   app.on('window-all-closed', () => {
     // Stays alive in the tray.
   })
