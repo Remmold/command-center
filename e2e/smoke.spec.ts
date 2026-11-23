@@ -152,6 +152,45 @@ test.describe('slow turn', () => {
   })
 })
 
+test.describe('working indicator', () => {
+  test.use({ script: 'slow' })
+
+  test('the working line shows while a turn runs and goes when it ends and after Stop', async ({ launched }) => {
+    const { page } = launched
+    const pane = page.locator('[data-chat-pane]')
+    const line = pane.locator('[data-working-line]')
+    await startSession(launched)
+    await send(page, 'quick one')
+    await expect(line).toBeVisible()
+    await expect(line).toContainText(/[A-Z][a-z]+\.\.\./)
+    await expect(pane.getByText('Quick reply.')).toBeVisible()
+    await expect(line).toHaveCount(0)
+
+    await send(page, 'run the long job')
+    await expect(pane.getByText('Starting a long job.')).toBeVisible()
+    await expect(line).toBeVisible()
+    await pane.getByRole('button', { name: 'Stop' }).click()
+    await expect(line).toHaveCount(0)
+  })
+
+  test('a running Bash call blinks, offers Run in background, and the click sends background_tasks for it', async ({ launched }) => {
+    const { page, log } = launched
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await send(page, 'build it')
+    const row = pane.locator('[data-timeline-row]', { hasText: 'pnpm build' })
+    await expect(row.getByRole('img', { name: 'running' })).toBeVisible()
+    const action = row.getByRole('button', { name: 'Run in background' })
+    await expect(action).toBeVisible()
+    await action.click()
+    await expect.poll(() => log.controlRequests('background_tasks')).toEqual([{ subtype: 'background_tasks', tool_use_id: expect.stringMatching(/^toolu_fake/) }])
+    await expect(pane.getByText('The build is done.')).toBeVisible()
+    await expect(row.getByRole('img', { name: 'succeeded' })).toBeVisible()
+    await expect(row.getByRole('button', { name: 'Run in background' })).toHaveCount(0)
+    await expect(pane.locator('[data-working-line]')).toHaveCount(0)
+  })
+})
+
 test.describe('auto-update', () => {
   test.use({ script: 'slow', env: { CC_UPDATE_IDLE_MS: '1500' } })
 

@@ -28,7 +28,7 @@ const DOT: Record<Exclude<TimelineDot, 'none'>, string> = {
   neutral: 'bg-muted',
   success: 'bg-success',
   error: 'bg-error',
-  progress: 'bg-status-running animate-pulse',
+  progress: 'bg-muted animate-blink',
   pending: 'border border-faint'
 }
 

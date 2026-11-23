@@ -55,6 +55,7 @@ module.exports = {
           8: theme('chart-8')
         },
         clay: theme('claude-clay'),
+        spinner: theme('spinner'),
         scrim: theme('scrim'),
         status: {
           running: theme('status-running'),
@@ -64,6 +65,15 @@ module.exports = {
           live: theme('status-live'),
           quiet: theme('status-quiet')
         }
+      },
+      // The extension's timeline `blink` and spinner row `fadeIn`.
+      keyframes: {
+        blink: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0' } },
+        'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } }
+      },
+      animation: {
+        blink: 'blink 1s linear infinite',
+        'fade-in': 'fade-in 0.3s ease-in-out'
       },
       fontSize: {
         sm: ['13px', '20px']

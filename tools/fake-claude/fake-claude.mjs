@@ -318,6 +318,18 @@ class Fake {
       }
       case 'interrupt':
         return this.interrupt(request.cancel_queued === true, ok)
+      case 'background_tasks': {
+        const id = request.tool_use_id
+        if (id !== undefined && id !== null && typeof id !== 'string') return fail('background_tasks: tool_use_id must be a string')
+        const shell = this.running?.shell
+        if (id === undefined || id === null || id === '') {
+          ok({})
+          return shell && !shell.backgrounded ? this.running.backgroundShell() : undefined
+        }
+        if (!shell || shell.toolUseId !== id || shell.backgrounded) return ok({ backgrounded: false })
+        ok({ backgrounded: true })
+        return this.running.backgroundShell()
+      }
       case 'stop_task': {
         if (typeof request.task_id !== 'string') return fail('stop_task: task_id must be a string')
         const sub = this.running?.sub
@@ -448,6 +460,12 @@ class Turn {
   stopSubagent() {
     if (!this.sub) return
     this.sub.stopped = true
+    for (const wake of this.wakers) wake()
+  }
+
+  backgroundShell() {
+    if (!this.shell) return
+    this.shell.backgrounded = true
     for (const wake of this.wakers) wake()
   }
 
@@ -737,6 +755,11 @@ class Turn {
     }
     if (decision.behavior === 'allow') {
       fake.remember(decision.updatedPermissions)
+      if (typeof event.runMs === 'number') {
+        if (!(await this.runShell(event, toolUseId, input))) return false
+        this.foldQueued()
+        return false
+      }
       this.toolResult(toolUseId, event.result ?? NO_APPROVAL_RESULTS[event.name] ?? 'Done.', false)
       this.foldQueued()
       return false
@@ -750,6 +773,32 @@ class Turn {
     this.foldQueued()
     if (event.onDeny) return (await this.play(event.onDeny)) || this.finishEarly()
     return false
+  }
+
+  /**
+   * A shell command that runs `runMs` in the foreground, shaped by the CLI's schema: `task_started` (`local_bash`, not backgrounded),
+   * then `task_updated` and the call's result. `background_tasks` for its call moves it to the background at once. False when interrupted.
+   */
+  async runShell(event, toolUseId, input) {
+    const taskId = `b${randomBytes(4).toString('hex')}`
+    const system = (fields) => this.emit({ type: 'system', ...fields, task_id: taskId, uuid: '', session_id: '' })
+    system({ subtype: 'task_started', tool_use_id: toolUseId, description: input.description ?? input.command ?? event.name, task_type: 'local_bash', is_backgrounded: false })
+    this.shell = { taskId, toolUseId, backgrounded: false }
+    this.awaitingTool = toolUseId
+    await this.sleep(event.runMs)
+    const shell = this.shell
+    this.shell = null
+    if (this.aborted) return false
+    this.awaitingTool = null
+    if (shell.backgrounded) {
+      system({ subtype: 'task_updated', patch: { is_backgrounded: true } })
+      const output = join(process.cwd(), '.fake-claude', 'tasks', `${taskId}.output`)
+      this.toolResult(toolUseId, `Command was manually backgrounded by user with ID: ${taskId}. Output is being written to: ${output}`, false)
+      return true
+    }
+    system({ subtype: 'task_updated', patch: { status: 'completed', end_time: Date.now() } })
+    this.toolResult(toolUseId, event.result ?? 'Done.', false)
+    return true
   }
 
   finishEarly() {

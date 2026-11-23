@@ -1,6 +1,30 @@
 {
   "turns": [
     {
+      "match": "^build",
+      "repeat": true,
+      "events": [
+        { "type": "text", "text": "Running the build." },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": { "command": "pnpm build", "description": "Build the app" },
+          "approval": false,
+          "runMs": 60000,
+          "result": "built"
+        },
+        { "type": "text", "text": "The build is done." }
+      ]
+    },
+    {
+      "match": "^quick",
+      "repeat": true,
+      "events": [
+        { "type": "wait", "ms": 1500 },
+        { "type": "text", "text": "Quick reply." }
+      ]
+    },
+    {
       "match": "",
       "repeat": true,
       "events": [

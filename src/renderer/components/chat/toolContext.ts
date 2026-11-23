@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react'
 import type { ToolPairs } from './toolCall'
 import type { ChatItem } from './types'
 import type { SubagentTasks } from './subagents'
+import type { BackgroundOutcome, ForegroundCalls } from './runInBackground'
 
 /** A hosted or followed session whose transcripts folder holds its subagents' own files. */
 export interface TranscriptSource {
@@ -20,6 +21,14 @@ export interface AgentHost {
   transcript?: TranscriptSource
 }
 
+/** What "Run in background" needs: the calls the CLI could still move, and the means to ask it. */
+export interface BackgroundHost {
+  foreground: ForegroundCalls
+  /** The session refused a move before, so the line no longer shows. */
+  refused: boolean
+  move: (toolUseIds: readonly string[]) => Promise<BackgroundOutcome>
+}
+
 interface ToolContextValue {
   pairs: ToolPairs
   cwd: string | undefined
@@ -28,11 +37,14 @@ interface ToolContextValue {
   /** Each Agent or SendMessage call's subagent items. */
   subagentItems: ReadonlyMap<string, ChatItem[]>
   agents?: AgentHost
+  /** Tool calls still waiting on their result while the turn runs. */
+  running: ReadonlySet<string>
+  background?: BackgroundHost
 }
 
 const NO_PAIRS: ToolPairs = { resultFor: new Map(), isPaired: () => false }
 
-export const ToolContext = createContext<ToolContextValue>({ pairs: NO_PAIRS, cwd: undefined, subagentItems: new Map() })
+export const ToolContext = createContext<ToolContextValue>({ pairs: NO_PAIRS, cwd: undefined, subagentItems: new Map(), running: new Set() })
 
 export function useToolContext(): ToolContextValue {
   return useContext(ToolContext)

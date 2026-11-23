@@ -491,6 +491,32 @@ describe('subagent', () => {
   })
 })
 
+describe('foreground shell commands', () => {
+  const SHELL = { type: 'tool_use', name: 'Bash', input: { command: 'pnpm build', description: 'Build the app' }, approval: false, runMs: 5000, result: 'built' }
+
+  it('runs as a local_bash task that background_tasks moves to the background, and the turn goes on', async () => {
+    const fake = start([], { turns: [{ match: '', events: [SHELL, { type: 'text', text: 'Carried on.' }] }] })
+    fake.say('build')
+    const started = await fake.next((l) => l.subtype === 'task_started')
+    expect(started).toMatchObject({ task_type: 'local_bash', is_backgrounded: false, tool_use_id: expect.stringMatching(/^toolu_fake/) })
+    expect((await fake.control('background_tasks', { tool_use_id: 'toolu_other' })).response).toEqual({ backgrounded: false })
+    expect((await fake.control('background_tasks', { tool_use_id: 42 })).subtype).toBe('error')
+    expect((await fake.control('background_tasks', { tool_use_id: started.tool_use_id })).response).toEqual({ backgrounded: true })
+    expect(await fake.next((l) => l.subtype === 'task_updated')).toMatchObject({ task_id: started.task_id, patch: { is_backgrounded: true } })
+    const result = await fake.next((l) => l.type === 'user' && l.message.content[0]?.tool_use_id === started.tool_use_id)
+    expect(result.message.content[0].content).toMatch(/^Command was manually backgrounded by user with ID: /)
+    expect((await fake.next(isResult)).result).toBe('Carried on.')
+  })
+
+  it('ends with task_updated completed and its result when left to run', async () => {
+    const fake = start([], { turns: [{ match: '', events: [{ ...SHELL, runMs: 50 }] }] })
+    fake.say('build')
+    expect(await fake.next((l) => l.subtype === 'task_updated')).toMatchObject({ patch: { status: 'completed' } })
+    const result = await fake.next((l) => l.type === 'user' && l.message.content[0]?.type === 'tool_result')
+    expect(result.message.content[0].content).toBe('built')
+  })
+})
+
 describe('robustness', () => {
   it('exits when stdin closes during a pending approval', async () => {
     const fake = start([], { turns: [{ match: '', events: [WRITE] }] })

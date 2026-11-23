@@ -50,6 +50,8 @@
   --cc-chart-7: 17 168 205;
   --cc-chart-8: 204 204 204;
   --cc-claude-clay: 198 97 63;
+  /* The extension's --app-spinner-foreground on a dark theme (--app-claude-orange). */
+  --cc-spinner: 217 119 87;
   --cc-scrim: 0 0 0;
 
   /* Dark+ token colours, read by syntax.css for highlight.js. */
