@@ -538,6 +538,8 @@ export interface RendererApi {
     read: (workspaceId: string, sessionId: string) => Promise<ObservedOpenResult>
     /** The config folder whose `sessions/<pid>.json` holds the session with a live process; null when none does. */
     liveConfigDir: (sessionId: string) => Promise<string | null>
+    /** How often to read `liveConfigDir` and the session list again, in ms. */
+    refreshMs: number
   }
   approval: {
     list: () => Promise<ApprovalRequest[]>

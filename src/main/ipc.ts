@@ -8,6 +8,7 @@ import { liveConfigDir } from './observed/turn'
 import * as vscodeMatch from './profiles/vscodeMatch'
 import { transcriptsDirForCwd, transcriptsDirForWorkspace } from './profiles/transcripts'
 import { ObservedService } from './observed/service'
+import { observedRefreshMs } from '../shared/observedRefresh'
 import * as apps from './apps/store'
 import { appManager } from './apps/manager'
 import { ptyManager } from './pty/manager'
@@ -93,7 +94,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     workspaces.list,
     transcriptsDirForWorkspace,
     (sessions) => sendAll(IPC.OBSERVED_CHANGED, sessions),
-    (event) => sendAll(IPC.OBSERVED_ITEMS, event)
+    (event) => sendAll(IPC.OBSERVED_ITEMS, event),
+    observedRefreshMs(process.env)
   )
   observed.start()
   ipcMain.handle(IPC.OBSERVED_LIST, () => observed.list())

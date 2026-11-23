@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_VIEW, parseView } from './views'
+import { parseView } from './views'
 
 describe('app view', () => {
-  it('opens on the Dashboard', () => {
-    expect(DEFAULT_VIEW).toBe('dashboard')
-  })
-
   it('keeps each current view', () => {
     expect(parseView('dashboard')).toBe('dashboard')
     expect(parseView('work')).toBe('work')

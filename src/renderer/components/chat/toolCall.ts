@@ -62,9 +62,3 @@ export function pairToolResults(items: ChatItem[]): ToolPairs {
   }
   return { resultFor, isPaired: (result) => resultFor.get(result.toolUseId) === result }
 }
-
-/** What an approval prompt shows for a tool call: a shell command in full, anything else by its row title. */
-export function approvalTarget(name: string, input: unknown, cwd: string | undefined): string {
-  const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
-  return stringField(o, 'command') ?? toolCallTitle(name, input, cwd).target
-}

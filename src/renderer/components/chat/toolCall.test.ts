@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { approvalTarget, pairToolResults, toolCallTitle } from './toolCall'
+import { pairToolResults, toolCallTitle } from './toolCall'
 import type { ChatItem, ToolResultItem } from './types'
 
 const CWD = 'C:\\projects\\personal\\command-center'
@@ -79,18 +79,5 @@ describe('tool call pairing', () => {
     const pairs = pairToolResults([call('t1'), orphan])
     expect(pairs.isPaired(orphan)).toBe(false)
     expect(pairs.resultFor.has('t1')).toBe(false)
-  })
-})
-
-describe('approval target', () => {
-  it('shows a PowerShell command in full, every line', () => {
-    const command = 'Get-ChildItem src\n  | Measure-Object'
-    expect(approvalTarget('PowerShell', { command, description: 'Count files' }, CWD)).toBe(command)
-  })
-
-  it('names any other tool the way its tool call row does', () => {
-    expect(approvalTarget('Edit', { file_path: `${CWD}\\src\\a.ts`, old_string: 'x' }, CWD)).toBe('src/a.ts')
-    expect(approvalTarget('WebFetch', { url: 'https://example.com/a' }, CWD)).toBe('https://example.com/a')
-    expect(approvalTarget('mcp__x__ping', {}, CWD)).toBe('')
   })
 })
