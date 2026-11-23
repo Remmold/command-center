@@ -24,7 +24,8 @@ function toRequest(paneId: string, requestId: string, raw: IncomingControlReques
     input: isRecord(raw.input) ? (raw.input as ToolInput) : {},
     suggestions: Array.isArray(raw.permission_suggestions)
       ? (raw.permission_suggestions.filter(isRecord) as PermissionSuggestion[])
-      : []
+      : [],
+    raisedAt: Date.now()
   }
   if (typeof raw.description === 'string') request.description = raw.description
   if (typeof raw.decision_reason === 'string' && REASON_TYPES_SHOWN.has(String(raw.decision_reason_type))) {
@@ -33,7 +34,7 @@ function toRequest(paneId: string, requestId: string, raw: IncomingControlReques
   return request
 }
 
-/** Holds each `can_use_tool` request until the user answers it in the chat. */
+/** Holds each `can_use_tool` request until the user answers it, in the chat or the approval inbox. */
 export class ApprovalBroker {
   private readonly pending = new Map<string, Pending>()
   private raisedListeners: Array<(request: ApprovalRequest) => void> = []

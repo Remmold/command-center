@@ -1,6 +1,43 @@
 {
   "turns": [
     {
+      "match": "^ask",
+      "flags": "i",
+      "repeat": true,
+      "events": [
+        { "type": "text", "text": "Two quick questions before I build the export." },
+        {
+          "type": "tool_use",
+          "name": "AskUserQuestion",
+          "input": {
+            "questions": [
+              {
+                "question": "Which formats should the export offer?",
+                "header": "Formats",
+                "multiSelect": true,
+                "options": [
+                  { "label": "CSV", "description": "Rows for spreadsheets" },
+                  { "label": "PDF", "description": "A printable report" },
+                  { "label": "JSON", "description": "For scripts" }
+                ]
+              },
+              {
+                "question": "Which layout should the report use?",
+                "header": "Layout",
+                "multiSelect": false,
+                "options": [
+                  { "label": "Table", "description": "One row per invoice", "preview": "| Invoice | Total |\n|---------|-------|\n| 1001    | 40.00 |" },
+                  { "label": "Cards", "description": "One card per invoice", "preview": "+---------------+\n| Invoice 1001  |\n| Total 40.00   |\n+---------------+" }
+                ]
+              }
+            ]
+          },
+          "onDeny": [{ "type": "text", "text": "Okay, no questions then." }]
+        },
+        { "type": "text", "text": "Thanks, building the export now." }
+      ]
+    },
+    {
       "match": "",
       "repeat": true,
       "events": [

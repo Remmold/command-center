@@ -2,7 +2,7 @@ import { Notification } from 'electron'
 import { windowOffscreen } from '../testWindow'
 import type { SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
 import type { SessionStatusTracker } from '../sessions/tracker'
-import { notificationText, shouldNotify, trayBadge, type Onscreen, type TrayBadge } from './attention'
+import { clickTarget, notificationText, shouldNotify, trayBadge, type Onscreen, type TrayBadge } from './attention'
 
 export interface AttentionDeps {
   tracker: SessionStatusTracker
@@ -10,6 +10,8 @@ export interface AttentionDeps {
   onscreen: () => Onscreen
   setBadge: (badge: TrayBadge) => void
   openSession: (paneId: string) => void
+  /** Opens the approval inbox at this chat's oldest request. */
+  openApprovals: (paneId: string) => void
   /** Path of the image to show for a session running in `cwd`. */
   notificationIcon: (cwd: string) => Promise<string>
 }
@@ -39,7 +41,8 @@ export function startAttention(deps: AttentionDeps): () => void {
     live.add(n)
     n.on('click', () => {
       live.delete(n)
-      deps.openSession(entry.paneId)
+      if (clickTarget(entry) === 'approvals') deps.openApprovals(entry.paneId)
+      else deps.openSession(entry.paneId)
     })
     if (live.size > KEPT_NOTIFICATIONS) live.delete(live.values().next().value as Notification)
     n.show()

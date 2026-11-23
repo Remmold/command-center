@@ -39,6 +39,7 @@ import { useApprovalsStore } from '../../state/approvalsStore'
 import { useAccountSwitchStore } from '../../state/accountSwitchStore'
 import { availableModes, initialMode, isPermissionMode, migrateMode, nextMode, type PermissionMode } from '../../state/permissionModes'
 import { NOT_RUNNING, controlOnceStarted } from './launchGate'
+import { switchSessionMode } from '../../state/sessionMode'
 import type { ApprovalRequest } from '../../../shared/approval'
 import { useFocusRequestStore } from '../../state/sessionNavigation'
 import { useSessionInit, useSessionInitStore } from '../../state/sessionInitStore'
@@ -239,14 +240,9 @@ export const ChatView = memo(function ChatView({
   }
 
   const setMode = async (next: PermissionMode): Promise<boolean> => {
-    const store = useProjectViewsStore.getState()
-    const previous = mode
-    store.setSessionPermissionMode(paneId, next)
-    const res = await control('set_permission_mode', { mode: next })
-    if (res.ok || res.error === NOT_RUNNING) return true
-    store.setSessionPermissionMode(paneId, previous)
-    setError(res.error)
-    return false
+    const failed = await switchSessionMode(paneId, next, (fields) => control('set_permission_mode', fields))
+    if (failed) setError(failed)
+    return failed === null
   }
 
   const pickMode = async (next: PermissionMode): Promise<void> => {

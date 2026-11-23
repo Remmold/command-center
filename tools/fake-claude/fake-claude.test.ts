@@ -342,6 +342,17 @@ describe('tool approval', () => {
     expect(toolResults(fake)).toEqual([{ tool_use_id: toolUse.id, type: 'tool_result', content: 'File created successfully' }])
   })
 
+  it('answers an allowed AskUserQuestion with the answers in the CLI’s result wording', async () => {
+    const questions = [{ question: 'Which DB?', header: 'DB', multiSelect: false, options: [{ label: 'SQLite' }, { label: 'Postgres' }] }]
+    const fake = start([], { turns: [{ match: '', events: [{ type: 'tool_use', name: 'AskUserQuestion', input: { questions } }] }] })
+    fake.say('ask me')
+    const ask = await fake.next(isApproval)
+    expect(ask.request.tool_name).toBe('AskUserQuestion')
+    reply(fake, ask, { behavior: 'allow', updatedInput: { questions, answers: { 'Which DB?': 'SQLite' } }, updatedPermissions: [] })
+    await fake.next(isResult)
+    expect(toolResults(fake)[0].content).toBe('Your questions have been answered: "Which DB?"="SQLite". You can now continue with these answers in mind.')
+  })
+
   it('passes deny feedback back as an error tool_result and plays the deny path', async () => {
     const fake = start([], {
       turns: [{ match: '', events: [{ ...WRITE, onDeny: [{ type: 'text', text: 'Okay, I will not.' }] }, { type: 'text', text: 'Wrote it.' }] }]

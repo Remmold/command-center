@@ -15,6 +15,7 @@ interface PlainShortcut {
     | 'nextWaiting'
     | 'loadPastSession'
     | 'toggleMediaTab'
+    | 'openApprovals'
 }
 
 export type ShortcutAction =
@@ -31,11 +32,15 @@ const CTRL_LETTERS: Record<string, PlainShortcut['name']> = {
   l: 'loadPastSession'
 }
 
-/** Ctrl+J is the prompt box's newline, as in the VS Code extension. Ctrl+Shift+M is VS Code's Problems panel, which the app has none of. */
+/**
+ * Ctrl+J is the prompt box's newline, as in the VS Code extension. Ctrl+Shift+M is VS Code's Problems panel, which the app has none of.
+ * Ctrl+Shift+A is VS Code's Open Agents Window (block comment only on Linux).
+ */
 const CTRL_SHIFT_LETTERS: Record<string, PlainShortcut['name']> = {
   j: 'nextWaiting',
   e: 'toggleIdePanels',
-  m: 'toggleMediaTab'
+  m: 'toggleMediaTab',
+  a: 'openApprovals'
 }
 
 /** By the printed key, since Nordic layouts put + on the Minus key; Ctrl+0 also by position, for layouts where that key types another character. */
@@ -68,9 +73,9 @@ export function shortcutFor(e: KeyChord): ShortcutAction | null {
   return letter ? { name: letter } : null
 }
 
-const EVERYWHERE: ReadonlySet<ShortcutAction['name']> = new Set(['switchView', 'openSettings', 'nextWaiting', 'zoom'])
+const EVERYWHERE: ReadonlySet<ShortcutAction['name']> = new Set(['switchView', 'openSettings', 'nextWaiting', 'zoom', 'openApprovals'])
 
-const BEFORE_FOCUSED: ReadonlySet<ShortcutAction['name']> = new Set(['zoom', 'toggleSessionList'])
+const BEFORE_FOCUSED: ReadonlySet<ShortcutAction['name']> = new Set(['zoom', 'toggleSessionList', 'openApprovals'])
 
 /** Taken before a focused shell or prompt box sees the key, as VS Code's terminal skips these commands; the rest leave a shell its keys. */
 export function beforeFocusedElement(action: ShortcutAction): boolean {

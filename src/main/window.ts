@@ -127,3 +127,7 @@ export function showView(view: AppView): void {
 export function showSession(paneId: string): void {
   sendWhenLoaded(showMainWindow(), IPC.NAVIGATION_OPEN_SESSION, paneId)
 }
+
+export function showApprovals(paneId: string): void {
+  sendWhenLoaded(showMainWindow(), IPC.NAVIGATION_OPEN_APPROVALS, paneId)
+}

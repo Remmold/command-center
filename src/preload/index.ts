@@ -257,6 +257,11 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, paneId: string) => cb(paneId)
       ipcRenderer.on(IPC.NAVIGATION_OPEN_SESSION, handler)
       return () => ipcRenderer.off(IPC.NAVIGATION_OPEN_SESSION, handler)
+    },
+    onOpenApprovals: (cb) => {
+      const handler = (_e: IpcRendererEvent, paneId: string) => cb(paneId)
+      ipcRenderer.on(IPC.NAVIGATION_OPEN_APPROVALS, handler)
+      return () => ipcRenderer.off(IPC.NAVIGATION_OPEN_APPROVALS, handler)
     }
   },
   git: {

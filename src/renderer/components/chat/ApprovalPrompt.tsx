@@ -3,6 +3,7 @@ import {
   DESTINATION_HINT,
   DESTINATION_LABEL,
   PLAN_TOOL,
+  QUESTION_TOOL,
   allowReply,
   alwaysAllowLabel,
   alwaysAllowReply,
@@ -28,10 +29,16 @@ import {
   ChoicePrompt,
   PromptCode,
   PromptDetails,
+  PromptBox,
   PromptNote,
-  PromptPath
+  PromptPath,
+  mayTakeFocus
 } from '../ui/ChoicePrompt'
 import { Markdown } from '../ui/Markdown'
+import { fileBaseName } from '../../../shared/fileLinks'
+import { DiffLines } from './DiffLines'
+import { computeUnifiedDiff, trimContext } from './diff'
+import { QuestionPrompt } from './QuestionCard'
 
 const DESTINATION_KEY = 'command-center.permission-destination'
 
@@ -52,7 +59,7 @@ function rememberDestination(destination: PermissionDestination): void {
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '')
-const fileName = (input: ToolInput): string => text(input.file_path).split('/').pop() ?? ''
+const fileName = (input: ToolInput): string => fileBaseName(text(input.file_path))
 
 function InputDetails({ input }: { input: ToolInput }) {
   if (Object.keys(input).length === 0) return null
@@ -75,8 +82,20 @@ function RequestBody({ request }: { request: ApprovalRequest }) {
     )
   }
   if (toolName === 'WebFetch') return <PromptCode>{text(input.url)}</PromptCode>
+  if (toolName === 'Edit' && typeof input.old_string === 'string' && typeof input.new_string === 'string') {
+    return <PromptDiff segments={trimContext(computeUnifiedDiff(input.old_string, input.new_string))} />
+  }
+  if (toolName === 'Write' && typeof input.content === 'string') return <PromptDiff segments={computeUnifiedDiff('', input.content)} />
   if (toolName === PLAN_TOOL) return <Markdown text={text(input.plan)} />
   return <InputDetails input={input} />
+}
+
+function PromptDiff({ segments }: { segments: Parameters<typeof DiffLines>[0]['segments'] }) {
+  return (
+    <PromptBox>
+      <DiffLines segments={segments} />
+    </PromptBox>
+  )
 }
 
 function requestTitle({ toolName, input }: ApprovalRequest): ReactNode {
@@ -132,9 +151,32 @@ interface Props {
   autoAvailable: boolean
   /** Switches the running session's mode without making it the default; false when the CLI refused. */
   onSetMode: (mode: PermissionMode) => Promise<boolean>
+  /** Told just before the reply goes out, e.g. so the approval inbox moves on. */
+  onAnswered?: (requestId: string) => void
+  /** Esc closes what holds the prompt (the approval inbox) instead of answering No. */
+  escapeCloses?: boolean
 }
 
-export function ApprovalPrompt({ request, autoAvailable, onSetMode }: Props) {
+/** Sends one reply for the request, once: the only way an approval is answered, from the chat or the inbox. */
+function useReply(request: ApprovalRequest, onAnswered: Props['onAnswered']): (payload: ApprovalReply) => void {
+  const answered = useRef(false)
+  return (payload) => {
+    if (answered.current) return
+    answered.current = true
+    onAnswered?.(request.requestId)
+    window.api.approval.respond(request.requestId, payload)
+    useApprovalsStore.getState().remove(request.requestId)
+  }
+}
+
+export function ApprovalPrompt(props: Props) {
+  const reply = useReply(props.request, props.onAnswered)
+  const hint = props.escapeCloses ? 'Esc to close' : 'Esc to cancel'
+  if (props.request.toolName === QUESTION_TOOL) return <QuestionPrompt request={props.request} onReply={reply} hint={hint} />
+  return <ToolApproval {...props} reply={reply} hint={hint} />
+}
+
+function ToolApproval({ request, autoAvailable, onSetMode, reply, hint }: Props & { reply: (payload: ApprovalReply) => void; hint: string }) {
   const isPlan = request.toolName === PLAN_TOOL
   const label = isPlan ? null : alwaysAllowLabel(request.suggestions)
   const hasSecond = isPlan || label !== null
@@ -147,21 +189,11 @@ export function ApprovalPrompt({ request, autoAvailable, onSetMode }: Props) {
   const secondRef = useRef<HTMLButtonElement | null>(null)
   const noRef = useRef<HTMLButtonElement | null>(null)
   const fieldRef = useRef<HTMLInputElement | null>(null)
-  const answered = useRef(false)
   const plan = planYes(autoAvailable)
 
   useEffect(() => {
-    const pane = rootRef.current?.closest('[data-chat-pane]')
-    const active = document.activeElement
-    if (!active || active === document.body || pane?.contains(active)) yesRef.current?.focus()
+    if (mayTakeFocus(rootRef.current)) yesRef.current?.focus()
   }, [])
-
-  const reply = (payload: ApprovalReply): void => {
-    if (answered.current) return
-    answered.current = true
-    window.api.approval.respond(request.requestId, payload)
-    useApprovalsStore.getState().remove(request.requestId)
-  }
 
   const yes = async (): Promise<void> => {
     if (isPlan) {
@@ -221,7 +253,7 @@ export function ApprovalPrompt({ request, autoAvailable, onSetMode }: Props) {
   }
 
   return (
-    <ChoicePrompt ref={rootRef} label={`Approve ${request.toolName}`} title={requestTitle(request)} hint="Esc to cancel" onKeyDown={onKeyDown}>
+    <ChoicePrompt ref={rootRef} label={`Approve ${request.toolName}`} title={requestTitle(request)} hint={hint} onKeyDown={onKeyDown}>
       <RequestBody request={request} />
       {request.reason && <PromptNote>{request.reason}</PromptNote>}
       <ChoiceList>

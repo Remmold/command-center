@@ -151,6 +151,7 @@ export function alwaysAllowReply(
 }
 
 export const PLAN_TOOL = 'ExitPlanMode'
+export const QUESTION_TOOL = 'AskUserQuestion'
 
 export function planYes(autoAvailable: boolean): { label: string; mode: 'auto' | 'acceptEdits' } {
   return autoAvailable ? { label: 'Yes, and use auto mode', mode: 'auto' } : { label: 'Yes, and auto-accept', mode: 'acceptEdits' }
@@ -165,6 +166,43 @@ export function planDenyReply(feedback: string): DenyReply {
   return denyReply(feedback)
 }
 
+export interface QuestionOption {
+  label: string
+  description?: string
+  /** Shown beside the options while this one is highlighted, monospaced unless it is markdown with a fence. */
+  preview?: string
+}
+
+export interface Question {
+  question: string
+  header?: string
+  multiSelect: boolean
+  options: QuestionOption[]
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+
+/** The questions of an AskUserQuestion call. */
+export function parseQuestions(input: ToolInput): Question[] {
+  const raw = Array.isArray(input.questions) ? input.questions : []
+  return raw.flatMap((q): Question[] => {
+    if (!isObject(q) || typeof q.question !== 'string') return []
+    const options = (Array.isArray(q.options) ? q.options : []).flatMap((o): QuestionOption[] => {
+      if (!isObject(o) || typeof o.label !== 'string') return []
+      const option: QuestionOption = { label: o.label }
+      if (typeof o.description === 'string') option.description = o.description
+      if (typeof o.preview === 'string') option.preview = o.preview
+      return [option]
+    })
+    return [{ question: q.question, ...(typeof q.header === 'string' ? { header: q.header } : {}), multiSelect: q.multiSelect === true, options }]
+  })
+}
+
+/** Answers an AskUserQuestion call as the extension does: the questions back with `answers` keyed by question text. */
+export function questionReply(input: ToolInput, answers: Record<string, string>): AllowReply {
+  return allowReply({ questions: input.questions, answers })
+}
+
 /** A `can_use_tool` request from a hosted session's CLI, waiting for the user. */
 export interface ApprovalRequest {
   requestId: string
@@ -175,6 +213,8 @@ export interface ApprovalRequest {
   description?: string
   /** Why the CLI asks, shown only for its safety checks. */
   reason?: string
+  /** When main received it, in epoch ms. */
+  raisedAt: number
 }
 
 export type ApprovalReply = AllowReply | DenyReply

@@ -307,3 +307,23 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: keep the green meter for on track.
 165. **The VS Code mark is an inline SVG of the VS Code logo in the muted text colour**, since lucide has no brand icons; it sits before the status dot with the ticket's tooltip.
     - Alternative: lucide's generic Code icon.
+166. **The approval inbox opens on Ctrl+Shift+A**, which VS Code uses for its Open Agents Window and chat-question commands (block comment only on Linux) and the app had free. It is taken before a focused shell or prompt box, like zoom.
+    - Alternative: Ctrl+Shift+I.
+167. **The inbox shows the chat's own approval prompt component**, so its answers, wording, keys and reply path are the chat's. Esc closes the inbox instead of answering No; No stays on 3 and its button. ↑/↓ move between rows only while the queue list has focus (in a prompt they keep moving between its answers and options, as in the chat); J/K move rows from anywhere that is not a text field; O opens the chat.
+    - Alternative: ↑/↓ always move rows, taking them from the prompt.
+168. **After an answer the inbox selects the row that took the answered one's place** (the next oldest), else the row above it.
+    - Alternative: always jump back to the oldest.
+169. **Ctrl+Shift+A with nothing waiting shows the "All clear" toast** instead of an empty overlay; the title-bar pill is hidden at 0 anyway.
+170. **Inbox rows show the account short name only with two or more accounts**, as the Dashboard does (152).
+    - Alternative: always, as the ticket's row list reads literally.
+171. **An item answered or cancelled elsewhere shows "answered in chat" for 1.5 s**, then goes.
+172. **A Windows notification for a chat that needs approval opens the inbox at that chat's request when clicked**; other notifications open the chat as before. Windows toast buttons need custom toast XML, so there is no separate button.
+    - Alternative: a second toast action "Open in approvals".
+173. **The Dashboard's Needs-you rows that need approval get an "Open in approvals" icon on hover**; a click on the row still opens the chat.
+    - Alternative: the row click opens the inbox.
+174. **The question card follows the extension's card (`gTn`) exactly, including its keys**: 1 is "Submit answers" (disabled until every question has an answer), ↑/↓ move through options, ←/→ through questions, Enter or Space picks. Number keys do not pick options, although the scope note asked for 1..N, because the extension maps 1 to Submit. There is no No button or feedback field; Esc or the card's X declines with the extension's stop message. The fold button is left out.
+    - Alternative: 1..N pick options and Enter submits.
+175. **Edit and Write approvals show their diff inline**, with the chat's own diff component, in the chat and the inbox alike; the extension opens VS Code's diff editor instead. The prompt's file name is now the base name on Windows paths too.
+    - Alternative: keep the JSON Details for edits.
+176. **An answered question in a transcript (hosted or VS Code chat) reads "Question(s)" with "Answered · 2 questions" and the read-only card**; a declined or unanswered one shows only its status ("Declined", "No answer"), as the extension.
+177. **A plan approved from the inbox switches the chat's mode with the same `set_permission_mode` control the chat uses**, then sends the same reply.
