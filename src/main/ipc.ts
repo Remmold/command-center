@@ -21,7 +21,7 @@ import { openWithSystem, readImage, resolveLink } from './files/links'
 import { resolveMedia, revealInFolder } from './files/media'
 import { registerVideoIpc } from './video/service'
 import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
-import { readSubagentTranscript } from './claude/subagentTranscript'
+import { SubagentWatchService } from './claude/subagentWatch'
 import { isTeleportedSession } from './claude/teleport'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
@@ -45,7 +45,6 @@ import {
   type ScreenFocus,
   type SessionInitEnvelope,
   type SessionRename,
-  type SubagentTranscriptRequest,
   type RenameResult
 } from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
@@ -359,9 +358,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.CLAUDE_LIST_LOCAL_SESSIONS, async (_e, cwd: string) =>
     listLocalSessions(await transcriptsDirForCwd(cwd))
   )
-  ipcMain.handle(IPC.CLAUDE_SUBAGENT_TRANSCRIPT, async (_e, request: SubagentTranscriptRequest) =>
-    readSubagentTranscript(await transcriptsDirForCwd(request.cwd), request.sessionId, { agentId: request.agentId, toolUseId: request.toolUseId })
-  )
+  const subagents = new SubagentWatchService(transcriptsDirForCwd, (event) => sendAll(IPC.SUBAGENTS_ITEMS, event))
+  ipcMain.on(IPC.SUBAGENTS_WATCH, (_e, source: unknown) => void subagents.watch(source))
+  ipcMain.on(IPC.SUBAGENTS_UNWATCH, (_e, source: unknown) => subagents.unwatch(source))
+  unsubscribers.push(() => subagents.stopAll())
   ipcMain.handle(IPC.CLAUDE_RENAME_SESSION, async (_e, rename: SessionRename): Promise<RenameResult> => {
     const title = cleanSessionTitle(rename.title)
     if (!title) return { ok: false, error: 'title must be non-empty' }

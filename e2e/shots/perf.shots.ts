@@ -294,6 +294,15 @@ test('click latency on seeded data', async () => {
     for (let k = 0; k < TRIES * 5; k++) await sample(page, 'keystroke in prompt box while a turn runs', 'keydown', () => page.keyboard.press('a'))
     await input.fill('')
 
+    // Five background agents writing their own files while keys go into the prompt box.
+    await startIn(page, 'notes-cli', 'agents: five for the keystroke check', 'Five agents are working')
+    await expect(pane.locator('[data-agents-still-working]')).toContainText('5 agents still working')
+    await expect(pane.getByRole('tab', { name: 'Agents 5' })).toBeVisible()
+    await page.waitForTimeout(2000)
+    await input.click()
+    for (let k = 0; k < TRIES * 5; k++) await sample(page, 'keystroke in prompt box with 5 agents running', 'keydown', () => page.keyboard.press('a'))
+    await input.fill('')
+
     // Five waiting requests across chats: the Write above plus a Bash, an Edit, a question and another Bash.
     await startIn(page, 'notes-cli', 'bash: check the migrations', 'Checking the migrations')
     await startIn(page, 'ledger-web', 'edit: rename the token field', 'Renaming the field')

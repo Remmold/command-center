@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import { observedRefreshMs } from '../shared/observedRefresh'
+import type { SubagentTailEvent } from '../shared/subagentTail'
 import type {
   AccountProfile,
   AppExitEvent,
@@ -192,7 +193,6 @@ const api: RendererApi = {
     send: (paneId, content, uuid) => ipcRenderer.send(IPC.CLAUDE_SEND, paneId, content, uuid),
     listLocalSessions: (cwd) => ipcRenderer.invoke(IPC.CLAUDE_LIST_LOCAL_SESSIONS, cwd),
     renameSession: (rename) => ipcRenderer.invoke(IPC.CLAUDE_RENAME_SESSION, rename),
-    subagentTranscript: (request) => ipcRenderer.invoke(IPC.CLAUDE_SUBAGENT_TRANSCRIPT, request),
     interrupt: (paneId) => ipcRenderer.send(IPC.CLAUDE_INTERRUPT, paneId),
     stop: (paneId) => ipcRenderer.send(IPC.CLAUDE_STOP, paneId),
     onEvent: (cb) => {
@@ -204,6 +204,15 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, envelope: ClaudeExitEnvelope) => cb(envelope)
       ipcRenderer.on(IPC.CLAUDE_EXIT, handler)
       return () => ipcRenderer.off(IPC.CLAUDE_EXIT, handler)
+    }
+  },
+  subagents: {
+    watch: (source) => ipcRenderer.send(IPC.SUBAGENTS_WATCH, source),
+    unwatch: (source) => ipcRenderer.send(IPC.SUBAGENTS_UNWATCH, source),
+    onItems: (cb) => {
+      const handler = (_e: IpcRendererEvent, event: SubagentTailEvent) => cb(event)
+      ipcRenderer.on(IPC.SUBAGENTS_ITEMS, handler)
+      return () => ipcRenderer.off(IPC.SUBAGENTS_ITEMS, handler)
     }
   },
   observed: {

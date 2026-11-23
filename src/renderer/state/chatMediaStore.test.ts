@@ -35,6 +35,15 @@ describe('chat media tabs', () => {
     expect(shownTab(tabOf('pane-1'), 0)).toBe('chat')
   })
 
+  it('opening an agent shows the Agents tab on its live view, while the chat has agents', () => {
+    useChatMediaStore.getState().showAgents('pane-4', 'a1')
+    expect(useChatMediaStore.getState().openAgent['pane-4']).toBe('a1')
+    expect(shownTab(tabOf('pane-4'), 0, 2)).toBe('agents')
+    expect(shownTab(tabOf('pane-4'), 0, 0)).toBe('chat')
+    useChatMediaStore.getState().showAgents('pane-4')
+    expect(useChatMediaStore.getState().openAgent['pane-4']).toBeUndefined()
+  })
+
   it('drops the old Media column width from storage and leaves other keys', () => {
     const saved = new Map([
       ['command-center.media-panel', '{"state":{"width":320},"version":1}'],

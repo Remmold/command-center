@@ -79,3 +79,8 @@ export function TimelineRow({ dot, stamp, children }: Props) {
     </div>
   )
 }
+
+/** A timeline dot on its own, inline in a row of text, e.g. a list of agents. */
+export function DotMark({ dot }: { dot: Exclude<TimelineDot, 'none' | 'neutral'> }) {
+  return <span role="img" aria-label={DOT_LABEL[dot]} title={DOT_LABEL[dot]} className={`h-[7px] w-[7px] shrink-0 rounded-full ${DOT[dot]}`} />
+}

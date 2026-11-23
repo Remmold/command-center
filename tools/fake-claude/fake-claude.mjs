@@ -184,6 +184,8 @@ class Fake {
     this.used = new Set()
     this.queue = []
     this.running = null
+    /** Background agents still working, by task id; they outlive the turn that started them. */
+    this.background = new Map()
     this.pendingApprovals = new Map()
     this.counter = 0
     this.title = null
@@ -351,6 +353,11 @@ class Fake {
       }
       case 'stop_task': {
         if (typeof request.task_id !== 'string') return fail('stop_task: task_id must be a string')
+        const background = this.background.get(request.task_id)
+        if (background) {
+          ok()
+          return background.stop()
+        }
         const sub = this.running?.sub
         if (!sub || sub.taskId !== request.task_id || sub.stopped) return fail(`No running task with ID: ${request.task_id}`)
         ok()
@@ -710,6 +717,12 @@ class Turn {
     })
     if (background) this.toolResult(toolUseId, `Async agent launched successfully.\nagentId: ${taskId}`, false)
     const transcript = subagentTranscript(fake.sessionId, taskId, toolUseId, input)
+    if (background) {
+      transcript.record({ type: 'user', message: { role: 'user', content: input.prompt } })
+      const steps = Array.from({ length: event.loop ?? 1 }, () => event.events ?? []).flat()
+      void runBackgroundAgent(fake, { taskId, toolUseId, description: input.description, record: transcript.record }, steps, event.result ?? 'Done.', system)
+      return
+    }
     const sub = { taskId, toolUseId, stopped: false, record: transcript.record }
     transcript.record({ type: 'user', message: { role: 'user', content: input.prompt } })
     const started = Date.now()
@@ -903,6 +916,76 @@ class Turn {
     }
     this.emit(line)
   }
+}
+
+/**
+ * A background agent, which outlives the turn: each event goes out with `parent_tool_use_id` and into its own file, a `task_progress`
+ * after each, then `task_notification` (`completed`, or `stopped` after `stop_task`). Events: `text`, `tool_use` (`result`) and `wait`.
+ */
+async function runBackgroundAgent(fake, agent, events, result, system) {
+  let wake = null
+  const state = { stopped: false }
+  fake.background.set(agent.taskId, {
+    stop() {
+      state.stopped = true
+      wake?.()
+    }
+  })
+  const sleep = (ms) =>
+    !ms || state.stopped
+      ? Promise.resolve()
+      : new Promise((resolve) => {
+          const done = () => {
+            clearTimeout(timer)
+            wake = null
+            resolve()
+          }
+          const timer = setTimeout(done, ms)
+          wake = done
+        })
+  const out = (line) => {
+    const stamped = fake.stamp(line)
+    stamped.parent_tool_use_id = agent.toolUseId
+    agent.record(stamped)
+    fake.send(stamped)
+  }
+  const assistant = (block) => {
+    const line = clone(template.assistant)
+    line.message.id = fake.id('msg_fake')
+    line.message.model = fake.resolvedModel()
+    line.message.content = [block]
+    line.request_id = fake.id('req_fake')
+    delete line.wire_tool_inputs
+    return line
+  }
+  const started = Date.now()
+  let toolUses = 0
+  let tokens = 0
+  const usage = () => ({ total_tokens: tokens, tool_uses: toolUses, duration_ms: Date.now() - started })
+  for (const raw of events) {
+    const event = fill(raw)
+    await sleep(event.delayMs)
+    if (state.stopped) break
+    if (event.type === 'wait') {
+      await sleep(event.ms)
+      continue
+    }
+    if (event.type === 'text') out(assistant({ type: 'text', text: event.text ?? '' }))
+    else if (event.type === 'tool_use') {
+      const id = fake.id('toolu_fake')
+      out(assistant({ ...clone(template.assistant.message.content[0]), type: 'tool_use', id, name: event.name, input: event.input ?? {} }))
+      const line = clone(template.toolResult)
+      line.message.content = [{ tool_use_id: id, type: 'tool_result', content: event.result ?? 'Done.' }]
+      delete line.tool_use_result
+      delete line.tool_result_meta
+      out(line)
+      toolUses++
+    } else throw new Error(`fake-claude: background agents do not play ${event.type}`)
+    tokens += 1500
+    system({ subtype: 'task_progress', description: agent.description, usage: usage(), ...(event.type === 'tool_use' ? { last_tool_name: event.name } : {}) })
+  }
+  fake.background.delete(agent.taskId)
+  system({ subtype: 'task_notification', status: state.stopped ? 'stopped' : 'completed', output_file: '', summary: state.stopped ? '' : result, usage: usage() })
 }
 
 /** The CLI keeps a subagent's lines in `projects/<cwd>/<session>/subagents/agent-<id>.jsonl`, with a `.meta.json` naming its call. */

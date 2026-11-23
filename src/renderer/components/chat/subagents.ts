@@ -164,7 +164,7 @@ export interface AgentState {
 /** The CLI answers a background Agent call at once; that receipt says nothing about how the agent ended. */
 const BACKGROUND_RECEIPT = 'Async agent launched'
 
-function isBackgroundReceipt(result: ToolResultItem): boolean {
+export function isBackgroundReceipt(result: ToolResultItem): boolean {
   const content = result.content
   const first = typeof content === 'string' ? content : Array.isArray(content) ? (content[0] as { text?: unknown } | undefined)?.text : undefined
   return typeof first === 'string' && first.startsWith(BACKGROUND_RECEIPT)
@@ -179,26 +179,8 @@ export function agentStatus(toolUseId: string, tasks: SubagentTasks, result: Too
 }
 
 /** The extension's `p9`: whole seconds, then minutes and seconds. */
-function duration(ms: number): string {
+export function duration(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
   if (s < 60) return `${s}s`
   return `${Math.floor(s / 60)}m ${s % 60}s`
-}
-
-/** The extension's `lv`. */
-function tokens(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
-}
-
-/** The agent map row's meta (`IDt`): time so far while working, else the run's length when a second or more, then tokens. */
-export function agentMeta(task: SubagentTask, now: number): string {
-  const ran = task.endTime !== undefined && task.endTime > task.startTime ? task.endTime - task.startTime : undefined
-  const reported = task.usage && task.usage.durationMs > 0 ? task.usage.durationMs : undefined
-  const ms = task.status === 'working' ? now - task.startTime : task.status === 'finished' ? (reported ?? ran) : (ran ?? reported)
-  const parts: string[] = []
-  if (ms !== undefined && (task.status === 'working' || ms >= 1000)) parts.push(duration(ms))
-  if (task.usage && task.usage.totalTokens > 0) parts.push(`${tokens(task.usage.totalTokens)} tokens`)
-  return parts.join(' · ')
 }

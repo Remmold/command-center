@@ -12,11 +12,15 @@ interface SessionBusy {
   approvals: readonly string[]
   /** Prompts sent mid-turn that the CLI has not taken up yet. */
   waiting: readonly string[]
+  /** Background agents and tasks still running after the turn that started them ended. */
+  tasks: readonly string[]
 }
 
 export type BusyState = Readonly<Record<string, SessionBusy>>
 
-const IDLE: SessionBusy = { turnRunning: false, approvals: [], waiting: [] }
+const IDLE: SessionBusy = { turnRunning: false, approvals: [], waiting: [], tasks: [] }
+
+const TASK_END = new Set(['completed', 'failed', 'killed', 'stopped'])
 
 const TAKEN_UP = new Set(['started', 'completed', 'cancelled', 'discarded', 'refused'])
 
@@ -46,6 +50,7 @@ export function reduceBusy(state: BusyState, event: BusyEvent): BusyState {
 function applyLine(session: SessionBusy, line: unknown): SessionBusy {
   if (!isRecord(line)) return session
   if (line.type === 'result') return { ...session, turnRunning: false }
+  if (line.type === 'system' && typeof line.task_id === 'string') return applyTask(session, line)
   const takenUp = (uuid: unknown, starts: boolean): SessionBusy =>
     session.waiting.includes(uuid as string)
       ? { ...session, turnRunning: session.turnRunning || starts, waiting: session.waiting.filter((u) => u !== uuid) }
@@ -55,8 +60,17 @@ function applyLine(session: SessionBusy, line: unknown): SessionBusy {
   return session
 }
 
+/** A restart kills background agents and tasks too, so they count until the CLI reports them ended. */
+function applyTask(session: SessionBusy, line: Record<string, unknown>): SessionBusy {
+  const id = line.task_id as string
+  if (line.subtype === 'task_started') return session.tasks.includes(id) ? session : { ...session, tasks: [...session.tasks, id] }
+  const patch = isRecord(line.patch) ? line.patch : undefined
+  const ended = line.subtype === 'task_notification' || (line.subtype === 'task_updated' && TASK_END.has(patch?.status as string))
+  return ended ? { ...session, tasks: session.tasks.filter((t) => t !== id) } : session
+}
+
 export function isBusy(session: SessionBusy | undefined): boolean {
-  return !!session && (session.turnRunning || session.approvals.length > 0 || session.waiting.length > 0)
+  return !!session && (session.turnRunning || session.approvals.length > 0 || session.waiting.length > 0 || session.tasks.length > 0)
 }
 
 export function busyPanes(state: BusyState): string[] {

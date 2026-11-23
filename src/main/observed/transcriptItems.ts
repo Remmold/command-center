@@ -26,9 +26,10 @@ export interface TranscriptParser {
   push(chunk: Buffer | string): ChatItem[]
 }
 
-export function createTranscriptParser(): TranscriptParser {
+/** `sidechain` reads a subagent's own file, where every line is a sidechain one. */
+export function createTranscriptParser(sidechain = false): TranscriptParser {
   const decoder = new StringDecoder('utf8')
-  const read = lineReader(false)
+  const read = lineReader(sidechain)
   let pending = ''
   return {
     push(chunk) {
@@ -41,13 +42,8 @@ export function createTranscriptParser(): TranscriptParser {
 }
 
 /** Whole transcript lines in order, e.g. a tail read in one go. */
-export function transcriptLinesToItems(lines: string[]): ChatItem[] {
-  return lines.flatMap(lineReader(false))
-}
-
-/** Lines of a subagent's own transcript (`subagents/agent-<id>.jsonl`), where every line is a sidechain one. */
-export function sidechainLinesToItems(lines: string[]): ChatItem[] {
-  return lines.flatMap(lineReader(true))
+export function transcriptLinesToItems(lines: string[], sidechain = false): ChatItem[] {
+  return lines.flatMap(lineReader(sidechain))
 }
 
 /**

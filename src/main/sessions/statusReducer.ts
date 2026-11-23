@@ -17,12 +17,35 @@ export interface SessionStatusState {
   /** When the current status began; unchanged by events that keep the status. */
   since: number
   pendingRequestIds: readonly string[]
+  /** Agents (`local_agent` tasks) still working; the chat keeps running after its result until they end. */
+  agents?: readonly string[]
+  /** The last turn has its result; set until the next prompt. */
+  turnDone?: boolean
 }
 
 export function reduceSessionStatus(
   prev: SessionStatusState | null,
   event: SessionStatusEvent
 ): SessionStatusState {
+  const next = reduceTurn(prev, event)
+  if (event.kind === 'spawned' || event.kind === 'exit') return next
+  const before = prev?.agents ?? []
+  const agents = event.kind === 'claude-event' ? applyAgentEvent(before, event.event) : before
+  const turnStarts = event.kind === 'user-message' || (event.kind === 'claude-event' && isQueuedPromptStart(event.event))
+  const turnDone = event.kind === 'claude-event' && isTurnResult(event.event) ? true : turnStarts ? false : (prev?.turnDone ?? false)
+  let status = next.status
+  let since = next.since
+  if (status === 'your-turn' && agents.length > 0) {
+    status = 'running'
+    since = prev?.status === 'running' ? prev.since : event.at
+  } else if (status === 'running' && turnDone && agents.length === 0 && before.length > 0 && next.pendingRequestIds.length === 0) {
+    status = 'your-turn'
+    since = event.at
+  }
+  return { status, since, pendingRequestIds: next.pendingRequestIds, ...(agents.length > 0 ? { agents } : {}), ...(turnDone ? { turnDone } : {}) }
+}
+
+function reduceTurn(prev: SessionStatusState | null, event: SessionStatusEvent): SessionStatusState {
   const pending = prev?.pendingRequestIds ?? []
   switch (event.kind) {
     case 'spawned':
@@ -45,6 +68,18 @@ export function reduceSessionStatus(
       return enter(prev, 'running', event.at, left)
     }
   }
+}
+
+const AGENT_END = new Set(['completed', 'failed', 'killed', 'stopped'])
+
+function applyAgentEvent(agents: readonly string[], line: unknown): readonly string[] {
+  if (typeof line !== 'object' || line === null) return agents
+  const e = line as { type?: unknown; subtype?: unknown; task_id?: unknown; task_type?: unknown; patch?: { status?: unknown } }
+  if (e.type !== 'system' || typeof e.task_id !== 'string') return agents
+  const id = e.task_id
+  if (e.subtype === 'task_started') return e.task_type === 'local_agent' && !agents.includes(id) ? [...agents, id] : agents
+  const ended = e.subtype === 'task_notification' || (e.subtype === 'task_updated' && AGENT_END.has(e.patch?.status as string))
+  return ended && agents.includes(id) ? agents.filter((a) => a !== id) : agents
 }
 
 function enter(
