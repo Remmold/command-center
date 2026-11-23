@@ -6,7 +6,7 @@ Cause: `userItemText()` in `src/renderer/components/chat/promptHistory.ts` appen
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **The bubble:** a user message renders its attachments under the text, as the VS Code extension does:
   - image thumbnails, about 160 px tall, as many per row as fit;
