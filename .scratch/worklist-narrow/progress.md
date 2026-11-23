@@ -1,0 +1,1 @@
+- 01 resolved: narrow Work list (titles over model text, two-line usage lines, folded-only amber waiting pill) — c9a0723
