@@ -257,3 +257,10 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: IPC data URLs (no video streaming, whole files through IPC).
 136. **Videos play only in the panel's preview**; a video link in the transcript still opens in the system app (decision 112 unchanged). The preview's arrows and Left/Right keys step in the panel's order, newest first, so Right goes to an older file.
 137. **Jump to message scrolls to the top-level row**: a subagent's mention jumps to its Agent call, a tool output's to the call that produced it.
+
+138. **Media is a tab (media-panel 02); the whole tab strip hides while the chat has no media**, not only the Media tab, so a chat without media keeps its full height and shows no lone "Chat" tab.
+    - Alternative: always show Chat, with Media appearing beside it.
+139. **The hidden transcript stays mounted with `visibility: hidden`**, laid out at its real size, so `useFollowOutput` keeps following and the scroll position stays without any restore. Focus inside it moves to the grid on the switch. The grid itself unmounts on Chat, so its own scroll and an open preview are not kept.
+    - Alternative: `display: none` plus the scroll restore.
+140. **The tab strip is underlined text tabs, like VS Code's panel tabs** ("Chat", "Media 3"), a slim row under the header; tiles are 160 px in as many columns as fit. Ctrl+Shift+M does nothing in a chat with no media, so media arriving later never switches the tab by itself; a chat whose media briefly vanishes (a VS Code transcript reloading) keeps Media chosen.
+141. **The column's saved width (`command-center.media-panel` in local storage) is deleted on start**; the tab state is memory-only.

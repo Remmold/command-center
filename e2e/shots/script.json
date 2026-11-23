@@ -5,7 +5,7 @@
       "flags": "i",
       "repeat": true,
       "events": [
-        { "type": "text", "text": "I'll add the export preset file next to the pipeline config." },
+        { "type": "text", "text": "I'll add the export preset file next to the pipeline config and [its preview](preview.png)." },
         {
           "type": "tool_use",
           "name": "Write",

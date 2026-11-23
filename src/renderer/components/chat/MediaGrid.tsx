@@ -1,16 +1,13 @@
-import { memo, useEffect, useRef, useState, type MouseEvent } from 'react'
+import { forwardRef, memo, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Copy, ExternalLink, FileQuestion, FolderOpen, MessageSquareText } from 'lucide-react'
 import type { MediaFile } from '../../../shared/media'
 import { useMenu } from '../../hooks/useMenu'
-import { MEDIA_PANEL_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
-import { useChatMediaStore, type ChatMediaKey } from '../../state/chatMediaStore'
 import { useToastStore } from '../../state/toastStore'
 import { IconButton } from '../ui/IconButton'
 import { ImagePreview } from '../ui/ImagePreview'
 import { MenuItem } from '../ui/MenuItem'
 import { Popover, PopoverMenu } from '../ui/Popover'
-import { SidePanel } from '../ui/SidePanel'
-import { THUMBNAIL_SIZE, Thumbnail, ThumbnailImage, ThumbnailPlaceholder, ThumbnailVideo } from '../ui/Thumbnail'
+import { Thumbnail, ThumbnailGrid, ThumbnailImage, ThumbnailPlaceholder, ThumbnailVideo } from '../ui/Thumbnail'
 import { TimeStamp } from '../ui/TimeStamp'
 import type { MediaEntry } from './chatMedia'
 import { stampLabel, stampTitle } from './messageTime'
@@ -191,36 +188,28 @@ function MediaViewer({ media, index, cwd, revision, onIndex, onClose }: ViewerPr
 }
 
 interface Props {
-  chatKey: ChatMediaKey
   media: readonly MediaEntry[]
   cwd: string | undefined
   revision: number
   onJump: (messageId: string) => void
 }
 
-/** Every image and video the chat touched, newest first; a click opens the preview, which steps through them. */
-export function MediaPanel({ chatKey, media, cwd, revision, onJump }: Props) {
-  const width = useChatMediaStore((s) => s.width)
-  const setWidth = useChatMediaStore((s) => s.setWidth)
-  const toggle = useChatMediaStore((s) => s.toggle)
+/** Every image and video the chat touched, newest first, filling the transcript's space; a click opens the preview, which steps through them. */
+export const MediaGrid = forwardRef<HTMLDivElement, Props>(function MediaGrid({ media, cwd, revision, onJump }, ref) {
   const [viewing, setViewing] = useState<string | null>(null)
   const index = viewing === null ? -1 : media.findIndex((m) => m.key === viewing)
   const onOpen = useRef((entry: MediaEntry) => setViewing(entry.key)).current
 
   return (
-    <SidePanel title="Media" width={width} onResize={setWidth} onClose={() => toggle(chatKey)} closeTooltip={`Close Media (${MEDIA_PANEL_SHORTCUT})`}>
-      {media.length === 0 ? (
-        <p className="px-1 py-2 text-xs text-muted">Images and videos this session reads, writes or names show here.</p>
-      ) : (
-        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${THUMBNAIL_SIZE}px, 1fr))` }}>
-          {media.map((entry) => (
-            <MediaTile key={entry.key} entry={entry} cwd={cwd} revision={revision} onOpen={onOpen} onJump={onJump} />
-          ))}
-        </div>
-      )}
+    <div ref={ref} role="tabpanel" aria-label="Media" tabIndex={-1} className="absolute inset-0 overflow-y-auto px-5 py-4 focus:outline-none">
+      <ThumbnailGrid>
+        {media.map((entry) => (
+          <MediaTile key={entry.key} entry={entry} cwd={cwd} revision={revision} onOpen={onOpen} onJump={onJump} />
+        ))}
+      </ThumbnailGrid>
       {index !== -1 && (
         <MediaViewer media={media} index={index} cwd={cwd} revision={revision} onIndex={(i) => setViewing(media[i].key)} onClose={() => setViewing(null)} />
       )}
-    </SidePanel>
+    </div>
   )
-}
+})

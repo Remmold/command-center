@@ -770,28 +770,36 @@ async function recordWebm(page: Page): Promise<Buffer> {
   return Buffer.from(base64, 'base64')
 }
 
-test.describe('media panel', () => {
+test.describe('media tab', () => {
   test.use({ script: 'media' })
 
-  test('lists the chat’s png and webm newest first with a missing file tile, steps through them in the preview, and jumps to the message', async ({ launched }) => {
+  test('the Media tab replaces the transcript with the chat’s png, webm and missing file, steps through them in the preview, and jumps back to the message', async ({ launched }) => {
     const { page, workspace } = launched
     mkdirSync(join(workspace, 'refs'), { recursive: true })
     mkdirSync(join(workspace, 'clips'), { recursive: true })
     writeFileSync(join(workspace, 'refs', 'shot.png'), Buffer.from(TINY_PNG, 'base64'))
     writeFileSync(join(workspace, 'clips', 'demo.webm'), await recordWebm(page))
     const pane = page.locator('[data-chat-pane]')
+    const transcript = pane.locator('[data-transcript]')
+    const input = pane.locator('textarea')
     await startSession(launched)
+    await expect(pane.getByRole('tablist')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Media', exact: true })).toHaveCount(0)
     await send(page, 'show the media')
     await expect(pane.getByText('That is the reference shot.')).toBeVisible()
 
-    const button = page.getByRole('button', { name: 'Media', exact: true })
-    await expect(button).toHaveText('3')
-    await page.keyboard.press('Control+Shift+M')
-    const panel = page.getByRole('complementary', { name: 'Media' })
-    await expect(panel).toBeVisible()
-    await expect(button).toHaveAttribute('aria-pressed', 'true')
+    const chatTab = pane.getByRole('tab', { name: 'Chat' })
+    const mediaTab = pane.getByRole('tab', { name: 'Media 3' })
+    await expect(chatTab).toHaveAttribute('aria-selected', 'true')
+    await mediaTab.click()
+    await expect(mediaTab).toHaveAttribute('aria-selected', 'true')
+    const grid = pane.getByRole('tabpanel', { name: 'Media' })
+    await expect(grid).toBeVisible()
+    await expect(transcript).toBeHidden()
+    await expect(input).toBeVisible()
+    await expect(page.getByRole('complementary', { name: 'Media' })).toHaveCount(0)
 
-    const tiles = panel.locator('[data-thumbnail]')
+    const tiles = grid.locator('[data-thumbnail]')
     await expect(tiles).toHaveCount(3)
     await expect(tiles.nth(0).getByRole('button', { name: 'shot.png' }).locator('img')).toHaveAttribute('src', /^cc-media:\/\/file\//)
     await expect(tiles.nth(1).locator('video')).toHaveCount(1)
@@ -799,7 +807,7 @@ test.describe('media panel', () => {
     await expect(tiles.nth(2)).toContainText('File not found')
     await expect.poll(() => tiles.nth(0).locator('img').evaluate((img) => (img as unknown as { naturalWidth: number }).naturalWidth)).toBe(1)
     await expect.poll(() => tiles.nth(1).locator('video').evaluate((v) => (v as unknown as { readyState: number }).readyState)).toBeGreaterThan(0)
-    const shotPath = process.env.MEDIA_PANEL_SHOT
+    const shotPath = process.env.MEDIA_TAB_SHOT
     if (shotPath) {
       const png = await evaluateMain(launched.app, async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'), undefined)
       writeFileSync(shotPath, Buffer.from(png, 'base64'))
@@ -817,23 +825,70 @@ test.describe('media panel', () => {
     await page.keyboard.press('Escape')
     await expect(preview).toHaveCount(0)
 
-    for (let i = 1; i <= 4; i++) {
-      await send(page, `more ${i}`)
-      await expect(pane.getByText('Line eight of a long reply.')).toHaveCount(i)
-    }
-    const shotMessage = pane.locator('[data-item-id]', { hasText: 'That is the reference shot.' })
-    await expect(shotMessage).not.toBeInViewport()
-    await tiles.nth(0).hover()
-    await tiles.nth(0).getByRole('button', { name: 'Jump to message' }).click()
-    await expect(shotMessage).toBeInViewport()
-
     await tiles.nth(2).click({ button: 'right' })
     await expect(page.getByRole('menuitem', { name: 'Copy path' })).toBeVisible()
     await expect(page.getByRole('menuitem', { name: 'Reveal in Explorer' })).toBeDisabled()
     await page.keyboard.press('Escape')
 
     await page.keyboard.press('Control+Shift+M')
-    await expect(panel).toHaveCount(0)
+    await expect(chatTab).toHaveAttribute('aria-selected', 'true')
+    await expect(transcript).toBeVisible()
+    await expect(grid).toHaveCount(0)
+    for (let i = 1; i <= 4; i++) {
+      await send(page, `more ${i}`)
+      await expect(pane.getByText('Line eight of a long reply.')).toHaveCount(i)
+    }
+    const shotMessage = pane.locator('[data-item-id]', { hasText: 'That is the reference shot.' })
+    await expect(shotMessage).not.toBeInViewport()
+    await page.keyboard.press('Control+Shift+M')
+    await expect(grid).toBeVisible()
+    await tiles.nth(0).hover()
+    await tiles.nth(0).getByRole('button', { name: 'Jump to message' }).click()
+    await expect(chatTab).toHaveAttribute('aria-selected', 'true')
+    await expect(grid).toHaveCount(0)
+    await expect(shotMessage).toBeInViewport()
+  })
+
+  test('the Chat tab keeps its scroll position and follows new output across a trip to Media', async ({ launched }) => {
+    const { page } = launched
+    const pane = page.locator('[data-chat-pane]')
+    const transcript = pane.locator('[data-transcript]')
+    await startSession(launched)
+    await send(page, 'show the media')
+    await expect(pane.getByText('That is the reference shot.')).toBeVisible()
+    for (let i = 1; i <= 4; i++) {
+      await send(page, `more ${i}`)
+      await expect(pane.getByText('Line eight of a long reply.')).toHaveCount(i)
+    }
+    const top = () => transcript.evaluate((el) => (el as unknown as { scrollTop: number }).scrollTop)
+    const gap = () => transcript.evaluate((el) => {
+      const box = el as unknown as { scrollTop: number; scrollHeight: number; clientHeight: number }
+      return box.scrollHeight - box.clientHeight - box.scrollTop
+    })
+    await transcript.evaluate((el) => ((el as unknown as { scrollTop: number }).scrollTop = 120))
+    await expect.poll(top).toBe(120)
+    // A remounted transcript would be a new element without this mark.
+    await transcript.evaluate((el) => ((el as unknown as { dataset: Record<string, string> }).dataset.kept = 'yes'))
+
+    await page.keyboard.press('Control+Shift+M')
+    await expect(transcript).toBeHidden()
+    await page.keyboard.press('Control+Shift+M')
+    await expect(transcript).toBeVisible()
+    expect(await top()).toBe(120)
+    await expect(transcript).toHaveAttribute('data-kept', 'yes')
+
+    await transcript.evaluate((el) => {
+      const box = el as unknown as { scrollTop: number; scrollHeight: number }
+      box.scrollTop = box.scrollHeight
+    })
+    await expect.poll(gap).toBeLessThan(2)
+    await page.keyboard.press('Control+Shift+M')
+    await expect(transcript).toBeHidden()
+    await send(page, 'more 5')
+    await expect(pane.getByText('Line eight of a long reply.')).toHaveCount(5)
+    await page.keyboard.press('Control+Shift+M')
+    await expect(transcript).toBeVisible()
+    await expect.poll(gap).toBeLessThan(2)
   })
 })
 

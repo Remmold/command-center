@@ -107,9 +107,9 @@ export function App() {
       if (projectId) useProjectViewsStore.getState().toggleShellDrawer(projectId)
     },
     toggleSessionList: () => useSessionListStore.getState().toggle(),
-    toggleMediaPanel: () => {
+    toggleMediaTab: () => {
       const target = focusedTarget()
-      if (target) useChatMediaStore.getState().toggle(mediaKeyOf(target))
+      if (target) useChatMediaStore.getState().toggleTab(mediaKeyOf(target))
     },
     zoom: (step) => useZoomStore.getState().step(step),
     selectRow: openRowAt

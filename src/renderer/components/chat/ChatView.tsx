@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { compactMetadata } from './compaction'
 import { ChatItems } from './ChatItems'
+import { HostedMediaTabs } from './MediaTabs'
 import { MessageColumn } from './MessageColumn'
 import { ChatBanner } from './ChatBanner'
 import { Button } from '../ui/Button'
@@ -704,45 +705,47 @@ export const ChatView = memo(function ChatView({
 
   return (
     <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col" onKeyDown={handlePaneKeyDown}>
-      <div ref={scrollRef} tabIndex={-1} data-transcript="" className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
-        {/* Positioned so the screen-reader status below stays inside the scroll box instead of stretching the Layer stack. */}
-        <div ref={contentRef} className="relative">
-          <MessageColumn className="space-y-3">
-            {error && (
-              <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
-                {error}
-              </ChatBanner>
-            )}
-            {items.length === 0 && !error && !processRunning && !inProgress && (
-              <div className="py-10 text-center text-sm text-faint">starting claude…</div>
-            )}
-            {showIdleBanner && (
-              <ChatBanner
-                action={
-                  <Button variant="secondary" onClick={handleResume}>
-                    {resumeSessionId ? 'resume now' : 'start'}
-                  </Button>
-                }
-              >
-                {resumeSessionId
-                  ? 'paused — sending will resume this session'
-                  : 'idle — sending will start a new claude process'}
-              </ChatBanner>
-            )}
-            <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} agents={agents} busy={turnActive} background={background} />
-            {pendingApprovals.map((req) => (
-              <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
-            ))}
-            {turnActive && pendingApprovals.length === 0 && <WorkingLine mode={mode} compacting={compacting} />}
-            {held.map((p) => (
-              <UserPrompt key={p.uuid} text={p.text} queued />
-            ))}
-            <div role="status" className="sr-only">
-              {held.length > 0 ? 'Message queued.' : ''}
-            </div>
-          </MessageColumn>
+      <HostedMediaTabs paneId={paneId} cwd={cwd}>
+        <div ref={scrollRef} tabIndex={-1} data-transcript="" className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
+          {/* Positioned so the screen-reader status below stays inside the scroll box instead of stretching the Layer stack. */}
+          <div ref={contentRef} className="relative">
+            <MessageColumn className="space-y-3">
+              {error && (
+                <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
+                  {error}
+                </ChatBanner>
+              )}
+              {items.length === 0 && !error && !processRunning && !inProgress && (
+                <div className="py-10 text-center text-sm text-faint">starting claude…</div>
+              )}
+              {showIdleBanner && (
+                <ChatBanner
+                  action={
+                    <Button variant="secondary" onClick={handleResume}>
+                      {resumeSessionId ? 'resume now' : 'start'}
+                    </Button>
+                  }
+                >
+                  {resumeSessionId
+                    ? 'paused — sending will resume this session'
+                    : 'idle — sending will start a new claude process'}
+                </ChatBanner>
+              )}
+              <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} agents={agents} busy={turnActive} background={background} />
+              {pendingApprovals.map((req) => (
+                <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
+              ))}
+              {turnActive && pendingApprovals.length === 0 && <WorkingLine mode={mode} compacting={compacting} />}
+              {held.map((p) => (
+                <UserPrompt key={p.uuid} text={p.text} queued />
+              ))}
+              <div role="status" className="sr-only">
+                {held.length > 0 ? 'Message queued.' : ''}
+              </div>
+            </MessageColumn>
+          </div>
         </div>
-      </div>
+      </HostedMediaTabs>
       <InputBox
         busy={turnActive}
         initialDraft={savedDraft(paneId)}
@@ -774,7 +777,7 @@ export const ChatView = memo(function ChatView({
             />
             <Button variant="ghost" pressed={thinking} onClick={() => void toggleThinking()} tooltip="Toggle extended thinking mode">
               <Brain size={13} strokeWidth={2} />
-              Thinking
+              <span className="input-footer-wide">Thinking</span>
             </Button>
           </>
         }
