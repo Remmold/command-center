@@ -1,0 +1,1 @@
+- 01 resolved: compact Work sidebar, one-line account headers, Personal short name — 754718c

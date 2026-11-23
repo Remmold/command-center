@@ -18,7 +18,7 @@ He chose the **Compact** layout, and **"Personal"** as the short name for the de
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Account header: exactly one line.**
   - The account's colour dot, its short name and plan, then a thin weekly usage bar with the percentage, right-aligned.
