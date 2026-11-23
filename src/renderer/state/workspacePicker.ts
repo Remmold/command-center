@@ -5,6 +5,8 @@ export interface WorkspacePickInput {
   workspaces: readonly Workspace[]
   identities: RepoIdentityViews
   query: string
+  /** Last use per workspace id; used ones come first, newest first. */
+  recent?: Readonly<Record<string, number>>
 }
 
 export interface WorkspacePick {
@@ -24,10 +26,11 @@ function matches({ workspace, repoName }: WorkspacePick, words: readonly string[
   return words.every((w) => haystack.includes(w))
 }
 
-export function workspacePicks({ workspaces, identities, query }: WorkspacePickInput): WorkspacePick[] {
+export function workspacePicks({ workspaces, identities, query, recent = {} }: WorkspacePickInput): WorkspacePick[] {
   const words = normalise(query).split(/\s+/).filter(Boolean)
+  const lastUse = (pick: WorkspacePick) => recent[pick.workspace.id] ?? 0
   return workspaces
     .map((workspace) => ({ workspace, repoName: repoDisplayName(workspace.repoName, identities[workspace.repoGroupKey]) }))
     .filter((pick) => matches(pick, words))
-    .sort(byRepoThenTag)
+    .sort((a, b) => lastUse(b) - lastUse(a) || byRepoThenTag(a, b))
 }

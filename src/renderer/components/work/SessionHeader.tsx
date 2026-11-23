@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useMenu } from '../../hooks/useMenu'
 import {
   Columns2,
@@ -27,7 +26,7 @@ import { closeChatHalf, openSession, splitChat } from '../../state/sessionNaviga
 import { usePaneStatus } from '../../state/sessionStatusStore'
 import { IDE_PANELS_SHORTCUT, SHELL_DRAWER_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { itemsToMarkdown } from '../chat/exportMarkdown'
-import { PastSessionsModal } from '../PastSessionsModal'
+import { pickPastSession } from '../../state/launcherStore'
 import { AccountMismatchNotice, HostedAccountBadge, ObservedAccountBadge } from './ChatAccountBadge'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
@@ -134,7 +133,6 @@ export function HostedSessionHeader({ workspace, view, session, place }: HostedP
 
 function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSession }) {
   const menu = useMenu()
-  const [pastOpen, setPastOpen] = useState(false)
   const store = useProjectViewsStore
 
   const act = (fn: () => void) => () => {
@@ -186,7 +184,7 @@ function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSes
             icon={History}
             label="load past session…"
             description="resume any previous claude session in this workspace"
-            onClick={act(() => setPastOpen(true))}
+            onClick={act(() => pickPastSession(view.projectId))}
           />
           <MenuItem icon={Copy} label="duplicate session" description="copy model + perms, fresh history" onClick={act(duplicate)} />
           <MenuItem icon={Download} label="export to markdown…" description="save the conversation as .md" onClick={act(() => void exportMarkdown())} />
@@ -199,16 +197,6 @@ function ChatMenu({ view, session }: { view: ProjectView; session: ClaudeChatSes
           <MenuItem icon={Trash2} label="clear session" description="wipe items + session id (process restarts fresh)" onClick={act(clear)} />
         </PopoverMenu>
       </Popover>
-      {pastOpen && (
-        <PastSessionsModal
-          cwd={view.projectPath}
-          onClose={() => setPastOpen(false)}
-          onLoad={(info) => {
-            const loaded = store.getState().loadSessionFromLocal(view.projectId, info)
-            if (loaded) openSession(loaded.id)
-          }}
-        />
-      )}
     </>
   )
 }

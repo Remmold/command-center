@@ -3,7 +3,7 @@ import type { RendererApi } from '../src/shared/types'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, prompt, send, startSession, test, transcriptsOf, type FakeLog } from './harness'
+import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, newChatIn, prompt, send, startSession, test, transcriptsOf, type FakeLog } from './harness'
 
 const BASIC_REPLY = 'Hello! This is a scripted reply from the fake Claude.'
 const WRITE_DONE = 'Created hello.txt containing hi.'
@@ -83,7 +83,7 @@ test.describe('the mode a new session starts in', () => {
     await delayClaudeStart(app, 2000)
     await page.keyboard.press('Control+2')
     await page.keyboard.press('Control+t')
-    await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+    await newChatIn(page, /e2e-workspace/)
     await page.locator('[data-chat-pane]').getByRole('button', { name: /^(Manual|Edit automatically)$/ }).click()
     await page.getByRole('menuitemradio', { name: /^Plan/ }).click()
     expect(log.initializedIn(workspace)).toBe(false)
@@ -524,7 +524,7 @@ function seedPastSessions(dir: string): void {
 }
 
 test.describe('session history', () => {
-  test('Claude names the session, a rename reaches the CLI, and past sessions show titles, search and rename', async ({ launched }) => {
+  test('Claude names the session, a rename reaches the CLI, and Past sessions opens the picker at this project with titles, search, back, rename and switching', async ({ launched }) => {
     const { page, log } = launched
     const transcripts = transcriptsOf(launched)
     seedPastSessions(transcripts)
@@ -551,40 +551,55 @@ test.describe('session history', () => {
     const openPast = async () => {
       await page.getByRole('button', { name: 'Session list actions' }).click()
       await page.getByRole('menuitem', { name: /Past sessions/ }).click()
-      await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
-      return page.getByRole('dialog', { name: 'Past conversations' })
+      return page.getByRole('dialog', { name: 'Open a workspace' })
     }
     let past = await openPast()
-    const rows = past.getByRole('list', { name: 'Sessions' }).getByRole('button', { name: /now$/ })
+    const filter = past.getByRole('combobox', { name: 'Open a workspace' })
+    await expect(past.getByText('e2e-workspace', { exact: true })).toBeVisible()
+    await expect(past.getByRole('option').first()).toHaveAccessibleName('New chat')
+    const rows = past.getByRole('option', { name: /now/ })
     await expect(rows).toHaveCount(2)
-    await expect(past.getByRole('button', { name: 'Old login fix now' })).toBeVisible()
-    await expect(past.getByRole('button', { name: 'tidy the readme now' })).toBeVisible()
+    await expect(past.getByRole('option', { name: /^Old login fix feature\/oauth now/ })).toBeVisible()
+    await expect(past.getByRole('option', { name: /^tidy the readme main now/ })).toBeVisible()
 
-    await past.getByRole('searchbox', { name: 'Search sessions' }).fill('OAUTH')
+    await filter.fill('OAUTH')
     await expect(rows).toHaveCount(1)
-    await past.getByRole('searchbox', { name: 'Search sessions' }).fill('login')
+    await filter.fill('login')
     await expect(past.locator('mark')).toHaveText('login')
-    await past.getByRole('searchbox', { name: 'Search sessions' }).fill('')
+    await filter.fill('')
+    await filter.press('Backspace')
+    await expect(past.getByRole('option', { name: /e2e-workspace/ })).toBeVisible()
+    await expect(past.getByRole('option', { name: 'New chat' })).toHaveCount(0)
+    await past.getByRole('combobox', { name: 'Open a workspace' }).press('Enter')
+    await expect(past.getByRole('option', { name: 'New chat' })).toBeVisible()
 
-    await past.getByRole('button', { name: 'tidy the readme now' }).hover()
-    await past.getByRole('listitem').filter({ hasText: 'tidy the readme' }).getByRole('button', { name: 'Rename session' }).click()
+    await past.getByRole('option', { name: /^tidy the readme/ }).hover()
+    await past.getByRole('option', { name: /^tidy the readme/ }).getByRole('button', { name: 'Rename session' }).click()
     await past.getByRole('textbox', { name: 'Session title' }).fill('Readme tidy')
     await past.getByRole('textbox', { name: 'Session title' }).press('Enter')
-    await expect(past.getByRole('button', { name: 'Readme tidy now' })).toBeVisible()
+    await expect(past.getByRole('option', { name: /^Readme tidy main now/ })).toBeVisible()
     await expect
       .poll(() => readFileSync(join(transcripts, `${UNNAMED_SESSION}.jsonl`), 'utf-8').trim().split('\n').at(-1))
       .toBe(JSON.stringify({ type: 'custom-title', sessionId: UNNAMED_SESSION, customTitle: 'Readme tidy' }))
 
-    await past.getByRole('button', { name: 'Old login fix now' }).click()
+    await past.getByRole('option', { name: /^Old login fix/ }).click()
     await expect(past).toHaveCount(0)
     await expect(list.getByText('Old login fix', { exact: true })).toBeVisible()
     await send(page, 'carry on')
     await expect.poll(() => log.entries().some((e) => e.kind === 'argv' && (e.argv as string[]).includes(OLD_SESSION))).toBe(true)
     expect(log.controlRequests('generate_session_title')).toHaveLength(1)
 
-    past = await openPast()
+    await page.keyboard.press('Control+l')
+    past = page.getByRole('dialog', { name: 'Open a workspace' })
     await expect(past.getByRole('img', { name: /^Open in this window/ })).toHaveCount(1)
-    await expect(past.getByRole('listitem').filter({ hasText: 'Old login fix' }).getByRole('img', { name: /^Open in this window/ })).toBeVisible()
+    await expect(past.getByRole('option', { name: /Old login fix/ }).getByRole('img', { name: /^Open in this window/ })).toBeVisible()
+    await past.getByRole('option', { name: /Old login fix/ }).click()
+    await expect(past).toHaveCount(0)
+    await expect(list.getByText('Old login fix', { exact: true })).toHaveCount(1)
+    await page.keyboard.press('Control+t')
+    await expect(page.getByRole('dialog', { name: 'Open a workspace' }).getByRole('option').first()).toHaveAccessibleName(/^e2e-workspace/)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: 'Open a workspace' })).toHaveCount(0)
   })
 })
 
@@ -967,7 +982,7 @@ test.describe('Remote Control', () => {
     await delayClaudeStart(app, 2000)
     await page.keyboard.press('Control+2')
     await page.keyboard.press('Control+t')
-    await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+    await newChatIn(page, /e2e-workspace/)
     await prompt(page).fill('/rc')
     await prompt(page).press('Enter')
     const pane = page.locator('[data-chat-pane]')
@@ -1134,7 +1149,7 @@ test.describe('grouped by account', () => {
     const workLabel = 'Work · Claude Ultra'
     await startSession(launched)
     await page.keyboard.press('Control+t')
-    await page.getByRole('option', { name: /work-repo/ }).first().click()
+    await newChatIn(page, /work-repo/)
     await expect.poll(() => log.initializedIn(workRepo)).toBe(true)
     await send(page, 'say hello')
     await expect(page.getByText(BASIC_REPLY)).toBeVisible()
@@ -1280,7 +1295,7 @@ test.describe('zoom and the session list', () => {
     const reply = page.locator('[data-chat-pane]').getByText(BASIC_REPLY)
     const openAnother = async () => {
       await page.keyboard.press('Control+t')
-      await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+      await newChatIn(page, /e2e-workspace/)
       await expect(reply).toBeHidden()
     }
     await openAnother()
@@ -1324,7 +1339,7 @@ test.describe('the account a chat runs on', () => {
     await delayClaudeStart(app, 2500)
     await page.keyboard.press('Control+2')
     await page.keyboard.press('Control+t')
-    await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+    await newChatIn(page, /e2e-workspace/)
     await expect(workBadge).toContainText('pending')
     await expect.poll(() => log.initializedIn(workspace)).toBe(true)
     await expect(workBadge).not.toContainText('pending')

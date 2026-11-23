@@ -193,6 +193,7 @@ export async function startIn(page: Page, workspace: string, text: string | null
   await page.keyboard.press('Control+2')
   await page.keyboard.press('Control+t')
   await page.getByRole('option', { name: new RegExp(`^${workspace}\\b`) }).first().click()
+  await page.getByRole('option', { name: 'New chat' }).click()
   const input = page.locator('[data-chat-pane] textarea:visible')
   await expect(input).toBeVisible()
   if (text === null) return

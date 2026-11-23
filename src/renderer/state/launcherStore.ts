@@ -1,24 +1,30 @@
 import { create } from 'zustand'
-import type { Workspace } from '../../shared/types'
-
-export type PickPurpose = 'new-session' | 'past-sessions'
+import { startStep, type PickerStep } from './projectPicker'
+import { focusedTarget } from './sessionNavigation'
+import { useWorkspacesStore } from './workspacesStore'
 
 interface LauncherState {
-  /** Why the workspace picker is open; null while it is closed. */
-  picking: PickPurpose | null
-  /** The workspace whose past sessions are listed. */
-  pastFor: Workspace | null
-  pickWorkspace: (purpose: PickPurpose) => void
-  closePicker: () => void
-  showPastSessions: (workspace: Workspace) => void
-  closePastSessions: () => void
+  /** The step the project picker opened at; null while it is closed. */
+  opened: PickerStep | null
+  /** Bumped on every open, so reopening at the same step starts afresh. */
+  openCount: number
+  open: (step: PickerStep) => void
+  close: () => void
 }
 
 export const useLauncherStore = create<LauncherState>((set) => ({
-  picking: null,
-  pastFor: null,
-  pickWorkspace: (purpose) => set({ picking: purpose, pastFor: null }),
-  closePicker: () => set({ picking: null }),
-  showPastSessions: (workspace) => set({ pastFor: workspace }),
-  closePastSessions: () => set({ pastFor: null })
+  opened: null,
+  openCount: 0,
+  open: (step) => set((s) => ({ opened: step, openCount: s.openCount + 1 })),
+  close: () => set({ opened: null })
 }))
+
+/** + New session and Ctrl+T: the project list. */
+export function pickProject(): void {
+  useLauncherStore.getState().open({ kind: 'projects' })
+}
+
+/** Past sessions… and Ctrl+L: the sessions of the given project, else of the focused chat's, else the project list. */
+export function pickPastSession(workspaceId: string | null = focusedTarget()?.workspaceId ?? null): void {
+  useLauncherStore.getState().open(startStep(workspaceId, useWorkspacesStore.getState().workspaces))
+}
