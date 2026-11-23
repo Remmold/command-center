@@ -6,7 +6,7 @@ import type { AssistantMessageItem, ChatItem, ToolResultItem, ResultItem, System
 import { computeUnifiedDiff, trimContext, type DiffSegment } from './diff'
 import { UnifiedDiffView, isUnifiedDiff } from './UnifiedDiffView'
 import { DiffLines } from './DiffLines'
-import { ToolCallBody, ToolCallRow, ToolCallSection, type ToolCallStatus } from './ToolCallRow'
+import { ToolCallBody, ToolCallRow, ToolCallSection } from './ToolCallRow'
 import { toolCallTitle } from './toolCall'
 import { mcpToolTitle } from './mcpTool'
 import { useToolContext } from './toolContext'
@@ -22,6 +22,9 @@ import { Checklist, type CheckState } from '../ui/Checklist'
 import { TimelinePlaceProvider, TimelineRow, timelinePlace } from '../ui/Timeline'
 import { AgentCall, SubagentItemList } from './AgentCall'
 import { AGENT_TOOLS } from './subagents'
+import { toolCallStatus } from './runningCalls'
+import { BACKGROUNDABLE_TOOLS } from './runInBackground'
+import { RunInBackgroundLine } from './RunInBackgroundLine'
 
 const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
 
@@ -211,11 +214,6 @@ function isReadInput(input: unknown): input is ReadInput {
   return !!input && typeof input === 'object' && typeof (input as Record<string, unknown>).file_path === 'string'
 }
 
-function statusOf(result: ToolResultItem | undefined): ToolCallStatus {
-  if (!result) return 'pending'
-  return result.isError ? 'error' : 'ok'
-}
-
 /** Tools whose header already says what they did; the extension shows only their output (or only an error). */
 const OUTPUT_ONLY: ReadonlySet<string> = new Set(['Glob', 'Grep', 'WebFetch', 'WebSearch'])
 const ERROR_ONLY: ReadonlySet<string> = new Set(['Skill'])
@@ -238,10 +236,10 @@ function FileTarget({ path, suffix = '' }: { path: string; suffix?: string }) {
 }
 
 function ToolCall({ block }: { block: ToolUse }) {
-  const { pairs, cwd, latestTodoId, subagentItems } = useToolContext()
+  const { pairs, cwd, latestTodoId, subagentItems, running } = useToolContext()
   const result = pairs.resultFor.get(block.id)
   const { name, target } = toolCallTitle(block.name, block.input, cwd)
-  const status = statusOf(result)
+  const status = toolCallStatus(result, running.has(block.id))
 
   if (AGENT_TOOLS.has(block.name)) {
     return <AgentCall id={block.id} name={block.name} input={block.input} result={result} resultText={result ? stringifyToolResult(result.content) : ''} />
@@ -320,7 +318,8 @@ function ToolCall({ block }: { block: ToolUse }) {
   const woken = subagentItems.get(block.id) ?? []
   const showsInput = !OUTPUT_ONLY.has(block.name) && !ERROR_ONLY.has(block.name)
   const showsResult = !!result && (!ERROR_ONLY.has(block.name) || result.isError)
-  const hasBody = showsInput || showsResult || woken.length > 0
+  const movable = !result && BACKGROUNDABLE_TOOLS.has(block.name)
+  const hasBody = showsInput || showsResult || woken.length > 0 || movable
   return (
     <ToolCallRow name={name} target={target} status={status}>
       {hasBody ? (
@@ -332,6 +331,7 @@ function ToolCall({ block }: { block: ToolUse }) {
             </ToolCallBody>
           )}
           {woken.length > 0 && <SubagentItemList items={woken} />}
+          {movable && <RunInBackgroundLine toolUseId={block.id} />}
         </>
       ) : undefined}
     </ToolCallRow>
@@ -354,7 +354,7 @@ function ResultSection({ result }: { result: ToolResultItem }) {
 function LooseToolResult({ item }: { item: ToolResultItem }) {
   const text = stringifyToolResult(item.content)
   return (
-    <ToolCallRow name="Result" target={oneLine(text)} status={statusOf(item)}>
+    <ToolCallRow name="Result" target={oneLine(text)} status={toolCallStatus(item, false)}>
       <ToolCallBody>
         <ResultSection result={item} />
       </ToolCallBody>

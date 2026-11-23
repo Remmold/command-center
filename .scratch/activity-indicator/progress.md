@@ -1,0 +1,1 @@
+- 01 resolved: working line, blinking running tool dots, Run in background (background_tasks), reduced motion, fake shell runs — COMMIT

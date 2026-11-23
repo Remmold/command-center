@@ -213,9 +213,17 @@ function processTable(): ProcessRow[] {
     })
 }
 
+/**
+ * A process and everything it started. Windows keeps a dead parent's PID on its children and reuses PIDs,
+ * so an unrelated older process (VS Code was killed this way) can name the test app as its parent; a real
+ * child is always created after its parent, so anything older is not part of the tree.
+ */
 function treeOf(root: number, table: ProcessRow[]): ProcessRow[] {
   const tree = table.filter((p) => p.pid === root)
-  for (let i = 0; i < tree.length; i++) tree.push(...table.filter((p) => p.parent === tree[i].pid && p.pid !== tree[i].pid))
+  for (let i = 0; i < tree.length; i++) {
+    const parent = tree[i]
+    tree.push(...table.filter((p) => p.parent === parent.pid && p.pid !== parent.pid && BigInt(p.started) >= BigInt(parent.started)))
+  }
   return tree
 }
 

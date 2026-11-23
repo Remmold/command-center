@@ -66,3 +66,11 @@ code, kbd, pre, samp {
     content-visibility: visible;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-blink,
+  .animate-fade-in {
+    animation: none;
+  }
+}

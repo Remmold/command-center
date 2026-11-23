@@ -24,7 +24,7 @@ export function ObservedChatView({ cwd }: { cwd: string | undefined }) {
 
   return (
     <Pane label="observed session">
-      <MessageList items={items} cwd={cwd} agents={agents}>
+      <MessageList items={items} cwd={cwd} agents={agents} busy={live}>
         {loading && <EmptyHint>reading transcript…</EmptyHint>}
         {error && <EmptyHint>could not open this session: {error}</EmptyHint>}
         {shortened && <EmptyHint>showing the latest {OBSERVED_INITIAL_ITEMS} entries; earlier ones are in VS Code</EmptyHint>}

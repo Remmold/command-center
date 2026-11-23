@@ -8,6 +8,7 @@ import { Message } from './Message'
 import { ChatItems } from './ChatItems'
 import { Button } from '../ui/Button'
 import { Dialog } from '../ui/Dialog'
+import { RunInBackgroundLine } from './RunInBackgroundLine'
 
 /** Stopped shares Failed's red dot, as the extension's `BE` draws both as failed. */
 const ROW_STATUS: Record<AgentStatus, ToolCallStatus> = { working: 'running', finished: 'ok', failed: 'error', stopped: 'stopped' }
@@ -92,6 +93,7 @@ export function AgentCall({ id, name, input, result, resultText }: Props) {
         )}
         <SubagentBody callId={id} items={subagentItems.get(id) ?? []} source={agents?.transcript} agentId={task?.taskId} />
         {failure && <ErrorLine>{failure}</ErrorLine>}
+        {!result && <RunInBackgroundLine toolUseId={id} />}
         <AgentActions status={status} task={task} stop={agents?.stop} onOpenTranscript={agents?.transcript ? () => setTranscriptOpen(true) : undefined} />
       </ToolCallRow>
       {transcriptOpen && agents?.transcript && (

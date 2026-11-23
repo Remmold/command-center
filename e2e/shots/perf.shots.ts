@@ -282,6 +282,17 @@ test('click latency on seeded data', async () => {
       await page.keyboard.press('Control+2')
     }
 
+    // A turn running in a 300-message chat: the working line animates while keys go into the prompt box.
+    await list.getByText('run the onboarding tests').click()
+    await expect(pane.getByText('step 149: refactor').first()).toBeAttached()
+    await input.fill('long run for the keystroke check')
+    await input.press('Enter')
+    await expect(pane.locator('[data-working-line]')).toBeVisible()
+    await expect(pane.getByText('Refreshing the token store').first()).toBeVisible()
+    await input.click()
+    for (let k = 0; k < TRIES * 5; k++) await sample(page, 'keystroke in prompt box while a turn runs', 'keydown', () => page.keyboard.press('a'))
+    await input.fill('')
+
     const rows = stats.map((s) => ({
       action: s.action,
       n: s.frames.length,

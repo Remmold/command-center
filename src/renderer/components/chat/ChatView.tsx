@@ -27,7 +27,9 @@ import { useFollowOutput } from './useFollowOutput'
 import { noteScroll, saveDraft, savedDraft, savedScroll } from '../../state/restoreStore'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { useSubagentTasksStore } from '../../state/subagentTasksStore'
-import type { AgentHost } from './toolContext'
+import type { AgentHost, BackgroundHost } from './toolContext'
+import { WorkingLine } from './WorkingLine'
+import { applyForegroundEvent, backgroundOutcome, type BackgroundOutcome, type ForegroundCalls } from './runInBackground'
 import { findSessionByPane, shellTabsOfSession, storedPermissionMode, useProjectViewsStore } from '../../state/projectViewsStore'
 import { isFirstPrompt, noteClaudeSessionId, requestClaudeTitle } from '../../state/sessionTitleSync'
 import { useApprovalsStore } from '../../state/approvalsStore'
@@ -65,6 +67,7 @@ const EMPTY_ITEMS: ChatItem[] = []
 const EMPTY_REQUESTS: ApprovalRequest[] = []
 const EMPTY_HELD: HeldPrompt[] = []
 const NO_TASKS = {}
+const NO_FOREGROUND: ForegroundCalls = new Map()
 const TASK_EVENTS: ReadonlySet<string> = new Set(['task_started', 'task_progress', 'task_notification', 'task_updated'])
 
 /** The extension saves these as the default for new sessions when the user picks them. */
@@ -147,6 +150,9 @@ export const ChatView = memo(function ChatView({
   const [error, setError] = useState<string | null>(null)
   const [inProgress, setInProgress] = useState<AssistantMessageItem | null>(null)
   const [thinkingTokens, setThinkingTokens] = useState<number | undefined>(undefined)
+  const [foreground, setForeground] = useState<ForegroundCalls>(NO_FOREGROUND)
+  const [backgroundRefused, setBackgroundRefused] = useState(false)
+  const [compacting, setCompacting] = useState(false)
   /** When each thinking block of the streaming message started, by block index. */
   const thinkingStartsRef = useRef<{ messageId: string | undefined; starts: Map<number, number> }>({ messageId: undefined, starts: new Map() })
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
@@ -269,6 +275,9 @@ export const ChatView = memo(function ChatView({
       if (id !== paneId) return
       startedRef.current = false
       useSubagentTasksStore.getState().end(paneId)
+      setForeground(NO_FOREGROUND)
+      setBackgroundRefused(false)
+      setCompacting(false)
       setProcessRunning(false)
       setTurnActive(false)
       setInProgress(null)
@@ -386,11 +395,14 @@ export const ChatView = memo(function ChatView({
     }
     if (event.type === 'system') {
       const sys = event as ClaudeSystemEvent
-      if (sys.subtype === 'status' && isPermissionMode(sys.permissionMode)) {
-        useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
+      if (sys.subtype === 'status') {
+        // The extension's rule: a hooks-only status line leaves the status as it was.
+        if (!('userPromptSubmitHooksRunning' in sys)) setCompacting(sys.status === 'compacting')
+        if (isPermissionMode(sys.permissionMode)) useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
         return
       }
       if (TASK_EVENTS.has(sys.subtype)) {
+        setForeground((calls) => applyForegroundEvent(calls, sys))
         useSubagentTasksStore.getState().apply(paneId, sys)
         return
       }
@@ -664,6 +676,16 @@ export const ChatView = memo(function ChatView({
     }
   }, [paneId, subagentTasks, processRunning, transcript])
 
+  const background = useMemo((): BackgroundHost => {
+    const move = async (toolUseIds: readonly string[]): Promise<BackgroundOutcome> => {
+      const replies = await Promise.all(toolUseIds.map((id) => window.api.claude.control(paneId, 'background_tasks', { tool_use_id: id })))
+      const outcome = backgroundOutcome(replies)
+      if (outcome === 'disabled') setBackgroundRefused(true)
+      return outcome
+    }
+    return { foreground, refused: backgroundRefused, move }
+  }, [paneId, foreground, backgroundRefused])
+
   const indicator = contextUsage ? contextIndicator(contextUsage) : null
   const commands = useMemo(
     () => sessionInit?.commands ?? initCommandNames.map((name) => ({ name, description: '', argumentHint: '', aliases: [], builtin: false })),
@@ -703,13 +725,11 @@ export const ChatView = memo(function ChatView({
                   : 'idle — sending will start a new claude process'}
               </ChatBanner>
             )}
-            <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} agents={agents} />
+            <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} agents={agents} busy={turnActive} background={background} />
             {pendingApprovals.map((req) => (
               <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
             ))}
-            {turnActive && !inProgress && pendingApprovals.length === 0 && (
-              <div className="px-1.5 text-xs text-faint">claude is thinking…</div>
-            )}
+            {turnActive && pendingApprovals.length === 0 && <WorkingLine mode={mode} compacting={compacting} />}
             {held.map((p) => (
               <UserPrompt key={p.uuid} text={p.text} queued />
             ))}
