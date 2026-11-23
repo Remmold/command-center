@@ -61,7 +61,7 @@ describe('usageEntries', () => {
         elapsed: 69,
         pace: { ahead: false, by: 0, text: 'on track' },
         paceNote: '69% of the week passed · on track',
-        line: 'Week 69% · on track · resets Mon 23:00',
+        line: { head: 'Week 69%', verdict: 'on track', reset: 'resets Mon 23:00' },
         tooltip: 'Weekly (7 day): 69% used · 69% of the week passed · on track · resets Mon 23:00'
       }
     ])
@@ -83,7 +83,7 @@ describe('usageEntries', () => {
       elapsed: 56,
       pace: { ahead: true, by: 27, text: 'ahead of pace by 27%' },
       tooltip: 'Session (5hr): 83% used · 56% of the 5 hours passed · ahead of pace by 27% · resets in 2h 10m',
-      line: '5h 83% · ahead by 27% · resets 22:10'
+      line: { head: '5h 83%', verdict: 'ahead of pace by 27%', reset: 'resets 22:10' }
     })
   })
 
@@ -95,7 +95,7 @@ describe('usageEntries', () => {
       now: NOW,
       timeZone: UTC
     })
-    expect(entry.bars[0]).toMatchObject({ elapsed: null, pace: null, tooltip: 'Weekly (7 day): 10% used', line: 'Week 10%' })
+    expect(entry.bars[0]).toMatchObject({ elapsed: null, pace: null, tooltip: 'Weekly (7 day): 10% used', line: { head: 'Week 10%', verdict: null, reset: null } })
   })
 
   it('falls back to the profile name, marks a profile without credentials, and highlights the one on screen', () => {

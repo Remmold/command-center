@@ -21,7 +21,16 @@ interface Box {
   scrollWidth: number
   clientWidth: number
 }
-declare const document: { querySelectorAll(selector: string): ArrayLike<Box & { getAttribute(n: string): string | null; tagName: string }> }
+interface Rect {
+  x: number
+  y: number
+  right: number
+  width: number
+  height: number
+}
+declare const document: {
+  querySelectorAll(selector: string): ArrayLike<Box & { getAttribute(n: string): string | null; tagName: string; textContent: string | null; getBoundingClientRect(): Rect }>
+}
 
 /** Elements that clip text on purpose (truncate) are left out; anything else wider than its box overflows. */
 async function overflowing(page: Page, selectors: string[]): Promise<string[]> {
@@ -36,6 +45,27 @@ async function overflowing(page: Page, selectors: string[]): Promise<string[]> {
     }
     return out
   }, selectors)
+}
+
+const LIST = 'nav[aria-label="Sessions"]'
+
+/** The Work list at its default 300 px: usage percentages and verdicts sit whole inside it, and rows give the model's room to the title. */
+async function narrowListProblems(page: Page): Promise<string[]> {
+  return page.evaluate((list) => {
+    const out: string[] = []
+    const box = document.querySelectorAll(list)[0].getBoundingClientRect()
+    if (box.width > 360) out.push(`the list is ${box.width}px wide, not narrow`)
+    const uncut = document.querySelectorAll(`${list} .meter-line-head, ${list} .meter-line-verdict`)
+    if (uncut.length === 0) out.push('no usage lines')
+    for (let i = 0; i < uncut.length; i++) {
+      const r = uncut[i].getBoundingClientRect()
+      if (r.width === 0 || r.right > box.right + 0.5) out.push(`cut: ${uncut[i].textContent}`)
+    }
+    const models = document.querySelectorAll(`${list} .hide-in-narrow-list`)
+    if (models.length === 0) out.push('no row has a model to hide')
+    for (let i = 0; i < models.length; i++) if (models[i].getBoundingClientRect().width > 0) out.push(`model shown: ${models[i].textContent}`)
+    return out
+  }, LIST)
 }
 
 for (const percent of [110, 125, 150]) {
@@ -74,6 +104,21 @@ for (const percent of [110, 125, 150]) {
 
       await shot('work')
       expect(await overflowing(page, sideways)).toEqual([])
+      await expect(page.locator(`${LIST} .meter-line-verdict`).first()).toBeVisible({ timeout: 15_000 })
+      expect(await narrowListProblems(page)).toEqual([])
+      const workSection = page.getByRole('navigation', { name: 'Sessions' }).getByRole('button', { name: /^Work · Claude Team/ })
+      await workSection.click()
+      await expect(workSection.getByText(/^\d+ waiting$/)).toBeVisible()
+      const listBox = (await page.locator(LIST).boundingBox())!
+      const listPng = await app.evaluate(async ({ BrowserWindow }, b) => {
+        const contents = BrowserWindow.getAllWindows()[0].webContents
+        const z = contents.getZoomFactor()
+        const rect = { x: Math.round(b.x * z), y: Math.round(b.y * z), width: Math.round(b.width * z), height: Math.round(b.height * z) }
+        return (await contents.capturePage(rect)).toPNG().toString('base64')
+      }, listBox)
+      writeFileSync(join(OUT, `zoom-${percent}-work-list-narrow.png`), Buffer.from(listPng, 'base64'))
+      expect(await overflowing(page, sideways)).toEqual([])
+      await workSection.click()
 
       await page.keyboard.press('Control+b')
       await shot('work-list-hidden')

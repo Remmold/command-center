@@ -278,3 +278,7 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: a stored hash of Unity's default icon. Not taken: the icon differs between Unity versions and Windows' rendering.
 148. **Found icons carry the detector version (`searchVersion`)**; on start, a repo searched by an older detector is searched again, so an icon the new rules reject is replaced (else the letter). A user's own pick is never touched.
     - Alternative: re-search only repos whose automatic icon is an exe.
+149. **The Work list's usage line words the verdict in full ("ahead of pace by 38%") at every width**, as the tooltip and Account & Usage dialog do; under 360 px the verdict and reset drop to a second line, and only the reset may be cut.
+    - Alternative: keep "ahead by 38%" on the wide one-line layout and switch wording by width.
+150. **"Narrow" is one container query on the whole Work list (360 px)** for both the row model text and the usage layout, so both switch together.
+    - Alternative: each usage block queries its own width.

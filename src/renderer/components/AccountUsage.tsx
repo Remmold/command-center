@@ -47,7 +47,9 @@ export function AccountUsageLines({ entry, color }: { entry: UsageEntry; color: 
       {entry.bars.map((bar) => (
         <MeterLine
           key={bar.key}
-          text={bar.line}
+          head={bar.line.head}
+          verdict={bar.line.verdict}
+          reset={bar.line.reset}
           tooltip={bar.tooltip}
           gauge={<Meter percent={bar.percent} tone={bar.tone} label={`${entry.label} ${bar.label}`} elapsed={elapsedOf(bar)} />}
         />

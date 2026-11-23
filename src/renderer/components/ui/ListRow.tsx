@@ -66,10 +66,18 @@ export function ListRowMatch({ text, query }: { text: string; query: string }) {
   return <span className="min-w-0 flex-1 truncate">{parts}</span>
 }
 
-export function ListRowLabel({ children, tooltip, tone = 'primary' }: { children: ReactNode; tooltip?: string; tone?: 'primary' | 'secondary' }) {
+interface ListRowLabelProps {
+  children: ReactNode
+  tooltip?: string
+  tone?: 'primary' | 'secondary'
+  /** Gives way to the row's title in a narrow Work list; the row's tooltip should carry it instead. */
+  hideWhenNarrow?: boolean
+}
+
+export function ListRowLabel({ children, tooltip, tone = 'primary', hideWhenNarrow = false }: ListRowLabelProps) {
   const look = tone === 'primary' ? 'font-medium text-fg' : 'text-muted'
   return (
-    <span title={tooltip} className={`max-w-[16rem] shrink-0 truncate ${look}`}>
+    <span title={tooltip} className={`max-w-[16rem] shrink-0 truncate ${look} ${hideWhenNarrow ? 'hide-in-narrow-list' : ''}`}>
       {children}
     </span>
   )
