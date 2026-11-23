@@ -24,7 +24,12 @@ const images: IconImages = {
     const bytes = await fs.readFile(path)
     return path.endsWith('.svg') ? { bytes, ext: 'svg' } : { bytes, ext: 'png' }
   },
-  exeIcon: async () => null
+  // The file's bytes stand in for its icon, so an exe copied from its crash handler has the engine's icon.
+  exeIcon: async (path, engineDefaults) => {
+    const bytes = await fs.readFile(path)
+    const same = await Promise.all(engineDefaults.map(async (ref) => (await fs.readFile(ref)).equals(bytes)))
+    return { bytes: pngOf(256), generic: same.includes(true) }
+  }
 }
 
 async function put(path: string, bytes: Buffer | string): Promise<void> {
@@ -81,6 +86,33 @@ describe('repo identity service', () => {
     await fs.rm(join(repo, 'brand'), { recursive: true })
     await icons.detectMissing()
     expect((await icons.list())[KEY]?.found?.map((f) => f.path)).toEqual(['icon.png', 'public/favicon.svg'])
+  })
+
+  it('skips a Unity build whose exe carries the Unity default icon, and keeps one with its own icon', async () => {
+    await fs.rm(join(repo, 'public'), { recursive: true })
+    await fs.rm(join(repo, 'brand'), { recursive: true })
+    await put('Builds/Windows/UnityPlayer.dll', 'player')
+    await put('Builds/Windows/UnityCrashHandler64.exe', 'unity cube')
+    await put('Builds/Windows/Game.exe', 'unity cube')
+    const icons = service()
+    await icons.detectMissing()
+    expect((await icons.list())[KEY]?.found).toEqual([])
+
+    await put('Builds/Windows/Game.exe', 'the game’s own icon')
+    await icons.detectAgain(KEY)
+    expect((await icons.list())[KEY]?.found?.map((f) => f.path)).toEqual(['Builds/Windows/Game.exe'])
+  })
+
+  it('searches again on start a repo searched by an older version, keeping the user’s pick', async () => {
+    await fs.writeFile(
+      join(dir, 'repo-identities.json'),
+      JSON.stringify({ [KEY]: { icon: { kind: 'letter' }, found: [{ file: 'ab'.repeat(16) + '.png', path: 'public/favicon.svg', source: 'file' }] } })
+    )
+    const icons = service()
+    await icons.detectMissing()
+    const identity = (await icons.list())[KEY]
+    expect(identity?.found?.map((f) => f.path)).toEqual(['brand/app-icon-1024.png', 'public/favicon.svg'])
+    expect(identity?.icon).toEqual({ kind: 'letter' })
   })
 
   it('writes nothing into the repo', async () => {

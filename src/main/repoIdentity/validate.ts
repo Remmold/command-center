@@ -47,8 +47,14 @@ function parseIdentity(x: unknown): RepoIdentity | undefined {
   const displayName = typeof x.displayName === 'string' && x.displayName.trim() ? x.displayName.trim() : undefined
   const icon = parseIcon(x.icon)
   const found = parseFound(x.found)
+  const searchVersion = found && Number.isInteger(x.searchVersion) ? (x.searchVersion as number) : undefined
   if (displayName === undefined && icon === undefined && found === undefined) return undefined
-  return { ...(displayName && { displayName }), ...(icon && { icon }), ...(found && { found }) }
+  return {
+    ...(displayName && { displayName }),
+    ...(icon && { icon }),
+    ...(found && { found }),
+    ...(searchVersion !== undefined && { searchVersion })
+  }
 }
 
 /** Drops anything malformed, so a hand-edited or older file never breaks the app. */

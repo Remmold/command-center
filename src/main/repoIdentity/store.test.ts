@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createRepoIdentityStore, type RepoIdentityStore } from './store'
+import { createRepoIdentityStore, SEARCH_VERSION, type RepoIdentityStore } from './store'
 
 const KEY = 'git:c:/projects/darkfall/.git'
 const OTHER = 'dir:c:/notes'
@@ -116,7 +116,7 @@ describe('repo identity store', () => {
 
   it('remembers a search that found nothing apart from no search at all', async () => {
     await store.setFound(KEY, [])
-    expect(await store.list()).toEqual({ [KEY]: { found: [] } })
+    expect(await store.list()).toEqual({ [KEY]: { found: [], searchVersion: SEARCH_VERSION } })
   })
 
   it('keeps a found icon the user picked after a new search drops it', async () => {
