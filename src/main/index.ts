@@ -21,6 +21,7 @@ import {
   getMainWindow,
   onscreen,
   showMainWindow,
+  showApprovals,
   showSession,
   showView
 } from './window'
@@ -119,6 +120,7 @@ if (!app.requestSingleInstanceLock()) {
       onscreen,
       setBadge: tray.setBadge,
       openSession: showSession,
+      openApprovals: showApprovals,
       notificationIcon: repoIdentities.notificationIcon
     })
 

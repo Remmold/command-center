@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
-import { notificationText, shouldNotify, trayBadge } from './attention'
+import { clickTarget, notificationText, shouldNotify, trayBadge } from './attention'
 
 const entry = (paneId: string, status: SessionStatus): SessionStatusEntry => ({
   paneId,
@@ -108,5 +108,12 @@ describe('notification text', () => {
       title: 'alpha',
       body: 'Your turn'
     })
+  })
+})
+
+describe('notification click', () => {
+  it('opens the approval inbox for an approval and the chat for anything else', () => {
+    expect(clickTarget({ paneId: 'p', cwd: 'C:/ws', status: 'needs-approval', since: 1 })).toBe('approvals')
+    expect(clickTarget({ paneId: 'p', cwd: 'C:/ws', status: 'your-turn', since: 1 })).toBe('chat')
   })
 })

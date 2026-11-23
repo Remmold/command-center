@@ -1,0 +1,3 @@
+- Done: inbox, question cards, notification and Dashboard entry points, perf and zoom cases; quick, e2e (81.7 s), build, perf and zoom all green (89d4f45).
+- Next: Andreas tests section 30 of the test flow; one real recording of an answered AskUserQuestion to confirm the CLI's result wording for the transcript card.
+- Open reds: none.

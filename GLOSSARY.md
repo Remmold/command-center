@@ -48,6 +48,10 @@ _Avoid_: State, activity
 A hosted session in Needs approval or Your turn. The tray badge counts these.
 _Avoid_: Pending, blocked session
 
+**Approval inbox**:
+The overlay (Ctrl+Shift+A) that lists every tool approval, question and plan the hosted sessions wait on, oldest first, and answers each one with the chat's own prompt.
+_Avoid_: Approval queue, approvals view
+
 **Live sessions**:
 The Dashboard panel of sessions in motion: hosted sessions that are Running, Needs approval or Your turn, plus observed sessions that are Live. Broader than the observed status Live.
 _Avoid_: Active sessions, running sessions

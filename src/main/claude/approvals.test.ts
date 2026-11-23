@@ -37,7 +37,8 @@ describe('ApprovalBroker', () => {
         toolName: 'Bash',
         input: canUseTool.input,
         suggestions: canUseTool.permission_suggestions,
-        description: 'Print 7 with Node'
+        description: 'Print 7 with Node',
+        raisedAt: expect.any(Number)
       }
     ])
     expect(broker.respond('cli-7', { behavior: 'allow', updatedInput: canUseTool.input, updatedPermissions: [] })).toBe(true)

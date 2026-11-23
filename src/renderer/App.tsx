@@ -18,6 +18,8 @@ import { closeSession, focusedTarget, initChatPair, paneOnScreen } from './state
 import { pickPastSession, pickProject } from './state/launcherStore'
 import { SessionLauncher } from './components/work/SessionLauncher'
 import { Toasts } from './components/ui/Toasts'
+import { ApprovalInbox } from './components/inbox/ApprovalInbox'
+import { useApprovalInboxStore } from './state/approvalInboxStore'
 import { jumpToNextWaiting, openRowAt } from './state/workSessions'
 import { useWorkspacesStore } from './state/workspacesStore'
 import { useProfilesStore } from './state/profilesStore'
@@ -91,6 +93,7 @@ export function App() {
     switchView: (next) => useViewStore.getState().setView(next),
     openSettings: () => useViewStore.getState().openSettings(),
     nextWaiting: jumpToNextWaiting,
+    openApprovals: () => useApprovalInboxStore.getState().toggle(),
     newChat: pickProject,
     loadPastSession: () => pickPastSession(),
     closeActiveChat: () => {
@@ -138,6 +141,7 @@ export function App() {
         </div>
       </div>
       <SessionLauncher />
+      <ApprovalInbox />
       <Toasts />
       {settingsSection && (
         <div className="absolute inset-0 z-40">

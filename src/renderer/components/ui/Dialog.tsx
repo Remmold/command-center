@@ -7,11 +7,18 @@ interface Props {
   title: string
   onClose: () => void
   maxWidth?: number
+  /** `tall`: a fixed-height frame whose body lays out its own panes and scrolling. */
+  size?: 'fit' | 'tall'
+  /** A `data-` attribute name set on the dialog, so code can tell it from other dialogs. */
+  marker?: 'approval-inbox'
   children: ReactNode
 }
 
+const FRAME = { fit: 'max-h-[80vh]', tall: 'h-[85vh]' } as const
+const BODY = { fit: 'scrollbar-thin min-h-0 overflow-y-auto px-4 py-3', tall: 'flex min-h-0 flex-1' } as const
+
 /** A centred modal with a title bar and a close button; Escape or a click outside closes it. */
-export function Dialog({ title, onClose, maxWidth = 440, children }: Props) {
+export function Dialog({ title, onClose, maxWidth = 440, size = 'fit', marker, children }: Props) {
   const closeRef = useRef(onClose)
   closeRef.current = onClose
 
@@ -32,9 +39,10 @@ export function Dialog({ title, onClose, maxWidth = 440, children }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        {...(marker ? { [`data-${marker}`]: '' } : {})}
         style={{ maxWidth }}
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[80vh] w-full flex-col overflow-hidden rounded-md border border-strong bg-widget text-xs text-fg shadow-lg"
+        className={`flex ${FRAME[size]} w-full flex-col overflow-hidden rounded-md border border-strong bg-widget text-xs text-fg shadow-lg`}
       >
         <header className="flex items-center justify-between gap-2 border-b border-subtle px-4 py-2.5">
           <h2 className="text-sm font-medium">{title}</h2>
@@ -42,7 +50,7 @@ export function Dialog({ title, onClose, maxWidth = 440, children }: Props) {
             <X size={14} strokeWidth={2} />
           </IconButton>
         </header>
-        <div className="scrollbar-thin min-h-0 overflow-y-auto px-4 py-3">{children}</div>
+        <div className={BODY[size]}>{children}</div>
       </div>
     </div>,
     document.body

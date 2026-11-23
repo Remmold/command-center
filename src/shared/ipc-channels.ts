@@ -75,6 +75,7 @@ export const IPC = {
   ZOOM_CHANGED: 'zoom:changed',
   NAVIGATION_SHOW_VIEW: 'navigation:showView',
   NAVIGATION_OPEN_SESSION: 'navigation:openSession',
+  NAVIGATION_OPEN_APPROVALS: 'navigation:openApprovals',
   FILES_LIST: 'files:list',
   FILES_MENTIONS: 'files:mentions',
   FILES_SAVE_AS: 'files:saveAs',

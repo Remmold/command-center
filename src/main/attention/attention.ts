@@ -68,3 +68,8 @@ export function notificationText(
 ): { title: string; body: string } {
   return { title: workspaceNameFor(entry.cwd, workspaces), body: STATUS_LABEL[entry.status] }
 }
+
+/** A click on a waiting chat's notification opens the approval inbox at its request when it waits on one, else the chat. */
+export function clickTarget(entry: SessionStatusEntry): 'approvals' | 'chat' {
+  return entry.status === 'needs-approval' ? 'approvals' : 'chat'
+}

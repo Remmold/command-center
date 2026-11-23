@@ -1,4 +1,8 @@
 import { useEffect } from 'react'
+import { Inbox } from 'lucide-react'
+import { APPROVALS_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
+import { useApprovalInboxStore } from '../../state/approvalInboxStore'
+import { IconButton } from '../ui/IconButton'
 import { OBSERVED_STATUS_LABEL } from '../../../shared/types'
 import { STATUS_LABEL } from '../../../shared/needsYou'
 import { useMinuteClock } from '../../hooks/useMinuteClock'
@@ -83,8 +87,14 @@ function WorktreeTag({ row }: { row: SessionRow }) {
 
 function NeedsYouRow({ row, now, account }: { row: HostedRow; now: number; account?: string }) {
   const waited = elapsed(row.statusSince, now)
+  const approvals =
+    row.status === 'needs-approval' ? (
+      <IconButton label="Open in approvals" tooltip={`Open in approvals (${APPROVALS_SHORTCUT})`} onClick={() => useApprovalInboxStore.getState().show(row.paneId)}>
+        <Inbox size={14} strokeWidth={2} />
+      </IconButton>
+    ) : undefined
   return (
-    <ListRow onClick={() => openSession(row.paneId)} tooltip={`${row.title} · ${row.repoName} · ${STATUS_LABEL[row.status]}`}>
+    <ListRow onClick={() => openSession(row.paneId)} tooltip={`${row.title} · ${row.repoName} · ${STATUS_LABEL[row.status]}`} actions={approvals}>
       <RepoIcon repoGroupKey={row.workspace.repoGroupKey} repoName={row.workspace.repoName} size="sm" />
       <WorktreeTag row={row} />
       <ListRowText primary={row.title} secondary={row.repoName} />

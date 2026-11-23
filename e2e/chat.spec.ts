@@ -355,7 +355,7 @@ test.describe('a full context', () => {
 test.describe('tool approval', () => {
   test.use({ script: 'approval' })
 
-  test('1 approves, 3 with feedback denies, 2 allows for the session and skips the next prompt', async ({ launched }) => {
+  test('1 approves, 3 with feedback denies, 2 allows for the session; the approval inbox and question cards answer through the same replies', async ({ launched }) => {
     const { page, log } = launched
     const approval = page.getByRole('group', { name: 'Approve Write' })
     await startSession(launched)
@@ -399,6 +399,74 @@ test.describe('tool approval', () => {
       expect(log.approvalReplies().slice(2)).toEqual([
         expect.objectContaining({ behavior: 'allow', updatedPermissions: [expect.objectContaining({ type: 'setMode', mode: 'acceptEdits' })] })
       ])
+    })
+
+    const FORMATS = 'Which formats should the export offer?'
+    const LAYOUT = 'Which layout should the report use?'
+    const answered = (answers: Record<string, string>) =>
+      expect.objectContaining({ behavior: 'allow', updatedInput: { questions: expect.any(Array), answers }, updatedPermissions: [] })
+
+    await test.step('Ctrl+Shift+A answers two waiting chats oldest first with their own prompts, then closes with All clear', async () => {
+      await page.keyboard.press('Control+t')
+      await newChatIn(page, /e2e-workspace/)
+      await send(page, 'create hello.txt')
+      await expect(approval).toBeVisible()
+      await page.keyboard.press('Control+t')
+      await newChatIn(page, /e2e-workspace/)
+      await send(page, 'ask about the export')
+      await expect(page.locator('[data-chat-pane]').getByRole('group', { name: 'Questions from Claude' })).toBeVisible()
+      await expect(page.getByRole('button', { name: '2 approvals' })).toBeVisible()
+
+      await page.keyboard.press('Control+Shift+A')
+      const inbox = page.getByRole('dialog', { name: /^Approvals/ })
+      const rows = inbox.getByRole('list', { name: 'Waiting approvals' }).getByRole('listitem')
+      await expect(rows).toHaveCount(2)
+      await expect(rows.nth(0)).toContainText('Write')
+      await expect(rows.nth(1)).toContainText('Question')
+      await expect(inbox.getByRole('group', { name: 'Approve Write' })).toBeVisible()
+      await expect(inbox.getByText("I'll create hello.txt for you.")).toBeVisible()
+      await page.keyboard.press('1')
+      await expect.poll(() => log.approvalReplies().length).toBe(4)
+      expect(log.approvalReplies()[3]).toMatchObject({ behavior: 'allow', updatedInput: expect.objectContaining({ content: 'hi' }) })
+
+      await expect(rows).toHaveCount(1)
+      const card = inbox.getByRole('group', { name: 'Questions from Claude' })
+      await card.getByRole('checkbox', { name: 'CSV' }).click()
+      await card.getByRole('checkbox', { name: 'JSON' }).click()
+      await card.getByRole('checkbox', { name: 'Other' }).click()
+      await card.getByRole('textbox', { name: 'Type your answer…' }).fill('XML')
+      await expect(card.getByRole('button', { name: /Submit answers/ })).toBeDisabled()
+      await card.getByRole('checkbox', { name: 'CSV' }).focus()
+      await page.keyboard.press('ArrowRight')
+      await expect(card.getByRole('radio', { name: 'Table' })).toBeFocused()
+      await expect(card.getByRole('region', { name: 'Preview: Table' })).toContainText('Invoice')
+      await page.keyboard.press('ArrowDown')
+      await expect(card.getByRole('region', { name: 'Preview: Cards' })).toContainText('Total 40.00')
+      await page.keyboard.press('Enter')
+      await page.keyboard.press('1')
+      await expect(inbox).toHaveCount(0)
+      await expect(page.getByRole('status', { name: 'Notifications' }).getByText('All clear')).toBeVisible()
+      await expect.poll(() => log.approvalReplies().length).toBe(5)
+      expect(log.approvalReplies()[4]).toEqual(answered({ [FORMATS]: 'CSV, JSON, XML', [LAYOUT]: 'Cards' }))
+      await expect(page.getByRole('button', { name: /approvals?$/ })).toHaveCount(0)
+    })
+
+    await test.step('O opens the chat at its question, whose own card answers by clicks and then reads Answered', async () => {
+      await expect(prompt(page)).toBeEditable()
+      await send(page, 'ask again')
+      const card = page.locator('[data-chat-pane]').getByRole('group', { name: 'Questions from Claude' })
+      await expect(card).toBeVisible()
+      await page.keyboard.press('Control+Shift+A')
+      await expect(page.getByRole('dialog', { name: /^Approvals/ })).toBeVisible()
+      await page.keyboard.press('o')
+      await expect(page.getByRole('dialog', { name: /^Approvals/ })).toHaveCount(0)
+      await card.getByRole('checkbox', { name: 'PDF' }).click()
+      await card.getByRole('tab', { name: 'Layout' }).click()
+      await card.getByRole('radio', { name: 'Table' }).click()
+      await card.getByRole('button', { name: /Submit answers/ }).click()
+      await expect.poll(() => log.approvalReplies().length).toBe(6)
+      expect(log.approvalReplies()[5]).toEqual(answered({ [FORMATS]: 'PDF', [LAYOUT]: 'Table' }))
+      await expect(page.locator('[data-chat-pane]').getByText('Answered · 2 questions').last()).toBeVisible()
     })
   })
 })

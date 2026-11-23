@@ -567,6 +567,7 @@ export interface RendererApi {
   navigation: {
     onShowView: (cb: (view: AppView) => void) => () => void
     onOpenSession: (cb: (paneId: string) => void) => () => void
+    onOpenApprovals: (cb: (paneId: string) => void) => () => void
   }
   git: {
     status: (cwd: string) => Promise<GitStatusResult>

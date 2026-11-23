@@ -35,6 +35,13 @@ describe('keyboard shortcuts', () => {
     expect(shortcutFor(ctrlShift('J', 'KeyJ'))).toEqual({ name: 'nextWaiting' })
   })
 
+  it('Ctrl+Shift+A opens the approval inbox from anywhere, before a focused shell or prompt box', () => {
+    const action = shortcutFor(ctrlShift('A', 'KeyA'))!
+    expect(action).toEqual({ name: 'openApprovals' })
+    expect(beforeFocusedElement(action)).toBe(true)
+    expect(shortcutApplies(action, { view: 'board', settingsOpen: true })).toBe(true)
+  })
+
   it('leaves the prompt box its keys: Ctrl+J newline, Enter, Ctrl+Enter, Shift+Enter, Shift+Tab, Escape', () => {
     const promptKeys = [
       ctrl('j', 'KeyJ'),

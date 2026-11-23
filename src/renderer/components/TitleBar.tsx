@@ -6,6 +6,7 @@ import { SegmentedControl } from './ui/SegmentedControl'
 import { TitleBarButton } from './ui/TitleBarButton'
 import { UsageStrip } from './UsageStrip'
 import { UpdatePill } from './UpdatePill'
+import { ApprovalsPill } from './ApprovalsPill'
 
 const VIEW_LABELS: Record<AppView, string> = { dashboard: 'Dashboard', work: 'Work', board: 'Board' }
 
@@ -28,6 +29,7 @@ export function TitleBar() {
         <SegmentedControl<AppView> label="view" value={view} onChange={setView} options={VIEW_OPTIONS} />
       </div>
       <span className="flex-1" />
+      <ApprovalsPill />
       <UpdatePill />
       <UsageStrip />
       <TitleBarButton label="Settings" tooltip={`Settings (${SETTINGS_SHORTCUT})`} pressed={settingsOpen} onClick={() => (settingsOpen ? closeSettings() : openSettings())}>

@@ -94,6 +94,13 @@ const INTERRUPTED_TOOL = '[Request interrupted by user for tool use]'
 const REJECTED =
   "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+
+/** The CLI's AskUserQuestion result, in the wording the extension's transcript reader parses (`RTe`, `aLt`, `rLt`). */
+function answeredQuestionsText(input) {
+  const answers = input?.answers ?? {}
+  const pairs = (input?.questions ?? []).filter((q) => answers[q.question]).map((q) => `"${q.question}"="${answers[q.question]}"`)
+  return `Your questions have been answered: ${pairs.join(', ')}. You can now continue with these answers in mind.`
+}
 /** Tools the CLI runs without asking, with the result it gives them. */
 const NO_APPROVAL_RESULTS = {
   TodoWrite:
@@ -772,7 +779,8 @@ class Turn {
         this.foldQueued()
         return false
       }
-      this.toolResult(toolUseId, event.result ?? NO_APPROVAL_RESULTS[event.name] ?? 'Done.', false)
+      const answered = event.name === 'AskUserQuestion' ? answeredQuestionsText(decision.updatedInput) : undefined
+      this.toolResult(toolUseId, event.result ?? answered ?? NO_APPROVAL_RESULTS[event.name] ?? 'Done.', false)
       this.foldQueued()
       return false
     }

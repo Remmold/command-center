@@ -1,6 +1,36 @@
 {
   "turns": [
     {
+      "match": "^bash:",
+      "flags": "i",
+      "repeat": true,
+      "events": [
+        {"type": "text", "text": "Checking the migrations against the staging schema before I touch anything."},
+        {"type": "tool_use", "name": "Bash", "input": {"command": "pnpm prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-migrations prisma/migrations --exit-code", "description": "Compare the migrations with the staging schema"}},
+        {"type": "text", "text": "No drift."}
+      ]
+    },
+    {
+      "match": "^edit:",
+      "flags": "i",
+      "repeat": true,
+      "events": [
+        {"type": "text", "text": "Renaming the field in the token store; the reader and the tests follow in the next step."},
+        {"type": "tool_use", "name": "Edit", "input": {"file_path": "{cwd}{sep}src{sep}tokenStore.ts", "old_string": "export interface StoredToken {\n  token: string\n  expires: number\n}", "new_string": "export interface StoredToken {\n  accessToken: string\n  expiresAt: number\n  rotatedFrom?: string\n}"}},
+        {"type": "text", "text": "Renamed."}
+      ]
+    },
+    {
+      "match": "^ask:",
+      "flags": "i",
+      "repeat": true,
+      "events": [
+        {"type": "text", "text": "Two questions about the export before I write the presets."},
+        {"type": "tool_use", "name": "AskUserQuestion", "input": {"questions": [{"question": "Which formats should the export offer?", "header": "Formats", "multiSelect": true, "options": [{"label": "CSV", "description": "Rows for spreadsheets"}, {"label": "PDF", "description": "A printable report"}, {"label": "JSON", "description": "For scripts and other tools"}]}, {"question": "Which layout should the report use?", "header": "Layout", "multiSelect": false, "options": [{"label": "Table", "description": "One row per invoice", "preview": "| Invoice | Customer      | Total  |\n|---------|---------------|--------|\n| 1001    | Nordlys AB    | 40.00  |\n| 1002    | Fjell & Co    | 125.50 |"}, {"label": "Cards", "description": "One card per invoice", "preview": "+----------------------+\n| Invoice 1001         |\n| Nordlys AB    40.00  |\n+----------------------+"}]}]}},
+        {"type": "text", "text": "Thanks."}
+      ]
+    },
+    {
       "match": "approve|write",
       "flags": "i",
       "repeat": true,

@@ -9,7 +9,9 @@ import {
   nextDestination,
   planDenyReply,
   planManualReply,
-  planYes
+  planYes,
+  parseQuestions,
+  questionReply
 } from './approval'
 
 const input = { command: 'node -e "console.log(7)"', description: 'Print 7 with Node' }
@@ -180,5 +182,31 @@ describe('approving a plan', () => {
       interrupt: true
     })
     expect(planDenyReply('smaller steps')).toEqual(denyReply('smaller steps'))
+  })
+})
+
+describe('AskUserQuestion answers', () => {
+  const input = {
+    questions: [
+      { question: 'Which database?', header: 'DB', multiSelect: false, options: [{ label: 'Postgres', description: 'Relational' }, { label: 'SQLite' }] },
+      { question: 'Which features?', header: 'Features', multiSelect: true, options: [{ label: 'Auth' }, { label: 'Search' }] },
+      { question: 42 }
+    ]
+  }
+
+  it('reads the questions the CLI sent, dropping malformed ones', () => {
+    expect(parseQuestions(input).map((q) => [q.question, q.header, q.multiSelect, q.options.map((o) => o.label)])).toEqual([
+      ['Which database?', 'DB', false, ['Postgres', 'SQLite']],
+      ['Which features?', 'Features', true, ['Auth', 'Search']]
+    ])
+    expect(parseQuestions({})).toEqual([])
+  })
+
+  it('allows the call with the questions and the answers keyed by question, as the extension sends them', () => {
+    expect(questionReply(input, { 'Which database?': 'SQLite', 'Which features?': 'Auth, Search' })).toEqual({
+      behavior: 'allow',
+      updatedInput: { questions: input.questions, answers: { 'Which database?': 'SQLite', 'Which features?': 'Auth, Search' } },
+      updatedPermissions: []
+    })
   })
 })

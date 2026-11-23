@@ -9,6 +9,7 @@ export const SESSION_LIST_SHORTCUT = 'Ctrl+B'
 export const SHELL_DRAWER_SHORTCUT = 'Ctrl+`'
 export const SETTINGS_SHORTCUT = 'Ctrl+,'
 export const MEDIA_TAB_SHORTCUT = 'Ctrl+Shift+M'
+export const APPROVALS_SHORTCUT = 'Ctrl+Shift+A'
 
 export interface ShortcutHandlers {
   switchView?: (view: AppView) => void
@@ -24,6 +25,7 @@ export interface ShortcutHandlers {
   loadPastSession?: () => void
   nextWaiting?: () => void
   toggleMediaTab?: () => void
+  openApprovals?: () => void
 }
 
 /** Runs the handler for the action; false when no handler is registered for it. */

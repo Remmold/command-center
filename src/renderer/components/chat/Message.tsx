@@ -25,6 +25,9 @@ import { AGENT_TOOLS } from './subagents'
 import { toolCallStatus } from './runningCalls'
 import { BACKGROUNDABLE_TOOLS } from './runInBackground'
 import { RunInBackgroundLine } from './RunInBackgroundLine'
+import { AnsweredQuestions } from './QuestionCard'
+import { questionOutcome } from './questionCardModel'
+import { QUESTION_TOOL, parseQuestions } from '../../../shared/approval'
 
 const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
 
@@ -258,6 +261,8 @@ function ToolCall({ block }: { block: ToolUse }) {
     )
   }
 
+  if (block.name === QUESTION_TOOL) return <QuestionCall block={block} result={result} status={status} />
+
   const todos = block.name === TODO_TOOL ? parseTodos(block.input) : undefined
   if (todos) {
     const current = block.id === latestTodoId
@@ -333,6 +338,25 @@ function ToolCall({ block }: { block: ToolUse }) {
           {woken.length > 0 && <SubagentItemList items={woken} />}
           {movable && <RunInBackgroundLine toolUseId={block.id} />}
         </>
+      ) : undefined}
+    </ToolCallRow>
+  )
+}
+
+/** "Question(s)" with the extension's status line ("Answered · 2 questions") and the answered card; the result box when it reads as neither. */
+function QuestionCall({ block, result, status }: { block: ToolUse; result: ToolResultItem | undefined; status: ReturnType<typeof toolCallStatus> }) {
+  const questions = parseQuestions(block.input && typeof block.input === 'object' ? (block.input as Record<string, unknown>) : {})
+  const name = questions.length === 1 ? 'Question' : 'Questions'
+  const outcome = result ? questionOutcome(questions, stringifyToolResult(result.content), result.isError === true) : null
+  const count = questions.length > 0 ? ` · ${questions.length} ${questions.length === 1 ? 'question' : 'questions'}` : ''
+  return (
+    <ToolCallRow name={name} target={outcome ? `${outcome.status}${count}` : ''} status={status}>
+      {outcome?.status === 'Answered' ? (
+        <AnsweredQuestions questions={questions} answers={outcome.answers} />
+      ) : result && !outcome ? (
+        <ToolCallBody>
+          <ResultSection result={result} />
+        </ToolCallBody>
       ) : undefined}
     </ToolCallRow>
   )

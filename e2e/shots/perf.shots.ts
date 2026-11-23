@@ -18,6 +18,7 @@ const MAIN = join(REPO, 'out', 'main', 'index.js')
 const ELECTRON = require('electron') as unknown as string
 const TRIES = Number(process.env.PERF_TRIES ?? 10)
 const LONG_MESSAGES = 300
+const OPEN_APPROVALS = 'open approvals with 5 waiting (Ctrl+Shift+A)'
 
 const CODE = Array.from({ length: 30 }, (_, i) => `  const value${i} = await store.read('key-${i}') ?? fallback(${i}) // line ${i}`).join('\n')
 
@@ -293,6 +294,21 @@ test('click latency on seeded data', async () => {
     for (let k = 0; k < TRIES * 5; k++) await sample(page, 'keystroke in prompt box while a turn runs', 'keydown', () => page.keyboard.press('a'))
     await input.fill('')
 
+    // Five waiting requests across chats: the Write above plus a Bash, an Edit, a question and another Bash.
+    await startIn(page, 'notes-cli', 'bash: check the migrations', 'Checking the migrations')
+    await startIn(page, 'ledger-web', 'edit: rename the token field', 'Renaming the field')
+    await startIn(page, 'notes-cli', 'ask: export options', 'Two questions about the export')
+    await startIn(page, 'ledger-web', 'bash: check the migrations again', 'Checking the migrations')
+    await expect(page.getByRole('button', { name: '5 approvals' })).toBeVisible()
+    const inbox = page.getByRole('dialog', { name: /^Approvals/ })
+    for (let i = 0; i < TRIES; i++) {
+      await sample(page, OPEN_APPROVALS, 'keydown', () => page.keyboard.press('Control+Shift+A'), async () => {
+        await expect(inbox.getByRole('list', { name: 'Waiting approvals' }).getByRole('listitem')).toHaveCount(5)
+        await page.keyboard.press('Escape')
+        await expect(inbox).toHaveCount(0)
+      })
+    }
+
     const rows = stats.map((s) => ({
       action: s.action,
       n: s.frames.length,
@@ -304,7 +320,8 @@ test('click latency on seeded data', async () => {
     console.table(rows)
     if (process.env.PERF_OUT) writeFileSync(process.env.PERF_OUT, JSON.stringify({ rows, stats }, null, 2))
     // Loose bounds, a few times the measured medians, so only a real regression (seconds before the fix) fails.
-    for (const row of rows) expect(row.frameMedian, row.action).toBeLessThan(row.action.startsWith('keystroke') ? 16 : 150)
+    const bound = (action: string): number => (action.startsWith('keystroke') ? 16 : action === OPEN_APPROVALS ? 100 : 150)
+    for (const row of rows) expect(row.frameMedian, row.action).toBeLessThan(bound(row.action))
   } finally {
     await shutdown(app)
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })

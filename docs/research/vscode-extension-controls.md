@@ -340,6 +340,42 @@ accepts a prompt suggestion, Esc stops Claude or closes menus.
 
 ---
 
+## 10. AskUserQuestion (extension 2.1.330, `webview/index.js`)
+
+A pending AskUserQuestion is an ordinary `can_use_tool` request. The extension's permission card
+(`tFt`) asks the tool's renderer (`class ATe extends ro{name=dc}`, `dc="AskUserQuestion"`) for its body,
+which is the question card `gTn`:
+
+- **Tabs**: a navigation bar with one tab per question, labelled with its `header`; the active one is
+  marked and answered ones get a mark. A fold button and a close (X) button sit at the right end. The
+  close button calls the card's No (`onClose: Et`).
+- **Question**: the `question` text large, then its options as rows (`_ae`): a radio (or a checkbox when
+  `multiSelect`), the `label` and the `description`. An **Other** row always comes last. Picking Other
+  shows a text field "Type your answer…"; Enter in it moves to the next question.
+- **Picking**: single choice replaces the pick. On any question but the last, the row shows as
+  confirming for 300 ms and the card moves to the next question. Multi-select toggles and never
+  moves on.
+- **Keys** (inside the card): ↑/↓ move focus through the option rows and wrap; ←/→ switch questions;
+  Enter or Space on a row picks it (Enter on a row that is not picked stops there, so it never submits).
+  The card's own keys (`In`) map **1 to "Submit answers"**, disabled until every question has a
+  non-empty answer; Enter elsewhere submits too. Esc cancels. Questions get no "No" button and no
+  "Tell Claude what to do instead" field (`!u&&…`), only the "Esc to cancel" hint.
+- **Previews**: an option may carry `preview`. A single-choice question with any preview shows a pane
+  beside the options (`withPreview`): the highlighted row's label as caption and its preview as
+  markdown, fenced as `text` unless it already holds a fence (`pTn`), or "No preview for this option".
+  Row 0 is highlighted at first; focus highlights at once, hover after 150 ms (`uTn`). The pane keeps
+  room for the longest preview plus one line, at least 3 (`--preview-lines`).
+- **Answer**: `accept({questions, answers})`, with `answers` keyed by question text: the picked labels
+  joined by `", "`; a typed Other answer replaces "Other" and goes last; an untyped Other stays "Other".
+- **Decline**: the card's No with no text: the REJECTED_STOP message and `interrupt: true`.
+- **Transcript** (`ATe.body`): the header reads "Question" or "Questions", then a foldable status line,
+  "Answered · 2 questions" (`XIn`: Answered, Declined, No answer, Session ended before an answer), and the
+  read-only card (`mTn`): each question with its options, the picked ones marked, the others faded, and
+  a typed answer under Other. The answers come from the user line's `toolUseResult.answers`, else from
+  the result text `Your questions have been answered: "Q"="A", …. You can now continue with these
+  answers in mind.` (`RTe`, `rLt`, `rTn`); a multi-select answer is split back on `", "` by known labels
+  (`lTn`, `cTn`).
+
 ## Implications for command center
 
 | Concern | VS Code extension | Command center today (`src/main/claude/session.ts`, `src/main/permission/`, `SessionHeader.tsx`, `UsageStrip.tsx`) |
