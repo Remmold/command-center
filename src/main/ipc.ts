@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
+import { liveConfigDir } from './observed/turn'
 import * as vscodeMatch from './profiles/vscodeMatch'
 import { transcriptsDirForCwd, transcriptsDirForWorkspace } from './profiles/transcripts'
 import { ObservedService } from './observed/service'
@@ -102,6 +103,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.on(IPC.OBSERVED_CLOSE, () => observed.close())
   ipcMain.handle(IPC.OBSERVED_TURN, (_e, workspaceId: string, sessionId: string) => observed.turn(workspaceId, sessionId))
   ipcMain.handle(IPC.OBSERVED_READ, (_e, workspaceId: string, sessionId: string) => observed.items(workspaceId, sessionId))
+  ipcMain.handle(IPC.OBSERVED_LIVE_CONFIG_DIR, async (_e, sessionId: string) =>
+    /^[\w-]+$/.test(sessionId) ? liveConfigDir(await profiles.knownConfigDirs(), sessionId) : null
+  )
   unsubscribers.push(() => observed.stop())
 
   const discovery = new DiscoveryService(workspaces.list, (model) => sendAll(IPC.DISCOVERY_CHANGED, model))
@@ -316,8 +320,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
     const { profileId, env } = await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)
     const teleported = options.resumeSessionId ? await isTeleportedSession(await transcriptsDirForCwd(options.cwd), options.resumeSessionId) : false
-    return claudeManager.start({ ...options, profileEnv: env, profileId, teleported })
+    const started = claudeManager.start({ ...options, profileEnv: env, profileId, teleported })
+    return started.ok ? { ...started, profileId: claudeManager.profileOf(options.paneId) } : started
   })
+  ipcMain.handle(IPC.CLAUDE_PROCESS_PROFILE, (_e, paneId: string) => (claudeManager.isAlive(paneId) ? claudeManager.profileOf(paneId) : null))
   ipcMain.handle(
     IPC.CLAUDE_CONTROL,
     (_e, paneId: string, subtype: string, fields?: Record<string, unknown>) =>

@@ -42,6 +42,13 @@ for (const percent of [110, 125, 150]) {
   test(`layout at ${percent}%`, async () => {
     const root = mkdtempSync(join(tmpdir(), 'cc-zoom-'))
     const seeded = seed(root)
+    const work = join(root, 'claude-work')
+    mkdirSync(work, { recursive: true })
+    writeFileSync(join(work, '.credentials.json'), '{}')
+    writeFileSync(join(work, 'fake-account.json'), JSON.stringify({ email: 'andreas@work.example', organization: 'Work AB', subscriptionType: 'Claude Team' }))
+    writeFileSync(join(seeded.userData, 'profiles.json'), JSON.stringify([{ id: 'p-work', name: 'Work', createdAt: 1, configDir: work }]))
+    const onWork = seeded.workspaces.map((w) => ({ ...w, createdAt: Date.now(), ...(w.name === 'pixel-forge' ? { profileId: 'p-work' } : {}) }))
+    writeFileSync(join(seeded.userData, 'projects.json'), JSON.stringify(onWork))
     mkdirSync(OUT, { recursive: true })
     writeFileSync(join(seeded.userData, 'zoom.json'), JSON.stringify({ level: Math.log(percent / 100) / Math.log(1.2) }))
     const app = await _electron.launch({
@@ -71,6 +78,13 @@ for (const percent of [110, 125, 150]) {
       await page.keyboard.press('Control+b')
       await shot('work-list-hidden')
       await page.keyboard.press('Control+b')
+
+      await page.getByRole('navigation', { name: 'Sessions' }).getByText('Write the export presets').click({ modifiers: ['Control'] })
+      await expect(page.locator('[data-header-row]:visible')).toHaveCount(2)
+      await expect(page.getByRole('button', { name: /^Account: Work · Claude Team$/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /^Account: someone@example\.com/ })).toBeVisible()
+      await shot('work-split')
+      expect(await overflowing(page, [...sideways, '[data-header-row]'])).toEqual([])
 
       await page.keyboard.press('Control+3')
       await expect(page.getByTestId('view-board')).toBeVisible()

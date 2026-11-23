@@ -1,6 +1,7 @@
 import { LogIn, RefreshCw } from 'lucide-react'
 import { profileEnv } from '../../shared/profiles'
 import { updatedText, type UsageBarView, type UsageEntry } from '../state/usageModel'
+import type { MeterElapsed } from './ui/Meter'
 import { loginWorkspace, useProfilesStore } from '../state/profilesStore'
 import { useUsageStore } from '../state/usageStore'
 import { useWorkspacesStore } from '../state/workspacesStore'
@@ -8,6 +9,8 @@ import { openShell } from '../state/sessionNavigation'
 import { Button } from './ui/Button'
 import { DetailRow } from './ui/DetailRow'
 import { Meter } from './ui/Meter'
+import { MeterLine, MeterLines } from './ui/MeterLines'
+import type { AccountColor } from '../state/accountColors'
 import { PopoverActions, PopoverDivider, PopoverHeading, PopoverNote, PopoverSection } from './ui/Popover'
 import { SectionLabel } from './ui/SectionLabel'
 import { StatRow } from './ui/StatRow'
@@ -25,19 +28,43 @@ export function UsageMeters({ entry, size = 'compact' }: { entry: UsageEntry; si
           label={`${entry.label} ${bar.label}`}
           tooltip={bar.tooltip}
           size={size}
+          elapsed={elapsedOf(bar)}
         />
       ))}
     </span>
   )
 }
 
+export function elapsedOf(bar: UsageBarView): MeterElapsed | null {
+  return bar.elapsed === null || !bar.pace ? null : { percent: bar.elapsed, ahead: bar.pace.ahead }
+}
+
+/** An account's windows as short lines with their bars, for a list header; nothing without readings. */
+export function AccountUsageLines({ entry, color }: { entry: UsageEntry; color: AccountColor | null }) {
+  if (entry.bars.length === 0) return null
+  return (
+    <MeterLines label={`Usage for ${entry.label}`} color={color}>
+      {entry.bars.map((bar) => (
+        <MeterLine
+          key={bar.key}
+          text={bar.line}
+          tooltip={bar.tooltip}
+          gauge={<Meter percent={bar.percent} tone={bar.tone} label={`${entry.label} ${bar.label}`} elapsed={elapsedOf(bar)} />}
+        />
+      ))}
+    </MeterLines>
+  )
+}
+
 function UsageBarRow({ bar }: { bar: UsageBarView }) {
+  const detail = [bar.resetText && `Resets ${bar.resetText}`, bar.paceNote].filter(Boolean).join(' · ')
   return (
     <StatRow
       label={bar.label}
       value={`${bar.percent}%`}
-      gauge={<Meter percent={bar.percent} tone={bar.tone} label={bar.label} size="fill" />}
-      detail={bar.resetText ? `Resets ${bar.resetText}` : null}
+      gauge={<Meter percent={bar.percent} tone={bar.tone} label={bar.label} size="fill" elapsed={elapsedOf(bar)} />}
+      detail={detail || null}
+      tooltip={bar.tooltip}
     />
   )
 }

@@ -1,4 +1,9 @@
 import { useState, type MouseEvent } from 'react'
+import { useAccountColor } from '../../state/useAccountColor'
+import { AccentDot } from '../ui/AccentDot'
+import { AccountUsageLines } from '../AccountUsage'
+import { useMinuteClock } from '../../hooks/useMinuteClock'
+import { useUsageEntries } from '../../state/useUsageEntries'
 import { useMenu } from '../../hooks/useMenu'
 import { Columns2, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, X } from 'lucide-react'
 import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
@@ -72,6 +77,8 @@ export function SessionList() {
                 open={!collapsed.includes(section.account.profileId)}
                 onToggle={() => toggle(section.account.profileId)}
                 tooltip={`Sessions on the account ${section.account.label}`}
+                marker={<AccountMarker profileId={section.account.profileId} />}
+                detail={<SectionUsage profileId={section.account.profileId} />}
                 badge={
                   section.needsYou > 0 && (
                     <Badge tone="count" tooltip={`${section.needsYou} ${section.needsYou === 1 ? 'session needs' : 'sessions need'} you`}>
@@ -212,4 +219,14 @@ function RenameRow({ paneId, title, onDone }: { paneId: string; title: string; o
       />
     </li>
   )
+}
+
+function AccountMarker({ profileId }: { profileId: string }) {
+  return <AccentDot color={useAccountColor(profileId)} />
+}
+
+function SectionUsage({ profileId }: { profileId: string }) {
+  const color = useAccountColor(profileId)
+  const entry = useUsageEntries(null, useMinuteClock()).find((e) => e.profileId === profileId)
+  return entry ? <AccountUsageLines entry={entry} color={color} /> : null
 }

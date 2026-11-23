@@ -1,4 +1,5 @@
 import type { AccountProfile, ProfileUsage, UsageWindowReading } from '../../shared/types'
+import { elapsedShare, pace, type Pace } from './usagePace'
 
 export type WindowTone = 'ok' | 'warn' | 'limit'
 export type WindowKey = 'fiveHour' | 'sevenDay'
@@ -11,6 +12,13 @@ export interface UsageBarView {
   tone: WindowTone
   /** The extension's wording after "Resets ", e.g. "Mon, Nov 23 at 11:59 PM"; null when unknown. */
   resetText: string | null
+  /** Whole percent of the window already passed; null without a reset time. */
+  elapsed: number | null
+  pace: Pace | null
+  /** e.g. "48% of the week passed · on track"; null without a reset time. */
+  paceNote: string | null
+  /** One short line, e.g. "Week 62% · ahead by 14% · resets Mon 23:59". */
+  line: string
   tooltip: string
 }
 
@@ -41,13 +49,13 @@ export interface UsageEntriesInput {
   timeZone?: string
 }
 
-const WINDOWS: ReadonlyArray<{ key: WindowKey; label: string; showDay: boolean }> = [
-  { key: 'fiveHour', label: 'Session (5hr)', showDay: false },
-  { key: 'sevenDay', label: 'Weekly (7 day)', showDay: true }
-]
-
 const MIN = 60_000
 const DAY = 24 * 60 * MIN
+
+const WINDOWS: ReadonlyArray<{ key: WindowKey; label: string; short: string; showDay: boolean; length: number; span: string }> = [
+  { key: 'fiveHour', label: 'Session (5hr)', short: '5h', showDay: false, length: 5 * 60 * MIN, span: 'the 5 hours' },
+  { key: 'sevenDay', label: 'Weekly (7 day)', short: 'Week', showDay: true, length: 7 * DAY, span: 'the week' }
+]
 
 export function resetIn(resetsAt: number, now: number): string {
   const mins = Math.floor((resetsAt - now) / MIN)
@@ -76,11 +84,13 @@ export function resetAt(resetsAt: number, now: number, showDay: boolean, timeZon
   return `${day} at ${time}`
 }
 
+function clockShort(resetsAt: number, timeZone?: string): string {
+  return new Date(resetsAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone })
+}
+
 function resetDayShort(resetsAt: number, timeZone?: string): string {
-  const when = new Date(resetsAt)
-  const day = when.toLocaleDateString('en-US', { weekday: 'short', timeZone })
-  const time = when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone })
-  return `${day} ${time}`
+  const day = new Date(resetsAt).toLocaleDateString('en-US', { weekday: 'short', timeZone })
+  return `${day} ${clockShort(resetsAt, timeZone)}`
 }
 
 export function updatedText(updatedAt: number | null, now: number): string {
@@ -103,15 +113,29 @@ function barView(
 ): UsageBarView {
   const percent = Math.floor(Math.min(100, Math.max(0, reading.utilization)))
   const at = reading.resetsAt
-  const tooltipReset =
-    at === null ? '' : ` · resets ${spec.showDay ? resetDayShort(at, timeZone) : `in ${resetIn(at, now)}`}`
+  const share = elapsedShare(at, spec.length, now)
+  const elapsed = share === null ? null : Math.floor(share * 100)
+  const verdict = elapsed === null ? null : pace(percent, elapsed)
+  const paceNote = elapsed === null || !verdict ? null : `${elapsed}% of ${spec.span} passed · ${verdict.text}`
+  const parts = [`${percent}% used`]
+  if (paceNote) parts.push(paceNote)
+  if (at !== null) parts.push(`resets ${spec.showDay ? resetDayShort(at, timeZone) : `in ${resetIn(at, now)}`}`)
+  const line = [
+    `${spec.short} ${percent}%`,
+    ...(verdict ? [verdict.ahead ? `ahead by ${verdict.by}%` : verdict.text] : []),
+    ...(at === null ? [] : [`resets ${spec.showDay ? resetDayShort(at, timeZone) : clockShort(at, timeZone)}`])
+  ].join(' · ')
   return {
     key: spec.key,
     label: spec.label,
     percent,
     tone: tone(percent),
     resetText: at === null ? null : resetAt(at, now, spec.showDay, timeZone),
-    tooltip: `${spec.label} ${percent}%${tooltipReset}`
+    elapsed,
+    pace: verdict,
+    paceNote,
+    line,
+    tooltip: `${spec.label}: ${parts.join(' · ')}`
   }
 }
 

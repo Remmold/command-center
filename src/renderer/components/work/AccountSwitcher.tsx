@@ -1,4 +1,5 @@
-import { Check, UserRound } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Check } from 'lucide-react'
 import { DEFAULT_PROFILE_ID, type Workspace } from '../../../shared/types'
 import { useMenu } from '../../hooks/useMenu'
 import { useMinuteClock } from '../../hooks/useMinuteClock'
@@ -6,17 +7,20 @@ import { useAccountSwitchStore } from '../../state/accountSwitchStore'
 import { useProfilesStore } from '../../state/profilesStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { useUsageEntries } from '../../state/useUsageEntries'
-import { Button } from '../ui/Button'
 import { ListRow, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { Popover, PopoverHeading, PopoverNote, PopoverSection } from '../ui/Popover'
+
+type Menu = ReturnType<typeof useMenu>
 
 interface Props {
   workspace: Workspace
   paneId: string
+  /** The button that opens the menu; it gets the menu's anchor and toggle. */
+  children: (menu: Menu & { toggle: () => void }) => ReactNode
 }
 
 /** The chat header's account dropdown: moves the workspace to another profile and restarts this chat on it. */
-export function AccountSwitcher({ workspace, paneId }: Props) {
+export function AccountSwitcher({ workspace, paneId, children }: Props) {
   const menu = useMenu()
   const loadProfiles = useProfilesStore((s) => s.load)
   const setProfile = useWorkspacesStore((s) => s.setProfile)
@@ -38,20 +42,9 @@ export function AccountSwitcher({ workspace, paneId }: Props) {
     requestSwitch(paneId, label)
   }
 
-  const label = current?.label ?? 'Default'
   return (
     <>
-      <Button
-        ref={menu.setAnchor}
-        variant="ghost"
-        pressed={menu.open}
-        onClick={toggle}
-        label={`account profile for ${workspace.name}`}
-        tooltip={switching ? `Switching to ${switching} after this turn` : `Account profile: ${label}${current?.plan ? ` · ${current.plan}` : ''}`}
-      >
-        <UserRound size={12} strokeWidth={2.25} />
-        {switching ? `${switching}…` : label}
-      </Button>
+      {children({ ...menu, toggle })}
       <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} width={320} label="account profile">
         <PopoverHeading title="Account profile" />
         <ul>

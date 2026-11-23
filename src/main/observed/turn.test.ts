@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readLastLines, readTurn } from './turn'
+import { liveConfigDir, readLastLines, readTurn } from './turn'
 
 const roots: string[] = []
 
@@ -43,5 +43,27 @@ describe('readLastLines', () => {
     writeFileSync(file, `${calling[1]}\n${huge}\n{"type":"assist`)
     const lines = await readLastLines(file)
     expect(lines).toEqual([calling[1], huge])
+  })
+})
+
+describe('liveConfigDir', () => {
+  const record = (dir: string, pid: number, sessionId: string) => {
+    mkdirSync(join(dir, 'sessions'), { recursive: true })
+    writeFileSync(join(dir, 'sessions', `${pid}.json`), JSON.stringify({ pid, sessionId, status: 'idle', updatedAt: 1 }))
+  }
+
+  it('is the config folder whose process file names the session with a live process', async () => {
+    const root = folder()
+    const [personal, work] = [join(root, 'personal'), join(root, 'work')]
+    record(personal, 2 ** 22 + 7, 's1')
+    record(work, process.pid, 's1')
+    record(personal, process.pid, 's2')
+    expect(await liveConfigDir([personal, work], 's1')).toBe(work)
+  })
+
+  it('is null when no running process has the session, or a folder has no sessions', async () => {
+    const root = folder()
+    record(join(root, 'a'), 2 ** 22 + 7, 's1')
+    expect(await liveConfigDir([join(root, 'a'), join(root, 'missing')], 's1')).toBeNull()
   })
 })
