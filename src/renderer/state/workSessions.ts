@@ -2,8 +2,8 @@ import { useMemo } from 'react'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { nextWaiting } from '../../shared/needsYou'
-import type { CliModel, ModelDefaults, SessionInit, SessionStatusEntry } from '../../shared/types'
-import { currentChoice, paneModels, sessionTag } from './modelPicker'
+import type { CliModel, ModelDefaults, SessionInit, SessionStatusEntry, Workspace } from '../../shared/types'
+import { currentChoice, sessionTag } from './modelPicker'
 import { useModelStore, type AppliedModel } from './modelStore'
 import { useSessionInitStore } from './sessionInitStore'
 import { useObservedStore } from './observedStore'
@@ -23,6 +23,7 @@ import {
   type SessionRow
 } from './sessionList'
 import { accountOf, type Account } from './accounts'
+import type { ChatProcess } from './chatAccount'
 import { currentAccounts, useAccounts } from './useAccounts'
 import { useSessionStatusStore } from './sessionStatusStore'
 import { useWorkspacesStore } from './workspacesStore'
@@ -65,13 +66,22 @@ interface ModelSources {
   cachedModels: CliModel[]
   defaults: ModelDefaults
   applied: Record<string, AppliedModel>
+  defaultByProfile: Record<string, string>
+  processes: Record<string, ChatProcess>
 }
 
 /** None until there is a model list or a pick to name. */
-function modelTagOf(c: ClaudeChatSession, m: ModelSources): string | undefined {
-  const models = paneModels(m.inits[c.id]?.models, m.cachedModels)
-  const choice = currentChoice({ models, defaults: m.defaults, session: c, applied: m.applied[c.id] })
-  if (models.length === 0 && choice.selection === undefined) return undefined
+function modelTagOf(c: ClaudeChatSession, profileId: string | undefined, m: ModelSources): string | undefined {
+  const runsOn = m.processes[c.id]?.profileId ?? profileId
+  const choice = currentChoice({
+    own: m.inits[c.id]?.models,
+    cachedModels: m.cachedModels,
+    knownDefault: runsOn ? m.defaultByProfile[runsOn] : undefined,
+    defaults: m.defaults,
+    session: c,
+    applied: m.applied[c.id]
+  })
+  if (choice.models.length === 0 && choice.selection === undefined) return undefined
   return sessionTag(choice.pill)
 }
 
@@ -79,17 +89,19 @@ function modelTagOf(c: ClaudeChatSession, m: ModelSources): string | undefined {
 function hostedInputs(
   views: Record<string, ProjectView>,
   byPane: Record<string, SessionStatusEntry>,
-  models: ModelSources
+  models: ModelSources,
+  workspaces: readonly Workspace[]
 ): HostedSessionInput[] {
-  return Object.values(views).flatMap((v) =>
-    v.claudeSessions.map((c) => ({
+  return Object.values(views).flatMap((v) => {
+    const profileId = workspaces.find((w) => w.id === v.projectId)?.profileId
+    return v.claudeSessions.map((c) => ({
       paneId: c.id,
       workspaceId: v.projectId,
       title: c.title,
       lastActivityAt: byPane[c.id]?.since ?? 0,
-      modelTag: modelTagOf(c, models)
+      modelTag: modelTagOf(c, profileId, models)
     }))
-  )
+  })
 }
 
 interface ListSources extends Omit<SessionListInput, 'hosted' | 'statuses'> {
@@ -99,12 +111,13 @@ interface ListSources extends Omit<SessionListInput, 'hosted' | 'statuses'> {
 }
 
 function listInput({ views, byPane, models, ...rest }: ListSources): SessionListInput {
-  return { hosted: hostedInputs(views, byPane, models), statuses: Object.values(byPane), ...rest }
+  return { hosted: hostedInputs(views, byPane, models, rest.workspaces), statuses: Object.values(byPane), ...rest }
 }
 
 function currentModelSources(): ModelSources {
-  const { cachedModels, defaults, applied } = useModelStore.getState()
-  return { inits: useSessionInitStore.getState().byPane, cachedModels, defaults, applied }
+  const { cachedModels, defaults, applied, defaultByProfile } = useModelStore.getState()
+  const { byPane: inits, processByPane: processes } = useSessionInitStore.getState()
+  return { inits, cachedModels, defaults, applied, defaultByProfile, processes }
 }
 
 function currentSources(): ListSources {
@@ -130,18 +143,20 @@ export function useSessionSources(): Omit<SessionListInput, 'search'> {
   const cachedModels = useModelStore((s) => s.cachedModels)
   const defaults = useModelStore((s) => s.defaults)
   const applied = useModelStore((s) => s.applied)
+  const defaultByProfile = useModelStore((s) => s.defaultByProfile)
+  const processes = useSessionInitStore((s) => s.processByPane)
   return useMemo(
     () =>
       listInput({
         views,
         byPane,
-        models: { inits, cachedModels, defaults, applied },
+        models: { inits, cachedModels, defaults, applied, defaultByProfile, processes },
         observed,
         workspaces,
         identities,
         search: ''
       }),
-    [views, byPane, inits, cachedModels, defaults, applied, observed, workspaces, identities]
+    [views, byPane, inits, cachedModels, defaults, applied, defaultByProfile, processes, observed, workspaces, identities]
   )
 }
 

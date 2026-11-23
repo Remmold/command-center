@@ -8,6 +8,7 @@ import {
   nextEffort,
   pickerModels,
   pillText,
+  resolvedDefault,
   sessionTag
 } from './modelPicker'
 
@@ -80,12 +81,27 @@ describe('pill text', () => {
     expect(pillText({ models, selection: 'opus', effort: 'high' })).toEqual({ label: 'Opus 5.5', effort: 'High' })
   })
 
-  it('shows Default (recommended) until the CLI reports which model it serves', () => {
-    expect(pillText({ models, selection: undefined })).toEqual({ label: 'Default (recommended)' })
-    expect(pillText({ models, selection: 'default', servedModel: 'claude-opus-5-5', effort: 'xhigh' })).toEqual({
-      label: 'Opus 5.5',
+  it('names the model Default resolves to in this session, as the extension does', () => {
+    expect(pillText({ models, selection: undefined })).toEqual({ label: 'Opus 5.5' })
+    expect(pillText({ models, selection: 'default', effort: 'medium' })).toEqual({ label: 'Opus 5.5', effort: 'Medium' })
+    expect(pillText({ models, selection: 'default', servedModel: 'claude-sonnet-5-5', effort: 'xhigh' })).toEqual({
+      label: 'Sonnet 5.5',
       effort: 'Extra high'
     })
+  })
+
+  it("names a Default model no other entry lists from its model id", () => {
+    const only = [model('default', 'claude-opus-5-5', 'Default (recommended)', '')]
+    expect(pillText({ models: only, selection: undefined })).toEqual({ label: 'Opus 5.5' })
+  })
+
+  it("shows the account's last known Default before the session's own initialize", () => {
+    expect(pillText({ models, cached: true, knownDefault: 'claude-sonnet-5-5', selection: undefined })).toEqual({ label: 'Default (Sonnet 5.5)' })
+    expect(pillText({ models: [], knownDefault: 'claude-opus-5-5', selection: undefined })).toEqual({ label: 'Default (Opus 5.5)' })
+  })
+
+  it('shows plain Default before initialize when the account never resolved it', () => {
+    expect(pillText({ models, cached: true, selection: undefined, effort: 'high' })).toEqual({ label: 'Default', effort: 'High' })
   })
 
   it('adds the version when the CLI names a model by its family only, as the extension does', () => {
@@ -100,16 +116,32 @@ describe('pill text', () => {
     expect(pillText({ models, selection: 'sonnet' })).toEqual({ label: 'Sonnet 5.5' })
   })
 
-  it('falls back to the raw model name, or Model, without a model list', () => {
+  it('falls back to the raw model name, or Default, without a model list', () => {
     expect(pillText({ models: [], selection: 'claude-sonnet-4-6' })).toEqual({ label: 'claude-sonnet-4-6' })
-    expect(pillText({ models: [], selection: undefined })).toEqual({ label: 'Model' })
+    expect(pillText({ models: [], selection: undefined })).toEqual({ label: 'Default' })
+    expect(pillText({ models: [], selection: 'default', knownDefault: 'claude-opus-5-5' })).toEqual({ label: 'Default (Opus 5.5)' })
   })
 })
 
 describe('work list tag', () => {
   it('reads model · effort, shortened, with the effort left out when unset', () => {
     expect(sessionTag({ label: 'Opus 5.5', effort: 'High' })).toBe('Opus 5.5 · High')
-    expect(sessionTag({ label: 'Default (recommended)' })).toBe('Default')
+    expect(sessionTag({ label: 'Opus 4.6 (1M)' })).toBe('Opus 4.6')
+  })
+
+  it('keeps the model a pending Default resolves to', () => {
+    expect(sessionTag({ label: 'Default (Opus 5.5)', effort: 'Medium' })).toBe('Default (Opus 5.5) · Medium')
+  })
+})
+
+describe('default resolution', () => {
+  it("is the model the initialize reply's Default entry stands for", () => {
+    expect(resolvedDefault(models)).toBe('claude-opus-5-5')
+  })
+
+  it('is unknown without a Default entry', () => {
+    expect(resolvedDefault(models.slice(1))).toBeUndefined()
+    expect(resolvedDefault([])).toBeUndefined()
   })
 })
 

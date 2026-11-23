@@ -152,7 +152,7 @@ code, kbd, pre, samp {
 
 @container (max-width: 460px) {
   .input-footer-wide,
-  .input-footer [data-pill-detail] {
+  .input-footer [data-pill-label='shrinks'] {
     display: none;
   }
 }

@@ -47,6 +47,7 @@ import { useModelChoice } from '../../state/useModelChoice'
 import { DEFAULT_MODEL, effortLabel, launchChoice, versionedName } from '../../state/modelPicker'
 import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
 import { ModelPicker } from './ModelPicker'
+import { EffortPicker } from './EffortPicker'
 import { ContextPie } from './ContextPie'
 import { ContextDialog } from './ContextDialog'
 import { contextIndicator, parseContextUsage, type ContextUsage } from './contextUsage'
@@ -102,6 +103,8 @@ interface Props {
   thinking?: boolean
   resumeSessionId?: string
   permissionMode?: string
+  /** The account a chat not started yet will run on. */
+  profileId?: string
   registerFocus?: (fn: () => void) => void
 }
 
@@ -139,6 +142,7 @@ export const ChatView = memo(function ChatView({
   thinking = true,
   resumeSessionId,
   permissionMode,
+  profileId,
   registerFocus
 }: Props) {
   const items = useChatItemsStore((s) => s.items[paneId] ?? EMPTY_ITEMS)
@@ -182,7 +186,7 @@ export const ChatView = memo(function ChatView({
   const interruptedRef = useRef(false)
   const awaitingSummaryRef = useRef(false)
   const allowBypassSetting = useGeneralSettingsStore((s) => s.allowDangerouslySkipPermissions)
-  const choice = useModelChoice(paneId, { model, effort })
+  const choice = useModelChoice(paneId, { model, effort }, profileId)
   const mode = migrateMode(permissionMode)
   const autoAvailable = choice.entry?.supportsAutoMode === true
   // A running process can switch to bypass only if it was launched allowing it.
@@ -769,12 +773,10 @@ export const ChatView = memo(function ChatView({
               models={choice.models}
               current={choice.selection}
               pill={choice.pill}
-              effort={choice.effort}
-              levels={choice.levels}
               onSelectModel={(m) => void pickModel(m)}
-              onSelectEffort={(l) => void pickEffort(l)}
               openSignal={modelMenuSignal}
             />
+            <EffortPicker level={choice.effort} levels={choice.levels} onSelect={(l) => void pickEffort(l)} />
             <Button variant="ghost" pressed={thinking} onClick={() => void toggleThinking()} tooltip="Toggle extended thinking mode">
               <Brain size={13} strokeWidth={2} />
               <span className="input-footer-wide">Thinking</span>
@@ -790,7 +792,6 @@ export const ChatView = memo(function ChatView({
               mode={mode}
               modes={modes}
               onSelect={(m) => void pickMode(m)}
-              effort={{ level: choice.effort, levels: choice.levels, onSelect: (l) => void pickEffort(l) }}
             />
           </>
         }

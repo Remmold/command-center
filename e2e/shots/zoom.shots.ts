@@ -28,8 +28,15 @@ interface Rect {
   width: number
   height: number
 }
+interface Element extends Box {
+  getAttribute(n: string): string | null
+  tagName: string
+  textContent: string | null
+  getBoundingClientRect(): Rect
+  querySelectorAll(selector: string): ArrayLike<Element>
+}
 declare const document: {
-  querySelectorAll(selector: string): ArrayLike<Box & { getAttribute(n: string): string | null; tagName: string; textContent: string | null; getBoundingClientRect(): Rect }>
+  querySelectorAll(selector: string): ArrayLike<Element>
 }
 
 /** Elements that clip text on purpose (truncate) are left out; anything else wider than its box overflows. */
@@ -66,6 +73,40 @@ async function narrowListProblems(page: Page): Promise<string[]> {
     for (let i = 0; i < models.length; i++) if (models[i].getBoundingClientRect().width > 0) out.push(`model shown: ${models[i].textContent}`)
     return out
   }, LIST)
+}
+
+/** Each visible prompt footer: the effort pill sits whole beside the model pill, down to its icon below the 460 px rule. */
+async function footerProblems(page: Page, expectNarrow: boolean): Promise<string[]> {
+  return page.evaluate((narrowExpected) => {
+    const out: string[] = []
+    let narrow = 0
+    const footers = document.querySelectorAll('[data-chat-pane] .input-footer')
+    let seen = 0
+    for (let i = 0; i < footers.length; i++) {
+      const footer = footers[i]
+      const box = footer.getBoundingClientRect()
+      if (box.width === 0) continue
+      seen++
+      const effort = footer.querySelectorAll('button[aria-label^="Effort: "]')[0]
+      const model = footer.querySelectorAll('button[title="Switch model"]')[0]
+      if (!effort || !model) {
+        out.push(`footer #${i}: no ${effort ? 'model' : 'effort'} pill`)
+        continue
+      }
+      const e = effort.getBoundingClientRect()
+      const m = model.getBoundingClientRect()
+      if (e.x < m.right - 0.5) out.push(`footer #${i}: effort pill overlaps the model pill`)
+      if (e.right > box.right + 0.5) out.push(`footer #${i}: effort pill past the footer`)
+      if (effort.scrollWidth > effort.clientWidth + 1) out.push(`footer #${i}: effort pill cut`)
+      const word = effort.querySelectorAll('[data-pill-label]')[0].getBoundingClientRect().width
+      if (box.width <= 460) narrow++
+      if (box.width <= 460 && word > 0) out.push(`footer #${i}: ${box.width}px wide but the effort word shows`)
+      if (box.width > 460 && word === 0) out.push(`footer #${i}: ${box.width}px wide but the effort word is hidden`)
+    }
+    if (seen === 0) out.push('no prompt footer')
+    if (narrowExpected && narrow === 0) out.push('no footer is narrow enough to shrink the effort pill')
+    return out
+  }, expectNarrow)
 }
 
 /** A few past sessions of one workspace, for the project picker's second step. */
@@ -124,6 +165,11 @@ for (const percent of [110, 125, 150]) {
 
       await shot('work')
       expect(await overflowing(page, sideways)).toEqual([])
+      expect(await footerProblems(page, false)).toEqual([])
+      await page.locator('[data-chat-pane]:visible').getByRole('button', { name: /^Effort: / }).click()
+      await expect(page.getByRole('dialog', { name: 'Effort' })).toBeVisible()
+      await shot('work-effort')
+      await page.keyboard.press('Escape')
       await expect(page.locator(`${LIST} .meter-line-verdict`).first()).toBeVisible({ timeout: 15_000 })
       expect(await narrowListProblems(page)).toEqual([])
       const workSection = page.getByRole('navigation', { name: 'Sessions' }).getByRole('button', { name: /^Work · Claude Team/ })
@@ -158,6 +204,7 @@ for (const percent of [110, 125, 150]) {
       await expect(page.getByRole('button', { name: /^Account: someone@example\.com/ })).toBeVisible()
       await shot('work-split')
       expect(await overflowing(page, [...sideways, '[data-header-row]'])).toEqual([])
+      expect(await footerProblems(page, percent === 150)).toEqual([])
       const tabs = page.locator('[data-tab-strip]:visible')
       await expect(tabs).toHaveCount(1)
       await tabs.getByRole('tab', { name: 'Media 1' }).click()
