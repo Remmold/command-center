@@ -1,6 +1,8 @@
 import {
   isBuiltinIconName,
   isRepoAccent,
+  type FoundIcon,
+  type FoundIconSource,
   type RepoIconChoice,
   type RepoIdentities,
   type RepoIdentity
@@ -21,15 +23,32 @@ export function parseIcon(x: unknown): RepoIconChoice | undefined {
   if (x.kind === 'image' && typeof x.file === 'string' && IMAGE_FILE_NAME.test(x.file)) {
     return { kind: 'image', file: x.file }
   }
+  if (x.kind === 'letter') return { kind: 'letter' }
   return undefined
+}
+
+const FOUND_SOURCES: readonly FoundIconSource[] = ['file', 'unity', 'godot', 'exe']
+
+function parseFound(x: unknown): FoundIcon[] | undefined {
+  if (!Array.isArray(x)) return undefined
+  return x.flatMap((f): FoundIcon[] =>
+    isRecord(f) &&
+    typeof f.file === 'string' &&
+    IMAGE_FILE_NAME.test(f.file) &&
+    typeof f.path === 'string' &&
+    FOUND_SOURCES.includes(f.source as FoundIconSource)
+      ? [{ file: f.file, path: f.path, source: f.source as FoundIconSource }]
+      : []
+  )
 }
 
 function parseIdentity(x: unknown): RepoIdentity | undefined {
   if (!isRecord(x)) return undefined
   const displayName = typeof x.displayName === 'string' && x.displayName.trim() ? x.displayName.trim() : undefined
   const icon = parseIcon(x.icon)
-  if (displayName === undefined && icon === undefined) return undefined
-  return { ...(displayName && { displayName }), ...(icon && { icon }) }
+  const found = parseFound(x.found)
+  if (displayName === undefined && icon === undefined && found === undefined) return undefined
+  return { ...(displayName && { displayName }), ...(icon && { icon }), ...(found && { found }) }
 }
 
 /** Drops anything malformed, so a hand-edited or older file never breaks the app. */

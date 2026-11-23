@@ -22,6 +22,12 @@ describe('chooseNotificationIcon', () => {
     expect(choose('c:/projects/darkfall/', identities)).toEqual({ kind: 'image', file: PNG })
   })
 
+  it('uses the PNG found in the repo while the user picked no icon of their own', () => {
+    const found = [{ file: PNG, path: 'icon.png', source: 'file' }] as const
+    expect(choose('c:/projects/darkfall', { [KEY]: { found: [...found] } })).toEqual({ kind: 'image', file: PNG })
+    expect(choose('c:/projects/darkfall', { [KEY]: { icon: { kind: 'letter' }, found: [...found] } })).toEqual({ kind: 'rendered', repoGroupKey: KEY })
+  })
+
   it.each([
     ['a built-in icon', { icon: { kind: 'builtin', name: 'rocket', accent: 'teal' } }],
     ['a custom SVG', { icon: { kind: 'image', file: 'ab12ab12ab12ab12.svg' } }],

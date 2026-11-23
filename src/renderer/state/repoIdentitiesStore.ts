@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import {
   repoDisplayName,
-  type BuiltinIconChoice,
+  type RepoIconRequest,
   type RepoIdentityView,
   type RepoIdentityViews
 } from '../../shared/repoIdentity'
@@ -9,10 +9,14 @@ import {
 interface RepoIdentitiesState {
   identities: RepoIdentityViews
   load: () => Promise<void>
+  /** Returns the unsubscribe. */
+  listen: () => () => void
   /** Each change resolves to an error message to show, or null. */
   setDisplayName: (repoGroupKey: string, name: string) => Promise<string | null>
-  setIcon: (repoGroupKey: string, icon: BuiltinIconChoice | undefined) => Promise<string | null>
+  /** undefined goes back to the automatic icon. */
+  setIcon: (repoGroupKey: string, icon: RepoIconRequest) => Promise<string | null>
   chooseImage: (repoGroupKey: string) => Promise<string | null>
+  detect: (repoGroupKey: string) => Promise<string | null>
 }
 
 async function saved(
@@ -38,10 +42,12 @@ export const useRepoIdentitiesStore = create<RepoIdentitiesState>((set) => ({
       console.error('failed to load repo identities', err)
     }
   },
+  listen: () => window.api.repoIdentities.onChanged((identities) => set({ identities })),
   setDisplayName: (repoGroupKey, name) =>
     saved(window.api.repoIdentities.setDisplayName(repoGroupKey, name), set, 'Could not save the name.'),
   setIcon: (repoGroupKey, icon) =>
     saved(window.api.repoIdentities.setIcon(repoGroupKey, icon), set, 'Could not save the icon.'),
+  detect: (repoGroupKey) => saved(window.api.repoIdentities.detect(repoGroupKey), set, 'Could not search the repo.'),
   chooseImage: async (repoGroupKey) => {
     try {
       const result = await window.api.repoIdentities.chooseImage(repoGroupKey)

@@ -17,6 +17,11 @@ interface SwatchProps {
   children?: ReactNode
 }
 
+/** An image filling a Swatch. An <img>, never inline markup, so an SVG can't run script. */
+export function SwatchImage({ src }: { src: string }) {
+  return <img alt="" src={src} draggable={false} className="h-5 w-5 object-contain" />
+}
+
 /** One square choice in a SwatchGrid: an icon, or a colour when `fill` is set. */
 export function Swatch({ label, selected, onClick, fill, children }: SwatchProps) {
   return (

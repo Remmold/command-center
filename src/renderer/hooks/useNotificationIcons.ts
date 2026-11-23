@@ -10,11 +10,14 @@ export function useNotificationIcons(): void {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const identities = useRepoIdentitiesStore((s) => s.identities)
   const load = useRepoIdentitiesStore((s) => s.load)
+  const listen = useRepoIdentitiesStore((s) => s.listen)
   const sent = useRef(new Map<string, string>())
 
   useEffect(() => {
+    const stop = listen()
     void load()
-  }, [load])
+    return stop
+  }, [load, listen])
 
   useEffect(() => {
     for (const group of groupByRepo(workspaces)) {

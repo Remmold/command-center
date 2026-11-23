@@ -10,6 +10,8 @@ export const IPC = {
   REPO_IDENTITIES_SET_ICON: 'repoIdentities:setIcon',
   REPO_IDENTITIES_CHOOSE_IMAGE: 'repoIdentities:chooseImage',
   REPO_IDENTITIES_SET_RENDERED: 'repoIdentities:setRendered',
+  REPO_IDENTITIES_DETECT: 'repoIdentities:detect',
+  REPO_IDENTITIES_CHANGED: 'repoIdentities:changed',
   PROFILES_LIST: 'profiles:list',
   PROFILES_CREATE: 'profiles:create',
   PROFILES_RENAME: 'profiles:rename',

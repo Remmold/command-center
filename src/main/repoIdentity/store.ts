@@ -4,6 +4,8 @@ import { extname, join } from 'node:path'
 import {
   MAX_REPO_IMAGE_BYTES,
   MAX_REPO_IMAGE_LABEL,
+  type FoundIcon,
+  type FoundIconSource,
   type ImageImportResult,
   type RepoIconChoice,
   type RepoIdentities,
@@ -25,6 +27,13 @@ function contentMismatch(ext: 'png' | 'svg', bytes: Buffer): string | null {
   return null
 }
 
+export interface FoundImage {
+  bytes: Buffer
+  ext: 'png' | 'svg'
+  path: string
+  source: FoundIconSource
+}
+
 export interface RepoIdentityStore {
   list: () => Promise<RepoIdentities>
   /** An empty name falls back to the repo's folder name. */
@@ -33,6 +42,8 @@ export interface RepoIdentityStore {
   setIcon: (repoGroupKey: string, icon: RepoIconChoice | undefined) => Promise<RepoIdentities>
   /** Copies the file into the icons folder, so the source can move or vanish afterwards. */
   importImage: (repoGroupKey: string, sourcePath: string) => Promise<ImportImageResult>
+  /** Replaces the found icons, best first; the user's own icon stays. */
+  setFound: (repoGroupKey: string, images: readonly FoundImage[]) => Promise<RepoIdentities>
   imagePath: (file: string) => string
 }
 
@@ -67,13 +78,22 @@ export function createRepoIdentityStore(dir: string): RepoIdentityStore {
   }
 
   const imagesIn = (all: RepoIdentities): Set<string> =>
-    new Set(Object.values(all).flatMap((i) => (i.icon?.kind === 'image' ? [i.icon.file] : [])))
+    new Set(
+      Object.values(all).flatMap((i) => [...(i.icon?.kind === 'image' ? [i.icon.file] : []), ...(i.found ?? []).map((f) => f.file)])
+    )
+
+  const saveImage = async (bytes: Buffer, ext: 'png' | 'svg'): Promise<string> => {
+    const name = `${shortHash(bytes)}.${ext}`
+    await fs.mkdir(imagesDir, { recursive: true })
+    await fs.writeFile(imagePath(name), bytes)
+    return name
+  }
 
   const applyChange = async (repoGroupKey: string, change: (current: RepoIdentity) => RepoIdentity) => {
     const all = await readAll()
     const before = imagesIn(all)
     const next = change(all[repoGroupKey] ?? {})
-    if (next.displayName === undefined && next.icon === undefined) delete all[repoGroupKey]
+    if (next.displayName === undefined && next.icon === undefined && next.found === undefined) delete all[repoGroupKey]
     else all[repoGroupKey] = next
     await writeAll(all)
     const after = imagesIn(all)
@@ -101,14 +121,18 @@ export function createRepoIdentityStore(dir: string): RepoIdentityStore {
         const bytes = await fs.readFile(sourcePath)
         const error = contentMismatch(ext, bytes)
         if (error) return { ok: false, error }
-        const name = `${shortHash(bytes)}.${ext}`
-        await fs.mkdir(imagesDir, { recursive: true })
-        await fs.writeFile(imagePath(name), bytes)
+        const name = await saveImage(bytes, ext)
         const identities = await applyChange(repoGroupKey, (current) => ({
           ...current,
           icon: { kind: 'image', file: name }
         }))
         return { ok: true, identities }
+      }),
+    setFound: (repoGroupKey, images) =>
+      serial(async () => {
+        const found: FoundIcon[] = []
+        for (const { bytes, ext, path, source } of images) found.push({ file: await saveImage(bytes, ext), path, source })
+        return applyChange(repoGroupKey, (current) => ({ ...current, found }))
       }),
     imagePath
   }

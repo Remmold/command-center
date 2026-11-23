@@ -120,6 +120,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   unsubscribers.push(() => discovery.stop())
 
   const workspacesChanged = (): void => {
+    void repoIdentities.detectMissing()
     void refreshBoard()
     void observed.workspacesChanged()
     void discovery.rescan()
@@ -184,6 +185,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     if (result.canceled || result.filePaths.length === 0) return null
     return repoIdentities.importImage(key, result.filePaths[0])
   })
+  ipcMain.handle(IPC.REPO_IDENTITIES_DETECT, (_e, key: string) => repoIdentities.detectAgain(key))
   ipcMain.on(IPC.REPO_IDENTITIES_SET_RENDERED, (_e, key: string, dataUrl: string) => {
     repoIdentities.setRendered(key, dataUrl).catch((err) => console.error('[repo icons] could not keep drawn icon', err))
   })

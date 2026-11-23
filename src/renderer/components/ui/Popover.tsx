@@ -16,6 +16,7 @@ interface Props {
 }
 
 const PANEL_WIDTH = 256
+const EDGE_GAP = 8
 
 /** A floating panel portalled to the body, so a scrolling parent never clips it. */
 export function Popover({ open, onClose, anchor, label, align = 'start', side = 'below', width = PANEL_WIDTH, children }: Props) {
@@ -28,6 +29,13 @@ export function Popover({ open, onClose, anchor, label, align = 'start', side = 
     const left = align === 'end' ? rect.right - width : rect.left
     setPos(side === 'above' ? { bottom: window.innerHeight - rect.top + 4, left } : { top: rect.bottom + 4, left })
   }, [open, anchor, align, side, width])
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    if (!panel || pos?.top === undefined) return
+    const overflow = panel.getBoundingClientRect().height + pos.top - (window.innerHeight - EDGE_GAP)
+    panel.style.top = `${Math.max(EDGE_GAP, pos.top - Math.max(0, overflow))}px`
+  }, [pos, children])
 
   useEffect(() => {
     if (!open) return
