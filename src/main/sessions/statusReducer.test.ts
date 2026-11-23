@@ -183,4 +183,34 @@ describe('session status reducer', () => {
       ['your-turn', 400]
     ])
   })
+
+  it('stays running after the result while a background agent works, and turns to you when the last one ends', () => {
+    const task = (subtype: string, taskId: string, extra: object = {}) => ({ type: 'system', subtype, task_id: taskId, session_id: 's1', ...extra })
+    expect(
+      statuses([
+        { kind: 'spawned', at: 100 },
+        { kind: 'user-message', at: 200 },
+        claude(task('task_started', 'a1', { task_type: 'local_agent', is_backgrounded: true }), 210),
+        claude(task('task_started', 'a2', { task_type: 'local_agent', is_backgrounded: true }), 220),
+        claude(task('task_started', 'b1', { task_type: 'local_bash' }), 230),
+        claude(resultEvent, 300),
+        claude(task('task_notification', 'a1', { status: 'completed' }), 400),
+        claude(task('task_updated', 'a2', { patch: { status: 'killed' } }), 500)
+      ])
+    ).toEqual([
+      ['idle', 100],
+      ['running', 200],
+      ['running', 200],
+      ['running', 200],
+      ['running', 200],
+      ['running', 200],
+      ['running', 200],
+      ['your-turn', 500]
+    ])
+  })
+
+  it('an agent still working when the process ends leaves the chat idle', () => {
+    const started = { type: 'system', subtype: 'task_started', task_id: 'a1', task_type: 'local_agent', session_id: 's1' }
+    expect(statuses([{ kind: 'spawned', at: 100 }, { kind: 'user-message', at: 200 }, claude(started, 210), claude(resultEvent, 300), { kind: 'exit', at: 400 }, { kind: 'spawned', at: 500 }, { kind: 'user-message', at: 600 }, claude(resultEvent, 700)]).at(-1)).toEqual(['your-turn', 700])
+  })
 })

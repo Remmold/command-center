@@ -1,6 +1,7 @@
 import type { SpeechModelStatus, VideoFramesResult, VideoProgressEvent, VideoSource, VideoTranscriptResult } from './video'
 import type { ChooseImageResult, RepoIconRequest, RepoIdentityViews } from './repoIdentity'
 import type { ChatItem } from './chatItems'
+import type { SubagentSource, SubagentTailEvent } from './subagentTail'
 import type { AppView } from './views'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
@@ -315,14 +316,6 @@ export interface SessionRename {
   paneId?: string
 }
 
-/** A subagent of a session, by its agent (task) id or the Agent call that started it. */
-export interface SubagentTranscriptRequest {
-  cwd: string
-  sessionId: string
-  agentId?: string
-  toolUseId?: string
-}
-
 /** `title` is the name as stored: cleaned and cut the way the CLI does it. */
 export type RenameResult = { ok: true; title: string } | { ok: false; error: string }
 
@@ -537,8 +530,12 @@ export interface RendererApi {
     listLocalSessions: (cwd: string) => Promise<LocalSessionInfo[]>
     /** Tells the pane's CLI (`rename_session`), or with no process appends a `custom-title` line to the transcript. */
     renameSession: (rename: SessionRename) => Promise<RenameResult>
-    /** A subagent's own transcript in the session's folder; null when there is none. */
-    subagentTranscript: (request: SubagentTranscriptRequest) => Promise<ChatItem[] | null>
+  }
+  subagents: {
+    /** Follows the session's `subagents/` files, each agent's items arriving through `onItems`; watching again starts over. */
+    watch: (source: SubagentSource) => void
+    unwatch: (source: SubagentSource) => void
+    onItems: (cb: (event: SubagentTailEvent) => void) => () => void
   }
   observed: {
     list: () => Promise<ObservedSession[]>

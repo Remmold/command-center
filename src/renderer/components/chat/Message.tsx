@@ -20,7 +20,7 @@ import { CopyButton } from '../ui/CopyButton'
 import { TimeStamp } from '../ui/TimeStamp'
 import { Checklist, type CheckState } from '../ui/Checklist'
 import { TimelinePlaceProvider, TimelineRow, timelinePlace } from '../ui/Timeline'
-import { AgentCall, SubagentItemList } from './AgentCall'
+import { AgentCall } from './AgentCall'
 import { AGENT_TOOLS } from './subagents'
 import { toolCallStatus } from './runningCalls'
 import { BACKGROUNDABLE_TOOLS } from './runInBackground'
@@ -239,7 +239,7 @@ function FileTarget({ path, suffix = '' }: { path: string; suffix?: string }) {
 }
 
 function ToolCall({ block }: { block: ToolUse }) {
-  const { pairs, cwd, latestTodoId, subagentItems, running } = useToolContext()
+  const { pairs, cwd, latestTodoId, running } = useToolContext()
   const result = pairs.resultFor.get(block.id)
   const { name, target } = toolCallTitle(block.name, block.input, cwd)
   const status = toolCallStatus(result, running.has(block.id))
@@ -320,11 +320,10 @@ function ToolCall({ block }: { block: ToolUse }) {
     )
   }
 
-  const woken = subagentItems.get(block.id) ?? []
   const showsInput = !OUTPUT_ONLY.has(block.name) && !ERROR_ONLY.has(block.name)
   const showsResult = !!result && (!ERROR_ONLY.has(block.name) || result.isError)
   const movable = !result && BACKGROUNDABLE_TOOLS.has(block.name)
-  const hasBody = showsInput || showsResult || woken.length > 0 || movable
+  const hasBody = showsInput || showsResult || movable
   return (
     <ToolCallRow name={name} target={target} status={status}>
       {hasBody ? (
@@ -335,7 +334,6 @@ function ToolCall({ block }: { block: ToolUse }) {
               {showsResult && result && <ResultSection result={result} />}
             </ToolCallBody>
           )}
-          {woken.length > 0 && <SubagentItemList items={woken} />}
           {movable && <RunInBackgroundLine toolUseId={block.id} />}
         </>
       ) : undefined}

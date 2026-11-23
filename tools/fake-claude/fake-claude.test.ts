@@ -500,6 +500,34 @@ describe('subagent', () => {
     expect((await fake.next(isResult)).result).toBe('After the agent.')
     expect(fake.lines.some((l) => l.type === 'assistant' && l.message.content[0]?.text === 'never')).toBe(false)
   })
+
+  it('runs background agents side by side past the turn’s result, writing their own files as they go; stop_task stops one', async () => {
+    let configDir = ''
+    const agent = (description: string, events: unknown[]) => ({ type: 'subagent', background: true, description, prompt: description, result: `${description} done.`, events })
+    const turn = {
+      match: '',
+      events: [
+        agent('Scan', [{ type: 'tool_use', name: 'Read', input: { file_path: 'a.ts' } }, { type: 'wait', ms: 300 }, { type: 'text', text: 'Scanned.' }]),
+        agent('Watch', [{ type: 'text', text: 'Watching.' }, { type: 'wait', ms: 5000 }, { type: 'text', text: 'never' }]),
+        { type: 'text', text: 'Both launched.' }
+      ]
+    }
+    const fake = start([], { turns: [turn] }, (dir) => ((configDir = dir), { CLAUDE_CONFIG_DIR: dir }))
+    fake.say('go')
+    expect((await fake.next(isResult)).result).toBe('Both launched.')
+    const [scan, watch] = fake.lines.filter((l) => l.subtype === 'task_started')
+    expect(fake.lines.some((l) => l.subtype === 'task_notification')).toBe(false)
+
+    expect(await fake.next((l) => l.subtype === 'task_notification' && l.task_id === scan.task_id)).toMatchObject({ status: 'completed', summary: 'Scan done.' })
+    const folder = join(configDir, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'), scan.session_id, 'subagents')
+    const lines = readFileSync(join(folder, `agent-${scan.task_id}.jsonl`), 'utf-8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
+    expect(lines.map((l) => l.type)).toEqual(['user', 'assistant', 'user', 'assistant'])
+    expect(fake.lines.filter((l) => l.type === 'assistant' && l.parent_tool_use_id === scan.tool_use_id)).toHaveLength(2)
+
+    expect((await fake.control('stop_task', { task_id: watch.task_id })).subtype).toBe('success')
+    expect(await fake.next((l) => l.subtype === 'task_notification' && l.task_id === watch.task_id)).toMatchObject({ status: 'stopped' })
+    expect(fake.lines.some((l) => l.type === 'assistant' && l.message.content[0]?.text === 'never')).toBe(false)
+  })
 })
 
 describe('foreground shell commands', () => {

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { OBSERVED_INITIAL_ITEMS } from '../../../shared/types'
 import { useObservedStore } from '../../state/observedStore'
+import { mediaKeyOf } from '../../state/chatMediaStore'
 import { EmptyHint } from '../ui/Section'
 import { Pane } from '../ui/Pane'
 import { ObservedMediaTabs } from './MediaTabs'
@@ -16,16 +17,21 @@ export function ObservedChatView({ cwd }: { cwd: string | undefined }) {
   const error = useObservedStore((s) => s.error)
   const live = useObservedStore((s) => s.sessions.some((o) => o.sessionId === s.viewing?.sessionId && o.status === 'live'))
   const sessionId = viewing?.sessionId
-  // VS Code's CLI keeps a subagent's messages in their own file; an Agent call reads them from there.
+  // VS Code's CLI keeps each subagent's messages in its own file, which the Agents tab follows.
   const agents = useMemo(
-    (): AgentHost => ({ tasks: {}, running: live, ...(cwd && sessionId ? { transcript: { cwd, sessionId } } : {}) }),
+    (): AgentHost => ({
+      tasks: {},
+      running: live,
+      ...(sessionId ? { chatKey: mediaKeyOf({ kind: 'observed', sessionId }) } : {}),
+      ...(cwd && sessionId ? { transcript: { cwd, sessionId } } : {})
+    }),
     [live, cwd, sessionId]
   )
   if (!viewing) return null
 
   return (
     <Pane label="observed session">
-      <ObservedMediaTabs sessionId={viewing.sessionId} cwd={cwd}>
+      <ObservedMediaTabs sessionId={viewing.sessionId} cwd={cwd} agents={agents}>
         <MessageList items={items} cwd={cwd} agents={agents} busy={live}>
           {loading && <EmptyHint>reading transcript…</EmptyHint>}
           {error && <EmptyHint>could not open this session: {error}</EmptyHint>}

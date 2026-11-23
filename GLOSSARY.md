@@ -56,6 +56,14 @@ _Avoid_: Approval queue, approvals view
 The Dashboard panel of sessions in motion: hosted sessions that are Running, Needs approval or Your turn, plus observed sessions that are Live. Broader than the observed status Live.
 _Avoid_: Active sessions, running sessions
 
+**Subagent**:
+An agent Claude starts with the Agent tool inside a session, in the foreground or the background. Its messages live in its own file beside the session's transcript.
+_Avoid_: Child agent, task (the CLI's word for it in its events)
+
+**Agents tab**:
+The tab beside Chat and Media that lists a session's subagents, working ones first, and opens one in its live agent view: its transcript, read-only, following as it grows.
+_Avoid_: Agent panel, transcript dialog
+
 **Repo group**:
 The worktrees of one git repository, shown together under the repo's name.
 _Avoid_: Shard set, worktree family

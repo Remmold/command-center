@@ -21,13 +21,15 @@ interface Props {
   meta?: ReactNode
   /** Folds the body behind the header, opening when this turns true; without it the body always shows, as in the extension. */
   foldable?: { defaultOpen: boolean }
+  /** Makes the header a button that opens the call elsewhere, e.g. an agent's live view; the body then always shows. */
+  onOpen?: () => void
   children?: ReactNode
 }
 
 const HEADER = 'flex w-full min-w-0 items-center gap-2 text-left text-[13px] leading-5'
 
 /** One tool call as a timeline step: its header line and the IN/OUT boxes under it. */
-export function ToolCallRow({ name, target, status, meta, foldable, children }: Props) {
+export function ToolCallRow({ name, target, status, meta, foldable, onOpen, children }: Props) {
   const defaultOpen = foldable?.defaultOpen ?? true
   const [open, setOpen] = useState(defaultOpen)
   // A live call's result arrives after the row mounts and may be what makes it open.
@@ -56,6 +58,11 @@ export function ToolCallRow({ name, target, status, meta, foldable, children }: 
             {meta}
             <Chevron size={13} className="text-faint opacity-0 group-hover:opacity-100 group-aria-expanded:opacity-100" />
           </span>
+        </button>
+      ) : onOpen ? (
+        <button type="button" onClick={onOpen} className={`${HEADER} rounded hover:bg-list-hover focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus`}>
+          {title}
+          {meta && <span className="ml-auto flex shrink-0 items-center gap-2">{meta}</span>}
         </button>
       ) : (
         <div className={HEADER}>

@@ -1,6 +1,74 @@
 {
   "turns": [
     {
+      "match": "background",
+      "repeat": true,
+      "events": [
+        {
+          "type": "subagent",
+          "background": true,
+          "description": "Scan the routes",
+          "prompt": "Scan the routes for dead ones.",
+          "result": "No dead routes.",
+          "events": [
+            {
+              "type": "tool_use",
+              "name": "Read",
+              "input": {
+                "file_path": "{cwd}{sep}routes.ts"
+              },
+              "result": "export const routes = []"
+            },
+            {
+              "type": "wait",
+              "ms": 500
+            },
+            {
+              "type": "text",
+              "text": "Routes look fine."
+            }
+          ]
+        },
+        {
+          "type": "subagent",
+          "background": true,
+          "description": "Watch the logs",
+          "prompt": "Watch the logs while the tests run.",
+          "result": "The logs stayed quiet.",
+          "events": [
+            {
+              "type": "text",
+              "text": "Watching the logs."
+            },
+            {
+              "type": "wait",
+              "ms": 1500
+            },
+            {
+              "type": "tool_use",
+              "name": "Bash",
+              "input": {
+                "command": "pnpm test --run"
+              },
+              "result": "42 passed"
+            },
+            {
+              "type": "wait",
+              "ms": 2000
+            },
+            {
+              "type": "text",
+              "text": "Logs are quiet."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "Main agent: both agents work in the background."
+        }
+      ]
+    },
+    {
       "match": "explore",
       "repeat": true,
       "events": [
@@ -10,11 +78,25 @@
           "prompt": "Find where the config is read.",
           "result": "The config is read in settings.ts.",
           "events": [
-            { "type": "tool_use", "name": "Read", "input": { "file_path": "{cwd}{sep}settings.ts" }, "approval": false, "result": "export const config = {}" },
-            { "type": "text", "text": "Subagent says the config lives in settings.ts." }
+            {
+              "type": "tool_use",
+              "name": "Read",
+              "input": {
+                "file_path": "{cwd}{sep}settings.ts"
+              },
+              "approval": false,
+              "result": "export const config = {}"
+            },
+            {
+              "type": "text",
+              "text": "Subagent says the config lives in settings.ts."
+            }
           ]
         },
-        { "type": "text", "text": "Main agent: the explorer finished." }
+        {
+          "type": "text",
+          "text": "Main agent: the explorer finished."
+        }
       ]
     },
     {
@@ -26,12 +108,24 @@
           "description": "Wait around",
           "prompt": "Take your time.",
           "events": [
-            { "type": "text", "text": "Subagent is still looking." },
-            { "type": "wait", "ms": 20000 },
-            { "type": "text", "text": "Subagent never says this." }
+            {
+              "type": "text",
+              "text": "Subagent is still looking."
+            },
+            {
+              "type": "wait",
+              "ms": 20000
+            },
+            {
+              "type": "text",
+              "text": "Subagent never says this."
+            }
           ]
         },
-        { "type": "text", "text": "Main agent: carried on after the stop." }
+        {
+          "type": "text",
+          "text": "Main agent: carried on after the stop."
+        }
       ]
     }
   ]

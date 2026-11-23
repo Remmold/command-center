@@ -17,8 +17,10 @@ export interface AgentHost {
   running: boolean
   /** Sends `stop_task`; resolves to an error message when the CLI refused. */
   stop?: (taskId: string) => Promise<string | null>
-  /** Where the session's transcripts are, for a subagent's own transcript file. */
+  /** Where the session's transcripts are, for each subagent's own file. */
   transcript?: TranscriptSource
+  /** The chat whose Agents tab an Agent call opens. */
+  chatKey?: string
 }
 
 /** What "Run in background" needs: the calls the CLI could still move, and the means to ask it. */

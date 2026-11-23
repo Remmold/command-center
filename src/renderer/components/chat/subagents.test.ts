@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentMeta, agentStatus, applyTaskEvent, endTasks, groupSubagents, type SubagentTasks } from './subagents'
+import { agentStatus, applyTaskEvent, endTasks, groupSubagents, type SubagentTasks } from './subagents'
 import type { AssistantMessageItem, ChatItem, ToolResultItem } from './types'
 
 function call(id: string, name: string, input: unknown, parent?: string): AssistantMessageItem {
@@ -140,23 +140,5 @@ describe('agent status', () => {
     const launched: ToolResultItem = { ...result('x'), content: [{ type: 'text', text: 'Async agent launched successfully.\nagentId: a1' }] }
     expect(agentStatus('x', {}, launched, true).status).toBe('working')
     expect(agentStatus('x', {}, launched, false).status).toBe('stopped')
-  })
-})
-
-describe('agent meta line', () => {
-  it('shows elapsed time while working and tokens once known, as the agent map row', () => {
-    const working = applyTaskEvent(applyTaskEvent({}, started, 1000), {
-      type: 'system',
-      subtype: 'task_progress',
-      task_id: 'a1b2c3',
-      description: 'Look around',
-      usage: { total_tokens: 4500, tool_uses: 2, duration_ms: 3000 }
-    }, 2000).a1b2c3
-    expect(agentMeta(working, 66_000)).toBe('1m 5s · 4.5k tokens')
-  })
-
-  it('leaves out a duration under a second once ended', () => {
-    const done = { ...applyTaskEvent({}, started, 1000).a1b2c3, status: 'finished' as const, endTime: 1500 }
-    expect(agentMeta(done, 99_000)).toBe('')
   })
 })

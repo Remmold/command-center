@@ -271,6 +271,22 @@ for (const percent of [110, 125, 150]) {
         await expect(card.getByRole('region', { name: 'Preview: Table' })).toBeVisible()
         await shot('work-split-question')
         expect(await overflowing(page, [...sideways, '[data-header-row]', '[data-choice-prompt]'])).toEqual([])
+
+        await startFocused('notes-cli', 'agents: two for the review', 'Two agents are working')
+        const agentsPane = page.locator('[data-chat-pane]:visible', { has: page.getByText('Two agents are working') })
+        await expect(agentsPane.locator('[data-agents-still-working]')).toContainText('2 agents still working')
+        await agentsPane.getByRole('tab', { name: 'Agents 2' }).click()
+        const agentList = agentsPane.getByRole('list', { name: 'Agents' })
+        await expect(agentList.getByRole('button')).toHaveCount(2)
+        await expect(agentList.getByRole('button').first()).toContainText('now: ')
+        await shot('work-split-agents')
+        expect(await overflowing(page, [...sideways, '[data-header-row]', '[data-tab-strip]'])).toEqual([])
+        await agentList.getByRole('button', { name: /Map the token store/ }).click()
+        const agentView = agentsPane.locator('[data-agent-view]')
+        await expect(agentView.getByText('Reading how tokens are stored.').first()).toBeVisible()
+        await expect(agentView.getByRole('button', { name: 'Stop agent' })).toBeVisible()
+        await shot('work-split-agent-view')
+        expect(await overflowing(page, [...sideways, '[data-header-row]', '[data-agent-view]'])).toEqual([])
       }
     } finally {
       await shutdown(app)

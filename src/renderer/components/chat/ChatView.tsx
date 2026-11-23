@@ -32,6 +32,7 @@ import { mediaAttachments } from './chatMedia'
 import { useSubagentTasksStore } from '../../state/subagentTasksStore'
 import type { AgentHost, BackgroundHost } from './toolContext'
 import { WorkingLine } from './WorkingLine'
+import { AgentsStillWorking } from './AgentsStillWorking'
 import { applyForegroundEvent, backgroundOutcome, type BackgroundOutcome, type ForegroundCalls } from './runInBackground'
 import { findSessionByPane, shellTabsOfSession, storedPermissionMode, useProjectViewsStore } from '../../state/projectViewsStore'
 import { isFirstPrompt, noteClaudeSessionId, requestClaudeTitle } from '../../state/sessionTitleSync'
@@ -677,6 +678,7 @@ export const ChatView = memo(function ChatView({
       tasks: subagentTasks,
       running: processRunning,
       stop,
+      chatKey: paneId,
       ...(transcript ? { transcript } : {})
     }
   }, [paneId, subagentTasks, processRunning, transcript])
@@ -705,7 +707,7 @@ export const ChatView = memo(function ChatView({
 
   return (
     <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col" onKeyDown={handlePaneKeyDown}>
-      <HostedMediaTabs paneId={paneId} cwd={cwd}>
+      <HostedMediaTabs paneId={paneId} cwd={cwd} agents={agents}>
         <div ref={scrollRef} tabIndex={-1} data-transcript="" className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
           {/* Positioned so the screen-reader status below stays inside the scroll box instead of stretching the Layer stack. */}
           <div ref={contentRef} className="relative">
@@ -746,6 +748,7 @@ export const ChatView = memo(function ChatView({
           </div>
         </div>
       </HostedMediaTabs>
+      <AgentsStillWorking paneId={paneId} turnActive={turnActive} />
       <InputBox
         busy={turnActive}
         initialDraft={savedDraft(paneId)}
