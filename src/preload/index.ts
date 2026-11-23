@@ -228,6 +228,8 @@ const api: RendererApi = {
     close: () => ipcRenderer.send(IPC.OBSERVED_CLOSE),
     turn: (workspaceId: string, sessionId: string) => ipcRenderer.invoke(IPC.OBSERVED_TURN, workspaceId, sessionId),
     read: (workspaceId: string, sessionId: string) => ipcRenderer.invoke(IPC.OBSERVED_READ, workspaceId, sessionId),
+    image: (workspaceId: string, sessionId: string, uuid: string, block: number): Promise<string | null> =>
+      ipcRenderer.invoke(IPC.OBSERVED_IMAGE, workspaceId, sessionId, uuid, block),
     liveConfigDir: (sessionId: string): Promise<string | null> => ipcRenderer.invoke(IPC.OBSERVED_LIVE_CONFIG_DIR, sessionId),
     refreshMs: observedRefreshMs(process.env),
     onItems: (cb) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { estimateTokens, layoutSheets, planFrames, videoContextText } from './videoContext'
+import { estimateTokens, layoutSheets, parseVideoHeader, planFrames, videoContextText } from './videoContext'
 
 describe('frame plan', () => {
   it('takes the first frame, each scene change and the last frame, filling long gaps evenly', () => {
@@ -114,6 +114,12 @@ describe('video context text', () => {
       speech: { kind: 'none', reason: 'the video has no audio' }
     })
     expect(text).toBe(['Video: still.gif · 1:06:40 · 1 frame on 1 sheet', 'Sheet 1: 0:00', 'No transcript: the video has no audio.'].join('\n'))
+  })
+
+  it('starts with a header a transcript reader can parse back', () => {
+    const text = videoContextText({ name: 'my · clip.mp4', duration: 6, frameTimes: [0, 3], sheets: [{ first: 0, count: 1 }, { first: 1, count: 1 }], speech: { kind: 'none', reason: 'x' } })
+    expect(parseVideoHeader(text)).toEqual({ name: 'my · clip.mp4', sheets: 2 })
+    expect(parseVideoHeader('look at this video')).toBeNull()
   })
 
   it('truncates a long transcript with a note of what was left out', () => {

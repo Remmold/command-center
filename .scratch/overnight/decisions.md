@@ -357,3 +357,14 @@ Each entry records what was decided, why, and the alternative. Review these in t
 196. **A chat stays Running (Work list dot, Dashboard) after its result while a background agent works**, and turns to Your turn when the last one ends; ending the process leaves it Idle as before.
 
 197. **Background agents and tasks count as busy for updates (reverses 195).** On 2026-11-23 at 19:40 the app auto-restarted to install 0.1.13 while a background subagent in an otherwise idle chat was working, killing it. The busy gate now tracks every `task_started` until `task_notification` or a terminal `task_updated`, for agents and background Bash alike. Alternative (195): count only turns, approvals and queued prompts.
+198. **A sent prompt shows its attachments under its text, images as 160 px tall thumbnails wrapping to as many rows as needed**, as the ticket asks; the extension (`userMessageAttachments`) puts them above the text as 48 px tiles in one sideways-scrolling row.
+    - Alternative: the extension's row.
+199. **Images read from a transcript are not copied into chat items**: the item names the line and block (and the chat it was read from), and the image is read again from the transcript over IPC once its tile is on screen, keeping the last 48 in memory. A taken-over chat therefore still previews the original after a restart.
+    - Alternative: carry the base64 in the items.
+200. **A thumbnail is a PNG when one fits 40 kB, else a JPEG at quality 0.85, 0.7, 0.5 or 0.3 on white**, 320 px on its long side; none is kept when even that is over 40 kB.
+    - Alternative: always JPEG.
+201. **Items saved before this change are migrated when shown, not rewritten**: the marker becomes a chip "1 image (not kept)" with "Sent before attachments were kept".
+202. **In a transcript a video is recognised by its "Video: … on N sheets" text**; that many images before it fold into one video chip with the first sheet as its poster. Transcript images carry no name, so they read "image 1", "image 2".
+203. **File and video chips in a sent prompt do not open anything**; only images open the preview, stepping through that message's images.
+    - Alternative: open the PDF or video externally.
+204. **A prompt shows at once with its attachments; the thumbnails are made just after and written into the item (or the held prompt)**, so making them never delays a send or lets a later prompt overtake it. Until then the tile shows the full image from memory.

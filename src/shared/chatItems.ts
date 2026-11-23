@@ -5,10 +5,30 @@ interface Timed {
   at?: number
 }
 
+/** An image or file sent with a prompt, as its message shows it. */
+export interface UserAttachment {
+  kind: 'image' | 'pdf' | 'text' | 'video'
+  name: string
+  mediaType: string
+  /** A JPEG or PNG data URL at most 320 px a side, made when sent; a video's is its first contact sheet. */
+  thumb?: string
+  /** Where the original is in a transcript: block `block` of the line whose uuid is the item's id. */
+  transcript?: TranscriptImageRef
+}
+
+export interface TranscriptImageRef {
+  block: number
+  /** Set by whoever read the transcript, so the image can be read again later. */
+  workspaceId?: string
+  sessionId?: string
+}
+
 export interface UserMessageItem extends Timed {
   kind: 'user'
   id: string
   text: string
+  /** In the order sent; missing on items saved before attachments were kept. */
+  attachments?: UserAttachment[]
 }
 
 export interface AssistantMessageItem extends Timed {

@@ -1,3 +1,5 @@
+import { createReadStream } from 'node:fs'
+import { createInterface } from 'node:readline'
 import { dirname, join } from 'node:path'
 import type { ChatItem } from '../../shared/chatItems'
 import {
@@ -11,9 +13,11 @@ import type { ObservedTurn } from '../../shared/takeOver'
 import { readTurn } from './turn'
 import { listObservedTranscripts } from './listing'
 import { readLastItems, TranscriptFollower } from './tail'
+import { imageInLine, withTranscriptSource } from './transcriptItems'
 
 const INITIAL_MAX_BYTES = 8 * 1024 * 1024
 const SESSION_ID_RE = /^[\w-]+$/
+const LINE_UUID_RE = /^[\w-]+$/
 
 interface Viewing {
   workspaceId: string
@@ -116,7 +120,7 @@ export class ObservedService {
     if (typeof file !== 'string') return { ok: false, error: file.error }
     try {
       const tail = await readLastItems(file, OBSERVED_INITIAL_ITEMS, INITIAL_MAX_BYTES)
-      return { ok: true, items: tail.items, shortened: tail.shortened }
+      return { ok: true, items: withTranscriptSource(tail.items, workspaceId, sessionId), shortened: tail.shortened }
     } catch {
       return { ok: false, error: 'transcript not found' }
     }
@@ -135,10 +139,32 @@ export class ObservedService {
     }
     if (seq !== this.openSeq) return { ok: false, error: 'another session was opened' }
     const follower = new TranscriptFollower(file, tail.offset, (items: ChatItem[]) =>
-      this.pushItems({ workspaceId, sessionId, items })
+      this.pushItems({ workspaceId, sessionId, items: withTranscriptSource(items, workspaceId, sessionId) })
     )
     this.viewing = { workspaceId, sessionId, follower }
-    return { ok: true, items: tail.items, shortened: tail.shortened }
+    return { ok: true, items: withTranscriptSource(tail.items, workspaceId, sessionId), shortened: tail.shortened }
+  }
+
+  /** An image a prompt carried, read from its transcript line; null once the line or file is gone. */
+  async image(workspaceId: string, sessionId: string, uuid: string, block: number): Promise<string | null> {
+    const file = await this.transcriptFile(workspaceId, sessionId)
+    if (typeof file !== 'string' || !LINE_UUID_RE.test(uuid) || !Number.isInteger(block)) return null
+    const stream = createReadStream(file, { encoding: 'utf8' })
+    const lines = createInterface({ input: stream, crlfDelay: Infinity })
+    const needle = `"uuid":"${uuid}"`
+    try {
+      for await (const raw of lines) {
+        if (!raw.includes(needle)) continue
+        const found = imageInLine(raw, uuid, block)
+        if (found) return found
+      }
+      return null
+    } catch {
+      return null
+    } finally {
+      lines.close()
+      stream.destroy()
+    }
   }
 
   close(): void {

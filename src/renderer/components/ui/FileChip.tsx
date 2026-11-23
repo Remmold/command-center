@@ -7,7 +7,8 @@ interface Props {
   icon: ReactNode
   name: string
   meta: string
-  onRemove: () => void
+  /** Left out on a chip already sent. */
+  onRemove?: () => void
   /** Makes the chip a toggle for its details. */
   onToggle?: () => void
   expanded?: boolean
@@ -16,7 +17,7 @@ interface Props {
 
 const META_TONE = { normal: 'text-muted', error: 'text-error' } as const
 
-/** An attached file waiting to be sent. */
+/** An attached file, waiting to be sent or in a sent prompt. */
 export function FileChip({ thumbnail, icon, name, meta, onRemove, onToggle, expanded, tone = 'normal' }: Props) {
   const body = (
     <>
@@ -48,6 +49,7 @@ export function FileChip({ thumbnail, icon, name, meta, onRemove, onToggle, expa
       ) : (
         body
       )}
+      {onRemove && (
       <button
         type="button"
         onClick={onRemove}
@@ -57,6 +59,7 @@ export function FileChip({ thumbnail, icon, name, meta, onRemove, onToggle, expa
       >
         <X size={12} strokeWidth={2.25} />
       </button>
+      )}
     </div>
   )
 }

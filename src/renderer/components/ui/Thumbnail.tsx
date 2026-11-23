@@ -83,3 +83,25 @@ export function ThumbnailPlaceholder({ icon, children }: { icon: ReactNode; chil
     </span>
   )
 }
+
+/** Pictures at thumbnail height, as many to a row as fit. */
+export function TileRow({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap gap-2">{children}</div>
+}
+
+/** A picture at thumbnail height and its own width; a click opens it. */
+export const ImageTile = forwardRef<HTMLButtonElement, { src: string | null; alt: string; onOpen: () => void }>(function ImageTile({ src, alt, onOpen }, ref) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onOpen}
+      title={alt}
+      aria-label={`Open ${alt}`}
+      style={{ height: THUMBNAIL_SIZE, minWidth: src ? undefined : THUMBNAIL_SIZE, maxWidth: THUMBNAIL_SIZE * 2 }}
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-md border border-strong bg-widget hover:border-focus focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus"
+    >
+      {src && <img src={src} alt={alt} decoding="async" draggable={false} className="h-full w-auto object-cover" />}
+    </button>
+  )
+})
