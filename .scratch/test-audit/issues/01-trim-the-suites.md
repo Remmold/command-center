@@ -10,7 +10,7 @@ Decided: the UI suite gets **≤ 20 scenarios and ≤ 90 s**, unit tests get a l
 
 **Blocked by:** None. Run it on main after release 0.1.7 is merged, so no other branch is changing `e2e/`.
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Inventory:** list every UI scenario with:
   - its runtime, from a JSON reporter run;
