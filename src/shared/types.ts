@@ -36,6 +36,23 @@ export interface VsCodeConfigDir {
   configDir: string
 }
 
+/** A folder VS Code ties to a profile, and the Claude config folder that profile uses. */
+export interface VsCodeFolderAccount {
+  folder: string
+  profileName: string
+  configDir: string
+}
+
+/** What VS Code ties folders to, and which of its suggestions the user put away. */
+export interface VsCodeMatch {
+  folders: VsCodeFolderAccount[]
+  /** Keys of dismissed mismatches. */
+  dismissed: string[]
+  noticeDismissed: boolean
+}
+
+export type UseVsCodeAccountsResult = { ok: true; accountNames: string[] } | { ok: false; error: string }
+
 export type AdoptResult = { ok: true; profile: AccountProfile } | { ok: false; error: string }
 
 export type SessionStatus = 'running' | 'needs-approval' | 'your-turn' | 'idle'
@@ -396,6 +413,13 @@ export interface RendererApi {
     chooseFolder: () => Promise<AdoptResult | null>
     /** Forgets the profile; never deletes its folder. */
     remove: (id: string) => Promise<boolean>
+  }
+  vscodeMatch: {
+    get: () => Promise<VsCodeMatch>
+    dismiss: (keys: string[]) => Promise<void>
+    dismissNotice: () => Promise<void>
+    /** Moves these workspaces onto the accounts VS Code uses for them; open chats keep theirs. */
+    apply: (workspaceIds: string[]) => Promise<UseVsCodeAccountsResult>
   }
   usage: {
     list: () => Promise<ProfileUsage[]>

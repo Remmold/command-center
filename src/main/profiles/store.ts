@@ -8,7 +8,8 @@ import { userDataPath } from '../util/paths'
 import { ensureProfileLinks } from './linker'
 import { harnessConfigDir } from '../pty/claude-locator'
 import { adoptionProblem, adoptedName, linksAllowed, removeSaved, suggestionsFrom, type PathKind, type SavedProfile } from './adopt'
-import { readVsCodeConfigDirs, vscodeUserDir, type VsCodeConfigDir } from './vscodeProfiles'
+import { readVsCodeConfigDirs, readVsCodeFolderAccounts, vscodeUserDir, type VsCodeConfigDir, type VsCodeFolderAccount } from './vscodeProfiles'
+import { sameDir } from '../../shared/vscodeMatch'
 
 export function defaultConfigDir(): string {
   return harnessConfigDir() ?? join(homedir(), '.claude')
@@ -144,8 +145,19 @@ export async function suggestions(): Promise<VsCodeConfigDir[]> {
   return offered.filter((_, i) => kinds[i] === 'folder')
 }
 
+/** Folders VS Code ties to a profile whose Claude folder exists or is already an account's. */
+export async function vscodeFolderAccounts(): Promise<VsCodeFolderAccount[]> {
+  const dir = vscodeUserDir()
+  if (!dir) return []
+  const found = await readVsCodeFolderAccounts(dir, defaultConfigDir())
+  const used = await list()
+  const dirs = [...new Set(found.map((f) => f.configDir))]
+  const usable = await Promise.all(dirs.map(async (d) => used.some((p) => sameDir(p.configDir, d)) || (await pathKind(d)) === 'folder'))
+  return found.filter((f) => usable[dirs.indexOf(f.configDir)])
+}
+
 /** Adds a profile on an existing folder; the folder itself is only read, never written to. */
-export async function adopt(picked: string): Promise<AdoptResult> {
+export async function adopt(picked: string, name?: string): Promise<AdoptResult> {
   const path = isAbsolute(picked) ? resolve(picked) : picked
   const found = await vscodeFolders()
   const kind = await pathKind(path)
@@ -153,7 +165,7 @@ export async function adopt(picked: string): Promise<AdoptResult> {
     const used = await Promise.all([{ id: DEFAULT_PROFILE_ID, name: 'Default' }, ...(await readAll())].map(toProfile))
     const error = adoptionProblem({ path, kind, used, appProfilesRoot: appProfilesRoot() })
     if (error) return { ok: false, error }
-    const saved: SavedProfile = { id: randomUUID(), name: adoptedName(path, found), createdAt: Date.now(), configDir: path }
+    const saved: SavedProfile = { id: randomUUID(), name: name?.trim() || adoptedName(path, found), createdAt: Date.now(), configDir: path }
     await writeAll([...(await readAll()), saved])
     return { ok: true, profile: await toProfile(saved) }
   })

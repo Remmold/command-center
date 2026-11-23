@@ -22,6 +22,7 @@ import { Panel, PanelColumns } from '../ui/Panel'
 import { StatRow } from '../ui/StatRow'
 import { StatusTag } from '../ui/StatusDot'
 import { NowBuildingList } from './NowBuildingList'
+import { VsCodeAccountsNotice } from './VsCodeAccountsNotice'
 
 function openOnBoard(row: NowBuildingRow): void {
   useBoardStore.getState().showFeature(row.repoGroupKey, row.key, row.finished)
@@ -40,6 +41,7 @@ export function DashboardView() {
   return (
     <Page label="Dashboard">
       <PageBody>
+        <VsCodeAccountsNotice />
         <Panel title="Needs you" count={dash.needsYou.length} empty="Nobody is waiting on you" boxed>
           <ul>
             {dash.needsYou.map((row) => (

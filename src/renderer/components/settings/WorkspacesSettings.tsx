@@ -17,6 +17,7 @@ import { DrawerList } from '../ui/Drawer'
 import { ListRowLabel, ListRowText } from '../ui/ListRow'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
 import { SortableItem } from '../ui/SortableItem'
+import { VsCodeAccountsBanner } from '../VsCodeAccountsBanner'
 
 export function WorkspacesSettings() {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
@@ -51,6 +52,7 @@ export function WorkspacesSettings() {
         }
       />
       <PageBody>
+        <VsCodeAccountsBanner />
         {byAccount.length === 0 && <PageNote>No workspaces yet.</PageNote>}
         {byAccount.map((group) => (
           <AccountBlock key={group.account.profileId} group={group} repoGroups={repoGroups} />
