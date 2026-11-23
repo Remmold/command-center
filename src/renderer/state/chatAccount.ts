@@ -114,7 +114,7 @@ export function chatAccountView(
   const account = chat.profileId ? accounts.find((a) => a.profileId === chat.profileId) : undefined
   const known = chat.profileId ? usageAccounts[chat.profileId] : undefined
   const plan = chat.plan ?? account?.plan ?? null
-  const name = (chat.profileId === DEFAULT_PROFILE_ID && chat.email) || (account?.name ?? 'Unknown account')
+  const name = account?.name ?? 'Unknown account'
   const label = account && plan ? `${name} · ${plan}` : name
   const email = chat.email ?? known?.email
   const organization = chat.organization ?? known?.organization

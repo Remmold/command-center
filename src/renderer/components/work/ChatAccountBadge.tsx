@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ObservedSession, Workspace } from '../../../shared/types'
+import { DEFAULT_PROFILE_NAME } from '../../../shared/profiles'
 import { vscodeFolderFor } from '../../../shared/vscodeMatch'
 import { useMinuteClock } from '../../hooks/useMinuteClock'
 import { accountMismatch, chatAccountView, hostedChatAccount, observedChatAccount, type ChatAccount } from '../../state/chatAccount'
@@ -74,7 +75,7 @@ export function AccountMismatchNotice({ workspace, paneId }: { workspace: Worksp
   const switching = useAccountSwitchStore((s) => s.pending[paneId] ?? null)
   const mismatch = accountMismatch(chat, workspace.profileId, profiles)
   if (!mismatch) return null
-  const nameOf = (id: string) => accounts.find((a) => a.profileId === id)?.name ?? 'Default'
+  const nameOf = (id: string) => accounts.find((a) => a.profileId === id)?.name ?? DEFAULT_PROFILE_NAME
   const setTo = nameOf(mismatch.setTo)
   const idle = status === 'idle' || status === 'your-turn'
   const action = switching ? (

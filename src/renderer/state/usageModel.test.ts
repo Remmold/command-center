@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AccountProfile, ProfileUsage } from '../../shared/types'
-import { resetAt, resetIn, updatedText, usageEntries } from './usageModel'
+import { headerUsage, resetAt, resetIn, updatedText, usageEntries } from './usageModel'
 
 const NOW = Date.parse('2026-11-21T20:00:00Z')
 const MIN = 60_000
@@ -40,15 +40,16 @@ describe('reset formatting', () => {
 })
 
 describe('usageEntries', () => {
-  it('labels each profile with its email and plan and shows only the windows that came back', () => {
+  it('labels each profile with its short name, keeps email and plan, and shows only the windows that came back', () => {
     const [entry] = usageEntries({
-      profiles: [profile('default', 'Default')],
+      profiles: [profile('default', 'Personal')],
       usage: { default: usage({ sevenDay: { utilization: 69, resetsAt: Date.parse('2026-11-23T23:00:00Z') } }) },
       activeProfileId: null,
       now: NOW,
       timeZone: UTC
     })
-    expect(entry.label).toBe('me@example.com')
+    expect(entry.label).toBe('Personal')
+    expect(entry.email).toBe('me@example.com')
     expect(entry.plan).toBe('Claude Ultra')
     expect(entry.state).toBe('ready')
     expect(entry.bars).toEqual([
@@ -133,5 +134,58 @@ describe('usageEntries', () => {
       timeZone: UTC
     })
     expect(entry.state).toBe('ready')
+  })
+})
+
+describe('headerUsage', () => {
+  const HOUR = 60 * MIN
+  const DAY = 24 * HOUR
+  const header = (fiveHour: number | null, sevenDay: number | null, fiveHourResetIn = 4 * HOUR, weekResetIn = 5 * DAY) => {
+    const [entry] = usageEntries({
+      profiles: [profile('default', 'Personal')],
+      usage: {
+        default: usage({
+          ...(fiveHour === null ? {} : { fiveHour: { utilization: fiveHour, resetsAt: NOW + fiveHourResetIn } }),
+          ...(sevenDay === null ? {} : { sevenDay: { utilization: sevenDay, resetsAt: NOW + weekResetIn } })
+        })
+      },
+      activeProfileId: null,
+      now: NOW,
+      timeZone: UTC
+    })
+    return headerUsage(entry)
+  }
+
+  it('shows the weekly figure in a neutral colour while both windows are on track', () => {
+    expect(header(10, 23)).toMatchObject({ key: 'sevenDay', percent: 23, prefix: null, tone: 'neutral' })
+  })
+
+  it('shows the 5-hour figure with a 5h prefix when it is the binding window', () => {
+    expect(header(40, 23)).toMatchObject({ key: 'fiveHour', percent: 40, prefix: '5h' })
+    expect(header(23, 23)).toMatchObject({ key: 'sevenDay', percent: 23, prefix: null })
+    expect(header(40, null)).toMatchObject({ key: 'fiveHour', prefix: '5h' })
+  })
+
+  it('turns amber when the shown window is ahead of pace, and red from 90% of the limit', () => {
+    expect(header(40, 23)?.tone).toBe('ahead')
+    expect(header(null, 50, 0, 6 * DAY)?.tone).toBe('ahead')
+    expect(header(null, 89, 0, DAY / 2)?.tone).toBe('neutral')
+    expect(header(null, 90, 0, DAY / 2)?.tone).toBe('limit')
+    expect(header(10, 96)?.tone).toBe('limit')
+  })
+
+  it('lists both windows with their pace verdict and reset time, and the email, on hover', () => {
+    expect(header(10, 23)?.tooltip).toBe(
+      [
+        'Personal · Claude Ultra',
+        'me@example.com',
+        'Session (5hr): 10% used · 19% of the 5 hours passed · on track · resets in 4h',
+        'Weekly (7 day): 23% used · 28% of the week passed · on track · resets Thu 20:00'
+      ].join('\n')
+    )
+  })
+
+  it('is nothing without readings', () => {
+    expect(header(null, null)).toBeNull()
   })
 })

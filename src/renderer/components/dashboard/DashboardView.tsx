@@ -135,7 +135,7 @@ function UsageRow({ entry }: { entry: UsageEntry }) {
       value={entry.plan ?? ''}
       gauge={<UsageMeters entry={entry} size="fill" />}
       detail={detail}
-      tooltip={entry.bars.map((b) => b.tooltip).join('\n') || undefined}
+      tooltip={[entry.email, ...entry.bars.map((b) => b.tooltip)].filter(Boolean).join('\n') || undefined}
     />
   )
 }

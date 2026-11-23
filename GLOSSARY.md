@@ -9,11 +9,11 @@ A project folder added to the command center. It is the unit that sessions run i
 _Avoid_: Project (in new UI text), folder, repo
 
 **Account profile**:
-A named Claude login that a workspace uses. Every workspace uses exactly one. "Default" is the login Andreas already has.
+A named Claude login that a workspace uses. Every workspace uses exactly one. The default profile is the login Andreas already has; it is shown as "Personal" until renamed.
 _Avoid_: Licence, account, user
 
 **Account**:
-How an account profile is shown: its name and plan, e.g. "Work · Team". Default goes by its login's email. Projects and their sessions are grouped by account in Work, the Dashboard, the Board and Settings.
+How an account profile is shown: its name and plan, e.g. "Work · Team". Each profile has an editable short name; the email appears only in tooltips and Settings. Projects and their sessions are grouped by account in Work, the Dashboard, the Board and Settings.
 _Avoid_: Subscription, licence
 
 **Adopted folder**:
@@ -33,7 +33,7 @@ A Claude Code session running somewhere else (the VS Code extension). The comman
 _Avoid_: External session, VS Code chat
 
 **Take over**:
-Moving an observed session into the command center: it is resumed as a hosted session, once VS Code's agent has finished its turn (at once when it waits on the user). The observed session then leaves the In VS Code list.
+Moving an observed session into the command center: it is resumed as a hosted session, once VS Code's agent has finished its turn (at once when it waits on the user). The observed session then leaves the Work list's VS Code rows.
 _Avoid_: Handover, import
 
 **Session title**:

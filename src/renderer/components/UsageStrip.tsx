@@ -72,7 +72,7 @@ function UsageStripEntry({ entry, now, opensOnRequest, dimmed }: { entry: UsageE
     menu.toggle()
   }
 
-  const tooltip = [entry.label, ...entry.bars.map((b) => b.tooltip)].join('\n')
+  const tooltip = [entry.email ? `${entry.label} · ${entry.email}` : entry.label, ...entry.bars.map((b) => b.tooltip)].join('\n')
   return (
     <>
       <TitleBarButton

@@ -53,7 +53,7 @@ export function AccountSwitcher({ workspace, paneId, children }: Props) {
               key={e.profileId}
               disabled={e.state === 'not-logged-in'}
               onClick={() => void choose(e.profileId, e.label)}
-              tooltip={e.label === e.profileName ? e.profileName : `${e.profileName} · ${e.label}`}
+              tooltip={e.email ? `${e.label} · ${e.email}` : e.label}
             >
               <ListRowText primary={e.label} secondary={e.state === 'not-logged-in' ? 'not logged in' : (e.plan ?? undefined)} />
               {e.profileId === current?.profileId && (

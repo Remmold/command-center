@@ -4,6 +4,7 @@ import { DEFAULT_PROFILE_ID, type AccountProfile, type VsCodeConfigDir } from '.
 import { profileEnv, removalConfirmText } from '../../../shared/profiles'
 import { loginWorkspace, useProfilesStore } from '../../state/profilesStore'
 import { openShell } from '../../state/sessionNavigation'
+import { useAccounts } from '../../state/useAccounts'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { Button } from '../ui/Button'
 import { DrawerList } from '../ui/Drawer'
@@ -87,6 +88,7 @@ function ProfileItem({ profile }: { profile: AccountProfile }) {
   const rename = useProfilesStore((s) => s.rename)
   const remove = useProfilesStore((s) => s.remove)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
+  const email = useAccounts().find((a) => a.profileId === profile.id)?.email ?? null
   const [renaming, setRenaming] = useState(false)
   const target = loginWorkspace(workspaces, profile)
   const used = workspaces.filter((w) => w.profileId === profile.id).length
@@ -109,8 +111,11 @@ function ProfileItem({ profile }: { profile: AccountProfile }) {
   }
 
   return (
-    <ListItem tooltip={profile.configDir}>
-      <ListRowText primary={profile.name} secondary={`${profile.loggedIn ? 'logged in' : 'not logged in'}${profile.adopted ? ' · existing folder' : ''}`} />
+    <ListItem tooltip={email ? `${email}\n${profile.configDir}` : profile.configDir}>
+      <ListRowText
+        primary={profile.name}
+        secondary={[profile.loggedIn ? 'logged in' : 'not logged in', profile.adopted && 'existing folder', email].filter(Boolean).join(' · ')}
+      />
       <ListRowMeta>
         {used} {used === 1 ? 'workspace' : 'workspaces'}
       </ListRowMeta>
@@ -125,12 +130,10 @@ function ProfileItem({ profile }: { profile: AccountProfile }) {
           Log in
         </Button>
       )}
-      {profile.id !== DEFAULT_PROFILE_ID && (
-        <Button variant="ghost" onClick={() => setRenaming(true)}>
-          <Pencil size={12} />
-          Rename
-        </Button>
-      )}
+      <Button variant="ghost" onClick={() => setRenaming(true)} tooltip="The short name shown in the Work list, chat headers and usage pills">
+        <Pencil size={12} />
+        Rename
+      </Button>
       {profile.id !== DEFAULT_PROFILE_ID && (
         <Button
           variant="ghost"

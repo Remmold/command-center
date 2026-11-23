@@ -1,3 +1,4 @@
+import { DEFAULT_PROFILE_NAME } from '../../shared/profiles'
 import { DEFAULT_PROFILE_ID, type AccountProfile, type CliAccount, type ProfileUsage, type Workspace } from '../../shared/types'
 
 /** One Claude account profile as the app shows it, e.g. "Personal · Max". */
@@ -6,6 +7,8 @@ export interface Account {
   name: string
   plan: string | null
   label: string
+  /** The login's email, for tooltips; null until a check or session has read it. */
+  email: string | null
 }
 
 export interface AccountsInput {
@@ -25,14 +28,19 @@ export function accountList(input: AccountsInput): Account[] {
   return input.profiles.map((p) => {
     const known = input.usage[p.id]?.account ?? null
     const init = input.initAccounts[p.id]
-    const email = known?.email ?? init?.email
-    const name = p.id === DEFAULT_PROFILE_ID && email ? email : p.name
+    const email = known?.email ?? init?.email ?? null
     const plan = planName(known?.subscriptionType ?? init?.subscriptionType)
-    return { profileId: p.id, name, plan, label: plan ? `${name} · ${plan}` : name }
+    return { profileId: p.id, name: p.name, plan, label: plan ? `${p.name} · ${plan}` : p.name, email }
   })
 }
 
-const UNKNOWN: Account = { profileId: DEFAULT_PROFILE_ID, name: 'Default', plan: null, label: 'Default' }
+/** The Work list's account header, e.g. "Personal · Ultra": the plan loses its "Claude " prefix to fit 300 px. */
+export function sectionTitle(account: Pick<Account, 'name' | 'plan'>): string {
+  const plan = account.plan?.replace(/^Claude\s+/i, '')
+  return plan ? `${account.name} · ${plan}` : account.name
+}
+
+const UNKNOWN: Account = { profileId: DEFAULT_PROFILE_ID, name: DEFAULT_PROFILE_NAME, plan: null, label: DEFAULT_PROFILE_NAME, email: null }
 
 /** A profile the list no longer has runs on Default, as main resolves it. */
 export function accountOf(accounts: readonly Account[], profileId: string): Account {

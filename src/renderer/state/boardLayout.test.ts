@@ -183,8 +183,8 @@ describe('board layout', () => {
   })
 
   describe('by account', () => {
-    const personal: Account = { profileId: 'p', name: 'Personal', plan: 'Max', label: 'Personal · Max' }
-    const work: Account = { profileId: 'w', name: 'Work', plan: 'Team', label: 'Work · Team' }
+    const personal: Account = { profileId: 'p', name: 'Personal', plan: 'Max', label: 'Personal · Max', email: null }
+    const work: Account = { profileId: 'w', name: 'Work', plan: 'Team', label: 'Work · Team', email: null }
     const model: BoardModel = {
       repoGroups: [
         repo('alpha', [feature('mining', [ticket('01', 'backlog')])]),

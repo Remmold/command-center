@@ -12,5 +12,13 @@ export function profileEnv(profile: { id: string; configDir: string }, harnessDi
 }
 
 export function removalConfirmText(profile: { name: string; configDir: string }): string {
-  return `Remove ${profile.name}? Command Center forgets this account; the folder ${profile.configDir} stays on disk, untouched. Workspaces that used it go back to Default.`
+  return `Remove ${profile.name}? Command Center forgets this account; the folder ${profile.configDir} stays on disk, untouched. Workspaces that used it go back to the default account.`
+}
+
+export const DEFAULT_PROFILE_NAME = 'Personal'
+
+/** The default account's display name, from its saved file; "Personal" until renamed. */
+export function defaultProfileName(saved: unknown): string {
+  const name = saved && typeof saved === 'object' ? (saved as { name?: unknown }).name : undefined
+  return typeof name === 'string' && name.trim() ? name.trim() : DEFAULT_PROFILE_NAME
 }

@@ -145,8 +145,8 @@ describe('session list', () => {
 
 describe('account sections', () => {
   const ACCOUNTS: Account[] = [
-    { profileId: 'default', name: 'a@home.com', plan: 'Max', label: 'a@home.com · Max' },
-    { profileId: 'p-work', name: 'Work', plan: 'Team', label: 'Work · Team' }
+    { profileId: 'default', name: 'a@home.com', plan: 'Max', label: 'a@home.com · Max', email: null },
+    { profileId: 'p-work', name: 'Work', plan: 'Team', label: 'Work · Team', email: null }
   ]
   const workWs = { ...workspace('wk', 'work-repo'), profileId: 'p-work' }
   const sessions: Partial<SessionListInput> = {
@@ -158,11 +158,21 @@ describe('account sections', () => {
   }
   const sections = () => accountSections(sessionList(input(sessions)), ACCOUNTS)
 
-  it('puts each account in its own section, in Settings order, with the status groups inside', () => {
-    expect(sections().map((s) => [s.account.label, s.groups.map((g) => [g.id, g.rows.map((r) => r.title)])])).toEqual([
-      ['a@home.com · Max', [['needs-you', ['home waiting']], ['running', ['home running']], ['in-vscode', ['home vscode']]]],
-      ['Work · Team', [['needs-you', ['work waiting']], ['idle', ['work idle']]]]
+  it('puts each account in its own section, in Settings order, rows sorted needs you, running, idle, In VS Code without headings', () => {
+    expect(sections().map((s) => [s.account.label, s.rows.map((r) => r.title)])).toEqual([
+      ['a@home.com · Max', ['home waiting', 'home running', 'home vscode']],
+      ['Work · Team', ['work waiting', 'work idle']]
     ])
+  })
+
+  it('sorts newest first inside each status, waiting chats longest wait first', () => {
+    const many: Partial<SessionListInput> = {
+      hosted: [hosted('i1', 'old idle', 1), hosted('i2', 'new idle', 9), hosted('r1', 'old run', 2), hosted('r2', 'new run', 8), hosted('w1', 'old wait', 3), hosted('w2', 'new wait', 7)],
+      statuses: [status('r1', 'running', 2), status('r2', 'running', 8), status('w1', 'your-turn', 3), status('w2', 'needs-approval', 7)],
+      observed: [observed('o1', 'old vscode', 1), observed('o2', 'new vscode', 20)]
+    }
+    const [only] = accountSections(sessionList(input(many)), ACCOUNTS)
+    expect(only.rows.map((r) => r.title)).toEqual(['old wait', 'new wait', 'new run', 'old run', 'new idle', 'old idle', 'new vscode', 'old vscode'])
   })
 
   it("counts each account's waiting sessions for its header badge", () => {
@@ -180,7 +190,7 @@ describe('account sections', () => {
   it('leaves out accounts without sessions and puts sessions of a removed profile under the default account', () => {
     const orphan = { ...workspace('or', 'orphan'), profileId: 'gone' }
     const list = sessionList(input({ workspaces: [...WORKSPACES, orphan], hosted: [hosted('x', 'orphan one', 0, 'or')] }))
-    expect(accountSections(list, ACCOUNTS).map((s) => [s.account.profileId, s.groups[0].rows[0].title])).toEqual([['default', 'orphan one']])
+    expect(accountSections(list, ACCOUNTS).map((s) => [s.account.profileId, s.rows[0].title])).toEqual([['default', 'orphan one']])
   })
 
   it('numbers rows for Alt+1..9 in the order shown, skipping collapsed sections', () => {

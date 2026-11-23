@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { DEFAULT_PROFILE_ID, type AccountProfile, type AdoptResult } from '../../shared/types'
-import { profileEnv } from '../../shared/profiles'
+import { defaultProfileName, profileEnv } from '../../shared/profiles'
 import { userDataPath } from '../util/paths'
 import { ensureProfileLinks } from './linker'
 import { harnessConfigDir } from '../pty/claude-locator'
@@ -17,6 +17,23 @@ export function defaultConfigDir(): string {
 
 function profilesFile(): string {
   return userDataPath('profiles.json')
+}
+
+/** The default account lives outside profiles.json; this file holds only its display name. */
+function defaultNameFile(): string {
+  return userDataPath('default-profile.json')
+}
+
+async function readDefaultName(): Promise<string> {
+  try {
+    return defaultProfileName(JSON.parse(await fs.readFile(defaultNameFile(), 'utf-8')))
+  } catch {
+    return defaultProfileName(undefined)
+  }
+}
+
+async function defaultSaved(): Promise<Pick<SavedProfile, 'id' | 'name'>> {
+  return { id: DEFAULT_PROFILE_ID, name: await readDefaultName() }
 }
 
 function appProfilesRoot(): string {
@@ -94,7 +111,7 @@ async function linkFromDefault(profile: AccountProfile): Promise<void> {
 export function list(): Promise<AccountProfile[]> {
   return serial(async () => {
     const saved = await readAll()
-    return Promise.all([{ id: DEFAULT_PROFILE_ID, name: 'Default' }, ...saved].map(toProfile))
+    return Promise.all([await defaultSaved(), ...saved].map(toProfile))
   })
 }
 
@@ -116,6 +133,12 @@ export function create(name: string): Promise<AccountProfile> {
 
 export function rename(id: string, name: string): Promise<AccountProfile | null> {
   return serial(async () => {
+    if (id === DEFAULT_PROFILE_ID) {
+      const file = defaultNameFile()
+      await fs.mkdir(dirname(file), { recursive: true })
+      await fs.writeFile(file, JSON.stringify({ name: cleanName(name) }), 'utf-8')
+      return toProfile(await defaultSaved())
+    }
     const saved = await readAll()
     const target = saved.find((p) => p.id === id)
     if (!target) return null
@@ -162,7 +185,7 @@ export async function adopt(picked: string, name?: string): Promise<AdoptResult>
   const found = await vscodeFolders()
   const kind = await pathKind(path)
   return serial(async () => {
-    const used = await Promise.all([{ id: DEFAULT_PROFILE_ID, name: 'Default' }, ...(await readAll())].map(toProfile))
+    const used = await Promise.all([await defaultSaved(), ...(await readAll())].map(toProfile))
     const error = adoptionProblem({ path, kind, used, appProfilesRoot: appProfilesRoot() })
     if (error) return { ok: false, error }
     const saved: SavedProfile = { id: randomUUID(), name: name?.trim() || adoptedName(path, found), createdAt: Date.now(), configDir: path }
