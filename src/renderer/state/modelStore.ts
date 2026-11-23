@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { CliModel, ModelDefaults, ModelDefaultsPatch } from '../../shared/types'
+import { resolvedDefault } from './modelPicker'
 
 /** What the running CLI reports applying, from `get_settings`. */
 export interface AppliedModel {
@@ -13,6 +14,8 @@ interface ModelState {
   defaults: ModelDefaults
   /** The model list of the last `initialize` of any session, for panes that have not spawned. */
   cachedModels: CliModel[]
+  /** The model id Default last resolved to, per profile, for chats whose CLI has not replied yet. */
+  defaultByProfile: Record<string, string>
   applied: Record<string, AppliedModel>
   initialized: boolean
   init: () => void
@@ -35,14 +38,19 @@ export const useModelStore = create<ModelState>()(
     (set, get) => ({
       defaults: { effortByModel: {} },
       cachedModels: [],
+      defaultByProfile: {},
       applied: {},
       initialized: false,
       init: () => {
         if (get().initialized) return
         set({ initialized: true })
         void get().loadDefaults()
-        window.api.claude.onInit(({ paneId, init }) => {
+        window.api.claude.onInit(({ paneId, profileId, init }) => {
           if (init.models.length > 0) set({ cachedModels: init.models })
+          const resolved = resolvedDefault(init.models)
+          if (resolved && get().defaultByProfile[profileId] !== resolved) {
+            set((s) => ({ defaultByProfile: { ...s.defaultByProfile, [profileId]: resolved } }))
+          }
           void get().refreshApplied(paneId)
         })
         window.api.claude.onExit(({ paneId }) =>
@@ -73,7 +81,7 @@ export const useModelStore = create<ModelState>()(
     {
       name: 'command-center.models',
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ cachedModels: s.cachedModels })
+      partialize: (s) => ({ cachedModels: s.cachedModels, defaultByProfile: s.defaultByProfile })
     }
   )
 )

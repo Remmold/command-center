@@ -3,8 +3,7 @@ import { useMenu } from '../../hooks/useMenu'
 import { MODE_INFO, type PermissionMode } from '../../state/permissionModes'
 import { Button } from '../ui/Button'
 import { MenuItem } from '../ui/MenuItem'
-import { Popover, PopoverDivider, PopoverHeading, PopoverMenu } from '../ui/Popover'
-import { EffortRow } from './EffortRow'
+import { Popover, PopoverHeading, PopoverMenu } from '../ui/Popover'
 
 const MODE_ICON: Record<PermissionMode, LucideIcon> = {
   default: Hand,
@@ -19,12 +18,10 @@ interface Props {
   mode: PermissionMode
   modes: PermissionMode[]
   onSelect: (mode: PermissionMode) => void
-  /** The Effort row below the modes, for a model that supports effort. */
-  effort?: { level: string | undefined; levels: string[]; onSelect: (level: string) => void }
 }
 
 /** The prompt footer's permission mode button and its "Modes" menu. */
-export function PermissionModePicker({ mode, modes, onSelect, effort }: Props) {
+export function PermissionModePicker({ mode, modes, onSelect }: Props) {
   const menu = useMenu()
   const info = MODE_INFO[mode]
   const Icon = MODE_ICON[mode]
@@ -58,12 +55,6 @@ export function PermissionModePicker({ mode, modes, onSelect, effort }: Props) {
             />
           ))}
         </PopoverMenu>
-        {effort && effort.levels.length > 0 && (
-          <>
-            <PopoverDivider />
-            <EffortRow level={effort.level} levels={effort.levels} onSelect={effort.onSelect} />
-          </>
-        )}
       </Popover>
     </>
   )

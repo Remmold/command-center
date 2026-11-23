@@ -175,9 +175,19 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
     await expect(page.getByText('Set model to Sonnet 5.5')).toBeVisible()
 
     await pill.click()
-    await page.getByRole('dialog', { name: 'Select a model' }).getByRole('button', { name: /^Effort/ }).click()
+    await expect(page.getByRole('dialog', { name: 'Select a model' }).getByRole('button', { name: /^Effort/ })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    await expect(pill).toHaveText('Sonnet 5.5')
+    const effortPill = page.locator('[data-chat-pane]').getByRole('button', { name: /^Effort: / })
+    await effortPill.focus()
+    await page.keyboard.press('Enter')
+    const effortPopover = page.getByRole('dialog', { name: 'Effort' })
+    await expect(effortPopover.getByRole('slider', { name: 'Effort level' })).toBeFocused()
+    await effortPopover.getByRole('button', { name: /^Effort/ }).click()
     await expect.poll(settings).toContainEqual({ effortLevel: 'high' })
     await expect(page.getByText('Set effort to High')).toBeVisible()
+    await expect(effortPill).toHaveAccessibleName('Effort: High')
+    await page.keyboard.press('Escape')
   })
 
   await test.step('Shift+Tab sends set_permission_mode', async () => {

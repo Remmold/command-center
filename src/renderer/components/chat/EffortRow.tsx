@@ -1,4 +1,5 @@
 import { Gauge } from 'lucide-react'
+import type { Ref } from 'react'
 import { effortLabel, nextEffort } from '../../state/modelPicker'
 import { LevelSlider } from '../ui/LevelSlider'
 import { SettingRow } from '../ui/SettingRow'
@@ -8,10 +9,11 @@ interface Props {
   levels: string[]
   onSelect: (level: string) => void
   description?: string
+  sliderRef?: Ref<HTMLDivElement>
 }
 
 /** The extension's Effort row: click cycles the level, the slider picks one. */
-export function EffortRow({ level, levels, onSelect, description }: Props) {
+export function EffortRow({ level, levels, onSelect, description, sliderRef }: Props) {
   return (
     <SettingRow
       icon={Gauge}
@@ -26,6 +28,7 @@ export function EffortRow({ level, levels, onSelect, description }: Props) {
           value={level}
           onSelect={onSelect}
           label="Effort level"
+          sliderRef={sliderRef}
           tooltip="Click or drag to set effort level"
         />
       }

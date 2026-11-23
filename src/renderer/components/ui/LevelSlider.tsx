@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent } from 'react'
+import { useRef, type KeyboardEvent, type PointerEvent, type Ref } from 'react'
 
 interface Props {
   levels: readonly string[]
@@ -6,10 +6,11 @@ interface Props {
   onSelect: (level: string) => void
   label: string
   tooltip?: string
+  sliderRef?: Ref<HTMLDivElement>
 }
 
 /** A notched track to pick one of a few ordered levels by clicking or dragging. */
-export function LevelSlider({ levels, value, onSelect, label, tooltip }: Props) {
+export function LevelSlider({ levels, value, onSelect, label, tooltip, sliderRef }: Props) {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const dragging = useRef(false)
   const at = value ? levels.indexOf(value) : -1
@@ -36,23 +37,41 @@ export function LevelSlider({ levels, value, onSelect, label, tooltip }: Props) 
     dragging.current = false
   }
 
+  const step: Record<string, (i: number) => number> = {
+    ArrowLeft: (i) => i - 1,
+    ArrowDown: (i) => i - 1,
+    ArrowRight: (i) => i + 1,
+    ArrowUp: (i) => i + 1,
+    Home: () => 0,
+    End: () => levels.length - 1
+  }
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    const move = step[e.key]
+    if (!move || levels.length === 0) return
+    e.preventDefault()
+    const next = levels[Math.min(Math.max(move(at), 0), levels.length - 1)]
+    if (next !== value) onSelect(next)
+  }
+
   return (
     <div
+      ref={sliderRef}
       role="slider"
       aria-label={label}
       aria-valuemin={0}
       aria-valuemax={levels.length - 1}
       aria-valuenow={at === -1 ? undefined : at}
       aria-valuetext={value}
-      tabIndex={-1}
+      tabIndex={0}
       title={tooltip}
       onClick={(e) => e.stopPropagation()}
+      onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={stop}
       onPointerCancel={stop}
       onLostPointerCapture={stop}
-      className="flex h-4 w-20 shrink-0 cursor-pointer items-center px-1.5"
+      className="flex h-4 w-20 shrink-0 cursor-pointer items-center rounded px-1.5 focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus"
     >
       <div ref={trackRef} className="relative h-0.5 w-full rounded-full bg-strong">
         {levels.map((level, i) => (

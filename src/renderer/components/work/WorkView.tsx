@@ -144,6 +144,7 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
                           thinking={c.thinking}
                           resumeSessionId={c.claudeSessionId}
                           permissionMode={c.permissionMode}
+                          profileId={workspace?.profileId}
                           registerFocus={half === focused ? registerFocus : undefined}
                         />
                       </div>
