@@ -54,10 +54,9 @@ export function itemsToMarkdown(items: ChatItem[], title?: string): string {
         break
       }
       case 'result': {
-        const cost = item.costUsd !== undefined ? `$${item.costUsd.toFixed(4)}` : ''
         const dur = item.durationMs !== undefined ? `${(item.durationMs / 1000).toFixed(1)}s` : ''
         lines.push(
-          `\n_Turn complete · ${dur}${cost ? ` · ${cost}` : ''}${
+          `\n_Turn complete · ${dur}${
             item.numTurns ? ` · ${item.numTurns} turn(s)` : ''
           }_\n`
         )
