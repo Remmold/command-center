@@ -26,6 +26,8 @@ import { committedLength, thinkingDurations } from './liveItems'
 import { useFollowOutput } from './useFollowOutput'
 import { noteScroll, saveDraft, savedDraft, savedScroll } from '../../state/restoreStore'
 import { useChatItemsStore } from '../../state/chatItemsStore'
+import { useChatMediaStore } from '../../state/chatMediaStore'
+import { mediaAttachments } from './chatMedia'
 import { useSubagentTasksStore } from '../../state/subagentTasksStore'
 import type { AgentHost, BackgroundHost } from './toolContext'
 import { WorkingLine } from './WorkingLine'
@@ -620,6 +622,7 @@ export const ChatView = memo(function ChatView({
     }
     const uuid = crypto.randomUUID()
     const userText = userItemText(text, attachments)
+    useChatMediaStore.getState().addAttachments(paneId, mediaAttachments(uuid, attachments))
     // As the extension's `turnRunningOrQueued`: the CLI queues it and says when it starts.
     const queued = turnActive || held.length > 0
     if (queued) useHeldPromptsStore.getState().hold(paneId, { uuid, text: userText })

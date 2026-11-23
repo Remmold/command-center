@@ -81,7 +81,7 @@ export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents
             return (
               <Fragment key={key}>
                 {day !== undefined && <LabeledDivider>{dayLabel(day, now)}</LabeledDivider>}
-                <div className="lazy-render">
+                <div className="lazy-render" data-item-id={item.id}>
                   <Message
                     item={item}
                     stampAt={stamps[i]}

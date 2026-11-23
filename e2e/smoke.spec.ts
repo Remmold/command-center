@@ -741,6 +741,101 @@ test.describe('transcript look', () => {
   })
 })
 
+/** A one-second webm, recorded from a canvas inside the app, so the test needs no video tool or download. */
+async function recordWebm(page: Page): Promise<Buffer> {
+  // A string, since this project compiles the tests against Node's types, not the DOM's.
+  const base64 = await page.evaluate<string>(`(async () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 48
+    const context = canvas.getContext('2d')
+    const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: 'video/webm' })
+    const chunks = []
+    recorder.ondataavailable = (e) => chunks.push(e.data)
+    const stopped = new Promise((resolve) => (recorder.onstop = resolve))
+    recorder.start()
+    for (let frame = 0; frame < 20; frame++) {
+      context.fillStyle = 'hsl(' + frame * 18 + ', 70%, 50%)'
+      context.fillRect(0, 0, 64, 48)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    recorder.stop()
+    await stopped
+    const bytes = new Uint8Array(await new Blob(chunks, { type: 'video/webm' }).arrayBuffer())
+    let binary = ''
+    for (const byte of bytes) binary += String.fromCharCode(byte)
+    return btoa(binary)
+  })()`)
+  return Buffer.from(base64, 'base64')
+}
+
+test.describe('media panel', () => {
+  test.use({ script: 'media' })
+
+  test('lists the chat’s png and webm newest first with a missing file tile, steps through them in the preview, and jumps to the message', async ({ launched }) => {
+    const { page, workspace } = launched
+    mkdirSync(join(workspace, 'refs'), { recursive: true })
+    mkdirSync(join(workspace, 'clips'), { recursive: true })
+    writeFileSync(join(workspace, 'refs', 'shot.png'), Buffer.from(TINY_PNG, 'base64'))
+    writeFileSync(join(workspace, 'clips', 'demo.webm'), await recordWebm(page))
+    const pane = page.locator('[data-chat-pane]')
+    await startSession(launched)
+    await send(page, 'show the media')
+    await expect(pane.getByText('That is the reference shot.')).toBeVisible()
+
+    const button = page.getByRole('button', { name: 'Media', exact: true })
+    await expect(button).toHaveText('3')
+    await page.keyboard.press('Control+Shift+M')
+    const panel = page.getByRole('complementary', { name: 'Media' })
+    await expect(panel).toBeVisible()
+    await expect(button).toHaveAttribute('aria-pressed', 'true')
+
+    const tiles = panel.locator('[data-thumbnail]')
+    await expect(tiles).toHaveCount(3)
+    await expect(tiles.nth(0).getByRole('button', { name: 'shot.png' }).locator('img')).toHaveAttribute('src', /^cc-media:\/\/file\//)
+    await expect(tiles.nth(1).locator('video')).toHaveCount(1)
+    await expect(tiles.nth(2)).toContainText('gone.gif')
+    await expect(tiles.nth(2)).toContainText('File not found')
+    await expect.poll(() => tiles.nth(0).locator('img').evaluate((img) => (img as unknown as { naturalWidth: number }).naturalWidth)).toBe(1)
+    await expect.poll(() => tiles.nth(1).locator('video').evaluate((v) => (v as unknown as { readyState: number }).readyState)).toBeGreaterThan(0)
+    const shotPath = process.env.MEDIA_PANEL_SHOT
+    if (shotPath) {
+      const png = await evaluateMain(launched.app, async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'), undefined)
+      writeFileSync(shotPath, Buffer.from(png, 'base64'))
+    }
+
+    await tiles.nth(0).getByRole('button', { name: 'shot.png' }).click()
+    const preview = page.getByRole('dialog', { name: 'shot.png' })
+    await expect(preview.locator('img')).toHaveAttribute('src', /^cc-media:/)
+    await page.getByRole('button', { name: 'Next' }).click()
+    const video = page.getByRole('dialog', { name: 'demo.webm' }).locator('video')
+    await expect(video).toHaveCount(1)
+    await expect.poll(() => video.evaluate((v) => (v as unknown as { readyState: number }).readyState)).toBeGreaterThan(0)
+    await page.keyboard.press('ArrowLeft')
+    await expect(preview).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(preview).toHaveCount(0)
+
+    for (let i = 1; i <= 4; i++) {
+      await send(page, `more ${i}`)
+      await expect(pane.getByText('Line eight of a long reply.')).toHaveCount(i)
+    }
+    const shotMessage = pane.locator('[data-item-id]', { hasText: 'That is the reference shot.' })
+    await expect(shotMessage).not.toBeInViewport()
+    await tiles.nth(0).hover()
+    await tiles.nth(0).getByRole('button', { name: 'Jump to message' }).click()
+    await expect(shotMessage).toBeInViewport()
+
+    await tiles.nth(2).click({ button: 'right' })
+    await expect(page.getByRole('menuitem', { name: 'Copy path' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Reveal in Explorer' })).toBeDisabled()
+    await page.keyboard.press('Escape')
+
+    await page.keyboard.press('Control+Shift+M')
+    await expect(panel).toHaveCount(0)
+  })
+})
+
 test.describe('subagents', () => {
   test.use({ script: 'subagent' })
 

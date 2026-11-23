@@ -16,6 +16,7 @@ import { findMentions } from './files/mentions'
 import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { openWithSystem, readImage, resolveLink } from './files/links'
+import { resolveMedia, revealInFolder } from './files/media'
 import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
 import { readSubagentTranscript } from './claude/subagentTranscript'
 import { isTeleportedSession } from './claude/teleport'
@@ -375,6 +376,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.FILES_RESOLVE_LINK, (_e, cwd: string, path: string) => resolveLink(cwd, path))
   ipcMain.handle(IPC.FILES_READ_IMAGE, (_e, path: string) => readImage(path))
   ipcMain.handle(IPC.FILES_OPEN_WITH_SYSTEM, (_e, path: string) => openWithSystem(path))
+  ipcMain.handle(IPC.MEDIA_RESOLVE, (_e, cwd: string, paths: string[]) => resolveMedia(cwd, paths))
+  ipcMain.handle(IPC.MEDIA_REVEAL, (_e, path: string) => revealInFolder(path))
 
   ipcMain.handle(IPC.GIT_STATUS, (_e, cwd: string) => getStatus(cwd))
   ipcMain.handle(

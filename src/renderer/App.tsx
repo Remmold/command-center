@@ -29,6 +29,7 @@ import { useObservedStore } from './state/observedStore'
 import { useUpdateStore } from './state/updateStore'
 import { startRestore } from './state/restoreStore'
 import { useSessionListStore } from './state/sessionListStore'
+import { observedMediaKey, useChatMediaStore } from './state/chatMediaStore'
 import { useZoomStore } from './state/zoomStore'
 
 export function App() {
@@ -106,6 +107,10 @@ export function App() {
       if (projectId) useProjectViewsStore.getState().toggleShellDrawer(projectId)
     },
     toggleSessionList: () => useSessionListStore.getState().toggle(),
+    toggleMediaPanel: () => {
+      const target = focusedTarget()
+      if (target) useChatMediaStore.getState().toggle(target.kind === 'hosted' ? target.paneId : observedMediaKey(target.sessionId))
+    },
     zoom: (step) => useZoomStore.getState().step(step),
     selectRow: openRowAt
   })

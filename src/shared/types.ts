@@ -3,6 +3,7 @@ import type { ChatItem } from './chatItems'
 import type { AppView } from './views'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
+import type { MediaFile } from './media'
 import type { ZoomStep } from './zoom'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
@@ -469,6 +470,9 @@ export interface RendererApi {
     readImage: (path: string) => Promise<{ ok: true; dataUrl: string } | { ok: false; error: string }>
     /** Opens an existing file or folder in its system app; resolves to an error message, '' on success. */
     openWithSystem: (path: string) => Promise<string>
+    /** Each path a chat named, as the media panel loads it; nothing is written. */
+    resolveMedia: (cwd: string, paths: readonly string[]) => Promise<MediaFile[]>
+    revealMedia: (path: string) => Promise<void>
     list: (cwd: string) => Promise<string[]>
     /** The @ menu's rows for the text typed after `@`: ripgrep's listing, fuzzy-ranked. */
     mentions: (cwd: string, query: string) => Promise<MentionEntry[]>

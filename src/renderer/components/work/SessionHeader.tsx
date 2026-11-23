@@ -28,6 +28,7 @@ import { usePaneStatus } from '../../state/sessionStatusStore'
 import { IDE_PANELS_SHORTCUT, SHELL_DRAWER_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { itemsToMarkdown } from '../chat/exportMarkdown'
 import { PastSessionsModal } from '../PastSessionsModal'
+import { MediaButton } from '../chat/MediaSplit'
 import { AccountSwitcher } from './AccountSwitcher'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
@@ -94,6 +95,7 @@ export function HostedSessionHeader({ workspace, view, session, place }: HostedP
       highlighted={place.split && place.focused}
       actions={
         <span className="flex shrink-0 items-center gap-1">
+          <MediaButton chat={{ kind: 'hosted', paneId: session.id, cwd: view.projectPath }} />
           <Button
             variant="ghost"
             pressed={view.idePanelsOpen}
@@ -224,6 +226,7 @@ export function ObservedSessionHeader({ workspace, session, sessionId, place }: 
       highlighted={place.split && place.focused}
       actions={
         <span className="flex shrink-0 items-center gap-1">
+          <MediaButton chat={{ kind: 'observed', sessionId, cwd: workspace.path }} />
           <TakeOverControls workspaceId={workspace.id} sessionId={sessionId} title={title} />
           <HalfControls place={place} closable />
         </span>

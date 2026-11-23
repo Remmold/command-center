@@ -14,6 +14,7 @@ interface PlainShortcut {
     | 'toggleShellDrawer'
     | 'nextWaiting'
     | 'loadPastSession'
+    | 'toggleMediaPanel'
 }
 
 export type ShortcutAction =
@@ -30,10 +31,11 @@ const CTRL_LETTERS: Record<string, PlainShortcut['name']> = {
   l: 'loadPastSession'
 }
 
-/** Ctrl+J is the prompt box's newline, as in the VS Code extension. */
+/** Ctrl+J is the prompt box's newline, as in the VS Code extension. Ctrl+Shift+M is VS Code's Problems panel, which the app has none of. */
 const CTRL_SHIFT_LETTERS: Record<string, PlainShortcut['name']> = {
   j: 'nextWaiting',
-  e: 'toggleIdePanels'
+  e: 'toggleIdePanels',
+  m: 'toggleMediaPanel'
 }
 
 /** By the printed key, since Nordic layouts put + on the Minus key; Ctrl+0 also by position, for layouts where that key types another character. */
