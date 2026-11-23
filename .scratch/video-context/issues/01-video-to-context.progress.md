@@ -1,0 +1,3 @@
+- done: frames, sheets, transcript (whisper filter), model download, chip/preview, Settings Video group, Media tab; quick, e2e (18, 84 s), build, perf+zoom green
+- next: Andreas's manual run (test-flow section 31) incl. the real 470 MB download
+- open reds: none

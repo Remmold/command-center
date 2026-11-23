@@ -18,13 +18,14 @@ export interface MediaEntry {
   source: MediaSource
 }
 
-/** An image the user pasted or dropped into a prompt; kept in memory, never written to disk. */
+/** An image or video the user pasted or dropped into a prompt: pasted images and video sheets as data in memory, a video by its path. */
 export interface MediaAttachment {
   id: string
   /** The user item of the prompt that sent it. */
   messageId: string
   name: string
-  dataUrl: string
+  kind: MediaKind
+  source: MediaSource
 }
 
 export interface MediaInput {
@@ -140,8 +141,8 @@ export function collectMedia({ items, cwd, attachments = [] }: MediaInput): Medi
   const byKey = new Map<string, MediaEntry>()
   for (const mention of mentionsOf(items, attachments)) {
     if ('attachment' in mention) {
-      const { id, messageId, name, dataUrl } = mention.attachment
-      byKey.set(id, { key: id, kind: 'image', name, at: mention.at, messageId, source: { kind: 'data', dataUrl } })
+      const { id, messageId, name, kind, source } = mention.attachment
+      byKey.set(id, { key: id, kind, name, at: mention.at, messageId, source })
       continue
     }
     const kind = mediaKind(mention.path)
@@ -154,9 +155,22 @@ export function collectMedia({ items, cwd, attachments = [] }: MediaInput): Medi
   return [...byKey.values()].reverse()
 }
 
-/** A sent prompt's image attachments, as the Media panel keeps them. */
+/** A sent prompt's images and videos, as the Media panel keeps them: a video's original, then its contact sheets. */
 export function mediaAttachments(messageId: string, attachments: readonly PromptAttachment[]): MediaAttachment[] {
-  return attachments.flatMap((a, i) =>
-    a.kind === 'image' ? [{ id: `${messageId}#${i}`, messageId, name: a.name, dataUrl: `data:${a.mediaType};base64,${a.base64}` }] : []
-  )
+  return attachments.flatMap((a, i): MediaAttachment[] => {
+    const id = `${messageId}#${i}`
+    if (a.kind === 'image') return [{ id, messageId, name: a.name, kind: 'image', source: { kind: 'data', dataUrl: `data:${a.mediaType};base64,${a.base64}` } }]
+    if (a.kind !== 'video') return []
+    const sheets = a.sheets.map((s, n): MediaAttachment => ({
+      id: `${id}.${n + 1}`,
+      messageId,
+      name: `${a.name} · sheet ${n + 1}`,
+      kind: 'image',
+      source: { kind: 'data', dataUrl: `data:image/jpeg;base64,${s.base64}` }
+    }))
+    const kind = a.sourcePath ? mediaKind(a.sourcePath) : null
+    const original: MediaAttachment[] = a.sourcePath && kind ? [{ id, messageId, name: a.name, kind, source: { kind: 'file', path: a.sourcePath } }] : []
+    // Newest first in the panel, so the original is added last to lead its sheets.
+    return [...sheets, ...original]
+  })
 }

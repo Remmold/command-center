@@ -6,7 +6,9 @@ import { FileChip, FileChipRow } from '../ui/FileChip'
 import { IconButton } from '../ui/IconButton'
 import { NoticeLine } from '../ui/NoticeLine'
 import { insertMention, mentionText, mentionTrigger, unmentionableNotice, type MentionTrigger } from './mentions'
-import { attachmentKind, overLimitBy, overLimitNotice, unsupportedNotice, type PromptAttachment } from './attachments'
+import { attachmentKind, overLimitBy, overLimitNotice, unsupportedNotice, type FileAttachment, type PromptAttachment } from './attachments'
+import { useVideoAttachments } from './useVideoAttachments'
+import { SpeechModelPrompt, VideoChip, VideoDetails } from './VideoAttachments'
 import {
   argumentHint,
   buildMenu,
@@ -66,13 +68,16 @@ interface SlashState {
   picked: { id: string; query: string } | null
 }
 
-interface PendingFile extends PromptAttachment {
+type PendingFile = FileAttachment & {
   id: string
   size: number
   width: number
   height: number
   previewUrl: string
 }
+
+const VIDEO_NOT_READY = 'Wait for the video to finish preparing, or remove it.'
+const VIDEO_FAILED = 'Remove the video that could not be prepared to send.'
 
 const MENTION_DEBOUNCE_MS = 200
 
@@ -98,13 +103,19 @@ function imageSize(url: string): Promise<{ width: number; height: number }> {
 }
 
 /** The extension's `aq`: supported files become attachments, empty ones are skipped, the rest are named. */
-async function readFiles(files: readonly File[]): Promise<{ read: PendingFile[]; unsupported: string[] }> {
+async function readFiles(files: readonly File[]): Promise<{ read: PendingFile[]; videos: File[]; unsupported: string[] }> {
   const read: PendingFile[] = []
+  const videos: File[] = []
   const unsupported: string[] = []
   for (const file of files) {
     const name = file.name
-    if (attachmentKind(file.type.toLowerCase(), name) === 'unsupported') {
+    const claimed = attachmentKind(file.type.toLowerCase(), name)
+    if (claimed === 'unsupported') {
       unsupported.push(name)
+      continue
+    }
+    if (claimed === 'video') {
+      if (file.size > 0) videos.push(file)
       continue
     }
     if (file.size === 0) continue
@@ -113,14 +124,14 @@ async function readFiles(files: readonly File[]): Promise<{ read: PendingFile[];
       const [header, base64] = url.split(',')
       const mediaType = /data:([^;]+)/.exec(header)?.[1]?.toLowerCase() ?? 'application/octet-stream'
       const kind = attachmentKind(mediaType, name)
-      if (kind === 'unsupported' || base64 === undefined) continue
+      if (kind === 'unsupported' || kind === 'video' || base64 === undefined) continue
       const size = kind === 'image' ? await imageSize(url) : { width: 0, height: 0 }
       read.push({ id: crypto.randomUUID(), kind, mediaType, base64, name, size: file.size, ...size, previewUrl: url })
     } catch {
       continue
     }
   }
-  return { read, unsupported }
+  return { read, videos, unsupported }
 }
 
 /** Shift+Enter, or Ctrl+J as in the extension. */
@@ -158,6 +169,8 @@ export function InputBox({
   const [mention, setMention] = useState<MentionState | null>(null)
   const [slash, setSlash] = useState<SlashState | null>(null)
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
+  const video = useVideoAttachments()
+  const [expandedVideo, setExpandedVideo] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [recall, setRecall] = useState<HistoryCursor>(NO_RECALL)
@@ -242,13 +255,17 @@ export function InputBox({
 
   const send = () => {
     const trimmed = value.trim()
-    if (!trimmed && pendingFiles.length === 0) return
+    if (!trimmed && pendingFiles.length === 0 && video.videos.length === 0) return
+    if (!video.allReady) {
+      setNotice(video.blocked ? VIDEO_FAILED : VIDEO_NOT_READY)
+      return
+    }
     const over = overLimitBy(trimmed)
     if (over > 0) {
       setNotice(overLimitNotice('Your prompt', over, 'shorten it to send'))
       return
     }
-    const attachments = pendingFiles.map(({ kind, mediaType, base64, name }) => ({ kind, mediaType, base64, name }))
+    const attachments: PromptAttachment[] = [...pendingFiles.map(({ kind, mediaType, base64, name }) => ({ kind, mediaType, base64, name })), ...video.take()]
     onSend(trimmed, attachments.length > 0 ? attachments : undefined)
     setValue('')
     setPendingFiles([])
@@ -412,8 +429,9 @@ export function InputBox({
   const hint = argumentHint(menu, value)
 
   const addFiles = async (files: readonly File[]) => {
-    const { read, unsupported } = await readFiles(files)
+    const { read, videos, unsupported } = await readFiles(files)
     if (read.length > 0) setPendingFiles((prev) => [...prev, ...read])
+    if (videos.length > 0) void video.add(videos)
     const refused = unsupportedNotice(unsupported)
     if (refused) setNotice(refused)
   }
@@ -464,7 +482,9 @@ export function InputBox({
     await addFiles(files)
   }
 
-  const canSend = value.trim().length > 0 || pendingFiles.length > 0
+  const hasContent = value.trim().length > 0 || pendingFiles.length > 0 || video.videos.length > 0
+  const canSend = hasContent && video.allReady
+  const shownVideo = video.videos.find((v) => v.id === expandedVideo)
 
   return (
     <div
@@ -515,8 +535,18 @@ export function InputBox({
             <span title={notice}>{notice}</span>
           </NoticeLine>
         )}
-        {pendingFiles.length > 0 && (
+        {video.videos.some((v) => v.phase === 'asking') && <SpeechModelPrompt onAnswer={video.answer} />}
+        {(pendingFiles.length > 0 || video.videos.length > 0) && (
           <FileChipRow>
+            {video.videos.map((v) => (
+              <VideoChip
+                key={v.id}
+                video={v}
+                expanded={v.id === expandedVideo}
+                onToggle={() => setExpandedVideo((id) => (id === v.id ? null : v.id))}
+                onRemove={() => video.remove(v.id)}
+              />
+            ))}
             {pendingFiles.map((file) => (
               <FileChip
                 key={file.id}
@@ -529,6 +559,7 @@ export function InputBox({
             ))}
           </FileChipRow>
         )}
+        {shownVideo && <VideoDetails video={shownVideo} />}
         <div className="flex flex-col gap-1.5 rounded-md border border-strong bg-input px-3 py-2 focus-within:border-focus">
           <div className="relative flex">
             <textarea
@@ -570,7 +601,7 @@ export function InputBox({
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {footerEnd}
-              {busy && !canSend && onInterrupt ? (
+              {busy && !hasContent && onInterrupt ? (
                 <button
                   onClick={onInterrupt}
                   className="flex h-7 w-7 items-center justify-center rounded-md bg-error text-accent-fg hover:bg-error/80"
@@ -590,7 +621,7 @@ export function InputBox({
                       ? 'bg-accent text-accent-fg hover:bg-accent-hover'
                       : 'text-faint')
                   }
-                  title="send (enter)"
+                  title={video.allReady ? 'send (enter)' : video.blocked ? VIDEO_FAILED : VIDEO_NOT_READY}
                   type="button"
                 >
                   <ArrowUp size={14} strokeWidth={2.5} />

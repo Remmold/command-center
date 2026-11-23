@@ -19,6 +19,7 @@ import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { openWithSystem, readImage, resolveLink } from './files/links'
 import { resolveMedia, revealInFolder } from './files/media'
+import { registerVideoIpc } from './video/service'
 import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
 import { readSubagentTranscript } from './claude/subagentTranscript'
 import { isTeleportedSession } from './claude/teleport'
@@ -77,6 +78,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   })
   ipcMain.handle(IPC.BOARD_READ_FILE, (_e, path: string) => board.readFile(path))
   unsubscribers.push(() => board.stop())
+  unsubscribers.push(registerVideoIpc())
 
   const sendAll = (channel: string, payload: unknown): void => {
     for (const win of BrowserWindow.getAllWindows()) {

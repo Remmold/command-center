@@ -111,8 +111,8 @@ describe('collecting a chat media', () => {
       items: [call('a', 'Read', { file_path: 'x.png' }, 1), user, reply('b', 'nice', 6)],
       cwd: CWD,
       attachments: [
-        { id: 'att-1', messageId: 'u1', name: 'pasted.png', dataUrl: 'data:image/png;base64,AAA' },
-        { id: 'att-2', messageId: 'never-sent', name: 'gone.png', dataUrl: 'data:image/png;base64,BBB' }
+        { id: 'att-1', messageId: 'u1', name: 'pasted.png', kind: 'image', source: { kind: 'data', dataUrl: 'data:image/png;base64,AAA' } },
+        { id: 'att-2', messageId: 'never-sent', name: 'gone.png', kind: 'image', source: { kind: 'data', dataUrl: 'data:image/png;base64,BBB' } }
       ]
     })
     expect(media).toEqual([
@@ -129,6 +129,19 @@ describe('keeping a prompt’s pasted images for the Media panel', () => {
         { kind: 'image', mediaType: 'image/png', base64: 'AAA', name: 'pasted.png' },
         { kind: 'text', mediaType: 'text/plain', base64: 'BBB', name: 'notes.txt' }
       ])
-    ).toEqual([{ id: 'u1#0', messageId: 'u1', name: 'pasted.png', dataUrl: 'data:image/png;base64,AAA' }])
+    ).toEqual([{ id: 'u1#0', messageId: 'u1', name: 'pasted.png', kind: 'image', source: { kind: 'data', dataUrl: 'data:image/png;base64,AAA' } }])
+  })
+
+  it('keeps a video by its path and its sheets as data, the original first in the panel', () => {
+    const attachments = mediaAttachments('u1', [
+      { kind: 'video', name: 'clip.mp4', sheets: [{ base64: 'S1', width: 1, height: 1 }], text: 'Video: clip.mp4', sourcePath: 'C:/v/clip.mp4' },
+      { kind: 'video', name: 'pasted.webm', sheets: [], text: 'Video: pasted.webm', sourcePath: null }
+    ])
+    expect(attachments).toEqual([
+      { id: 'u1#0.1', messageId: 'u1', name: 'clip.mp4 · sheet 1', kind: 'image', source: { kind: 'data', dataUrl: 'data:image/jpeg;base64,S1' } },
+      { id: 'u1#0', messageId: 'u1', name: 'clip.mp4', kind: 'video', source: { kind: 'file', path: 'C:/v/clip.mp4' } }
+    ])
+    const user: ChatItem = { kind: 'user', id: 'u1', text: 'watch', at: 5 }
+    expect(collectMedia({ items: [user], cwd: CWD, attachments }).map((m) => m.name)).toEqual(['clip.mp4', 'clip.mp4 · sheet 1'])
   })
 })

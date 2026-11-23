@@ -2,9 +2,11 @@ interface Props {
   value: number
   max: number
   label: string
+  /** Shown beside the bar instead of "value/max". */
+  caption?: string
 }
 
-export function ProgressBar({ value, max, label }: Props) {
+export function ProgressBar({ value, max, label, caption }: Props) {
   const percent = max > 0 ? Math.round((value / max) * 100) : 0
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5">
@@ -19,7 +21,7 @@ export function ProgressBar({ value, max, label }: Props) {
         <span className="block h-full rounded-full bg-progress" style={{ width: `${percent}%` }} />
       </span>
       <span className="text-[10px] tabular-nums text-muted">
-        {value}/{max}
+        {caption ?? `${value}/${max}`}
       </span>
     </span>
   )

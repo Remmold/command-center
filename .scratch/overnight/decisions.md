@@ -327,3 +327,20 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: keep the JSON Details for edits.
 176. **An answered question in a transcript (hosted or VS Code chat) reads "Question(s)" with "Answered · 2 questions" and the read-only card**; a declined or unanswered one shows only its status ("Declined", "No answer"), as the extension.
 177. **A plan approved from the inbox switches the chat's mode with the same `set_permission_mode` control the chat uses**, then sends the same reply.
+178. **Video frame plan:** first frame, every scene change (ffmpeg scene score > 0.3) at least max(1 s, length/48) from the previous one and from the end, the last frame 0.25 s before the end, and evenly spaced filler frames in any stretch longer than max(length/8, 2 × spacing) without a cut. A static video therefore gets evenly spaced frames. Over 24, filler frames go first, then scene changes are thinned evenly.
+    - Alternative: scene changes only, with even frames only when none are found (screen recordings with few hard cuts would get 2–3 frames).
+179. **Sheets:** 3×3, or 2×2 for up to 4 frames or an aspect beyond 2.2:1 / 1:2.2; frames spread evenly over the sheets (10 frames → 5 + 5); 4 px dark padding; JPEG. Frames are taken at up to 768 px with the time burned bottom-left (Segoe UI Bold), then scaled down onto the sheet.
+    - Alternative: caption only.
+180. **The video's text block adds a "Sheet N: 0:00 · 0:03 …" line per sheet after the header, and "No transcript: <reason>." when there is none** (no audio, near silent, transcription off, no whisper filter, no speech heard, transcription failed), so Claude can match frames to times and knows why speech is missing. The sheets come before the text, as file attachments come before the prompt.
+    - Alternative: the ticket's two-part shape only.
+181. **The video's transcript is cut at 20,000 characters** with "[Transcript truncated: N more segments, up to hh:mm:ss]".
+182. **Near silent means a peak below −45 dB** (ffmpeg `volumedetect`).
+183. **The token estimate** is Claude's image rule per sheet (long side to 1,568 px, then capped at 1.15 MP, 750 px a token) plus the text at 4 characters a token.
+184. **The model question is a question card** (the app's ChoicePrompt) above the input with **1 Download** and **2 Frames only**; the download shows a progress bar and Cancel; a failed download offers Retry and Frames only. "Frames only" sets transcription off; Settings → General → Video's checkbox turns it back on. With transcription on but the model removed, the question is asked again.
+    - Alternative: a modal dialog.
+185. **The download is verified by size and SHA-256** (`1be3a9b2…a987b`, from Hugging Face's LFS etag for `ggml-small.bin`, 487,601,967 bytes), resumes from a `.part` file with a Range request and retries 3 times. At start-up a file of the right size counts as downloaded.
+186. **A failed or "Video needs ffmpeg" chip blocks Send** until removed ("Remove the video that could not be prepared to send."). The no-ffmpeg chip expands to the winget command and a link to ffmpeg.org's Windows downloads. Without ffmpeg a GIF also shows "Video needs ffmpeg", as the ticket treats GIF as video.
+    - Alternative: drop failed videos silently on send; send GIFs as images without ffmpeg.
+187. **The unsupported-file notice keeps the extension's wording** ("images (PNG, JPG, GIF, WebP), text files, and PDFs") though videos are now accepted.
+188. **A pasted video without a file path** is written into its temp job folder; its original then does not appear in the Media tab (only its sheets), since the folder is deleted after sending. The UI test drops such a video.
+189. **`CC_FFMPEG`** (a path to ffmpeg, or `none`) overrides the ffmpeg lookup for tests; normal use never sets it. The `video-temp` folder in app data is emptied at start-up for jobs a quit left behind.

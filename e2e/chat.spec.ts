@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASIC_REPLY, FAKE_SESSION, TINY_PNG, WRITE_DONE, clipboardText, userLines } from './common'
 import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, newChatIn, prompt, send, startSession, test } from './harness'
@@ -16,6 +16,22 @@ function seedMentionWorkspace(workspace: string): void {
   writeFileSync(join(workspace, 'my folder', 'notes.md'), '# notes')
   mkdirSync(join(workspace, 'src'))
   writeFileSync(join(workspace, 'src', 'app.ts'), 'export {}')
+}
+
+/** A 6 s clip with a cut at 3 s and a tone, made by ffmpeg itself; null without ffmpeg. */
+function ffmpegClip(workspace: string): string | null {
+  const clip = join(workspace, '..', 'clip.mp4')
+  try {
+    execFileSync('ffmpeg', [
+      ...['-hide_banner', '-loglevel', 'error', '-y'],
+      ...['-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=25:duration=3', '-f', 'lavfi', '-i', 'smptebars=size=320x240:rate=25:duration=3'],
+      ...['-f', 'lavfi', '-i', 'sine=frequency=440:duration=6', '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0[v]', '-map', '[v]', '-map', '2:a'],
+      ...['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', clip]
+    ])
+    return clip
+  } catch {
+    return null
+  }
 }
 
 test('a basic chat: views, usage strip, Manual start, @ menu, attachments, prompt history, slash menu, model and effort, Shift+Tab, Remote Control, a draft across a reload, and picks made while a process starts', async ({ launched }) => {
@@ -77,8 +93,29 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
     await prompt(page).fill('')
   })
 
-  await test.step('text and PDF files go as document blocks before the prompt; an over-long prompt is refused; the reply streams on the profile config dir', async () => {
-    await page.locator('[data-chat-pane] input[type="file"]').setInputFiles([
+  await test.step('text and PDF files go as document blocks, a video as its contact sheet and text, before the prompt; an over-long prompt is refused; the reply streams on the profile config dir', async () => {
+    const fileInput = page.locator('[data-chat-pane] input[type="file"]')
+    const clip = ffmpegClip(workspace)
+    if (clip) {
+      const dropped = await page.evaluateHandle((base64) => {
+        type Transfer = { items: { add: (file: unknown) => void } }
+        const transfer = new (globalThis as unknown as { DataTransfer: new () => Transfer }).DataTransfer()
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+        transfer.items.add(new File([bytes], 'clip.mp4', { type: 'video/mp4' }))
+        return transfer
+      }, readFileSync(clip).toString('base64'))
+      await prompt(page).dispatchEvent('drop', { dataTransfer: dropped })
+      const chip = page.getByRole('button', { name: /^clip\.mp4: / })
+      await expect(page.getByRole('group', { name: 'Speech model' })).toBeVisible()
+      await expect(page.getByText('0:06 · waiting for the speech model', { exact: true })).toBeVisible()
+      await page.getByRole('button', { name: /Frames only/ }).click()
+      await expect(chip).toHaveAccessibleName(/^clip\.mp4: 0:06 · 5 frames · ≈\d+ tokens$/)
+      await chip.click()
+      await expect(page.getByRole('region', { name: 'clip.mp4 details' }).getByRole('img', { name: 'Sheet 1: 0:00, 0:01, 0:03, 0:04, 0:05' })).toBeVisible()
+    } else {
+      test.info().annotations.push({ type: 'skipped', description: 'ffmpeg not on PATH: no video attached' })
+    }
+    await fileInput.setInputFiles([
       { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello notes') },
       { name: 'paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') },
       { name: 'archive.zip', mimeType: 'application/zip', buffer: Buffer.from('PK') }
@@ -87,11 +124,22 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
     await expect(page.getByRole('button', { name: 'Remove notes.txt' })).toBeVisible()
     await send(page, 'read these')
     await expect.poll(() => userLines(log).length).toBe(1)
+    const videoBlocks = clip
+      ? [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: expect.stringMatching(/^\/9j\//) } },
+          {
+            type: 'text',
+            text: ['Video: clip.mp4 · 0:06 · 5 frames on 1 sheet', 'Sheet 1: 0:00 · 0:01 · 0:03 · 0:04 · 0:05', 'No transcript: transcription is off.'].join('\n')
+          }
+        ]
+      : []
     expect((userLines(log)[0].line?.message as { content: unknown }).content).toEqual([
       { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'hello notes' }, title: 'notes.txt' },
       { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from('%PDF-1.4').toString('base64') }, title: 'paper.pdf' },
+      ...videoBlocks,
       { type: 'text', text: 'read these' }
     ])
+    if (clip) await expect.poll(() => readdirSync(join(launched.root, 'user-data', 'video-temp'))).toEqual([])
 
     await prompt(page).fill('x'.repeat(50_001))
     await prompt(page).press('Enter')

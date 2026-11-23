@@ -18,6 +18,12 @@ describe('attachmentKind', () => {
     expect(attachmentKind('application/octet-stream', 'LICENSE')).toBe('text')
   })
 
+  it('takes mp4, webm, mov, mkv and avi as video, and gif too', () => {
+    for (const name of ['a.mp4', 'a.WEBM', 'a.mov', 'a.mkv', 'a.avi', 'a.gif']) expect(attachmentKind('', name)).toBe('video')
+    expect(attachmentKind('image/gif', 'a.gif')).toBe('video')
+    expect(attachmentKind('video/mp4', 'clip')).toBe('video')
+  })
+
   it('refuses other images and binaries', () => {
     expect(attachmentKind('image/bmp', 'a.bmp')).toBe('unsupported')
     expect(attachmentKind('application/zip', 'a.zip')).toBe('unsupported')
@@ -75,6 +81,15 @@ describe('promptContent', () => {
       { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'héllo' }, title: 'c.txt' },
       { type: 'text', text: '<terminal name="pwsh">\nPS> ls\n</terminal>' },
       { type: 'text', text: 'look @terminal:pwsh' }
+    ])
+  })
+
+  it('sends a video as its sheets, then their text, with no empty prompt text after', () => {
+    const video = { kind: 'video' as const, name: 'clip.mp4', sheets: [{ base64: 'S1', width: 10, height: 10 }, { base64: 'S2', width: 10, height: 10 }], text: 'Video: clip.mp4', sourcePath: null }
+    expect(promptContent('', [video], [])).toEqual([
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'S1' } },
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'S2' } },
+      { type: 'text', text: 'Video: clip.mp4' }
     ])
   })
 
