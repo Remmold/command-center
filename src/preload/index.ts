@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import { observedRefreshMs } from '../shared/observedRefresh'
@@ -35,6 +35,7 @@ import type {
 } from '../shared/types'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from '../shared/approval'
 import type { RepoIdentityViews } from '../shared/repoIdentity'
+import type { SpeechModelStatus, VideoProgressEvent } from '../shared/video'
 
 const api: RendererApi = {
   workspaces: {
@@ -120,6 +121,26 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, event: AppExitEvent) => cb(event)
       ipcRenderer.on(IPC.APPS_EXIT, handler)
       return () => ipcRenderer.off(IPC.APPS_EXIT, handler)
+    }
+  },
+  video: {
+    pathOf: (file) => webUtils.getPathForFile(file),
+    prepare: (jobId, source) => ipcRenderer.invoke(IPC.VIDEO_PREPARE, jobId, source),
+    transcribe: (jobId) => ipcRenderer.invoke(IPC.VIDEO_TRANSCRIBE, jobId),
+    release: (jobId) => ipcRenderer.invoke(IPC.VIDEO_RELEASE, jobId),
+    onProgress: (cb) => {
+      const handler = (_e: IpcRendererEvent, event: VideoProgressEvent) => cb(event)
+      ipcRenderer.on(IPC.VIDEO_PROGRESS, handler)
+      return () => ipcRenderer.off(IPC.VIDEO_PROGRESS, handler)
+    },
+    modelStatus: () => ipcRenderer.invoke(IPC.VIDEO_MODEL_STATUS),
+    downloadModel: () => ipcRenderer.invoke(IPC.VIDEO_MODEL_DOWNLOAD),
+    cancelModelDownload: () => ipcRenderer.invoke(IPC.VIDEO_MODEL_CANCEL),
+    removeModel: () => ipcRenderer.invoke(IPC.VIDEO_MODEL_REMOVE),
+    onModelChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, status: SpeechModelStatus) => cb(status)
+      ipcRenderer.on(IPC.VIDEO_MODEL_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.VIDEO_MODEL_CHANGED, handler)
     }
   },
   files: {

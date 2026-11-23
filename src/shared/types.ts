@@ -1,3 +1,4 @@
+import type { SpeechModelStatus, VideoFramesResult, VideoProgressEvent, VideoSource, VideoTranscriptResult } from './video'
 import type { ChooseImageResult, RepoIconRequest, RepoIdentityViews } from './repoIdentity'
 import type { ChatItem } from './chatItems'
 import type { AppView } from './views'
@@ -472,6 +473,22 @@ export interface RendererApi {
     kill: (paneId: string) => void
     onData: (cb: (event: PtyDataEvent) => void) => () => void
     onExit: (cb: (event: PtyExitEvent) => void) => () => void
+  }
+  video: {
+    /** The file's path on disk, or '' for a pasted file that has none. */
+    pathOf: (file: File) => string
+    /** Probes the video and builds its contact sheets in a temp folder; progress comes as `onProgress`. */
+    prepare: (jobId: string, source: VideoSource) => Promise<VideoFramesResult>
+    /** The speech of a prepared video, once the speech model is downloaded. */
+    transcribe: (jobId: string) => Promise<VideoTranscriptResult>
+    /** Stops the job and deletes its temp folder: after sending, or when the chip is removed. */
+    release: (jobId: string) => Promise<void>
+    onProgress: (cb: (event: VideoProgressEvent) => void) => () => void
+    modelStatus: () => Promise<SpeechModelStatus>
+    downloadModel: () => Promise<SpeechModelStatus>
+    cancelModelDownload: () => Promise<void>
+    removeModel: () => Promise<SpeechModelStatus>
+    onModelChanged: (cb: (status: SpeechModelStatus) => void) => () => void
   }
   files: {
     /** Where a file link in a chat points, or null when nothing is there. */

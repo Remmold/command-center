@@ -13,7 +13,8 @@ export const MEDIA_TYPES: Readonly<Record<string, { kind: MediaKind; mime: strin
   mp4: { kind: 'video', mime: 'video/mp4' },
   webm: { kind: 'video', mime: 'video/webm' },
   mov: { kind: 'video', mime: 'video/quicktime' },
-  mkv: { kind: 'video', mime: 'video/x-matroska' }
+  mkv: { kind: 'video', mime: 'video/x-matroska' },
+  avi: { kind: 'video', mime: 'video/x-msvideo' }
 }
 
 export function mediaType(path: string): { kind: MediaKind; mime: string } | null {

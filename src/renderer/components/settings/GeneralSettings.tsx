@@ -10,6 +10,59 @@ import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DetailRow } from '../ui/DetailRow'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
+import { useSpeechModelStore } from '../../state/speechModelStore'
+import { SPEECH_MODEL, type SpeechModelStatus } from '../../../shared/video'
+
+const megabytes = (bytes: number): string => `${Math.round(bytes / 1_000_000)} MB`
+
+function modelLabel(status: SpeechModelStatus | null): string {
+  if (!status) return '…'
+  switch (status.state) {
+    case 'absent':
+      return 'Not downloaded'
+    case 'downloading':
+      return `Downloading… ${Math.floor((status.received / status.total) * 100)}%`
+    case 'failed':
+      return `Download failed: ${status.error}`
+    case 'ready':
+      return `Downloaded (${megabytes(status.bytes)})`
+  }
+}
+
+function VideoGroup() {
+  const transcription = useGeneralSettingsStore((s) => s.videoTranscription)
+  const setTranscription = useGeneralSettingsStore((s) => s.setVideoTranscription)
+  const model = useSpeechModelStore((s) => s.status)
+  const download = useSpeechModelStore((s) => s.download)
+  const cancel = useSpeechModelStore((s) => s.cancel)
+  const remove = useSpeechModelStore((s) => s.remove)
+  const action =
+    model?.state === 'ready' ? (
+      <Button variant="secondary" onClick={remove}>
+        Remove model
+      </Button>
+    ) : model?.state === 'downloading' ? (
+      <Button variant="secondary" onClick={cancel}>
+        Cancel download
+      </Button>
+    ) : (
+      <Button variant="secondary" disabled={!model} onClick={download}>
+        Download model
+      </Button>
+    )
+  return (
+    <PageGroup title="Video" actions={action}>
+      <Checkbox checked={transcription === 'on'} onChange={(on) => setTranscription(on ? 'on' : 'off')}>
+        Transcribe speech in videos
+      </Checkbox>
+      <PageNote>
+        A video attached to a prompt goes to Claude as key frames on contact sheets, plus a timestamped transcript of its speech. Transcription
+        runs on this computer with the {SPEECH_MODEL.label} model.
+      </PageNote>
+      <DetailRow label="Speech model" value={modelLabel(model)} />
+    </PageGroup>
+  )
+}
 
 function useStartWithWindows(): [StartWithWindowsState | null, (checked: boolean) => void] {
   const [state, setState] = useState<StartWithWindowsState | null>(null)
@@ -96,6 +149,7 @@ export function GeneralSettings() {
           </Checkbox>
           <PageNote>When enabled, use Ctrl/Cmd+Enter to send prompts instead of just Enter. This allows Enter to create new lines.</PageNote>
         </PageGroup>
+        <VideoGroup />
       </PageBody>
     </Page>
   )

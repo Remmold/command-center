@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import type { VideoTranscription } from '../../shared/video'
 
 interface GeneralSettingsState {
   /** The extension's `claudeCode.allowDangerouslySkipPermissions`; applies to sessions started from then on. */
@@ -8,6 +9,9 @@ interface GeneralSettingsState {
   /** The extension's `claudeCode.useCtrlEnterToSend`: Ctrl+Enter sends and Enter adds a line. */
   useCtrlEnterToSend: boolean
   setUseCtrlEnterToSend: (on: boolean) => void
+  /** Whether a video's speech is transcribed; asked on the first video with sound. */
+  videoTranscription: VideoTranscription
+  setVideoTranscription: (value: VideoTranscription) => void
 }
 
 export const useGeneralSettingsStore = create<GeneralSettingsState>()(
@@ -16,7 +20,9 @@ export const useGeneralSettingsStore = create<GeneralSettingsState>()(
       allowDangerouslySkipPermissions: false,
       setAllowDangerouslySkipPermissions: (allow) => set({ allowDangerouslySkipPermissions: allow }),
       useCtrlEnterToSend: false,
-      setUseCtrlEnterToSend: (on) => set({ useCtrlEnterToSend: on })
+      setUseCtrlEnterToSend: (on) => set({ useCtrlEnterToSend: on }),
+      videoTranscription: 'ask',
+      setVideoTranscription: (value) => set({ videoTranscription: value })
     }),
     { name: 'command-center.general-settings', storage: createJSONStorage(() => localStorage) }
   )

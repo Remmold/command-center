@@ -1,15 +1,28 @@
 import type { UserContentBlock } from '../../../shared/types'
+import { isVideoFile } from '../../../shared/video'
 
 // The extension's attachment rules (`sq`, `gYt`, `fqe`, `mqe`, `vYt`, `aq`, `gqe`, `C9`, `wzt` in webview/index.js).
 
 export type AttachmentKind = 'image' | 'pdf' | 'text'
 
-export interface PromptAttachment {
+export interface FileAttachment {
   kind: AttachmentKind
   mediaType: string
   base64: string
   name: string
 }
+
+/** A video prepared for Claude: its contact sheets and the text that goes with them. */
+export interface VideoAttachment {
+  kind: 'video'
+  name: string
+  sheets: readonly { base64: string; width: number; height: number }[]
+  text: string
+  /** The original on disk, for the Media tab; null when it was pasted without one. */
+  sourcePath: string | null
+}
+
+export type PromptAttachment = FileAttachment | VideoAttachment
 
 export interface TerminalSnapshot {
   name: string
@@ -57,7 +70,8 @@ function isText(mediaType: string, name: string): boolean {
   return TEXT_EXTENSIONS.has(lower) || TEXT_NAMES.has(lower)
 }
 
-export function attachmentKind(mediaType: string, name: string): AttachmentKind | 'unsupported' {
+export function attachmentKind(mediaType: string, name: string): AttachmentKind | 'video' | 'unsupported' {
+  if (isVideoFile(name, mediaType)) return 'video'
   if (IMAGE_TYPES.includes(mediaType)) return 'image'
   if (mediaType === 'application/pdf') return 'pdf'
   return isText(mediaType, name) ? 'text' : 'unsupported'
@@ -107,16 +121,22 @@ function decodeText(base64: string): string {
   return new TextDecoder().decode(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)))
 }
 
-function attachmentBlock(a: PromptAttachment): UserContentBlock {
-  if (a.kind === 'image') return { type: 'image', source: { type: 'base64', media_type: a.mediaType, data: a.base64 } }
-  if (a.kind === 'pdf') return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.base64 }, title: a.name }
-  return { type: 'document', source: { type: 'text', media_type: 'text/plain', data: decodeText(a.base64) }, title: a.name }
+function attachmentBlocks(a: PromptAttachment): UserContentBlock[] {
+  if (a.kind === 'video') {
+    return [
+      ...a.sheets.map((s): UserContentBlock => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: s.base64 } })),
+      { type: 'text', text: a.text }
+    ]
+  }
+  if (a.kind === 'image') return [{ type: 'image', source: { type: 'base64', media_type: a.mediaType, data: a.base64 } }]
+  if (a.kind === 'pdf') return [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.base64 }, title: a.name }]
+  return [{ type: 'document', source: { type: 'text', media_type: 'text/plain', data: decodeText(a.base64) }, title: a.name }]
 }
 
-/** The user message's `content`: attachments, then terminal contents, then the prompt text. */
+/** The user message's `content`: attachments (a video as its sheets, then their text), then terminal contents, then the prompt text. */
 export function promptContent(text: string, attachments: readonly PromptAttachment[], terminals: readonly TerminalSnapshot[]): UserContentBlock[] {
-  const blocks: UserContentBlock[] = attachments.map(attachmentBlock)
+  const blocks: UserContentBlock[] = attachments.flatMap(attachmentBlocks)
   for (const t of terminals) blocks.push({ type: 'text', text: `<terminal name="${t.name}">\n${t.contents}\n</terminal>` })
-  if (text.trim() !== '' || blocks.length === 0 || blocks.some((b) => b.type === 'text')) blocks.push({ type: 'text', text })
+  if (text.trim() !== '' || blocks.length === 0 || terminals.length > 0) blocks.push({ type: 'text', text })
   return blocks
 }

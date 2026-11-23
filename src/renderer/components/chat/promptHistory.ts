@@ -2,13 +2,13 @@ import type { ChatItem } from './types'
 import type { HeldPrompt } from './heldPrompts'
 
 /** What `userItemText` appends; never part of a title or a recalled prompt. */
-export const ATTACHED_MARKER = /\n\n_\[\d+ (?:images?|files?) attached\]_$/
+export const ATTACHED_MARKER = /\n\n_\[\d+ (?:images?|videos?|files?) attached\]_$/
 
 /** The prompt as the transcript shows it: a note counts the attachments (all images, else files). */
 export function userItemText(text: string, attachments: readonly { kind: string }[]): string {
   const count = attachments.length
   if (count === 0) return text
-  const noun = attachments.every((a) => a.kind === 'image') ? 'image' : 'file'
+  const noun = attachments.every((a) => a.kind === 'image') ? 'image' : attachments.every((a) => a.kind === 'video') ? 'video' : 'file'
   return `${text}\n\n_[${count} ${noun}${count === 1 ? '' : 's'} attached]_`
 }
 
