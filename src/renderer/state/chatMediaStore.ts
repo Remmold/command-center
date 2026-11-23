@@ -2,19 +2,19 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { MediaAttachment } from '../components/chat/chatMedia'
 
-export const MEDIA_PANEL_MIN_WIDTH = 180
-export const MEDIA_PANEL_MAX_WIDTH = 720
+const MEDIA_PANEL_MIN_WIDTH = 180
+const MEDIA_PANEL_MAX_WIDTH = 720
 const DEFAULT_WIDTH = 280
 
-/** A hosted chat by its pane id, a followed VS Code session by `observed:<session id>`. */
+/** A hosted session by its pane id, a followed VS Code session by `observed:<session id>`. */
 export type ChatMediaKey = string
 
-export function observedMediaKey(sessionId: string): ChatMediaKey {
-  return `observed:${sessionId}`
+export function mediaKeyOf(chat: { kind: 'hosted'; paneId: string } | { kind: 'observed'; sessionId: string }): ChatMediaKey {
+  return chat.kind === 'hosted' ? chat.paneId : `observed:${chat.sessionId}`
 }
 
 interface ChatMediaState {
-  /** Which chats show their Media panel; each half of a split has its own chat, so its own panel. */
+  /** Which sessions show their Media panel; each half of a split has its own session, so its own panel. */
   open: Record<ChatMediaKey, boolean>
   width: number
   /** Images pasted or dropped into prompts, by pane; in memory only. */

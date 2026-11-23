@@ -10,7 +10,7 @@ import { ImagePreview } from '../ui/ImagePreview'
 import { MenuItem } from '../ui/MenuItem'
 import { Popover, PopoverMenu } from '../ui/Popover'
 import { SidePanel } from '../ui/SidePanel'
-import { Thumbnail, ThumbnailImage, ThumbnailPlaceholder, ThumbnailVideo } from '../ui/Thumbnail'
+import { THUMBNAIL_SIZE, Thumbnail, ThumbnailImage, ThumbnailPlaceholder, ThumbnailVideo } from '../ui/Thumbnail'
 import { TimeStamp } from '../ui/TimeStamp'
 import type { MediaEntry } from './chatMedia'
 import { stampLabel, stampTitle } from './messageTime'
@@ -30,17 +30,23 @@ function lookUp(entry: MediaEntry, cwd: string | undefined): Promise<Loaded> {
   const key = lookupKey(entry, cwd)
   let lookup = lookups.get(key)
   if (!lookup) {
-    lookup = window.api.files.resolveMedia(cwd ?? '', [path]).then((files) => files[0] ?? { found: false })
+    lookup = window.api.files.resolveMedia(cwd ?? '', [path]).then((files) => {
+      const file = files[0] ?? { found: false }
+      // A file named before it is written is looked up again on the chat's next item.
+      if (!file.found) lookups.delete(key)
+      return file
+    })
     lookups.set(key, lookup)
   }
   return lookup.then((file) => (file.found ? { state: 'found', url: file.url, path: file.path } : { state: 'missing' }))
 }
 
-function useLoaded(entry: MediaEntry, cwd: string | undefined, active: boolean): Loaded {
+function useLoaded(entry: MediaEntry, cwd: string | undefined, active: boolean, revision: number): Loaded {
   const key = lookupKey(entry, cwd)
   const entryRef = useRef(entry)
   entryRef.current = entry
   const [loaded, setLoaded] = useState<{ key: string; value: Loaded }>({ key: '', value: PENDING })
+  const retry = loaded.key === key && loaded.value.state === 'missing' ? revision : 0
   useEffect(() => {
     if (!active) return
     let live = true
@@ -48,7 +54,7 @@ function useLoaded(entry: MediaEntry, cwd: string | undefined, active: boolean):
     return () => {
       live = false
     }
-  }, [key, cwd, active])
+  }, [key, cwd, active, retry])
   return loaded.key === key ? loaded.value : PENDING
 }
 
@@ -57,6 +63,7 @@ const sameTile = (a: TileProps, b: TileProps): boolean =>
   a.entry.at === b.entry.at &&
   a.entry.messageId === b.entry.messageId &&
   a.cwd === b.cwd &&
+  a.revision === b.revision &&
   a.onOpen === b.onOpen &&
   a.onJump === b.onJump
 
@@ -83,13 +90,15 @@ async function openExternally(path: string): Promise<void> {
 interface TileProps {
   entry: MediaEntry
   cwd: string | undefined
+  /** Changes with every new item, so a missing file is looked for again. */
+  revision: number
   onOpen: (entry: MediaEntry) => void
   onJump: (messageId: string) => void
 }
 
-const MediaTile = memo(function MediaTile({ entry, cwd, onOpen, onJump }: TileProps) {
+const MediaTile = memo(function MediaTile({ entry, cwd, revision, onOpen, onJump }: TileProps) {
   const [ref, seen] = useSeen()
-  const loaded = useLoaded(entry, cwd, seen)
+  const loaded = useLoaded(entry, cwd, seen, revision)
   const menu = useMenu()
   const filePath = entry.source.kind === 'file' ? entry.source.path : null
   const foundPath = loaded.state === 'found' ? loaded.path : null
@@ -154,9 +163,18 @@ const MediaTile = memo(function MediaTile({ entry, cwd, onOpen, onJump }: TilePr
   )
 }, sameTile)
 
-function MediaViewer({ media, index, cwd, onIndex, onClose }: { media: readonly MediaEntry[]; index: number; cwd: string | undefined; onIndex: (i: number) => void; onClose: () => void }) {
+interface ViewerProps {
+  media: readonly MediaEntry[]
+  index: number
+  cwd: string | undefined
+  revision: number
+  onIndex: (i: number) => void
+  onClose: () => void
+}
+
+function MediaViewer({ media, index, cwd, revision, onIndex, onClose }: ViewerProps) {
   const entry = media[index]
-  const loaded = useLoaded(entry, cwd, true)
+  const loaded = useLoaded(entry, cwd, true, revision)
   const path = loaded.state === 'found' ? loaded.path : null
   return (
     <ImagePreview
@@ -176,11 +194,12 @@ interface Props {
   chatKey: ChatMediaKey
   media: readonly MediaEntry[]
   cwd: string | undefined
+  revision: number
   onJump: (messageId: string) => void
 }
 
 /** Every image and video the chat touched, newest first; a click opens the preview, which steps through them. */
-export function MediaPanel({ chatKey, media, cwd, onJump }: Props) {
+export function MediaPanel({ chatKey, media, cwd, revision, onJump }: Props) {
   const width = useChatMediaStore((s) => s.width)
   const setWidth = useChatMediaStore((s) => s.setWidth)
   const toggle = useChatMediaStore((s) => s.toggle)
@@ -191,16 +210,16 @@ export function MediaPanel({ chatKey, media, cwd, onJump }: Props) {
   return (
     <SidePanel title="Media" width={width} onResize={setWidth} onClose={() => toggle(chatKey)} closeTooltip={`Close Media (${MEDIA_PANEL_SHORTCUT})`}>
       {media.length === 0 ? (
-        <p className="px-1 py-2 text-xs text-muted">Images and videos this chat reads, writes or names show here.</p>
+        <p className="px-1 py-2 text-xs text-muted">Images and videos this session reads, writes or names show here.</p>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2" data-media-grid="">
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${THUMBNAIL_SIZE}px, 1fr))` }}>
           {media.map((entry) => (
-            <MediaTile key={entry.key} entry={entry} cwd={cwd} onOpen={onOpen} onJump={onJump} />
+            <MediaTile key={entry.key} entry={entry} cwd={cwd} revision={revision} onOpen={onOpen} onJump={onJump} />
           ))}
         </div>
       )}
       {index !== -1 && (
-        <MediaViewer media={media} index={index} cwd={cwd} onIndex={(i) => setViewing(media[i].key)} onClose={() => setViewing(null)} />
+        <MediaViewer media={media} index={index} cwd={cwd} revision={revision} onIndex={(i) => setViewing(media[i].key)} onClose={() => setViewing(null)} />
       )}
     </SidePanel>
   )
