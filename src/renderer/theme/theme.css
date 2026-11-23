@@ -24,7 +24,7 @@
   --cc-success: 129 184 139;
   --cc-link: 77 170 252;
   --cc-code: 60 60 60;
-  --cc-code-fg: 208 208 208;
+  --cc-code-fg: 215 186 125; /* VS Code Dark Modern textPreformat.foreground #D7BA7D */
   --cc-scrollbar: 121 121 121 / 0.4;
   --cc-scrollbar-hover: 100 100 100 / 0.7;
 
