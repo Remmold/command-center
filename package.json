@@ -1,6 +1,6 @@
 {
   "name": "command-center",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Single-window command center for managing multiple Claude Code projects in parallel.",
   "private": true,
   "main": "out/main/index.js",
