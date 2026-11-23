@@ -1,4 +1,5 @@
 import { Notification } from 'electron'
+import { windowOffscreen } from '../testWindow'
 import type { SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
 import type { SessionStatusTracker } from '../sessions/tracker'
 import { notificationText, shouldNotify, trayBadge, type Onscreen, type TrayBadge } from './attention'
@@ -30,7 +31,7 @@ export function startAttention(deps: AttentionDeps): () => void {
   }
 
   const notify = async (entry: SessionStatusEntry) => {
-    if (!Notification.isSupported()) return
+    if (!Notification.isSupported() || windowOffscreen(process.env)) return
     const workspaces = await deps.listWorkspaces().catch(() => [])
     const { title, body } = notificationText(entry, workspaces)
     const icon = await deps.notificationIcon(entry.cwd).catch(() => undefined)

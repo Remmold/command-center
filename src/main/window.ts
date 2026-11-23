@@ -6,8 +6,10 @@ import type { Onscreen } from './attention/attention'
 import { getScreenFocus } from './sessions/screenFocus'
 import { applyZoom, zoomLevel } from './zoom/service'
 import { zoomFactor } from '../shared/zoom'
+import { OFFSCREEN_POSITION, windowOffscreen } from './testWindow'
 
 let mainWindow: BrowserWindow | null = null
+const offscreen = windowOffscreen(process.env)
 let quitting = false
 
 /** After this, closing the window really closes it instead of hiding to the tray. */
@@ -21,7 +23,9 @@ export function getMainWindow(): BrowserWindow | null {
 
 export function createMainWindow(options: { show?: boolean } = {}): BrowserWindow {
   const win = new BrowserWindow({
-    show: options.show ?? true,
+    // Test runs open off-screen and are shown without focus, so they never land on the user's desktop.
+    show: offscreen ? false : (options.show ?? true),
+    ...(offscreen ? { ...OFFSCREEN_POSITION, skipTaskbar: true } : {}),
     width: 1400,
     height: 900,
     backgroundColor: '#18181b',
@@ -55,6 +59,7 @@ export function createMainWindow(options: { show?: boolean } = {}): BrowserWindo
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+  if (offscreen && (options.show ?? true)) win.showInactive()
   mainWindow = win
   return win
 }
@@ -62,6 +67,10 @@ export function createMainWindow(options: { show?: boolean } = {}): BrowserWindo
 export function showMainWindow(): BrowserWindow {
   const win = getMainWindow() ?? createMainWindow()
   if (win.isMinimized()) win.restore()
+  if (offscreen) {
+    win.showInactive()
+    return win
+  }
   win.show()
   win.focus()
   return win
