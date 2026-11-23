@@ -1,6 +1,7 @@
-export type MeterTone = 'ok' | 'warn' | 'limit'
+export type MeterTone = 'neutral' | 'ok' | 'warn' | 'limit'
 
 const FILL: Record<MeterTone, string> = {
+  neutral: 'bg-muted',
   ok: 'bg-meter-ok',
   warn: 'bg-meter-warn',
   limit: 'bg-meter-limit'
@@ -58,6 +59,32 @@ export function Meter({ percent, tone, label, size = 'compact', tooltip, elapsed
       >
         <span className={`block h-full rounded-full ${elapsed.ahead ? 'bg-warning' : 'bg-faint'}`} style={{ width: `${clamp(elapsed.percent)}%` }} />
       </span>
+    </span>
+  )
+}
+
+const READING_TEXT: Record<MeterTone, string> = {
+  neutral: 'text-muted',
+  ok: 'text-muted',
+  warn: 'text-meter-warn',
+  limit: 'text-meter-limit'
+}
+
+interface ReadingProps {
+  percent: number
+  tone: MeterTone
+  label: string
+  /** A tiny window name before the bar, e.g. "5h". */
+  prefix?: string | null
+}
+
+/** One window's bar and percentage on a single line; never shrinks or cuts. */
+export function MeterReading({ percent, tone, label, prefix }: ReadingProps) {
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] font-normal tabular-nums ${READING_TEXT[tone]}`}>
+      {prefix && <span className="text-[9px] text-faint">{prefix}</span>}
+      <Meter percent={percent} tone={tone} label={label} />
+      <span className="meter-reading-percent">{percent}%</span>
     </span>
   )
 }

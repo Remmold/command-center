@@ -34,7 +34,7 @@ export type UsageEntryState = 'ready' | 'loading' | 'error' | 'not-logged-in'
 
 export interface UsageEntry {
   profileId: string
-  /** The account email, else the profile name. */
+  /** The profile's short display name, e.g. "Personal". */
   label: string
   profileName: string
   plan: string | null
@@ -169,7 +169,7 @@ export function usageEntries(input: UsageEntriesInput): UsageEntry[] {
         : []
     return {
       profileId: profile.id,
-      label: account?.email ?? profile.name,
+      label: profile.name,
       profileName: profile.name,
       plan: account?.subscriptionType ?? null,
       email: account?.email ?? null,
@@ -182,4 +182,37 @@ export function usageEntries(input: UsageEntriesInput): UsageEntry[] {
       error: usage?.error ?? null
     }
   })
+}
+
+export type HeaderTone = 'neutral' | 'ahead' | 'limit'
+
+/** The one figure an account header shows: the weekly window, or the 5-hour one when that is further used. */
+export interface HeaderUsage {
+  key: WindowKey
+  percent: number
+  /** The window's name, e.g. "Weekly (7 day)". */
+  label: string
+  /** "5h" when the 5-hour window is shown. */
+  prefix: string | null
+  tone: HeaderTone
+  tooltip: string
+}
+
+const LIMIT_PERCENT = 90
+
+export function headerUsage(entry: UsageEntry): HeaderUsage | null {
+  const week = entry.bars.find((b) => b.key === 'sevenDay')
+  const fiveHour = entry.bars.find((b) => b.key === 'fiveHour')
+  const shown = fiveHour && (!week || fiveHour.percent > week.percent) ? fiveHour : week
+  if (!shown) return null
+  const tone: HeaderTone = shown.percent >= LIMIT_PERCENT ? 'limit' : shown.pace?.ahead ? 'ahead' : 'neutral'
+  const name = entry.plan ? `${entry.label} · ${entry.plan}` : entry.label
+  return {
+    key: shown.key,
+    percent: shown.percent,
+    label: shown.label,
+    prefix: shown === fiveHour ? (WINDOWS.find((w) => w.key === 'fiveHour')?.short ?? null) : null,
+    tone,
+    tooltip: [name, ...(entry.email ? [entry.email] : []), ...entry.bars.map((b) => b.tooltip)].join('\n')
+  }
 }

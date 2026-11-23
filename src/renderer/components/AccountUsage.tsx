@@ -9,8 +9,6 @@ import { openShell } from '../state/sessionNavigation'
 import { Button } from './ui/Button'
 import { DetailRow } from './ui/DetailRow'
 import { Meter } from './ui/Meter'
-import { MeterLine, MeterLines } from './ui/MeterLines'
-import type { AccountColor } from '../state/accountColors'
 import { PopoverActions, PopoverDivider, PopoverHeading, PopoverNote, PopoverSection } from './ui/Popover'
 import { SectionLabel } from './ui/SectionLabel'
 import { StatRow } from './ui/StatRow'
@@ -37,25 +35,6 @@ export function UsageMeters({ entry, size = 'compact' }: { entry: UsageEntry; si
 
 export function elapsedOf(bar: UsageBarView): MeterElapsed | null {
   return bar.elapsed === null || !bar.pace ? null : { percent: bar.elapsed, ahead: bar.pace.ahead }
-}
-
-/** An account's windows as short lines with their bars, for a list header; nothing without readings. */
-export function AccountUsageLines({ entry, color }: { entry: UsageEntry; color: AccountColor | null }) {
-  if (entry.bars.length === 0) return null
-  return (
-    <MeterLines label={`Usage for ${entry.label}`} color={color}>
-      {entry.bars.map((bar) => (
-        <MeterLine
-          key={bar.key}
-          head={bar.line.head}
-          verdict={bar.line.verdict}
-          reset={bar.line.reset}
-          tooltip={bar.tooltip}
-          gauge={<Meter percent={bar.percent} tone={bar.tone} label={`${entry.label} ${bar.label}`} elapsed={elapsedOf(bar)} />}
-        />
-      ))}
-    </MeterLines>
-  )
 }
 
 function UsageBarRow({ bar }: { bar: UsageBarView }) {

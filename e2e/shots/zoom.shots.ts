@@ -56,17 +56,17 @@ async function overflowing(page: Page, selectors: string[]): Promise<string[]> {
 
 const LIST = 'nav[aria-label="Sessions"]'
 
-/** The Work list at its default 300 px: usage percentages and verdicts sit whole inside it, and rows give the model's room to the title. */
+/** The Work list at its default 300 px: each account header's percentage sits whole inside it, and rows give the model's room to the title. */
 async function narrowListProblems(page: Page): Promise<string[]> {
   return page.evaluate((list) => {
     const out: string[] = []
     const box = document.querySelectorAll(list)[0].getBoundingClientRect()
     if (box.width > 360) out.push(`the list is ${box.width}px wide, not narrow`)
-    const uncut = document.querySelectorAll(`${list} .meter-line-head, ${list} .meter-line-verdict`)
-    if (uncut.length === 0) out.push('no usage lines')
-    for (let i = 0; i < uncut.length; i++) {
-      const r = uncut[i].getBoundingClientRect()
-      if (r.width === 0 || r.right > box.right + 0.5) out.push(`cut: ${uncut[i].textContent}`)
+    const percents = document.querySelectorAll(`${list} section > button .meter-reading-percent`)
+    if (percents.length < 2) out.push(`${percents.length} account header percentages, not 2`)
+    for (let i = 0; i < percents.length; i++) {
+      const r = percents[i].getBoundingClientRect()
+      if (r.width === 0 || r.right > box.right + 0.5 || !/^\d+%$/.test(percents[i].textContent ?? '')) out.push(`cut: ${percents[i].textContent}`)
     }
     const models = document.querySelectorAll(`${list} .hide-in-narrow-list`)
     if (models.length === 0) out.push('no row has a model to hide')
@@ -170,19 +170,23 @@ for (const percent of [110, 125, 150]) {
       await expect(page.getByRole('dialog', { name: 'Effort' })).toBeVisible()
       await shot('work-effort')
       await page.keyboard.press('Escape')
-      await expect(page.locator(`${LIST} .meter-line-verdict`).first()).toBeVisible({ timeout: 15_000 })
+      await expect(page.locator(`${LIST} section > button .meter-reading-percent`)).toHaveCount(2, { timeout: 15_000 })
       expect(await narrowListProblems(page)).toEqual([])
-      const workSection = page.getByRole('navigation', { name: 'Sessions' }).getByRole('button', { name: /^Work · Claude Team/ })
+      const listShot = async (name: string) => {
+        const listBox = (await page.locator(LIST).boundingBox())!
+        const listPng = await app.evaluate(async ({ BrowserWindow }, b) => {
+          const contents = BrowserWindow.getAllWindows()[0].webContents
+          const z = contents.getZoomFactor()
+          const rect = { x: Math.round(b.x * z), y: Math.round(b.y * z), width: Math.round(b.width * z), height: Math.round(b.height * z) }
+          return (await contents.capturePage(rect)).toPNG().toString('base64')
+        }, listBox)
+        writeFileSync(join(OUT, `zoom-${percent}-${name}.png`), Buffer.from(listPng, 'base64'))
+      }
+      await listShot('work-list-accounts')
+      const workSection = page.getByRole('navigation', { name: 'Sessions' }).getByRole('button', { name: /^Work · Team/ })
       await workSection.click()
       await expect(workSection.getByText(/^\d+ waiting$/)).toBeVisible()
-      const listBox = (await page.locator(LIST).boundingBox())!
-      const listPng = await app.evaluate(async ({ BrowserWindow }, b) => {
-        const contents = BrowserWindow.getAllWindows()[0].webContents
-        const z = contents.getZoomFactor()
-        const rect = { x: Math.round(b.x * z), y: Math.round(b.y * z), width: Math.round(b.width * z), height: Math.round(b.height * z) }
-        return (await contents.capturePage(rect)).toPNG().toString('base64')
-      }, listBox)
-      writeFileSync(join(OUT, `zoom-${percent}-work-list-narrow.png`), Buffer.from(listPng, 'base64'))
+      await listShot('work-list-narrow')
       expect(await overflowing(page, sideways)).toEqual([])
       await workSection.click()
 
@@ -201,7 +205,7 @@ for (const percent of [110, 125, 150]) {
       await page.getByRole('navigation', { name: 'Sessions' }).getByText('Write the export presets').click({ modifiers: ['Control'] })
       await expect(page.locator('[data-header-row]:visible')).toHaveCount(2)
       await expect(page.getByRole('button', { name: /^Account: Work · Claude Team$/ })).toBeVisible()
-      await expect(page.getByRole('button', { name: /^Account: someone@example\.com/ })).toBeVisible()
+      await expect(page.getByRole('button', { name: /^Account: Personal/ })).toBeVisible()
       await shot('work-split')
       expect(await overflowing(page, [...sideways, '[data-header-row]'])).toEqual([])
       expect(await footerProblems(page, percent === 150)).toEqual([])

@@ -297,3 +297,13 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: first letter of the level; not taken, since "Extra high" and "Low"/"Max" read poorly as one letter.
 160. **A saved window whose monitor still exists but moved in the layout follows that monitor** (same offset from its corner, clamped into its work area) instead of jumping to the primary screen; only a gone monitor falls back to the primary work area, centred. "Enough of the title bar" means its full 32 px height and at least 100 px of its width inside a work area.
     - Alternative: any layout change sends the window to the primary display, as the ticket's fallback line reads literally.
+161. **Compact Work list: waiting rows keep the queue order (longest wait first)** inside an account; the other statuses sort newest first. The ticket said newest first within each, but the Needs you queue, Ctrl+Shift+J and the Dashboard all use longest wait first (workspace-hub spec).
+    - Alternative: newest first for waiting rows too.
+162. **The account header drops the plan's "Claude " prefix** ("Personal · Ultra", "Work · Team"), as the ticket's sketch; the chat badge, pills, Board, Dashboard and Settings keep the full plan ("Personal · Claude Ultra").
+    - Alternative: the full plan in the header, which leaves less room at 300 px.
+163. **The default account's display name lives in `default-profile.json` in the app's user data**, "Personal" until renamed; Settings → Accounts now offers Rename on it too and shows each account's email after "logged in". Removing a profile says its workspaces go back to "the default account".
+    - Alternative: a reserved entry in `profiles.json`, which every reader of that file would have to skip.
+164. **Header usage colours:** grey (muted) bar and text when on track, amber when the shown window is ahead of pace, red from 90% (red wins over amber). The 5-hour window is shown only when its percentage is strictly higher than the weekly one. The header has no time-passed tick; the hover lists both windows with pace and reset.
+    - Alternative: keep the green meter for on track.
+165. **The VS Code mark is an inline SVG of the VS Code logo in the muted text colour**, since lucide has no brand icons; it sits before the status dot with the ticket's tooltip.
+    - Alternative: lucide's generic Code icon.

@@ -92,7 +92,7 @@ describe('mismatch between a hosted chat and its workspace', () => {
 
 describe('the badge words', () => {
   const accounts = [
-    { profileId: 'default', name: 'me@home.se', plan: 'Max', label: 'me@home.se · Max' },
+    { profileId: 'default', name: 'Personal', plan: 'Max', label: 'Personal · Max' },
     { profileId: 'p-work', name: 'Work', plan: null, label: 'Work' }
   ]
   const usage = { 'p-work': { email: 'me@work.se', organization: 'Work AB' } }
@@ -118,6 +118,13 @@ describe('the badge words', () => {
       tooltip: expect.stringContaining('Email: me@work.se')
     })
     expect(chatAccountView(chat, accounts, usage).tooltip).toContain('Pending: the account this chat starts on, until Claude reports it')
+  })
+
+  it('names the default account by its short name even when Claude reported its email', () => {
+    const chat = hostedChatAccount({ process: { profileId: 'default', account: { email: 'me@home.se', subscriptionType: 'max' } }, workspaceProfileId: 'default', profiles })
+    const view = chatAccountView(chat, accounts, usage)
+    expect(view.label).toBe('Personal · Max')
+    expect(view.tooltip).toContain('Email: me@home.se')
   })
 
   it('says a VS Code guess is probable and names its VS Code profile', () => {

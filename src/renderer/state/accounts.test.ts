@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Workspace } from '../../shared/types'
-import { accountList, accountOf, moveWorkspace, repoAccounts, workspacesByAccount, type AccountsInput } from './accounts'
+import { accountList, accountOf, sectionTitle, moveWorkspace, repoAccounts, workspacesByAccount, type AccountsInput } from './accounts'
 
 const PROFILES = [
   { id: 'default', name: 'Default' },
@@ -36,9 +36,11 @@ describe('account list', () => {
     expect(list.map((a) => a.label)).toEqual(['Default', 'Work · Team', 'Personal · Max'])
   })
 
-  it("shows the Default profile under its account's email, not as Default", () => {
-    const list = accountList(input({ usage: { default: { account: { email: 'andreas@home.com', subscriptionType: 'pro' } } } }))
-    expect(list[0].label).toBe('andreas@home.com · Pro')
+  it('shows the default profile under its short display name and keeps the email for tooltips', () => {
+    const list = accountList(
+      input({ profiles: [{ id: 'default', name: 'Personal' }], usage: { default: { account: { email: 'andreas@home.com', subscriptionType: 'pro' } } } })
+    )
+    expect(list[0]).toMatchObject({ name: 'Personal', label: 'Personal · Pro', email: 'andreas@home.com' })
   })
 
   it("takes the plan from a session's initialize reply when usage has not read it yet", () => {
@@ -50,6 +52,15 @@ describe('account list', () => {
     const list = accountList(input())
     expect(accountOf(list, 'p-personal').label).toBe('Personal')
     expect(accountOf(list, 'gone').profileId).toBe('default')
+  })
+})
+
+describe('section title', () => {
+  it("is the short name and plan without the plan's Claude prefix", () => {
+    const list = accountList(input({ profiles: [{ id: 'default', name: 'Personal' }], usage: { default: { account: { subscriptionType: 'Claude Ultra' } } } }))
+    expect(sectionTitle(list[0])).toBe('Personal · Ultra')
+    expect(sectionTitle({ ...list[0], plan: 'Team' })).toBe('Personal · Team')
+    expect(sectionTitle({ ...list[0], plan: null })).toBe('Personal')
   })
 })
 

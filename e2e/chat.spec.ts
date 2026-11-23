@@ -47,9 +47,9 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
 
   await test.step('the usage strip shows the fake account and its weekly bar', async () => {
     const strip = page.getByRole('list', { name: 'usage per account profile' })
-    await expect(strip.getByText('someone@example.com')).toBeVisible()
-    await expect(strip.getByRole('meter', { name: 'someone@example.com Weekly (7 day)', exact: true })).toHaveAttribute('aria-valuenow', '69')
-    await expect(strip.getByRole('meter', { name: 'someone@example.com Weekly (7 day) time passed', exact: true })).toHaveAttribute('aria-valuenow', /^\d+$/)
+    await expect(strip.getByText('Personal', { exact: true })).toBeVisible()
+    await expect(strip.getByRole('meter', { name: 'Personal Weekly (7 day)', exact: true })).toHaveAttribute('aria-valuenow', '69')
+    await expect(strip.getByRole('meter', { name: 'Personal Weekly (7 day) time passed', exact: true })).toHaveAttribute('aria-valuenow', /^\d+$/)
   })
 
   await test.step('a new session starts Manual when settings.json sets no default mode', async () => {

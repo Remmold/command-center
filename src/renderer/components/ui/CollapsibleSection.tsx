@@ -10,13 +10,11 @@ interface Props {
   tooltip?: string
   /** Shown before the title, e.g. an account's colour. */
   marker?: ReactNode
-  /** Part of the header under its title, shown whether the section is open or not. */
-  detail?: ReactNode
   children: ReactNode
 }
 
 /** A foldable block of a side bar, headed like a VS Code view pane. */
-export function CollapsibleSection({ title, open, onToggle, badge, tooltip, marker, detail, children }: Props) {
+export function CollapsibleSection({ title, open, onToggle, badge, tooltip, marker, children }: Props) {
   return (
     <section aria-label={title}>
       <button
@@ -31,7 +29,6 @@ export function CollapsibleSection({ title, open, onToggle, badge, tooltip, mark
         <span className="min-w-0 flex-1 truncate">{title}</span>
         {badge}
       </button>
-      {detail}
       {open && children}
     </section>
   )

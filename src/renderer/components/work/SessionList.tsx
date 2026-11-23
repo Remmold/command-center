@@ -1,14 +1,15 @@
-import { useState, type MouseEvent } from 'react'
+import { useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import { useAccountColor } from '../../state/useAccountColor'
 import { AccentDot } from '../ui/AccentDot'
-import { AccountUsageLines } from '../AccountUsage'
 import { useMinuteClock } from '../../hooks/useMinuteClock'
 import { useUsageEntries } from '../../state/useUsageEntries'
 import { useMenu } from '../../hooks/useMenu'
 import { Columns2, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, X } from 'lucide-react'
 import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useSessionListStore } from '../../state/sessionListStore'
-import { sessionRowTooltip, waitingBadge, type AccountSection, type SessionGroup, type SessionGroupId, type SessionRow } from '../../state/sessionList'
+import { isNeedsYouRow, sessionRowTooltip, waitingBadge, type AccountSection, type SessionRow } from '../../state/sessionList'
+import { sectionTitle } from '../../state/accounts'
+import { headerUsage, type HeaderTone } from '../../state/usageModel'
 import { useChatPairStore } from '../../state/chatPairStore'
 import { pickPastSession, pickProject } from '../../state/launcherStore'
 import { closeSession } from '../../state/sessionNavigation'
@@ -20,21 +21,17 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { CollapsibleSection } from '../ui/CollapsibleSection'
 import { IconButton } from '../ui/IconButton'
-import { ListGroup } from '../ui/ListGroup'
 import { ListRow, ListRowLabel, ListRowText } from '../ui/ListRow'
 import { MenuItem } from '../ui/MenuItem'
+import { MeterReading, type MeterTone } from '../ui/Meter'
 import { Popover, PopoverMenu } from '../ui/Popover'
 import { SearchField } from '../ui/SearchField'
 import { EmptyHint } from '../ui/Section'
 import { StatusDot } from '../ui/StatusDot'
 import { TextField } from '../ui/TextField'
+import { VsCodeGlyph } from '../ui/VsCodeGlyph'
 
-const GROUP_TITLE: Record<SessionGroupId, string> = {
-  'needs-you': 'Needs you',
-  running: 'Running',
-  idle: 'Idle',
-  'in-vscode': 'In VS Code'
-}
+const VSCODE_TOOLTIP = 'In VS Code — read-only; Take over to continue here'
 
 export function SessionList() {
   const { sections, headed } = useSessionSections()
@@ -42,11 +39,8 @@ export function SessionList() {
   const search = useWorkSearchStore((s) => s.search)
   const setSearch = useWorkSearchStore((s) => s.setSearch)
   const collapsed = useAccountSectionsStore((s) => s.collapsed)
-  const toggle = useAccountSectionsStore((s) => s.toggle)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const groups = (section: AccountSection) => (
-    <StatusGroups groups={section.groups} pair={pair} renaming={renaming} setRenaming={setRenaming} />
-  )
+  const rows = (section: AccountSection) => <SessionRows rows={section.rows} pair={pair} renaming={renaming} setRenaming={setRenaming} />
 
   return (
     <nav aria-label="Sessions" className="work-list flex h-full min-h-0 flex-col bg-sidebar">
@@ -69,49 +63,66 @@ export function SessionList() {
         {sections.length === 0 && <EmptyHint>{search.trim() ? 'No session matches.' : 'No sessions yet.'}</EmptyHint>}
         {headed
           ? sections.map((section) => (
-              <CollapsibleSection
-                key={section.account.profileId}
-                title={section.account.label}
-                open={!collapsed.includes(section.account.profileId)}
-                onToggle={() => toggle(section.account.profileId)}
-                tooltip={`Sessions on the account ${section.account.label}`}
-                marker={<AccountMarker profileId={section.account.profileId} />}
-                detail={<SectionUsage profileId={section.account.profileId} />}
-                badge={<WaitingBadge section={section} open={!collapsed.includes(section.account.profileId)} />}
-              >
-                {groups(section)}
-              </CollapsibleSection>
+              <AccountGroup key={section.account.profileId} section={section} open={!collapsed.includes(section.account.profileId)}>
+                {rows(section)}
+              </AccountGroup>
             ))
-          : sections.map((section) => <div key={section.account.profileId}>{groups(section)}</div>)}
+          : sections.map((section) => <ul key={section.account.profileId}>{rows(section)}</ul>)}
       </div>
     </nav>
   )
 }
 
-interface StatusGroupsProps {
-  groups: SessionGroup[]
+const READING_TONE: Record<HeaderTone, MeterTone> = { neutral: 'neutral', ahead: 'warn', limit: 'limit' }
+
+function AccountGroup({ section, open, children }: { section: AccountSection; open: boolean; children: ReactNode }) {
+  const { account } = section
+  const color = useAccountColor(account.profileId)
+  const entry = useUsageEntries(null, useMinuteClock()).find((e) => e.profileId === account.profileId)
+  const usage = useMemo(() => (entry ? headerUsage(entry) : null), [entry])
+  const title = sectionTitle(account)
+  const fallback = [`Sessions on the account ${account.label}`, ...(account.email ? [account.email] : [])].join('\n')
+  return (
+    <CollapsibleSection
+      title={title}
+      open={open}
+      onToggle={() => useAccountSectionsStore.getState().toggle(account.profileId)}
+      tooltip={usage?.tooltip ?? fallback}
+      marker={<AccentDot color={color} />}
+      badge={
+        <>
+          <WaitingBadge section={section} open={open} />
+          {usage && (
+            <MeterReading
+              percent={usage.percent}
+              tone={READING_TONE[usage.tone]}
+              prefix={usage.prefix}
+              label={`${account.name} ${usage.label}`}
+            />
+          )}
+        </>
+      }
+    >
+      <ul>{children}</ul>
+    </CollapsibleSection>
+  )
+}
+
+interface SessionRowsProps {
+  rows: SessionRow[]
   pair: ChatPair
   renaming: string | null
   setRenaming: (key: string | null) => void
 }
 
-function StatusGroups({ groups, pair, renaming, setRenaming }: StatusGroupsProps) {
-  return groups.map((g) => (
-    <ListGroup key={g.id} title={GROUP_TITLE[g.id]} count={g.rows.length}>
-      {g.rows.map((row) =>
-        row.key === renaming && row.kind === 'hosted' ? (
-          <RenameRow key={row.key} paneId={row.paneId} title={row.title} onDone={() => setRenaming(null)} />
-        ) : (
-          <SessionListRow
-            key={row.key}
-            row={row}
-            active={isShown(row, pair)}
-            onRename={row.kind === 'hosted' ? () => setRenaming(row.key) : undefined}
-          />
-        )
-      )}
-    </ListGroup>
-  ))
+function SessionRows({ rows, pair, renaming, setRenaming }: SessionRowsProps) {
+  return rows.map((row) =>
+    row.key === renaming && row.kind === 'hosted' ? (
+      <RenameRow key={row.key} paneId={row.paneId} title={row.title} onDone={() => setRenaming(null)} />
+    ) : (
+      <SessionListRow key={row.key} row={row} active={isShown(row, pair)} onRename={row.kind === 'hosted' ? () => setRenaming(row.key) : undefined} />
+    )
+  )
 }
 
 function ListMenu() {
@@ -158,6 +169,7 @@ function SessionListRow({ row, active, onRename }: { row: SessionRow; active: bo
       onContextMenu={onContextMenu}
       tooltip={sessionRowTooltip(row)}
       actionsPinned={menu.open}
+      edge={isNeedsYouRow(row) ? 'waiting' : undefined}
       actions={
         <>
           <IconButton ref={menu.setAnchor} onClick={menu.toggle} label="Session actions">
@@ -184,6 +196,7 @@ function SessionListRow({ row, active, onRename }: { row: SessionRow; active: bo
       {workspace.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
       <ListRowText primary={row.title} />
       {row.kind === 'hosted' && row.modelTag && <ListRowLabel tone="secondary" hideWhenNarrow>{row.modelTag}</ListRowLabel>}
+      {row.kind === 'observed' && <VsCodeGlyph tooltip={VSCODE_TOOLTIP} />}
       <StatusDot status={row.status} />
     </ListRow>
   )
@@ -210,14 +223,4 @@ function RenameRow({ paneId, title, onDone }: { paneId: string; title: string; o
 function WaitingBadge({ section, open }: { section: AccountSection; open: boolean }) {
   const badge = waitingBadge(section, open)
   return badge && <Badge tone="waiting" tooltip={badge.tooltip}>{badge.text}</Badge>
-}
-
-function AccountMarker({ profileId }: { profileId: string }) {
-  return <AccentDot color={useAccountColor(profileId)} />
-}
-
-function SectionUsage({ profileId }: { profileId: string }) {
-  const color = useAccountColor(profileId)
-  const entry = useUsageEntries(null, useMinuteClock()).find((e) => e.profileId === profileId)
-  return entry ? <AccountUsageLines entry={entry} color={color} /> : null
 }

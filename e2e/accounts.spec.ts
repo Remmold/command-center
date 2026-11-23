@@ -153,7 +153,7 @@ test('VS Code’s accounts are adopted in one click and new chats and workspaces
   })
 })
 
-test('Work shows a section per account with a waiting badge, the Board groups By account, Settings lists workspaces under their account', async ({ launched }) => {
+test('Work shows a one-line header per account with a waiting badge, the Board groups By account, Settings lists workspaces under their account', async ({ launched }) => {
   const { page, log, root, workspace } = launched
   const work = join(root, 'claude-work')
   mkdirSync(work, { recursive: true })
@@ -175,7 +175,7 @@ test('Work shows a section per account with a waiting badge, the Board groups By
   await page.reload()
   await page.waitForLoadState('domcontentloaded')
 
-  const homeLabel = 'someone@example.com · Claude Ultra'
+  const homeLabel = 'Personal · Claude Ultra'
   const workLabel = 'Work · Claude Ultra'
   await startSession(launched)
   await page.keyboard.press('Control+t')
@@ -185,20 +185,23 @@ test('Work shows a section per account with a waiting badge, the Board groups By
   await expect(page.getByText(BASIC_REPLY)).toBeVisible()
 
   const list = page.getByRole('navigation', { name: 'Sessions' })
-  const homeSection = list.getByRole('region', { name: homeLabel })
-  const workSection = list.getByRole('region', { name: workLabel })
-  await expect(homeSection.getByRole('region', { name: 'Idle' })).toBeVisible()
-  await expect(workSection.getByRole('region', { name: 'Needs you' })).toBeVisible()
-  const workHeader = workSection.getByRole('button', { name: workLabel })
+  const homeSection = list.getByRole('region', { name: 'Personal · Ultra' })
+  const workSection = list.getByRole('region', { name: 'Work · Ultra' })
+  const workWaiting = workSection.getByRole('listitem').filter({ has: page.getByRole('img', { name: 'Your turn' }) })
+  await expect(homeSection.getByRole('listitem').getByRole('img', { name: 'Idle' })).toBeVisible()
+  await expect(workWaiting).toBeVisible()
+  await expect(workWaiting.getByRole('button').first()).toHaveClass(/inset_2px/)
+  await expect(list.getByRole('region', { name: /^(Needs you|Running|Idle|In VS Code)$/ })).toHaveCount(0)
+  const workHeader = workSection.getByRole('button', { name: /^Work · Ultra/ })
   await expect(workHeader).not.toContainText('waiting')
-  await expect(list.getByRole('region').first()).toHaveAttribute('aria-label', homeLabel)
+  await expect(list.getByRole('region').first()).toHaveAttribute('aria-label', 'Personal · Ultra')
 
   await workHeader.click()
-  await expect(workSection.getByRole('region', { name: 'Needs you' })).toBeHidden()
+  await expect(workWaiting).toBeHidden()
   await expect(workHeader.getByTitle('1 chat in Work is waiting on you')).toHaveText('1 waiting')
   await page.keyboard.press('Alt+1')
   await page.keyboard.press('Control+Shift+J')
-  await expect(workSection.getByRole('region', { name: 'Needs you' })).toBeVisible()
+  await expect(workWaiting).toBeVisible()
 
   await page.keyboard.press('Control+3')
   await page.getByRole('tab', { name: 'By account' }).click()
@@ -239,7 +242,7 @@ test('a Work chat shows the Work badge and pill, moving its workspace warns, and
   await expect(workBadge).toHaveAttribute('title', /Email: me@work\.example\nOrganization: Work AB\nConfig folder: .*claude-work\nReported by Claude/)
 
   const workPill = page.getByRole('button', { name: /^Account & usage for (Work|me@work\.example)$/ })
-  const homePill = page.getByRole('button', { name: 'Account & usage for someone@example.com' })
+  const homePill = page.getByRole('button', { name: 'Account & usage for Personal' })
   await expect(workPill).toHaveAttribute('aria-current', 'true')
   await expect(homePill).not.toHaveAttribute('aria-current', 'true')
   await expect(homePill).toHaveCSS('opacity', '0.5')
@@ -249,13 +252,13 @@ test('a Work chat shows the Work badge and pill, moving its workspace warns, and
 
   await page.evaluate(() => (globalThis as unknown as { api: RendererApi }).api.usage.refresh('p-work'))
   const list = page.getByRole('navigation', { name: 'Sessions' })
-  const workUsage = list.getByRole('list', { name: /^Usage for (Work|me@work.example)$/ })
-  await expect(workUsage.getByText('Week 69%', { exact: true })).toBeVisible({ timeout: 15_000 })
-  await expect(workUsage.getByText(/^(on track|ahead of pace by \d+%)$/)).toBeVisible()
-  await expect(workUsage.getByRole('meter', { name: /Weekly \(7 day\) time passed$/ })).toBeVisible()
-  await list.getByRole('button', { name: /^Work · Claude Team/ }).click()
-  await expect(workUsage).toBeVisible()
-  await list.getByRole('button', { name: /^Work · Claude Team/ }).click()
+  const workHeader = list.getByRole('button', { name: /^Work · Team/ })
+  await expect(workHeader.getByRole('meter', { name: 'Work Weekly (7 day)' })).toHaveAttribute('aria-valuenow', '69', { timeout: 15_000 })
+  await expect(workHeader).toContainText('69%')
+  await expect(workHeader).toHaveAttribute('title', /^Work · Claude Team\nme@work\.example\nWeekly \(7 day\): 69% used · \d+% of the week passed · (on track|ahead of pace by \d+%) · resets /)
+  await workHeader.click()
+  await expect(workHeader.getByRole('meter', { name: 'Work Weekly (7 day)' })).toBeVisible()
+  await workHeader.click()
 
   const moveWorkspaceTo = async (configFolder: string) => {
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
@@ -273,19 +276,19 @@ test('a Work chat shows the Work badge and pill, moving its workspace warns, and
   }
 
   await moveWorkspaceTo(configDir)
-  await expect(page.getByText('Running on Work; this workspace is set to someone@example.com')).toBeVisible()
+  await expect(page.getByText('Running on Work; this workspace is set to Personal')).toBeVisible()
   await expect(page.getByRole('button', { name: /^Account: Work/ })).toHaveAttribute('title', /This workspace is now set to another account/)
 
   await moveWorkspaceTo(work)
   await expect(page.getByText(/^Running on/)).toBeHidden()
   await moveWorkspaceTo(configDir)
-  await page.getByRole('button', { name: 'Restart on someone@example.com' }).click()
+  await page.getByRole('button', { name: 'Restart on Personal' }).click()
   await expect.poll(() => resumedOn(configDir)).toBe(true)
-  await expect(page.getByRole('button', { name: 'Account: someone@example.com · Claude Ultra' })).not.toContainText('pending')
+  await expect(page.getByRole('button', { name: 'Account: Personal · Claude Ultra' })).not.toContainText('pending')
   await expect(page.getByText(/^Running on/)).toBeHidden()
 
   await moveWorkspaceTo(work)
-  await expect(page.getByText('Running on someone@example.com; this workspace is set to Work')).toBeVisible()
+  await expect(page.getByText('Running on Personal; this workspace is set to Work')).toBeVisible()
   await page.getByRole('button', { name: 'Restart on Work' }).click()
   await expect.poll(() => resumedOn(work)).toBe(true)
   await expect(workBadge).not.toContainText('pending')

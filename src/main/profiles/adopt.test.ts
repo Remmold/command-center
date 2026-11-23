@@ -76,7 +76,7 @@ describe('an adopted folder is never touched', () => {
 
   it('says the folder stays on disk', () => {
     expect(removalConfirmText({ name: 'Work', configDir: 'C:\\Users\\me\\.claude-work' })).toBe(
-      'Remove Work? Command Center forgets this account; the folder C:\\Users\\me\\.claude-work stays on disk, untouched. Workspaces that used it go back to Default.'
+      'Remove Work? Command Center forgets this account; the folder C:\\Users\\me\\.claude-work stays on disk, untouched. Workspaces that used it go back to the default account.'
     )
   })
 })

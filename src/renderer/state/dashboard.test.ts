@@ -160,7 +160,7 @@ describe('dashboard: usage per account', () => {
     const d = dashboard(
       input({
         profiles: [
-          { id: 'default', name: 'Default', loggedIn: true },
+          { id: 'default', name: 'Personal', loggedIn: true },
           { id: 'work', name: 'Work', loggedIn: false }
         ],
         usage: {
@@ -176,7 +176,7 @@ describe('dashboard: usage per account', () => {
       })
     )
     expect(d.usage.map((u) => [u.label, u.plan, u.state, u.bars.map((b) => [b.label, b.percent])])).toEqual([
-      ['me@example.com', 'Max', 'ready', [['Weekly (7 day)', 69]]],
+      ['Personal', 'Max', 'ready', [['Weekly (7 day)', 69]]],
       ['Work', null, 'not-logged-in', []]
     ])
   })
@@ -221,8 +221,8 @@ describe('dashboard: empty', () => {
 
 describe('dashboard: accounts', () => {
   const ACCOUNTS: Account[] = [
-    { profileId: 'default', name: 'a@home.com', plan: 'Max', label: 'a@home.com · Max' },
-    { profileId: 'p-work', name: 'Work', plan: 'Team', label: 'Work · Team' }
+    { profileId: 'default', name: 'a@home.com', plan: 'Max', label: 'a@home.com · Max', email: null },
+    { profileId: 'p-work', name: 'Work', plan: 'Team', label: 'Work · Team', email: null }
   ]
   const WS = [workspace('wk', 'work-repo', '', 'p-work'), ...WORKSPACES]
   const active = (name: string, workspaceId: string, at: number): BoardFeature => ({

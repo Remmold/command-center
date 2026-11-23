@@ -126,33 +126,35 @@ export function sessionList(input: SessionListInput): SessionGroup[] {
 
 export interface AccountSection {
   account: Account
-  groups: SessionGroup[]
-  /** Waiting sessions in the section, shown on its header even when it is collapsed. */
+  /** The section's rows in list order: Needs you, Running, Idle, In VS Code. */
+  rows: SessionRow[]
+  /** Waiting sessions in the section, shown on its header when it is folded. */
   needsYou: number
 }
 
-/** The status groups split by the account of each row's workspace, accounts in Settings order. */
+/** The status groups split by the account of each row's workspace, accounts in Settings order; groups keep their order. */
 export function accountSections(groups: readonly SessionGroup[], accounts: readonly Account[]): AccountSection[] {
   const rank = accountRank(accounts)
-  const byAccount = new Map<string, SessionGroup[]>()
+  const byAccount = new Map<string, { rows: SessionRow[]; needsYou: number }>()
   for (const group of groups) {
-    const split = new Map<string, SessionRow[]>()
     for (const row of group.rows) {
       const id = accountOf(accounts, row.workspace.profileId).profileId
-      split.set(id, [...(split.get(id) ?? []), row])
+      const section = byAccount.get(id) ?? { rows: [], needsYou: 0 }
+      section.rows.push(row)
+      if (isNeedsYouRow(row)) section.needsYou++
+      byAccount.set(id, section)
     }
-    for (const [id, rows] of split) byAccount.set(id, [...(byAccount.get(id) ?? []), { id: group.id, rows }])
   }
   return [...byAccount]
     .sort(([a], [b]) => rank(a) - rank(b))
-    .map(([id, groups]) => ({
-      account: accountOf(accounts, id),
-      groups,
-      needsYou: groups.find((g) => g.id === 'needs-you')?.rows.length ?? 0
-    }))
+    .map(([id, { rows, needsYou }]) => ({ account: accountOf(accounts, id), rows, needsYou }))
 }
 
-/** A folded section's header pill; an open one already shows the Needs you group. */
+export function isNeedsYouRow(row: SessionRow): row is HostedRow {
+  return row.kind === 'hosted' && hostedGroup(row.status) === 'needs-you'
+}
+
+/** A folded section's header pill; an open one shows its waiting rows. */
 export function waitingBadge(section: AccountSection, open: boolean): { text: string; tooltip: string } | null {
   const n = section.needsYou
   if (open || n === 0) return null
@@ -169,12 +171,10 @@ export function sessionRowTooltip(row: SessionRow): string {
 
 /** The rows on screen, top to bottom; collapsed sections show none. */
 export function shownRows(sections: readonly AccountSection[], collapsed: readonly string[]): SessionRow[] {
-  return sections.filter((s) => !collapsed.includes(s.account.profileId)).flatMap((s) => s.groups.flatMap((g) => g.rows))
+  return sections.filter((s) => !collapsed.includes(s.account.profileId)).flatMap((s) => s.rows)
 }
 
 /** Waiting hosted sessions in the order the list shows them, collapsed sections included. */
 export function waitingRows(sections: readonly AccountSection[]): HostedRow[] {
-  return sections.flatMap((s) =>
-    (s.groups.find((g) => g.id === 'needs-you')?.rows ?? []).filter((r): r is HostedRow => r.kind === 'hosted')
-  )
+  return sections.flatMap((s) => s.rows.filter(isNeedsYouRow))
 }

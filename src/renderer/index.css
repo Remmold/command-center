@@ -95,44 +95,15 @@ code, kbd, pre, samp {
   }
 }
 
-/* Under 360 px the row titles and usage verdicts were cut; the model text goes and usage lines split in two. */
+/* Under 360 px the row titles were cut; the model text goes. */
 @layer utilities {
   .work-list {
     container: work-list / inline-size;
   }
 
-  .meter-line {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas: 'head detail gauge';
-    align-items: center;
-    column-gap: 0.25rem;
-  }
-
-  .meter-line-head {
-    grid-area: head;
-  }
-
-  .meter-line-detail {
-    grid-area: detail;
-  }
-
-  .meter-line-gauge {
-    grid-area: gauge;
-    margin-left: 0.25rem;
-  }
-
   @container work-list (max-width: 360px) {
-    .hide-in-narrow-list,
-    .meter-line-sep {
+    .hide-in-narrow-list {
       display: none;
-    }
-
-    .meter-line {
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-areas:
-        'head gauge'
-        'detail detail';
     }
   }
 }
