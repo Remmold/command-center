@@ -257,3 +257,13 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: IPC data URLs (no video streaming, whole files through IPC).
 136. **Videos play only in the panel's preview**; a video link in the transcript still opens in the system app (decision 112 unchanged). The preview's arrows and Left/Right keys step in the panel's order, newest first, so Right goes to an older file.
 137. **Jump to message scrolls to the top-level row**: a subagent's mention jumps to its Agent call, a tool output's to the call that produced it.
+
+138. **Found repo icons (repo-icons-auto 01) rank by source, then place, then quality, then name**: named files first, then the Unity, Godot and executable icons, as the ticket lists them; the root before monorepo `apps/<name>`/`packages/<name>` (alphabetical); within those, square PNG ≥128 px, SVG, ICO, then small or oblong PNG; then the dark variant (the app has only a dark theme), then name order (`app-icon*`, `apple-touch-icon*`, `icon.*`, `logo.*`, `favicon.*`, `mstile*`), larger size, shallower path.
+    - Alternative: name order before quality, so an `app-icon.svg` beats a 256 px `favicon.png`.
+139. **Bundled third-party folders are skipped** (`vendor`, `third_party`, `external`, `SDK`, any case), and so are `unins*.exe` and `UnityCrashHandler*.exe`; without this `C:\Darkfall` picked an Apache Ant docs favicon.
+    - Alternative: only the ticket's skip list.
+140. **"Use letter" is a choice of its own** (`{ kind: 'letter' }`), so no found icon replaces it; **"Use automatic"** goes back to the best found icon. Clicking a found thumbnail counts as the user's pick. Up to 12 found icons are kept, scaled to at most 128 px (SVG as is); the 12 best executables have their icon read.
+    - Alternative: clicking the automatic thumbnail returns to automatic, with no extra button.
+141. **The generic-exe check compares against the icon Windows gives a zero-byte `.exe` written to the temp folder** (never run, deleted right after). Unity icons stored as PSD/TGA are left out, since Electron can't read them. A vanished automatic icon is noticed on the next start or workspace change, or on Detect again, not while the app runs.
+    - Alternative: watch every repo's chosen file.
+142. **A popover that opens below an anchor low in the window moves up until it fits**: the icon picker grew past the window's bottom edge in Settings → Workspaces.

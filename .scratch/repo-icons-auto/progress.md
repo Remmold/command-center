@@ -1,0 +1,1 @@
+- 01 resolved: find each repo's own icon automatically, picker row with Use letter, Use automatic, Detect again — 30aa6fd
