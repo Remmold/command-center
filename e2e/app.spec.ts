@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ElectronApplication } from '@playwright/test'
+import { OFFSCREEN_POSITION } from '../src/main/testWindow'
 import { BASIC_REPLY, userLines } from './common'
 import { evaluateMain, expect, newChatIn, prompt, send, startSession, test } from './harness'
 
@@ -137,7 +138,7 @@ test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while
     const again = await launched.relaunch()
     await expect.poll(() => zoomPercent(again.app)).toBe(132)
     expect(existsSync(join(launched.root, 'user-data', 'window-place.json')), 'test windows never save their place').toBe(false)
-    expect(await evaluateMain(again.app, ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds().x, null)).toBe(-32000)
+    expect(await evaluateMain(again.app, ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds().x, null)).toBe(OFFSCREEN_POSITION.x)
     await again.page.keyboard.press('Control+2')
     await expect(again.page.getByRole('button', { name: 'Show sessions' })).toBeVisible()
     await expect(again.page.getByRole('navigation', { name: 'Sessions' })).toBeHidden()

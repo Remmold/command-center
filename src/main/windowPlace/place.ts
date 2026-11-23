@@ -26,19 +26,19 @@ export interface Placement {
   fullScreen: boolean
 }
 
-function isRect(value: unknown, sized: boolean): value is Rect {
+function isRect(value: unknown): value is Rect {
   if (typeof value !== 'object' || value === null) return false
   const r = value as Record<string, unknown>
   const finite = ['x', 'y', 'width', 'height'].every((k) => typeof r[k] === 'number' && Number.isFinite(r[k]))
-  return finite && (!sized || ((r.width as number) > 0 && (r.height as number) > 0))
+  return finite && (r.width as number) > 0 && (r.height as number) > 0
 }
 
 export function parsePlace(raw: unknown): SavedPlace | null {
   if (typeof raw !== 'object' || raw === null) return null
   const p = raw as Record<string, unknown>
   const display = p.display as Record<string, unknown> | undefined
-  if (!isRect(p.bounds, true) || typeof display !== 'object' || display === null) return null
-  if (typeof display.id !== 'number' || !isRect(display.bounds, true) || typeof display.scaleFactor !== 'number') return null
+  if (!isRect(p.bounds) || typeof display !== 'object' || display === null) return null
+  if (typeof display.id !== 'number' || !isRect(display.bounds) || typeof display.scaleFactor !== 'number') return null
   return {
     bounds: p.bounds,
     maximized: p.maximized === true,
@@ -49,7 +49,6 @@ export function parsePlace(raw: unknown): SavedPlace | null {
 
 const sameRect = (a: Rect, b: Rect): boolean => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
 
-/** Where the window should open, or null for the default spot. */
 export function restorePlace(raw: unknown, displays: DisplayInfo[], primary: DisplayInfo): Placement | null {
   const saved = parsePlace(raw)
   if (!saved) return null
@@ -69,7 +68,7 @@ export function restorePlace(raw: unknown, displays: DisplayInfo[], primary: Dis
   return { bounds: centreIn(saved.bounds, primary.workArea), ...state }
 }
 
-/** The title bar's height and the width of it that must stay grabbable. */
+/** Enough of the title bar to grab and drag the window back. */
 const TITLE_BAR_PX = 32
 const MIN_VISIBLE_PX = 100
 

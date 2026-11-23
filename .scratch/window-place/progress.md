@@ -1,0 +1,1 @@
+- 01 resolved: window reopens on the same monitor, bounds, maximised or full screen — 228e731

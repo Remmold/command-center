@@ -50,18 +50,20 @@ function write(place: SavedPlace): void {
 
 let flushPending: () => void = () => undefined
 
-/** Writes any pending move or resize now; the update install calls it before quitting. */
+/** The update install quits without closing the window first. */
 export function flushWindowPlace(): void {
   flushPending()
 }
 
-/** Saves the window's place on every move and resize, and once more right before quit. */
 export function trackWindowPlace(win: BrowserWindow): void {
   let timer: NodeJS.Timeout | null = null
+  // Before its first show a window has not had its maximised state applied, and minimised it reports none.
+  let shown = win.isVisible()
+  win.once('show', () => (shown = true))
   const save = (): void => {
     if (timer) clearTimeout(timer)
     timer = null
-    if (!win.isDestroyed()) write(capture(win))
+    if (!win.isDestroyed() && shown && !win.isMinimized()) write(capture(win))
   }
   const later = (): void => {
     if (timer) clearTimeout(timer)
