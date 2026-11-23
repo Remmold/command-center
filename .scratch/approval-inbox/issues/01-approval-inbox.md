@@ -9,7 +9,7 @@ Decided:
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Opening it:** Ctrl+Shift+A opens an overlay over any view. Check the shortcut map for clashes and for VS Code's meaning of the key. A count badge in the top bar ("3 approvals", hidden at 0) opens it too. Esc closes it. The Dashboard's Needs-you rows can open it at that item.
 - [x] **Queue, left or top:** one row per pending item across all hosted chats, oldest first. Each row shows the repo icon, chat title, account short name, kind (Bash, Edit, Write, MCP `Server [tool]`, Question, Plan) and age. J/K or ↑/↓ move between rows.

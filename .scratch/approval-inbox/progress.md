@@ -1,0 +1,1 @@
+- 01 resolved: Approval inbox (Ctrl+Shift+A overlay over all hosted chats' approvals, questions and plans, answered with the chat's own prompt) and the extension's clickable AskUserQuestion card in chat, inbox and transcripts — 89d4f45
