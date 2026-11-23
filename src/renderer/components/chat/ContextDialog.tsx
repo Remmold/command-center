@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useChatItemsStore } from '../../state/chatItemsStore'
 import { Dialog } from '../ui/Dialog'
+import { formatCostEstimate, sessionCostEstimate } from './sessionCost'
 import { formatTokens, homePath, parseContextUsage, shareText, type ContextUsage } from './contextUsage'
 
 const SWATCHES = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-chart-6', 'bg-chart-7', 'bg-chart-8']
@@ -12,6 +14,7 @@ interface Props {
 
 /** The extension's "Context usage" dialog, filled from `get_context_usage`. */
 export function ContextDialog({ paneId, onClose }: Props) {
+  const cost = useChatItemsStore((s) => sessionCostEstimate(s.items[paneId] ?? []))
   const [usage, setUsage] = useState<ContextUsage | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,6 +40,14 @@ export function ContextDialog({ paneId, onClose }: Props) {
         <Message>Loading context usage…</Message>
       ) : (
         <ContextBreakdown usage={usage} />
+      )}
+      {cost !== undefined && (
+        <p
+          className="mt-3 select-text text-xs text-muted"
+          title="The CLI's estimate at pay-per-token API prices. Subscription plans are not billed per token; the usage bars show what your plan has left."
+        >
+          Estimated cost this session: {formatCostEstimate(cost)} (API prices; not billed on your plan)
+        </p>
       )}
     </Dialog>
   )

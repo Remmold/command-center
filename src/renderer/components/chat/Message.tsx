@@ -399,7 +399,6 @@ function DiffCounts({ adds, dels, replaceAll }: { adds: number; dels?: number; r
 function TurnFooter({ item }: { item: ResultItem }) {
   const parts = [item.isError ? 'turn error' : 'turn complete']
   if (item.durationMs !== undefined) parts.push(`${(item.durationMs / 1000).toFixed(1)}s`)
-  if (item.costUsd !== undefined) parts.push(`$${item.costUsd.toFixed(4)}`)
   if (item.numTurns !== undefined) parts.push(`${item.numTurns} turn${item.numTurns === 1 ? '' : 's'}`)
   return <div className={`px-1.5 py-1.5 text-[11px] ${item.isError ? 'text-error' : 'text-faint'}`}>{parts.join(' · ')}</div>
 }
