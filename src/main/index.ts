@@ -12,6 +12,7 @@ import { startUpdates } from './update/service'
 import type { StartWithWindowsState } from '../shared/types'
 import { iconPath } from './util/paths'
 import { routeMenuZoom } from './zoom/menu'
+import { handleMediaScheme, registerMediaScheme } from './files/media'
 import {
   allowWindowClose,
   createMainWindow,
@@ -21,6 +22,8 @@ import {
   showSession,
   showView
 } from './window'
+
+registerMediaScheme()
 
 /** Keep equal to the electron-builder appId, or packaged notifications lose their attribution. */
 const APP_USER_MODEL_ID = 'com.commandcenter.app'
@@ -77,6 +80,7 @@ if (!app.requestSingleInstanceLock()) {
     const repoIdentities = createRepoIdentityService(app.getPath('userData'), iconPath('icon.png'), workspaces.list)
     const startWithWindows = createStartWithWindowsControl()
     registerIpc({ repoIdentities, startWithWindows })
+    handleMediaScheme()
     startUpdates()
     routeMenuZoom()
     const win = createMainWindow({ show: !startsHidden(process.argv) })

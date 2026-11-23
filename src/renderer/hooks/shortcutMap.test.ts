@@ -62,6 +62,11 @@ describe('keyboard shortcuts', () => {
     expect(shortcutFor(ctrlShift('E', 'KeyE'))).toEqual({ name: 'toggleIdePanels' })
   })
 
+  it('Ctrl+Shift+M shows the Media panel of the focused chat; Ctrl+M alone does nothing', () => {
+    expect(shortcutFor(ctrlShift('M', 'KeyM'))).toEqual({ name: 'toggleMediaPanel' })
+    expect(shortcutFor(ctrl('m', 'KeyM'))).toBeNull()
+  })
+
   it('zoom and Ctrl+B go before a focused shell or prompt box, as on the VS Code skip-shell list; the rest leave a shell its keys', () => {
     const first = [ctrl('=', 'Equal'), ctrl('-', 'Minus'), ctrl('0', 'Digit0'), ctrl('b', 'KeyB')]
     const after = [ctrl('t', 'KeyT'), ctrl('k', 'KeyK'), ctrlShift('E', 'KeyE'), ctrl('`', 'Backquote'), ctrl('1', 'Digit1')]

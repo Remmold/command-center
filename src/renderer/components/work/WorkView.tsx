@@ -10,6 +10,7 @@ import { useShownChats } from '../../state/workSessions'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { ActivityBar } from '../ActivityBar'
 import { ChatView } from '../chat/ChatView'
+import { MediaSplit } from '../chat/MediaSplit'
 import { ObservedChatView } from '../chat/ObservedChatView'
 import { DiffPane } from '../DiffPane'
 import { EditorPane } from '../files/EditorPane'
@@ -136,16 +137,18 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
                         <HostedSessionHeader workspace={workspace} view={view} session={c} place={placeOf(half)} />
                       )}
                       <div className="min-h-0 flex-1">
-                        <ChatView
-                          paneId={c.id}
-                          cwd={view.projectPath}
-                          model={c.model}
-                          effort={c.effort}
-                          thinking={c.thinking}
-                          resumeSessionId={c.claudeSessionId}
-                          permissionMode={c.permissionMode}
-                          registerFocus={half === focused ? registerFocus : undefined}
-                        />
+                        <MediaSplit chat={{ kind: 'hosted', paneId: c.id, cwd: view.projectPath }}>
+                          <ChatView
+                            paneId={c.id}
+                            cwd={view.projectPath}
+                            model={c.model}
+                            effort={c.effort}
+                            thinking={c.thinking}
+                            resumeSessionId={c.claudeSessionId}
+                            permissionMode={c.permissionMode}
+                            registerFocus={half === focused ? registerFocus : undefined}
+                          />
+                        </MediaSplit>
                       </div>
                     </Layer>
                   )
@@ -183,7 +186,9 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
                     />
                   )}
                   <div className="min-h-0 flex-1">
-                    <ObservedChatView cwd={observedWorkspace?.path} />
+                    <MediaSplit chat={{ kind: 'observed', sessionId: observed.sessionId, cwd: observedWorkspace?.path }}>
+                      <ObservedChatView cwd={observedWorkspace?.path} />
+                    </MediaSplit>
                   </div>
                 </Layer>
               )}

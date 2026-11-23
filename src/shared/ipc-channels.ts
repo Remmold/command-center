@@ -81,6 +81,8 @@ export const IPC = {
   FILES_RESOLVE_LINK: 'files:resolveLink',
   FILES_READ_IMAGE: 'files:readImage',
   FILES_OPEN_WITH_SYSTEM: 'files:openWithSystem',
+  MEDIA_RESOLVE: 'media:resolve',
+  MEDIA_REVEAL: 'media:reveal',
   APPROVAL_REQUEST: 'approval:request',
   APPROVAL_SETTLED: 'approval:settled',
   APPROVAL_RESPOND: 'approval:respond',

@@ -1,0 +1,25 @@
+{
+  "turns": [
+    {
+      "match": "media",
+      "events": [
+        { "type": "text", "text": "Kept old/gone.gif and recorded [the clip](clips/demo.webm)." },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "approval": false,
+          "input": { "file_path": "{cwd}{sep}refs{sep}shot.png" },
+          "result": "[image]"
+        },
+        { "type": "text", "text": "That is the reference shot." }
+      ]
+    },
+    {
+      "match": "more",
+      "repeat": true,
+      "events": [
+        { "type": "text", "text": "Line one of a long reply.\n\nLine two of a long reply.\n\nLine three of a long reply.\n\nLine four of a long reply.\n\nLine five of a long reply.\n\nLine six of a long reply.\n\nLine seven of a long reply.\n\nLine eight of a long reply.", "deltas": ["Line one of a long reply.\n\nLine two of a long reply.\n\nLine three of a long reply.\n\nLine four of a long reply.\n\nLine five of a long reply.\n\nLine six of a long reply.\n\nLine seven of a long reply.\n\nLine eight of a long reply."] }
+      ]
+    }
+  ]
+}
