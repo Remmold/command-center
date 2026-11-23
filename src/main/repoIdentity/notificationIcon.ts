@@ -16,14 +16,13 @@ interface Input {
   imageExists: (file: string) => boolean
 }
 
-/** Windows toasts take PNG but not SVG, so everything except a custom PNG goes through the drawn picture. */
+/** Windows toasts take PNG but not SVG, so everything except a custom or found PNG goes through the drawn picture. */
 export function chooseNotificationIcon({ cwd, workspaces, identities, hasRendered, imageExists }: Input): NotificationIconChoice {
   const workspace = workspaceAt(cwd, workspaces)
   if (!workspace) return { kind: 'app' }
-  const icon = identities[workspace.repoGroupKey]?.icon
-  if (icon?.kind === 'image' && icon.file.endsWith('.png') && imageExists(icon.file)) {
-    return { kind: 'image', file: icon.file }
-  }
+  const identity = identities[workspace.repoGroupKey]
+  const file = identity?.icon ? (identity.icon.kind === 'image' ? identity.icon.file : undefined) : identity?.found?.[0]?.file
+  if (file?.endsWith('.png') && imageExists(file)) return { kind: 'image', file }
   if (hasRendered(workspace.repoGroupKey)) return { kind: 'rendered', repoGroupKey: workspace.repoGroupKey }
   return { kind: 'app' }
 }

@@ -1,11 +1,13 @@
 import { useCallback, useState } from 'react'
-import { CaseUpper, ImagePlus, Pencil } from 'lucide-react'
+import { CaseUpper, ImagePlus, Pencil, RefreshCw, Sparkles } from 'lucide-react'
 import {
   BUILTIN_ICON_NAMES,
   MAX_REPO_IMAGE_LABEL,
   REPO_ACCENTS,
+  iconOrigin,
   repoDisplayName,
-  type RepoAccent
+  type RepoAccent,
+  type RepoIdentityView
 } from '../../shared/repoIdentity'
 import type { RepoGroupView } from '../../shared/repoGroups'
 import { useRepoIdentitiesStore, useRepoIdentity } from '../state/repoIdentitiesStore'
@@ -13,7 +15,7 @@ import { Button } from './ui/Button'
 import { IconButton } from './ui/IconButton'
 import { Popover, PopoverActions, PopoverNote, PopoverSection } from './ui/Popover'
 import { SectionLabel } from './ui/SectionLabel'
-import { Swatch, SwatchGrid } from './ui/SwatchGrid'
+import { Swatch, SwatchGrid, SwatchImage } from './ui/SwatchGrid'
 import { TextField } from './ui/TextField'
 import { BUILTIN_ICONS } from './repoIconSet'
 
@@ -47,6 +49,8 @@ function IdentityForm({ group }: { group: RepoGroupView }) {
   const setDisplayName = useRepoIdentitiesStore((s) => s.setDisplayName)
   const setIcon = useRepoIdentitiesStore((s) => s.setIcon)
   const chooseImage = useRepoIdentitiesStore((s) => s.chooseImage)
+  const detect = useRepoIdentitiesStore((s) => s.detect)
+  const [searching, setSearching] = useState(false)
   const builtin = identity?.icon?.kind === 'builtin' ? identity.icon : null
   const [accent, setAccent] = useState<RepoAccent>(builtin?.accent ?? DEFAULT_ACCENT)
   const [error, setError] = useState<string | null>(null)
@@ -56,6 +60,13 @@ function IdentityForm({ group }: { group: RepoGroupView }) {
     setError(null)
     void change.then(setError)
   }
+
+  const detectAgain = () => {
+    setSearching(true)
+    run(detect(key).finally(() => setSearching(false)))
+  }
+
+  const found = identity?.found
 
   const pickAccent = (next: RepoAccent) => {
     setAccent(next)
@@ -106,23 +117,70 @@ function IdentityForm({ group }: { group: RepoGroupView }) {
         </SwatchGrid>
       </PopoverSection>
       <PopoverSection>
+        <SectionLabel>found in this repo</SectionLabel>
+        <FoundIcons identity={identity} onPick={(file) => run(setIcon(key, { kind: 'found', file }))} />
+        <PopoverNote>{inUseNote(identity, searching)}</PopoverNote>
+      </PopoverSection>
+      <PopoverSection>
         <PopoverActions>
-          <Button
-            variant="ghost"
-            onClick={() => run(chooseImage(key))}
-          >
+          <Button variant="ghost" onClick={() => run(chooseImage(key))}>
             <ImagePlus size={11} strokeWidth={2.25} />
             Use image…
           </Button>
-          {identity?.icon && (
-            <Button variant="ghost" onClick={() => run(setIcon(key, undefined))}>
+          {identity?.icon?.kind !== 'letter' && (
+            <Button variant="ghost" onClick={() => run(setIcon(key, { kind: 'letter' }))}>
               <CaseUpper size={11} strokeWidth={2.25} />
               Use letter
             </Button>
           )}
+          {identity?.icon && !!found?.length && (
+            <Button variant="ghost" onClick={() => run(setIcon(key, undefined))} tooltip="Use the best icon found in this repo">
+              <Sparkles size={11} strokeWidth={2.25} />
+              Use automatic
+            </Button>
+          )}
+          <Button variant="ghost" onClick={detectAgain} disabled={searching} tooltip="Search this repo for icons again">
+            <RefreshCw size={11} strokeWidth={2.25} />
+            Detect again
+          </Button>
         </PopoverActions>
         <PopoverNote>{error ?? `Your own icon: a PNG or SVG of up to ${MAX_REPO_IMAGE_LABEL}. Colours apply to built-in icons.`}</PopoverNote>
       </PopoverSection>
     </>
   )
+}
+
+const pickedFile = (identity: RepoIdentityView | undefined): string | undefined =>
+  identity?.icon?.kind === 'image' ? identity.icon.file : undefined
+
+function FoundIcons({ identity, onPick }: { identity: RepoIdentityView | undefined; onPick: (file: string) => void }) {
+  const found = identity?.found
+  if (!found) return <PopoverNote>Not searched yet.</PopoverNote>
+  if (found.length === 0) return <PopoverNote>No icon found in this repo.</PopoverNote>
+  const automatic = iconOrigin(identity) === 'automatic'
+  const picked = pickedFile(identity)
+  return (
+    <SwatchGrid label="found in this repo">
+      {found.map((f, i) => {
+        const mark = automatic && i === 0 ? 'automatic' : f.file === picked ? 'picked' : null
+        return (
+          <Swatch key={f.file} label={mark ? `${f.path} (${mark})` : f.path} selected={mark !== null} onClick={() => onPick(f.file)}>
+            <SwatchImage src={f.url} />
+          </Swatch>
+        )
+      })}
+    </SwatchGrid>
+  )
+}
+
+function inUseNote(identity: RepoIdentityView | undefined, searching: boolean): string {
+  if (searching) return 'Searching this repo…'
+  const icon = identity?.icon
+  if (icon?.kind === 'letter') return 'Picked: the letter.'
+  if (icon) {
+    const fromRepo = identity?.found?.find((f) => f.file === pickedFile(identity))
+    return fromRepo ? `Picked: ${fromRepo.path}` : 'Picked: your own icon.'
+  }
+  const automatic = identity?.found?.[0]
+  return automatic ? `Automatic: ${automatic.path}` : 'Automatic: the letter.'
 }

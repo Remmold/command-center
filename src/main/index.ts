@@ -1,10 +1,12 @@
-import { app, dialog } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import { registerIpc } from './ipc'
 import { removeLegacyHook } from './permission/legacyHook'
 import { sessionStatusTracker } from './sessions/tracker'
 import * as workspaces from './workspaces/store'
 import { startAttention } from './attention/service'
+import { createIconImages } from './repoIdentity/iconImages'
 import { createRepoIdentityService } from './repoIdentity/service'
+import { IPC } from '../shared/ipc-channels'
 import { startsHidden } from './tray/autostart'
 import { createStartWithWindowsControl } from './tray/startWithWindows'
 import { createAppTray } from './tray/tray'
@@ -27,6 +29,9 @@ registerMediaScheme()
 
 /** Keep equal to the electron-builder appId, or packaged notifications lose their attribution. */
 const APP_USER_MODEL_ID = 'com.commandcenter.app'
+
+/** Lets the window draw first; the repo icon search then runs in the background. */
+const ICON_SEARCH_DELAY_MS = 3000
 
 let confirmingQuit = false
 
@@ -77,7 +82,16 @@ if (!app.requestSingleInstanceLock()) {
       .list()
       .then((all) => Promise.all(all.map((w) => removeLegacyHook(w.path).then((changed) => changed && console.log('[permission] removed legacy hook from', w.path)))))
       .catch((err) => console.error('[permission] legacy hook cleanup failed', err))
-    const repoIdentities = createRepoIdentityService(app.getPath('userData'), iconPath('icon.png'), workspaces.list)
+    const repoIdentities = createRepoIdentityService({
+      dataDir: app.getPath('userData'),
+      appIcon: iconPath('icon.png'),
+      listWorkspaces: workspaces.list,
+      images: createIconImages(),
+      onChanged: (views) => {
+        for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(IPC.REPO_IDENTITIES_CHANGED, views)
+      }
+    })
+    setTimeout(() => void repoIdentities.detectMissing(), ICON_SEARCH_DELAY_MS)
     const startWithWindows = createStartWithWindowsControl()
     registerIpc({ repoIdentities, startWithWindows })
     handleMediaScheme()

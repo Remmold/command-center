@@ -98,4 +98,38 @@ describe('repo identity store', () => {
     await store.setIcon(OTHER, { kind: 'builtin', name: 'zap', accent: 'red' })
     await expect(fs.stat(stored)).rejects.toThrow()
   })
+
+  it('keeps the icons found in a repo, best first, and their copies while any is listed', async () => {
+    const svg = Buffer.from(SVG_TEXT)
+    await store.setFound(KEY, [
+      { bytes: PNG_BYTES, ext: 'png', path: 'brand/app-icon-1024.png', source: 'file' },
+      { bytes: svg, ext: 'svg', path: 'public/favicon.svg', source: 'file' }
+    ])
+    const found = (await createRepoIdentityStore(root).list())[KEY]?.found ?? []
+    expect(found.map((f) => f.path)).toEqual(['brand/app-icon-1024.png', 'public/favicon.svg'])
+    expect(await fs.readFile(store.imagePath(found[1].file))).toEqual(svg)
+
+    await store.setFound(KEY, [{ bytes: svg, ext: 'svg', path: 'public/favicon.svg', source: 'file' }])
+    await expect(fs.stat(store.imagePath(found[0].file))).rejects.toThrow()
+    await expect(fs.stat(store.imagePath(found[1].file))).resolves.toBeTruthy()
+  })
+
+  it('remembers a search that found nothing apart from no search at all', async () => {
+    await store.setFound(KEY, [])
+    expect(await store.list()).toEqual({ [KEY]: { found: [] } })
+  })
+
+  it('keeps a found icon the user picked after a new search drops it', async () => {
+    await store.setFound(KEY, [{ bytes: PNG_BYTES, ext: 'png', path: 'icon.png', source: 'file' }])
+    const [picked] = (await store.list())[KEY]?.found ?? []
+    await store.setIcon(KEY, { kind: 'image', file: picked.file })
+    await store.setFound(KEY, [])
+    expect((await store.list())[KEY]?.icon).toEqual({ kind: 'image', file: picked.file })
+    await expect(fs.stat(store.imagePath(picked.file))).resolves.toBeTruthy()
+  })
+
+  it('keeps the letter chosen on purpose', async () => {
+    await store.setIcon(KEY, { kind: 'letter' })
+    expect(await createRepoIdentityStore(root).list()).toEqual({ [KEY]: { icon: { kind: 'letter' } } })
+  })
 })

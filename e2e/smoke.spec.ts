@@ -1168,6 +1168,50 @@ test.describe('grouped by account', () => {
   })
 })
 
+test.describe('repo icons found in the repo', () => {
+  test('the app icon is chosen automatically, the picker lists both, and a pick stays after Detect again', async ({ launched }) => {
+    const { app, page, root } = launched
+    const repo = join(root, 'icons-repo')
+    mkdirSync(join(repo, 'public'), { recursive: true })
+    mkdirSync(join(repo, 'brand'), { recursive: true })
+    writeFileSync(join(repo, 'public', 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#3b82f6"/></svg>')
+    const png = await evaluateMain(app, ({ nativeImage }, size: number) => {
+      const pixels = Buffer.alloc(size * size * 4)
+      for (let i = 0; i < pixels.length; i += 4) pixels.set([0x20, 0xa0, 0xe0, 0xff], i)
+      return nativeImage.createFromBitmap(pixels, { width: size, height: size }).toPNG().toString('base64')
+    }, 1024)
+    writeFileSync(join(repo, 'brand', 'app-icon-1024.png'), Buffer.from(png, 'base64'))
+    const before = readdirSync(repo, { recursive: true }).sort()
+
+    await page.evaluate(async (path) => {
+      const { api } = globalThis as unknown as { api: RendererApi }
+      await api.workspaces.addPath(path)
+    }, repo)
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Workspaces', { exact: true }).click()
+    const row = page.getByRole('listitem', { name: 'icons-repo' })
+    await expect(row.locator('img')).toHaveCount(1)
+
+    await row.getByRole('button', { name: 'edit icon and name of icons-repo' }).click()
+    const picker = page.getByRole('dialog', { name: 'repo icon' })
+    const found = picker.getByRole('group', { name: 'found in this repo' })
+    await expect(found.getByRole('button')).toHaveCount(2)
+    await expect(found.getByRole('button', { name: 'brand/app-icon-1024.png (automatic)' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(picker.getByText('Automatic: brand/app-icon-1024.png')).toBeVisible()
+    if (process.env.CC_ICON_PICKER_SHOT) await page.screenshot({ path: process.env.CC_ICON_PICKER_SHOT })
+
+    await found.getByRole('button', { name: 'public/favicon.svg' }).click()
+    await expect(found.getByRole('button', { name: 'public/favicon.svg (picked)' })).toHaveAttribute('aria-pressed', 'true')
+    await picker.getByRole('button', { name: 'Detect again' }).click()
+    await expect(picker.getByRole('button', { name: 'Detect again' })).toBeEnabled()
+    await expect(found.getByRole('button', { name: 'public/favicon.svg (picked)' })).toBeVisible()
+    await expect(picker.getByText('Picked: public/favicon.svg')).toBeVisible()
+    expect(readdirSync(repo, { recursive: true }).sort()).toEqual(before)
+  })
+})
+
 test.describe('zoom and the session list', () => {
   const zoomPercent = (app: ElectronApplication): Promise<number> =>
     evaluateMain(app, ({ BrowserWindow }) => Math.round(BrowserWindow.getAllWindows()[0].webContents.getZoomFactor() * 100), null)

@@ -1,0 +1,3 @@
+- Done: found-icon search, ranking, Unity/Godot/exe readers, picker row, notifications; quick, e2e (42) and perf green.
+- Next: Andreas judges the automatic icons on his real workspaces after merge/install.
+- Open reds: none.

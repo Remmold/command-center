@@ -1,4 +1,4 @@
-import type { BuiltinIconChoice, ChooseImageResult, RepoIdentityViews } from './repoIdentity'
+import type { ChooseImageResult, RepoIconRequest, RepoIdentityViews } from './repoIdentity'
 import type { ChatItem } from './chatItems'
 import type { AppView } from './views'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
@@ -401,12 +401,16 @@ export interface RendererApi {
   repoIdentities: {
     list: () => Promise<RepoIdentityViews>
     setDisplayName: (repoGroupKey: string, name: string) => Promise<RepoIdentityViews>
-    /** undefined goes back to the letter. */
-    setIcon: (repoGroupKey: string, icon: BuiltinIconChoice | undefined) => Promise<RepoIdentityViews>
+    /** undefined goes back to the automatic icon. */
+    setIcon: (repoGroupKey: string, icon: RepoIconRequest) => Promise<RepoIdentityViews>
     /** Opens a file dialog; null when cancelled. */
     chooseImage: (repoGroupKey: string) => Promise<ChooseImageResult | null>
     /** Hands main the icon drawn as a PNG data URL, for notifications. */
     setRendered: (repoGroupKey: string, pngDataUrl: string) => void
+    /** Searches the repo for icons again; the user's own icon stays. */
+    detect: (repoGroupKey: string) => Promise<RepoIdentityViews>
+    /** After a search in the background. */
+    onChanged: (cb: (identities: RepoIdentityViews) => void) => () => void
   }
   profiles: {
     list: () => Promise<AccountProfile[]>

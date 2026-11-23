@@ -103,8 +103,12 @@ How one repo group is shown everywhere in the app: its display name and its repo
 _Avoid_: Branding, repo profile
 
 **Repo icon**:
-The picture that marks one repo group everywhere in the app: a chosen icon with an accent colour, an image, or a letter by default.
+The picture that marks one repo group everywhere in the app: a picked icon (built-in with an accent colour, an image, a found icon or the letter on purpose), else the automatic icon.
 _Avoid_: Logo, avatar
+
+**Found icon**:
+An image the app found in the repo itself (a named app icon file, the Unity or Godot project icon, or an executable's own icon), copied into the app's data. The best one is the **automatic icon**, shown while the user picked none; with none found, the letter shows.
+_Avoid_: Detected logo, auto avatar
 
 **Worktree tag**:
 The short label that tells worktrees of one repo group apart, e.g. "shard-2".

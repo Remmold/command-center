@@ -33,6 +33,7 @@ import type {
   MentionEntry
 } from '../shared/types'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from '../shared/approval'
+import type { RepoIdentityViews } from '../shared/repoIdentity'
 
 const api: RendererApi = {
   workspaces: {
@@ -50,7 +51,13 @@ const api: RendererApi = {
     setIcon: (repoGroupKey, icon) => ipcRenderer.invoke(IPC.REPO_IDENTITIES_SET_ICON, repoGroupKey, icon),
     chooseImage: (repoGroupKey) => ipcRenderer.invoke(IPC.REPO_IDENTITIES_CHOOSE_IMAGE, repoGroupKey),
     setRendered: (repoGroupKey, pngDataUrl) =>
-      ipcRenderer.send(IPC.REPO_IDENTITIES_SET_RENDERED, repoGroupKey, pngDataUrl)
+      ipcRenderer.send(IPC.REPO_IDENTITIES_SET_RENDERED, repoGroupKey, pngDataUrl),
+    detect: (repoGroupKey) => ipcRenderer.invoke(IPC.REPO_IDENTITIES_DETECT, repoGroupKey),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, identities: RepoIdentityViews) => cb(identities)
+      ipcRenderer.on(IPC.REPO_IDENTITIES_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.REPO_IDENTITIES_CHANGED, handler)
+    }
   },
   profiles: {
     list: (): Promise<AccountProfile[]> => ipcRenderer.invoke(IPC.PROFILES_LIST),

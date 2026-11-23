@@ -264,3 +264,12 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: `display: none` plus the scroll restore.
 140. **The tab strip is underlined text tabs, like VS Code's panel tabs** ("Chat", "Media 3"), a slim row under the header; tiles are 160 px in as many columns as fit. Ctrl+Shift+M does nothing in a chat with no media, so media arriving later never switches the tab by itself; a chat whose media briefly vanishes (a VS Code transcript reloading) keeps Media chosen.
 141. **The column's saved width (`command-center.media-panel` in local storage) is deleted on start**; the tab state is memory-only.
+142. **Found repo icons (repo-icons-auto 01) rank by source, then place, then quality, then name**: named files first, then the Unity, Godot and executable icons, as the ticket lists them; the root before monorepo `apps/<name>`/`packages/<name>` (alphabetical); within those, square PNG ≥128 px, SVG, ICO, then small or oblong PNG; then the dark variant (the app has only a dark theme), then name order (`app-icon*`, `apple-touch-icon*`, `icon.*`, `logo.*`, `favicon.*`, `mstile*`), larger size, shallower path.
+    - Alternative: name order before quality, so an `app-icon.svg` beats a 256 px `favicon.png`.
+143. **Bundled third-party folders are skipped** (`vendor`, `third_party`, `external`, `SDK`, any case), and so are `unins*.exe` and `UnityCrashHandler*.exe`; without this `C:\Darkfall` picked an Apache Ant docs favicon.
+    - Alternative: only the ticket's skip list.
+144. **"Use letter" is a choice of its own** (`{ kind: 'letter' }`), so no found icon replaces it; **"Use automatic"** goes back to the best found icon. Clicking a found thumbnail counts as the user's pick. Up to 12 found icons are kept, scaled to at most 128 px (SVG as is); the 12 best executables have their icon read.
+    - Alternative: clicking the automatic thumbnail returns to automatic, with no extra button.
+145. **The generic-exe check compares against the icon Windows gives a zero-byte `.exe` written to the temp folder** (never run, deleted right after). Unity icons stored as PSD/TGA are left out, since Electron can't read them. A vanished automatic icon is noticed on the next start or workspace change, or on Detect again, not while the app runs.
+    - Alternative: watch every repo's chosen file.
+146. **A popover that opens below an anchor low in the window moves up until it fits**: the icon picker grew past the window's bottom edge in Settings → Workspaces.
