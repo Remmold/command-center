@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 **Accuracy rule:** the badge shows the account the chat's Claude process actually runs on, never the workspace's current setting.
 - **Hosted chats:** use the account the CLI reported in its `initialize` reply (email, organisation, subscription type) for that pane's process. Before that reply arrives, use the `CLAUDE_CONFIG_DIR` profile the process was started with, marked as pending, never guessed from the workspace.
