@@ -1,0 +1,1 @@
+- 01 resolved: Default names its model; effort pill with its own popover — 3a85553
