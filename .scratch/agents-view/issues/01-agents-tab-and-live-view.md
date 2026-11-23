@@ -10,7 +10,7 @@ The agents run **in the background**, so their messages never stream into the pa
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Compact Agent row:**
   - It shows the description. When the description is missing, use the `subagent_type` plus the first line of the prompt, never blank.

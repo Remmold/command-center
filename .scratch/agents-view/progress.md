@@ -1,1 +1,1 @@
-- 01 resolved: compact Agent rows, Agents tab with a live agent view (hosted and VS Code chats), still-working bar, Running while background agents work — COMMIT
+- 01 resolved: compact Agent rows, Agents tab with a live agent view (hosted and VS Code chats), still-working bar, Running while background agents work — 5953ea7
