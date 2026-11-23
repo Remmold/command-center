@@ -9,7 +9,7 @@ Decided by Andreas (2026-11-23):
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Collecting media (pure model, from the chat's items):**
   - image and video paths from Read, Write and Edit tool calls, and from tool output text, e.g. Blender or MCP results that name `.png` files;
