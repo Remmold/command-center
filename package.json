@@ -2,6 +2,7 @@
   "name": "command-center",
   "version": "0.1.12",
   "description": "Single-window command center for managing multiple Claude Code projects in parallel.",
+  "license": "MIT",
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
