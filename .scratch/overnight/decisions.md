@@ -355,3 +355,5 @@ Each entry records what was decided, why, and the alternative. Review these in t
 195. **A pinned "✻ N agents still working · View" line sits between the transcript and the prompt box once the turn has ended while agents run** (counted from the CLI's task events), then "agents done" for 4 s. The update busy-gate does not count it, as it never counted running background tasks after a turn's result.
     - Alternative: count running agents as busy and hold updates.
 196. **A chat stays Running (Work list dot, Dashboard) after its result while a background agent works**, and turns to Your turn when the last one ends; ending the process leaves it Idle as before.
+
+197. **Background agents and tasks count as busy for updates (reverses 195).** On 2026-11-23 at 19:40 the app auto-restarted to install 0.1.13 while a background subagent in an otherwise idle chat was working, killing it. The busy gate now tracks every `task_started` until `task_notification` or a terminal `task_updated`, for agents and background Bash alike. Alternative (195): count only turns, approvals and queued prompts.
