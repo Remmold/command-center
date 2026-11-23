@@ -30,9 +30,9 @@ const clock = {
   setInterval: (fn: () => void, ms: number) => setInterval(fn, ms)
 }
 
-function setup() {
+function setup(autoRestart = true) {
   const updater = new FakeUpdater()
-  const controller = createUpdateController({ updater, clock, version: '0.1.1', idleMs: 5 * MIN, checkEveryMs: 30 * MIN })
+  const controller = createUpdateController({ updater, clock, version: '0.1.1', idleMs: 5 * MIN, checkEveryMs: 30 * MIN, autoRestart })
   return { updater, controller }
 }
 
@@ -78,6 +78,36 @@ describe('update controller', () => {
     expect(updater.installs).toBe(0)
     expect(controller.restart(true)).toEqual({ kind: 'restart' })
     expect(updater.installs).toBe(1)
+  })
+
+  it('with Restart by itself off, an update waits for a click however long the app is idle', async () => {
+    const { updater, controller } = setup(false)
+    updater.deliver('0.1.2')
+    await vi.advanceTimersByTimeAsync(60 * MIN)
+    expect(updater.installs).toBe(0)
+    expect(controller.restart(false)).toEqual({ kind: 'restart' })
+    expect(updater.installs).toBe(1)
+  })
+
+  it('turning Restart by itself on over a long-waiting update restarts 5 minutes later, not at once', async () => {
+    const { updater, controller } = setup(false)
+    updater.deliver('0.1.2')
+    await vi.advanceTimersByTimeAsync(60 * MIN)
+    controller.setAutoRestart(true)
+    expect(controller.status().autoRestart).toBe(true)
+    await vi.advanceTimersByTimeAsync(5 * MIN - 1)
+    expect(updater.installs).toBe(0)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(updater.installs).toBe(1)
+  })
+
+  it('turning Restart by itself off cancels a restart already counting down', async () => {
+    const { updater, controller } = setup()
+    updater.deliver('0.1.2')
+    await vi.advanceTimersByTimeAsync(4 * MIN)
+    controller.setAutoRestart(false)
+    await vi.advanceTimersByTimeAsync(60 * MIN)
+    expect(updater.installs).toBe(0)
   })
 
   it('a click with no update downloaded does nothing', () => {
