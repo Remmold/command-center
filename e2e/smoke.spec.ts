@@ -601,6 +601,63 @@ test.describe('accounts from an existing folder', () => {
   })
 })
 
+function folderUri(path: string): string {
+  const [drive, ...rest] = path.split(/[\\/]/)
+  return `file:///${drive.toLowerCase().replace(':', '%3A')}/${rest.map(encodeURIComponent).join('/')}`
+}
+
+test.describe('accounts VS Code uses', () => {
+  test('the Dashboard points at the suggestion, one click adopts the Work folder and moves the workspace, and new chats and workspaces use it', async ({ launched }) => {
+    const { vscodeUserDir, root, workspace } = launched
+    const work = join(root, 'claude-work')
+    mkdirSync(work, { recursive: true })
+    writeFileSync(join(work, '.credentials.json'), '{}')
+    const second = join(root, 'second-repo')
+    mkdirSync(second, { recursive: true })
+    const settingsFile = join(vscodeUserDir, 'profiles', 'abc123', 'settings.json')
+    const storageFile = join(vscodeUserDir, 'globalStorage', 'storage.json')
+    mkdirSync(join(settingsFile, '..'), { recursive: true })
+    mkdirSync(join(storageFile, '..'), { recursive: true })
+    writeFileSync(settingsFile, JSON.stringify({ 'claudeCode.environmentVariables': [{ name: 'CLAUDE_CONFIG_DIR', value: work }] }))
+    writeFileSync(
+      storageFile,
+      JSON.stringify({
+        userDataProfiles: [{ location: 'abc123', name: 'Work' }],
+        profileAssociations: { workspaces: { [folderUri(workspace)]: 'abc123', [folderUri(second)]: 'abc123', 'file:///c%3A/elsewhere': '__default__profile__' } }
+      })
+    )
+    const vscodeBefore = [readFileSync(settingsFile, 'utf-8'), readFileSync(storageFile, 'utf-8')]
+    const { app, page } = await launched.relaunch()
+    const relaunched = { ...launched, app, page }
+
+    await page.getByRole('button', { name: 'Review in Settings' }).click()
+    const banner = page.getByRole('region', { name: 'VS Code accounts' })
+    await expect(banner).toHaveText(/VS Code uses the Work account for e2e-workspace\./)
+    await banner.getByRole('button', { name: 'Use the same accounts' }).click()
+    await expect(page.getByRole('status', { name: 'Notifications' })).toContainText(
+      'Chats already open keep their account; new chats and resumed ones use Work.'
+    )
+    await expect(banner).toBeHidden()
+    await expect(page.getByRole('region', { name: 'Account profiles' }).getByRole('listitem').filter({ hasText: 'Work · logged in · existing folder' })).toBeVisible()
+    expect(readdirSync(work)).toEqual(['.credentials.json'])
+    expect([readFileSync(settingsFile, 'utf-8'), readFileSync(storageFile, 'utf-8')]).toEqual(vscodeBefore)
+
+    await startSession(relaunched)
+    expect(launched.log.entries().filter((e) => e.kind === 'argv' && e.cwd === workspace).map((e) => e.configDir)).toEqual([work])
+
+    await app.evaluate(({ dialog }, picked) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog
+    }, second)
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Workspaces', { exact: true }).click()
+    await page.getByRole('button', { name: 'Add workspace' }).click()
+    const workList = page.getByRole('region', { name: 'Workspaces' }).getByRole('region', { name: /^Work · / })
+    await expect(workList.getByRole('listitem', { name: 'second-repo' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'VS Code accounts' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Review in Settings' })).toHaveCount(0)
+  })
+})
+
 const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
 test.describe('transcript look', () => {

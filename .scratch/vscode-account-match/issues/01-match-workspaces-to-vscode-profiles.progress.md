@@ -1,0 +1,3 @@
+- Done: reader, suggestion model, banner, Use the same accounts, add preselect, Dashboard notice; quick, e2e 37/37, perf green (0e71e40).
+- Next: Andreas tests section 20 of the test page after merge and release.
+- Open reds: none.

@@ -21,6 +21,7 @@ import { Toasts } from './components/ui/Toasts'
 import { jumpToNextWaiting, openRowAt } from './state/workSessions'
 import { useWorkspacesStore } from './state/workspacesStore'
 import { useProfilesStore } from './state/profilesStore'
+import { useVsCodeMatchStore } from './state/vscodeMatchStore'
 import { useReportScreenFocus } from './hooks/useReportScreenFocus'
 import { useMainNavigation } from './hooks/useMainNavigation'
 import { useNotificationIcons } from './hooks/useNotificationIcons'
@@ -64,6 +65,7 @@ export function App() {
     useRemoteControlStore.getState().init()
     useUpdateStore.getState().init()
     useZoomStore.getState().init()
+    void useVsCodeMatchStore.getState().load()
     startRestore()
   }, [initSessionStatus, initSessionInit, initModels])
 

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron, test as base, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { FAKE_BIN, assertFakeClaude } from './guard'
+import { treeOf, type ProcessRow } from './processTree'
 
 const REPO = resolve(__dirname, '..')
 const MAIN = join(REPO, 'out', 'main', 'index.js')
@@ -192,12 +193,6 @@ function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName, extra: Re
   return env
 }
 
-interface ProcessRow {
-  pid: number
-  parent: number
-  started: string
-}
-
 function processTable(): ProcessRow[] {
   const out = execFileSync(
     'powershell.exe',
@@ -209,14 +204,8 @@ function processTable(): ProcessRow[] {
     .filter((l) => l.trim())
     .map((l) => {
       const [pid, parent, started] = l.trim().split(' ')
-      return { pid: Number(pid), parent: Number(parent), started }
+      return { pid: Number(pid), parent: Number(parent), started: started ?? '' }
     })
-}
-
-function treeOf(root: number, table: ProcessRow[]): ProcessRow[] {
-  const tree = table.filter((p) => p.pid === root)
-  for (let i = 0; i < tree.length; i++) tree.push(...table.filter((p) => p.parent === tree[i].pid && p.pid !== tree[i].pid))
-  return tree
 }
 
 /**

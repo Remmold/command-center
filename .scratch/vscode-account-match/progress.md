@@ -1,0 +1,1 @@
+- 01 resolved: workspaces follow the account VS Code uses (reader, banner, adopt + move, add preselect, Dashboard notice) — 0e71e40

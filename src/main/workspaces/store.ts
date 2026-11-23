@@ -91,7 +91,8 @@ export function list(): Promise<Workspace[]> {
   })
 }
 
-export function add(path: string): Promise<Workspace> {
+/** `profileId` is the account a new workspace starts on; an existing workspace keeps its own. */
+export function add(path: string, profileId: string = DEFAULT_PROFILE_ID): Promise<Workspace> {
   return serial(async () => {
     const saved = await readAll()
     const existing = saved.find((p) => samePath(p.path, path))
@@ -101,7 +102,7 @@ export function add(path: string): Promise<Workspace> {
       name: basename(path) || path,
       path,
       createdAt: Date.now(),
-      profileId: DEFAULT_PROFILE_ID
+      profileId
     })
     await writeAll([...saved, toSaved(workspace)])
     return workspace

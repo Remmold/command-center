@@ -11,6 +11,7 @@ import { ListItem, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { NoticeLine } from '../ui/NoticeLine'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
 import { TextField } from '../ui/TextField'
+import { VsCodeAccountsBanner } from '../VsCodeAccountsBanner'
 
 export function AccountsSettings() {
   const profiles = useProfilesStore((s) => s.profiles)
@@ -29,6 +30,7 @@ export function AccountsSettings() {
     <Page label="Accounts">
       <PageHeader title="Accounts" description="The Claude logins that workspaces can use." />
       <PageBody>
+        <VsCodeAccountsBanner />
         <PageGroup title="Account profiles">
           <DrawerList>
             {profiles.map((p) => (

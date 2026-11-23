@@ -61,6 +61,12 @@ const api: RendererApi = {
     chooseFolder: () => ipcRenderer.invoke(IPC.PROFILES_CHOOSE_FOLDER),
     remove: (id: string) => ipcRenderer.invoke(IPC.PROFILES_REMOVE, id)
   },
+  vscodeMatch: {
+    get: () => ipcRenderer.invoke(IPC.VSCODE_MATCH_GET),
+    dismiss: (keys: string[]) => ipcRenderer.invoke(IPC.VSCODE_MATCH_DISMISS, keys),
+    dismissNotice: () => ipcRenderer.invoke(IPC.VSCODE_MATCH_DISMISS_NOTICE),
+    apply: (workspaceIds: string[]) => ipcRenderer.invoke(IPC.VSCODE_MATCH_APPLY, workspaceIds)
+  },
   usage: {
     list: (): Promise<ProfileUsage[]> => ipcRenderer.invoke(IPC.USAGE_LIST),
     refresh: (profileId?: string) => ipcRenderer.send(IPC.USAGE_REFRESH, profileId),

@@ -224,3 +224,11 @@ Each entry records what was decided, why, and the alternative. Review these in t
 113. **The compaction line has no dot and keeps the timeline line running through it**, as in the screenshot. A summary with no boundary before it (a cut-off transcript) reads "auto · 0k", as the extension's would.
 114. **ToolSearch rows are hidden**, as the extension's `hidden` renderer.
 115. **Review follow-ups for transcript look.** A file link never starts a program or script (exe, msi, bat, cmd, ps1, lnk, js, jar and the like are refused with a toast), since the link is text Claude wrote. A relative link in a chat with no workspace does not resolve against the app's own folder. Known limit: the first thinking block of each 512 KB chunk of a long VS Code transcript, and the first one arriving after the view attaches, show "Thinking" without a time (no earlier line in that read).
+
+116. **A new workspace whose folder VS Code ties to a profile starts on the account that uses that profile's Claude folder** (vscode-account-match 01). The add flow is a folder dialog with no account step, so "preselect" means it is saved on that account and can be changed at once in Settings → Workspaces. When no account uses that folder yet, it starts on Default and the banner offers the move.
+    - Alternative: add an account step to the add flow. Not taken: the extension has no such step and the row picker already changes it.
+117. **Dismiss is remembered per mismatch (workspace + Claude folder)**; the banner lists only mismatches not dismissed, so a new one shows on its own. Saved in `vscode-match.json` in user data, never in VS Code's files.
+    - Alternative: one key for the whole set, re-showing every old mismatch when one is added.
+118. **The Dashboard notice ("VS Code runs some workspaces on other accounts.") shows while a suggestion exists until it is dismissed or "Review in Settings" is clicked, then never again.**
+    - Alternative: show it only on the very first start. Not taken: a quick restart would lose it before it was seen.
+119. **VS Code profiles that share the default profile's settings (`useDefaultFlags.settings`) use the default profile's CLAUDE_CONFIG_DIR; any profile that sets none runs on ~/.claude.** Claude folders that do not exist (and no account uses) are not suggested. "Chats already open keep their account; …" is a toast.

@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
+import * as vscodeMatch from './profiles/vscodeMatch'
 import { transcriptsDirForCwd, transcriptsDirForWorkspace } from './profiles/transcripts'
 import { ObservedService } from './observed/service'
 import * as apps from './apps/store'
@@ -127,7 +128,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const stat = await fs.stat(folder).catch(() => null)
     if (!stat) return { ok: false, error: `${folder} does not exist` }
     if (!stat.isDirectory()) return { ok: false, error: `${folder} is not a folder` }
-    const workspace = await workspaces.add(folder)
+    const workspace = await workspaces.add(folder, await vscodeMatch.profileForNewWorkspace(folder))
     workspacesChanged()
     return { ok: true, workspace }
   })
@@ -142,7 +143,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
           properties: ['openDirectory', 'createDirectory']
         })
     if (result.canceled || result.filePaths.length === 0) return null
-    const added = await workspaces.add(result.filePaths[0])
+    const added = await workspaces.add(result.filePaths[0], await vscodeMatch.profileForNewWorkspace(result.filePaths[0]))
     workspacesChanged()
     return added
   })
@@ -197,6 +198,16 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     if (result.canceled || result.filePaths.length === 0) return null
     return adopted(await profiles.adopt(result.filePaths[0]))
+  })
+  const stringList = (ids: unknown): string[] => (Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])
+  ipcMain.handle(IPC.VSCODE_MATCH_GET, () => vscodeMatch.current())
+  ipcMain.handle(IPC.VSCODE_MATCH_DISMISS, (_e, keys: unknown) => vscodeMatch.dismiss(stringList(keys)))
+  ipcMain.handle(IPC.VSCODE_MATCH_DISMISS_NOTICE, () => vscodeMatch.dismissNotice())
+  ipcMain.handle(IPC.VSCODE_MATCH_APPLY, async (_e, ids: unknown) => {
+    const result = await vscodeMatch.useVsCodeAccounts(stringList(ids))
+    usage.refresh()
+    void observed.workspacesChanged()
+    return result
   })
   ipcMain.handle(IPC.PROFILES_REMOVE, async (_e, id: string) => {
     const removed = await profiles.remove(id)
