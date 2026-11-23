@@ -4,28 +4,30 @@ import { useMinuteClock } from '../hooks/useMinuteClock'
 import type { UsageEntry } from '../state/usageModel'
 import { useUsageEntries } from '../state/useUsageEntries'
 import { useProfilesStore } from '../state/profilesStore'
-import { useWorkspacesStore } from '../state/workspacesStore'
-import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useViewStore } from '../state/viewStore'
+import { useChatPairStore } from '../state/chatPairStore'
+import { chatKey, useChatAccountStore } from '../state/chatAccountStore'
+import { useAccountColor } from '../state/useAccountColor'
+import { AccentDot } from './ui/AccentDot'
 import { useUsagePopoverStore } from '../state/usagePopoverStore'
 import { AccountUsagePanel, UsageMeters } from './AccountUsage'
 import { Popover } from './ui/Popover'
 import { TitleBarButton } from './ui/TitleBarButton'
 import { TwoLineLabel } from './ui/TwoLineLabel'
 
-function useProfileOnScreen(): string | null {
+/** The account the focused chat in Work runs on, as its header resolved it; null with no chat focused. */
+function useFocusedChatAccount(): string | null {
   const view = useViewStore((s) => s.view)
-  const activeProjectId = useProjectViewsStore((s) => s.activeProjectId)
-  const workspaces = useWorkspacesStore((s) => s.workspaces)
-  if (view !== 'work' || !activeProjectId) return null
-  return workspaces.find((w) => w.id === activeProjectId)?.profileId ?? null
+  const focused = useChatPairStore((s) => s.pair.halves[s.pair.focused] ?? null)
+  const profileId = useChatAccountStore((s) => (focused ? (s.byChat[chatKey(focused)] ?? null) : null))
+  return view === 'work' ? profileId : null
 }
 
-/** Every account profile with its plan-limit bars; the profile of the chat on screen is highlighted. */
+/** Every account profile with its plan-limit bars; the focused chat's account is ringed and the others dimmed. */
 export function UsageStrip() {
   const loadProfiles = useProfilesStore((s) => s.load)
   const now = useMinuteClock()
-  const entries = useUsageEntries(useProfileOnScreen(), now)
+  const entries = useUsageEntries(useFocusedChatAccount(), now)
 
   useEffect(() => {
     void loadProfiles()
@@ -37,7 +39,7 @@ export function UsageStrip() {
     <ul aria-label="usage per account profile" className="flex h-full shrink-0 items-stretch border-l border-subtle">
       {entries.map((entry) => (
         <li key={entry.profileId} className="flex">
-          <UsageStripEntry entry={entry} now={now} opensOnRequest={entry.profileId === target} />
+          <UsageStripEntry entry={entry} now={now} opensOnRequest={entry.profileId === target} dimmed={!entry.highlighted && entries.some((e) => e.highlighted)} />
         </li>
       ))}
     </ul>
@@ -49,8 +51,9 @@ function stripNote(entry: UsageEntry): string | null {
   return entry.plan
 }
 
-function UsageStripEntry({ entry, now, opensOnRequest }: { entry: UsageEntry; now: number; opensOnRequest: boolean }) {
+function UsageStripEntry({ entry, now, opensOnRequest, dimmed }: { entry: UsageEntry; now: number; opensOnRequest: boolean; dimmed: boolean }) {
   const menu = useMenu()
+  const color = useAccountColor(entry.profileId)
   const loadProfiles = useProfilesStore((s) => s.load)
   const request = useUsagePopoverStore((s) => s.nonce)
   const seen = useRef(request)
@@ -79,7 +82,10 @@ function UsageStripEntry({ entry, now, opensOnRequest }: { entry: UsageEntry; no
         tooltip={tooltip}
         pressed={menu.open}
         current={entry.highlighted}
+        dimmed={dimmed}
+        accent={color}
       >
+        <AccentDot color={color} />
         <TwoLineLabel primary={entry.label} secondary={stripNote(entry)} />
         <UsageMeters entry={entry} />
       </TitleBarButton>

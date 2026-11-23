@@ -11,9 +11,9 @@ interface Props {
 
 export function HeaderRow({ icon, title, subtitle, children, note }: Props) {
   return (
-    <div className="flex min-w-0 items-center gap-2 px-1 text-xs">
+    <div data-header-row className="header-container flex min-w-0 items-center gap-2 px-1 text-xs">
       {icon}
-      <span className="shrink-0 font-medium text-fg">
+      <span title={title} className="min-w-[2.25rem] shrink truncate font-medium text-fg">
         {subtitle && <span className="font-normal text-muted">{subtitle} / </span>}
         {title}
       </span>

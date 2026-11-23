@@ -38,7 +38,7 @@ import { availableModes, initialMode, isPermissionMode, migrateMode, nextMode, t
 import { NOT_RUNNING, controlOnceStarted } from './launchGate'
 import type { ApprovalRequest } from '../../../shared/approval'
 import { useFocusRequestStore } from '../../state/sessionNavigation'
-import { useSessionInit } from '../../state/sessionInitStore'
+import { useSessionInit, useSessionInitStore } from '../../state/sessionInitStore'
 import { useModelStore } from '../../state/modelStore'
 import { useModelChoice } from '../../state/useModelChoice'
 import { DEFAULT_MODEL, effortLabel, launchChoice, versionedName } from '../../state/modelPicker'
@@ -580,6 +580,7 @@ export const ChatView = memo(function ChatView({
       if (resumeSessionId) useProjectViewsStore.getState().clearClaudeSessionId(paneId)
       return false
     }
+    if (res.profileId) useSessionInitStore.getState().started(paneId, res.profileId)
     startedRef.current = true
     setProcessRunning(true)
     void refreshContextUsage()

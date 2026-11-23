@@ -67,6 +67,34 @@ code, kbd, pre, samp {
   }
 }
 
+/* A pane header measures its own width; in a narrow one (a split at high zoom) the extras give way to the title and account. */
+@layer utilities {
+  .header-container {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 26rem) {
+    .hide-in-narrow-header {
+      display: none;
+    }
+  }
+
+  /* An account badge keeps room for a few letters of its name and its bars. */
+  .account-badge-min {
+    min-width: 7.5rem;
+  }
+
+  @container (max-width: 19rem) {
+    .hide-in-tight-header {
+      display: none;
+    }
+
+    .account-badge-min {
+      min-width: 4rem;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
   .animate-blink,

@@ -87,6 +87,11 @@ export interface SpawnResult {
   error?: string
 }
 
+export interface ClaudeStartResult extends SpawnResult {
+  /** The account profile the process was started on (its `CLAUDE_CONFIG_DIR`). */
+  profileId?: string
+}
+
 export interface PtyDataEvent {
   paneId: string
   data: string
@@ -487,7 +492,9 @@ export interface RendererApi {
     ) => Promise<{ ok: boolean; error?: string }>
   }
   claude: {
-    start: (options: ClaudeStartOptions) => Promise<SpawnResult>
+    start: (options: ClaudeStartOptions) => Promise<ClaudeStartResult>
+    /** The profile the pane's running process was started on; null when none runs. */
+    processProfile: (paneId: string) => Promise<string | null>
     control: (paneId: string, subtype: string, fields?: Record<string, unknown>) => Promise<ControlResult>
     getInit: (paneId: string) => Promise<SessionInit | null>
     /** The model and effort new sessions start with, from the user `settings.json`. */
@@ -521,6 +528,8 @@ export interface RendererApi {
     turn: (workspaceId: string, sessionId: string) => Promise<ObservedTurn>
     /** The last items, read once without following. */
     read: (workspaceId: string, sessionId: string) => Promise<ObservedOpenResult>
+    /** The config folder whose `sessions/<pid>.json` holds the session with a live process; null when none does. */
+    liveConfigDir: (sessionId: string) => Promise<string | null>
   }
   approval: {
     list: () => Promise<ApprovalRequest[]>

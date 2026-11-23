@@ -1,0 +1,1 @@
+- 01 resolved: account badge in chat headers (hosted + VS Code), focused-account ring on the usage pills, account colours, mismatch warning with Restart, pace line under usage bars — <commit>

@@ -22,6 +22,7 @@ import type {
   SessionStatusEntry,
   UpdateStatus,
   SpawnResult,
+  ClaudeStartResult,
   StartWithWindowsState,
   Workspace,
   ControlResult,
@@ -144,7 +145,8 @@ const api: RendererApi = {
     }
   },
   claude: {
-    start: (options): Promise<SpawnResult> => ipcRenderer.invoke(IPC.CLAUDE_START, options),
+    start: (options): Promise<ClaudeStartResult> => ipcRenderer.invoke(IPC.CLAUDE_START, options),
+    processProfile: (paneId): Promise<string | null> => ipcRenderer.invoke(IPC.CLAUDE_PROCESS_PROFILE, paneId),
     control: (paneId, subtype, fields): Promise<ControlResult> =>
       ipcRenderer.invoke(IPC.CLAUDE_CONTROL, paneId, subtype, fields),
     getInit: (paneId): Promise<SessionInit | null> => ipcRenderer.invoke(IPC.CLAUDE_GET_INIT, paneId),
@@ -186,6 +188,7 @@ const api: RendererApi = {
     close: () => ipcRenderer.send(IPC.OBSERVED_CLOSE),
     turn: (workspaceId: string, sessionId: string) => ipcRenderer.invoke(IPC.OBSERVED_TURN, workspaceId, sessionId),
     read: (workspaceId: string, sessionId: string) => ipcRenderer.invoke(IPC.OBSERVED_READ, workspaceId, sessionId),
+    liveConfigDir: (sessionId: string): Promise<string | null> => ipcRenderer.invoke(IPC.OBSERVED_LIVE_CONFIG_DIR, sessionId),
     onItems: (cb) => {
       const handler = (_e: IpcRendererEvent, event: ObservedItemsEvent) => cb(event)
       ipcRenderer.on(IPC.OBSERVED_ITEMS, handler)

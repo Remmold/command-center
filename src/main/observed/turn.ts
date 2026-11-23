@@ -37,15 +37,20 @@ function alive(pid: number): boolean {
   }
 }
 
-/** The status a running CLI keeps for the session in `<config>/sessions/<pid>.json`, as the extension reads it. */
-export async function readProcessStatus(sessionsDir: string, sessionId: string): Promise<CliProcessStatus | undefined> {
+interface LiveRecord {
+  status: CliProcessStatus
+  updatedAt: number
+}
+
+/** The newest record a running CLI keeps for the session in `<config>/sessions/<pid>.json`, as the extension reads it. */
+async function liveRecord(sessionsDir: string, sessionId: string): Promise<LiveRecord | undefined> {
   let entries: string[]
   try {
     entries = await fs.readdir(sessionsDir)
   } catch {
     return undefined
   }
-  let found: { status: CliProcessStatus; updatedAt: number } | undefined
+  let found: LiveRecord | undefined
   for (const entry of entries) {
     if (!/^\d+\.json$/.test(entry)) continue
     try {
@@ -60,7 +65,21 @@ export async function readProcessStatus(sessionsDir: string, sessionId: string):
       continue
     }
   }
-  return found?.status
+  return found
+}
+
+export async function readProcessStatus(sessionsDir: string, sessionId: string): Promise<CliProcessStatus | undefined> {
+  return (await liveRecord(sessionsDir, sessionId))?.status
+}
+
+/** The config folder a running CLI has the session in, by its process file; the newest wins. */
+export async function liveConfigDir(configDirs: readonly string[], sessionId: string): Promise<string | null> {
+  const records = await Promise.all(configDirs.map((dir) => liveRecord(join(dir, 'sessions'), sessionId)))
+  let best: { dir: string; updatedAt: number } | null = null
+  for (const [i, record] of records.entries()) {
+    if (record && (!best || record.updatedAt > best.updatedAt)) best = { dir: configDirs[i], updatedAt: record.updatedAt }
+  }
+  return best?.dir ?? null
 }
 
 export async function readTurn(file: string, sessionsDir: string, sessionId: string, now: number): Promise<ObservedTurn> {

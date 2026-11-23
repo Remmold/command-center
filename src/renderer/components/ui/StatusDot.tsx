@@ -22,9 +22,9 @@ export function StatusDot({ status, tooltip }: { status: DotStatus; tooltip?: st
 
 export function StatusTag({ status }: { status: DotStatus }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted">
+    <span title={LABEL[status]} className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted">
       <StatusDot status={status} />
-      {LABEL[status]}
+      <span className="hide-in-narrow-header">{LABEL[status]}</span>
     </span>
   )
 }

@@ -12,6 +12,7 @@ import { NoticeLine } from '../ui/NoticeLine'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
 import { TextField } from '../ui/TextField'
 import { VsCodeAccountsBanner } from '../VsCodeAccountsBanner'
+import { AccountColorPicker } from './AccountColorPicker'
 
 export function AccountsSettings() {
   const profiles = useProfilesStore((s) => s.profiles)
@@ -113,6 +114,7 @@ function ProfileItem({ profile }: { profile: AccountProfile }) {
       <ListRowMeta>
         {used} {used === 1 ? 'workspace' : 'workspaces'}
       </ListRowMeta>
+      <AccountColorPicker profileId={profile.id} name={profile.name} />
       {target && (
         <Button
           variant={profile.loggedIn ? 'ghost' : 'primary'}

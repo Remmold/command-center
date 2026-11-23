@@ -54,6 +54,14 @@ module.exports = {
           7: theme('chart-7'),
           8: theme('chart-8')
         },
+        account: {
+          blue: theme('account-blue'),
+          orange: theme('account-orange'),
+          purple: theme('account-purple'),
+          teal: theme('account-teal'),
+          green: theme('account-green'),
+          red: theme('account-red')
+        },
         clay: theme('claude-clay'),
         spinner: theme('spinner'),
         scrim: theme('scrim'),

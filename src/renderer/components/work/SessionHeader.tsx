@@ -28,7 +28,7 @@ import { usePaneStatus } from '../../state/sessionStatusStore'
 import { IDE_PANELS_SHORTCUT, SHELL_DRAWER_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { itemsToMarkdown } from '../chat/exportMarkdown'
 import { PastSessionsModal } from '../PastSessionsModal'
-import { AccountSwitcher } from './AccountSwitcher'
+import { AccountMismatchNotice, HostedAccountBadge, ObservedAccountBadge } from './ChatAccountBadge'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -90,42 +90,45 @@ export function HostedSessionHeader({ workspace, view, session, place }: HostedP
   const drawerOpen = view.shellDrawerOpen && view.shellTabs.length > 0
 
   return (
-    <Toolbar
-      highlighted={place.split && place.focused}
-      actions={
-        <span className="flex shrink-0 items-center gap-1">
-          <Button
-            variant="ghost"
-            pressed={view.idePanelsOpen}
-            onClick={() => toggleIdePanels(view.projectId)}
-            label="IDE panels"
-            tooltip={`${view.idePanelsOpen ? 'Hide' : 'Show'} file tree, editor and git (${IDE_PANELS_SHORTCUT})`}
-          >
-            <PanelLeft size={14} strokeWidth={2} />
-          </Button>
-          <Button
-            variant="ghost"
-            pressed={drawerOpen}
-            onClick={() => toggleShellDrawer(view.projectId)}
-            label="Shell"
-            tooltip={
-              view.shellTabs.length === 0
-                ? `Open a shell (${SHELL_DRAWER_SHORTCUT})`
-                : `${drawerOpen ? 'Hide' : 'Show'} shells (${SHELL_DRAWER_SHORTCUT})`
-            }
-          >
-            <Terminal size={14} strokeWidth={2} />
-          </Button>
-          <ChatMenu view={view} session={session} />
-          <HalfControls place={place} closable={false} />
-        </span>
-      }
-    >
-      <HeaderRow icon={<SessionIdentity workspace={workspace} />} title={session.title}>
-        <AccountSwitcher workspace={workspace} paneId={session.id} />
-        <StatusTag status={status} />
-      </HeaderRow>
-    </Toolbar>
+    <>
+      <Toolbar
+        highlighted={place.split && place.focused}
+        actions={
+          <span className="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              pressed={view.idePanelsOpen}
+              onClick={() => toggleIdePanels(view.projectId)}
+              label="IDE panels"
+              tooltip={`${view.idePanelsOpen ? 'Hide' : 'Show'} file tree, editor and git (${IDE_PANELS_SHORTCUT})`}
+            >
+              <PanelLeft size={14} strokeWidth={2} />
+            </Button>
+            <Button
+              variant="ghost"
+              pressed={drawerOpen}
+              onClick={() => toggleShellDrawer(view.projectId)}
+              label="Shell"
+              tooltip={
+                view.shellTabs.length === 0
+                  ? `Open a shell (${SHELL_DRAWER_SHORTCUT})`
+                  : `${drawerOpen ? 'Hide' : 'Show'} shells (${SHELL_DRAWER_SHORTCUT})`
+              }
+            >
+              <Terminal size={14} strokeWidth={2} />
+            </Button>
+            <ChatMenu view={view} session={session} />
+            <HalfControls place={place} closable={false} />
+          </span>
+        }
+      >
+        <HeaderRow icon={<SessionIdentity workspace={workspace} />} title={session.title}>
+          <HostedAccountBadge workspace={workspace} paneId={session.id} />
+          <StatusTag status={status} />
+        </HeaderRow>
+      </Toolbar>
+      <AccountMismatchNotice workspace={workspace} paneId={session.id} />
+    </>
   )
 }
 
@@ -231,6 +234,7 @@ export function ObservedSessionHeader({ workspace, session, sessionId, place }: 
     >
       <HeaderRow icon={<SessionIdentity workspace={workspace} />} title={title} note="read-only · reply in VS Code">
         <Badge>in VS Code</Badge>
+        <ObservedAccountBadge workspace={workspace} sessionId={sessionId} status={session?.status} />
         <StatusTag status={session?.status ?? 'quiet'} />
       </HeaderRow>
     </Toolbar>

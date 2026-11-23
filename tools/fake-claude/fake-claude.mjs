@@ -15,6 +15,17 @@ const readLines = (path) =>
     .map((l) => JSON.parse(l))
 const clone = (value) => structuredClone(value)
 
+/** A test's `fake-account.json` in the config folder replaces the recorded account, so two profiles can differ. */
+function accountFor(recordedAccount) {
+  const dir = process.env.CLAUDE_CONFIG_DIR
+  if (!dir) return recordedAccount
+  try {
+    return JSON.parse(readFileSync(join(dir, 'fake-account.json'), 'utf-8'))
+  } catch {
+    return recordedAccount
+  }
+}
+
 const recorded = {
   initialize: readJson(join(FIXTURES, 'initialize-reply.json')).response.response,
   usage: readJson(join(FIXTURES, 'get-usage-reply.json')).response.response,
@@ -266,6 +277,7 @@ class Fake {
       case 'initialize':
         return ok({
           ...clone(recorded.initialize),
+          account: accountFor(clone(recorded.initialize.account)),
           pid: process.pid,
           current_permission_mode: this.permissionMode,
           remote_control_auto_enable: this.script.remoteControlAtStartup === true,

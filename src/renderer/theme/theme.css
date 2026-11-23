@@ -49,6 +49,12 @@
   --cc-chart-6: 241 76 76;
   --cc-chart-7: 17 168 205;
   --cc-chart-8: 204 204 204;
+  --cc-account-blue: var(--cc-chart-2);
+  --cc-account-orange: var(--cc-chart-1);
+  --cc-account-purple: var(--cc-chart-5);
+  --cc-account-teal: var(--cc-chart-7);
+  --cc-account-green: var(--cc-chart-3);
+  --cc-account-red: var(--cc-chart-6);
   --cc-claude-clay: 198 97 63;
   /* The extension's --app-spinner-foreground on a dark theme (--app-claude-orange). */
   --cc-spinner: 217 119 87;

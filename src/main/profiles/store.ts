@@ -196,3 +196,9 @@ export async function prepareSession(
   }
   return { profileId: profile.id, env: profileEnv(profile, harnessConfigDir()) }
 }
+
+/** Every Claude folder a chat may run on: the accounts' and those VS Code profiles point at, each once. */
+export async function knownConfigDirs(): Promise<string[]> {
+  const dirs = [...(await list()).map((p) => p.configDir), ...(await vscodeFolders()).map((v) => v.configDir)]
+  return dirs.filter((dir, i) => dirs.findIndex((d) => sameDir(d, dir)) === i)
+}
