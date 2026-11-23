@@ -85,6 +85,12 @@ for (const percent of [110, 125, 150]) {
       await expect(page.getByRole('button', { name: /^Account: someone@example\.com/ })).toBeVisible()
       await shot('work-split')
       expect(await overflowing(page, [...sideways, '[data-header-row]'])).toEqual([])
+      const tabs = page.locator('[data-tab-strip]:visible')
+      await expect(tabs).toHaveCount(1)
+      await tabs.getByRole('tab', { name: 'Media 1' }).click()
+      await expect(page.getByRole('tabpanel', { name: 'Media' })).toBeVisible()
+      await shot('work-split-media')
+      expect(await overflowing(page, [...sideways, '[data-header-row]', '[data-tab-strip]'])).toEqual([])
 
       await page.keyboard.press('Control+3')
       await expect(page.getByTestId('view-board')).toBeVisible()

@@ -3,6 +3,7 @@ import { OBSERVED_INITIAL_ITEMS } from '../../../shared/types'
 import { useObservedStore } from '../../state/observedStore'
 import { EmptyHint } from '../ui/Section'
 import { Pane } from '../ui/Pane'
+import { ObservedMediaTabs } from './MediaTabs'
 import { MessageList } from './MessageList'
 import type { AgentHost } from './toolContext'
 
@@ -24,11 +25,13 @@ export function ObservedChatView({ cwd }: { cwd: string | undefined }) {
 
   return (
     <Pane label="observed session">
-      <MessageList items={items} cwd={cwd} agents={agents} busy={live}>
-        {loading && <EmptyHint>reading transcript…</EmptyHint>}
-        {error && <EmptyHint>could not open this session: {error}</EmptyHint>}
-        {shortened && <EmptyHint>showing the latest {OBSERVED_INITIAL_ITEMS} entries; earlier ones are in VS Code</EmptyHint>}
-      </MessageList>
+      <ObservedMediaTabs sessionId={viewing.sessionId} cwd={cwd}>
+        <MessageList items={items} cwd={cwd} agents={agents} busy={live}>
+          {loading && <EmptyHint>reading transcript…</EmptyHint>}
+          {error && <EmptyHint>could not open this session: {error}</EmptyHint>}
+          {shortened && <EmptyHint>showing the latest {OBSERVED_INITIAL_ITEMS} entries; earlier ones are in VS Code</EmptyHint>}
+        </MessageList>
+      </ObservedMediaTabs>
     </Pane>
   )
 }

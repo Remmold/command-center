@@ -62,8 +62,8 @@ describe('keyboard shortcuts', () => {
     expect(shortcutFor(ctrlShift('E', 'KeyE'))).toEqual({ name: 'toggleIdePanels' })
   })
 
-  it('Ctrl+Shift+M shows the Media panel of the focused chat; Ctrl+M alone does nothing', () => {
-    expect(shortcutFor(ctrlShift('M', 'KeyM'))).toEqual({ name: 'toggleMediaPanel' })
+  it('Ctrl+Shift+M switches the focused chat between Chat and Media; Ctrl+M alone does nothing', () => {
+    expect(shortcutFor(ctrlShift('M', 'KeyM'))).toEqual({ name: 'toggleMediaTab' })
     expect(shortcutFor(ctrl('m', 'KeyM'))).toBeNull()
   })
 

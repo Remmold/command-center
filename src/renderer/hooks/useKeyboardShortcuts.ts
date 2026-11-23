@@ -8,7 +8,7 @@ export const IDE_PANELS_SHORTCUT = 'Ctrl+Shift+E'
 export const SESSION_LIST_SHORTCUT = 'Ctrl+B'
 export const SHELL_DRAWER_SHORTCUT = 'Ctrl+`'
 export const SETTINGS_SHORTCUT = 'Ctrl+,'
-export const MEDIA_PANEL_SHORTCUT = 'Ctrl+Shift+M'
+export const MEDIA_TAB_SHORTCUT = 'Ctrl+Shift+M'
 
 export interface ShortcutHandlers {
   switchView?: (view: AppView) => void
@@ -23,7 +23,7 @@ export interface ShortcutHandlers {
   selectRow?: (index: number) => void
   loadPastSession?: () => void
   nextWaiting?: () => void
-  toggleMediaPanel?: () => void
+  toggleMediaTab?: () => void
 }
 
 /** Runs the handler for the action; false when no handler is registered for it. */

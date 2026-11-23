@@ -1,7 +1,7 @@
 import { forwardRef, type MouseEvent, type ReactNode } from 'react'
 import { Play } from 'lucide-react'
 
-export const THUMBNAIL_SIZE = 120
+export const THUMBNAIL_SIZE = 160
 
 interface Props {
   /** The picture: an `img`, a `video`, or a placeholder. */
@@ -45,6 +45,15 @@ export const Thumbnail = forwardRef<HTMLDivElement, Props>(function Thumbnail(
     </div>
   )
 })
+
+/** Thumbnails in as many columns as fit. */
+export function ThumbnailGrid({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${THUMBNAIL_SIZE}px, 1fr))` }}>
+      {children}
+    </div>
+  )
+}
 
 /** The fitted picture inside a thumbnail, decoded off the main thread at tile size. */
 export function ThumbnailImage({ src, alt }: { src: string; alt: string }) {

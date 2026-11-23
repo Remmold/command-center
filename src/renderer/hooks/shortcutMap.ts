@@ -14,7 +14,7 @@ interface PlainShortcut {
     | 'toggleShellDrawer'
     | 'nextWaiting'
     | 'loadPastSession'
-    | 'toggleMediaPanel'
+    | 'toggleMediaTab'
 }
 
 export type ShortcutAction =
@@ -35,7 +35,7 @@ const CTRL_LETTERS: Record<string, PlainShortcut['name']> = {
 const CTRL_SHIFT_LETTERS: Record<string, PlainShortcut['name']> = {
   j: 'nextWaiting',
   e: 'toggleIdePanels',
-  m: 'toggleMediaPanel'
+  m: 'toggleMediaTab'
 }
 
 /** By the printed key, since Nordic layouts put + on the Minus key; Ctrl+0 also by position, for layouts where that key types another character. */
