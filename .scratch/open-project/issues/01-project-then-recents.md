@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **One picker:** **+ New session** and Ctrl+T open one quick picker in the VS Code quick-pick style the app already uses.
   - **Step 1:** type to filter projects (workspaces), using each repo's icon and account tag. Enter or click opens step 2. Recently used projects come first.
