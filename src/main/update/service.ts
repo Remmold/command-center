@@ -7,6 +7,7 @@ import { userDataPath } from '../util/paths'
 import { createUpdateController, type UpdateController, type UpdaterPort } from './controller'
 import { AUTO_RESTART_IDLE_MS } from './restartPlan'
 import { FakeUpdater, githubUpdater } from './updaters'
+import { flushWindowPlace } from '../windowPlace/service'
 
 const CHECK_EVERY_MS = 30 * 60_000
 const MARKER = 'update-restart.json'
@@ -46,7 +47,10 @@ export function startUpdates(): UpdateController {
       clearTimeout: (h) => clearTimeout(h as NodeJS.Timeout),
       setInterval: (fn, ms) => setInterval(fn, ms)
     },
-    beforeRestart: () => writeFileSync(userDataPath(MARKER), JSON.stringify({ at: Date.now() }))
+    beforeRestart: () => {
+      flushWindowPlace()
+      writeFileSync(userDataPath(MARKER), JSON.stringify({ at: Date.now() }))
+    }
   })
 
   claudeManager.onSpawn((paneId) => controller.feed({ kind: 'spawned', paneId }))

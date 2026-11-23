@@ -7,10 +7,14 @@ import { getScreenFocus } from './sessions/screenFocus'
 import { applyZoom, zoomLevel } from './zoom/service'
 import { zoomFactor } from '../shared/zoom'
 import { OFFSCREEN_POSITION, windowOffscreen } from './testWindow'
+import { savedPlacement, trackWindowPlace } from './windowPlace/service'
+import type { Placement } from './windowPlace/place'
 
 let mainWindow: BrowserWindow | null = null
 const offscreen = windowOffscreen(process.env)
 let quitting = false
+/** Maximise or full screen waits for the first show, since applying it shows a hidden window. */
+let pendingState: Pick<Placement, 'maximized' | 'fullScreen'> | null = null
 
 /** After this, closing the window really closes it instead of hiding to the tray. */
 export function allowWindowClose(): void {
@@ -22,12 +26,14 @@ export function getMainWindow(): BrowserWindow | null {
 }
 
 export function createMainWindow(options: { show?: boolean } = {}): BrowserWindow {
+  // Test runs open off-screen and are shown without focus, so they never land on the user's desktop.
+  const place = offscreen ? null : savedPlacement()
   const win = new BrowserWindow({
-    // Test runs open off-screen and are shown without focus, so they never land on the user's desktop.
-    show: offscreen ? false : (options.show ?? true),
+    show: false,
     ...(offscreen ? { ...OFFSCREEN_POSITION, skipTaskbar: true } : {}),
     width: 1400,
     height: 900,
+    ...(place?.bounds ?? {}),
     backgroundColor: '#18181b',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -59,9 +65,30 @@ export function createMainWindow(options: { show?: boolean } = {}): BrowserWindo
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
-  if (offscreen && (options.show ?? true)) win.showInactive()
   mainWindow = win
+  if (offscreen) {
+    if (options.show ?? true) win.showInactive()
+    return win
+  }
+  // Set again after creation: Windows can scale constructor bounds by the wrong monitor's DPI.
+  if (place) win.setBounds(place.bounds)
+  pendingState = place && (place.maximized || place.fullScreen) ? { maximized: place.maximized, fullScreen: place.fullScreen } : null
+  trackWindowPlace(win)
+  if (options.show ?? true) reveal(win)
   return win
+}
+
+function reveal(win: BrowserWindow): void {
+  const state = pendingState
+  pendingState = null
+  if (state?.fullScreen) {
+    win.show()
+    win.setFullScreen(true)
+  } else if (state?.maximized) {
+    win.maximize()
+  } else {
+    win.show()
+  }
 }
 
 export function showMainWindow(): BrowserWindow {
@@ -71,7 +98,7 @@ export function showMainWindow(): BrowserWindow {
     win.showInactive()
     return win
   }
-  win.show()
+  reveal(win)
   win.focus()
   return win
 }
