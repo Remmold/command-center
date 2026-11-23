@@ -92,6 +92,8 @@ export interface RepoIdentity {
   icon?: RepoIconChoice
   /** Best first; absent until the repo was searched, empty when nothing was found. */
   found?: FoundIcon[]
+  /** The detector that made `found`; an older one's results are searched again on start. */
+  searchVersion?: number
 }
 
 /** Keyed by repo group key. */

@@ -1,17 +1,18 @@
 import { existsSync, promises as fs } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Workspace } from '../../shared/types'
 import type {
   ChooseImageResult,
-  FoundIcon,
   FoundIconView,
   RepoIconChoice,
   RepoIdentities,
+  RepoIdentity,
   RepoIdentityViews
 } from '../../shared/repoIdentity'
+import { engineIconReferences } from './engineDefaults'
 import { findIconCandidates } from './findIcons'
 import { rankIconCandidates, type IconCandidate } from './rankIcons'
-import { createRepoIdentityStore, shortHash, type FoundImage } from './store'
+import { createRepoIdentityStore, shortHash, SEARCH_VERSION, type FoundImage } from './store'
 import { chooseNotificationIcon } from './notificationIcon'
 import { parseIcon } from './validate'
 
@@ -31,8 +32,11 @@ export interface LoadedImage {
 export interface IconImages {
   /** A found image as a small PNG, or an SVG as is; null when it can't be read. */
   load: (path: string) => Promise<LoadedImage | null>
-  /** An executable's own icon as PNG, read from its resources; it is never run. */
-  exeIcon: (path: string) => Promise<{ bytes: Buffer; generic: boolean } | null>
+  /**
+   * An executable's own icon as PNG, read from its resources; it is never run. `generic` when it is
+   * Windows' plain program icon or the same icon as one of `engineDefaults`.
+   */
+  exeIcon: (path: string, engineDefaults: string[]) => Promise<{ bytes: Buffer; generic: boolean } | null>
 }
 
 export interface RepoIdentityServiceDeps {
@@ -75,7 +79,7 @@ export function createRepoIdentityService({ dataDir, appIcon, listWorkspaces, im
   const toViews = async (identities: RepoIdentities): Promise<RepoIdentityViews> => {
     const views: RepoIdentityViews = {}
     for (const [key, identity] of Object.entries(identities)) {
-      const { found, ...own } = identity
+      const { found, searchVersion: _version, ...own } = identity
       views[key] = { ...own }
       if (identity.icon?.kind === 'image') {
         const url = await dataUrl(identity.icon.file)
@@ -113,7 +117,9 @@ export function createRepoIdentityService({ dataDir, appIcon, listWorkspaces, im
     const exes = rankIconCandidates(candidates, THEME).filter((c) => c.source === 'exe').slice(0, MAX_EXES_CHECKED)
     const checked: IconCandidate[] = []
     for (const exe of exes) {
-      const icon = await images.exeIcon(join(root, exe.path)).catch(() => null)
+      const folder = dirname(join(root, exe.path))
+      const engineDefaults = engineIconReferences(await fs.readdir(folder).catch(() => [])).map((n) => join(folder, n))
+      const icon = await images.exeIcon(join(root, exe.path), engineDefaults).catch(() => null)
       if (!icon) continue
       exeIcons.set(exe.path, icon.bytes)
       checked.push({ ...exe, genericExeIcon: icon.generic })
@@ -136,8 +142,12 @@ export function createRepoIdentityService({ dataDir, appIcon, listWorkspaces, im
   let queue: Promise<unknown> = Promise.resolve()
   const inFlight = new Map<string, Promise<RepoIdentities>>()
 
-  const automaticGone = (root: string, found: FoundIcon[] | undefined): boolean =>
-    !!found?.[0] && !existsSync(join(root, found[0].path))
+  /** Never searched, searched by an older detector, or its automatic icon's file is gone. */
+  const needsSearch = (root: string, identity: RepoIdentity | undefined): boolean => {
+    const found = identity?.found
+    if (!found || identity.searchVersion !== SEARCH_VERSION) return true
+    return !!found[0] && !existsSync(join(root, found[0].path))
+  }
 
   /** One search at a time, so a start with many repos stays light. `onlyIfStale` skips a repo searched meanwhile. */
   const detect = (repoGroupKey: string, root: string, onlyIfStale = false): Promise<RepoIdentities> => {
@@ -146,8 +156,7 @@ export function createRepoIdentityService({ dataDir, appIcon, listWorkspaces, im
     const next = queue.then(async () => {
       try {
         const current = await store.list()
-        const found = current[repoGroupKey]?.found
-        if (onlyIfStale && found && !automaticGone(root, found)) return current
+        if (onlyIfStale && !needsSearch(root, current[repoGroupKey])) return current
         const all = await store.setFound(repoGroupKey, await search(root))
         onChanged(await toViews(all))
         return all
@@ -177,12 +186,11 @@ export function createRepoIdentityService({ dataDir, appIcon, listWorkspaces, im
       const root = repoRoots(await listWorkspaces()).get(key)
       return toViews(root ? await detect(key, root) : await store.list())
     },
-    /** Searches every repo not searched yet, or whose automatic icon's file is gone. */
+    /** Searches every repo not searched yet, searched by an older detector, or whose automatic icon's file is gone. */
     detectMissing: async (): Promise<void> => {
       const [roots, identities] = await Promise.all([listWorkspaces().then(repoRoots), store.list()])
       for (const [key, root] of roots) {
-        const found = identities[key]?.found
-        if (found && !automaticGone(root, found)) continue
+        if (!needsSearch(root, identities[key])) continue
         await detect(key, root, true).catch((err) => console.error('[repo icons] search failed for', root, err))
       }
     },

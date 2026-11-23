@@ -15,6 +15,9 @@ import { IMAGE_FILE_NAME, parseRepoIdentities } from './validate'
 
 export type ImportImageResult = ImageImportResult<RepoIdentities>
 
+/** Raise when a detector change can reject an icon it chose before; older results are searched again on start. */
+export const SEARCH_VERSION = 2
+
 export function shortHash(data: string | Buffer): string {
   return createHash('sha256').update(data).digest('hex').slice(0, 32)
 }
@@ -132,7 +135,7 @@ export function createRepoIdentityStore(dir: string): RepoIdentityStore {
       serial(async () => {
         const found: FoundIcon[] = []
         for (const { bytes, ext, path, source } of images) found.push({ file: await saveImage(bytes, ext), path, source })
-        return applyChange(repoGroupKey, (current) => ({ ...current, found }))
+        return applyChange(repoGroupKey, (current) => ({ ...current, found, searchVersion: SEARCH_VERSION }))
       }),
     imagePath
   }

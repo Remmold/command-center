@@ -44,12 +44,18 @@ export function createIconImages(): IconImages {
       const image = nativeImage.createFromPath(path)
       return image.isEmpty() ? null : { bytes: shrunk(image), ext: 'png' }
     },
-    exeIcon: async (path) => {
+    exeIcon: async (path, engineDefaults) => {
       generic ??= genericExeBitmap()
       const icon = await app.getFileIcon(path, { size: 'large' })
       if (icon.isEmpty()) return null
+      const bitmap = icon.toBitmap()
       const plain = await generic
-      return { bytes: icon.toPNG(), generic: !!plain && icon.toBitmap().equals(plain) }
+      if (plain && bitmap.equals(plain)) return { bytes: icon.toPNG(), generic: true }
+      for (const ref of engineDefaults) {
+        const engine = await app.getFileIcon(ref, { size: 'large' }).catch(() => null)
+        if (engine && bitmap.equals(engine.toBitmap())) return { bytes: icon.toPNG(), generic: true }
+      }
+      return { bytes: icon.toPNG(), generic: false }
     }
   }
 }
