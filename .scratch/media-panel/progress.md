@@ -1,1 +1,2 @@
 - 01 resolved: media panel beside the chat — 222275e, 19c1cc8
+- 02 resolved: media as a tab in the chat (Chat / Media N), column and header button removed — 86838e1

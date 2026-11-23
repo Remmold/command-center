@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (shipped in 0.1.6)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Tabs:**
   - Each chat (hosted and VS Code view, in each half of a split) gets two tabs at the top of its content area, under the header: **Chat** and **Media**. The Media tab shows the count, e.g. "Media 3", and hides when the chat has no media.
