@@ -1,0 +1,3 @@
+- done: suite trimmed and committed (f6f4286); quick green, e2e green 3x (86.6 s quiet, 93.7 s loaded), perf+zoom green
+- next: rerun e2e once the coordinator's off-screen test patch lands
+- open reds: none; e2e:gate fails the 90 s budget under heavy machine load

@@ -1,0 +1,1 @@
+- 01 resolved: UI suite 43 -> 18 scenarios in 4 files, 168 s -> 87 s, budget check, e2e:gate, release.md; unit 884 -> 890 — f6f4286

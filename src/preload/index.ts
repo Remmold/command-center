@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/ipc-channels'
+import { observedRefreshMs } from '../shared/observedRefresh'
 import type {
   AccountProfile,
   AppExitEvent,
@@ -198,6 +199,7 @@ const api: RendererApi = {
     turn: (workspaceId: string, sessionId: string) => ipcRenderer.invoke(IPC.OBSERVED_TURN, workspaceId, sessionId),
     read: (workspaceId: string, sessionId: string) => ipcRenderer.invoke(IPC.OBSERVED_READ, workspaceId, sessionId),
     liveConfigDir: (sessionId: string): Promise<string | null> => ipcRenderer.invoke(IPC.OBSERVED_LIVE_CONFIG_DIR, sessionId),
+    refreshMs: observedRefreshMs(process.env),
     onItems: (cb) => {
       const handler = (_e: IpcRendererEvent, event: ObservedItemsEvent) => cb(event)
       ipcRenderer.on(IPC.OBSERVED_ITEMS, handler)

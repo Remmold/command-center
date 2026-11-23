@@ -19,8 +19,6 @@ import { Button } from '../ui/Button'
 import { NoticeLine } from '../ui/NoticeLine'
 import { AccountSwitcher } from './AccountSwitcher'
 
-const LIVE_POLL_MS = 10_000
-
 /** The badge's label, colour, bars and hover text for a resolved chat account. */
 function useBadge(chat: ChatAccount) {
   const accounts = useAccounts()
@@ -108,7 +106,7 @@ function useLiveConfigDir(sessionId: string, status: ObservedSession['status'] |
         .then((dir) => alive && setFound({ sessionId, dir }))
         .catch(() => alive && setFound({ sessionId, dir: null }))
     read()
-    const timer = setInterval(read, LIVE_POLL_MS)
+    const timer = setInterval(read, window.api.observed.refreshMs)
     return () => {
       alive = false
       clearInterval(timer)

@@ -41,9 +41,12 @@ export class FakeLog {
       .map((l) => JSON.parse(l) as FakeLogEntry)
   }
 
-  /** True once a fake started in `cwd` received `initialize`; the usage probe runs elsewhere and never counts. */
-  initializedIn(cwd: string): boolean {
-    const entries = this.entries()
+  /**
+   * True once a fake started in `cwd` received `initialize`; the usage probe runs elsewhere and never counts.
+   * With `from`, only a fake started after that many log entries counts.
+   */
+  initializedIn(cwd: string, from = 0): boolean {
+    const entries = this.entries().slice(from)
     const start = entries.findIndex((e) => e.kind === 'argv' && e.cwd === cwd)
     return start !== -1 && entries.slice(start).some((e) => e.kind === 'received' && bodyOf(e, 'control_request')?.subtype === 'initialize')
   }
@@ -135,19 +138,24 @@ export async function evaluateMain<A, R>(app: ElectronApplication, fn: MainFn<A,
   }
 }
 
-/** Holds every `claude:start` in the app's main process for `ms`, to open the window before a chat's process exists. */
+/**
+ * Holds every later `claude:start` in the app's main process for `ms`, to open the window before a chat's process
+ * exists. Calling it again changes the hold; 0 ends it.
+ */
 export async function delayClaudeStart(app: ElectronApplication, ms: number): Promise<void> {
   await evaluateMain(app, ({ ipcMain }, wait: number) => {
     type Handler = (...args: unknown[]) => unknown
-    const marked = globalThis as unknown as { __ccClaudeStartDelayed?: boolean }
-    if (marked.__ccClaudeStartDelayed) return
-    marked.__ccClaudeStartDelayed = true
+    const marked = globalThis as unknown as { __ccClaudeStartDelayMs?: number }
+    const installed = marked.__ccClaudeStartDelayMs !== undefined
+    marked.__ccClaudeStartDelayMs = wait
+    if (installed) return
     const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, Handler> })._invokeHandlers
     const original = handlers.get('claude:start')
     if (!original) throw new Error('claude:start is not registered')
     ipcMain.removeHandler('claude:start')
     ipcMain.handle('claude:start', async (...args: unknown[]) => {
-      await new Promise((r) => setTimeout(r, wait))
+      const hold = marked.__ccClaudeStartDelayMs ?? 0
+      if (hold > 0) await new Promise((r) => setTimeout(r, hold))
       return original(...args)
     })
   }, ms)

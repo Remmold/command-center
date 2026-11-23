@@ -9,7 +9,7 @@ Read this in full before you start.
 - **Ticket status:** set `**Status:** in-progress` before your first code edit and `**Status:** resolved` after your final commit, or `**Status:** blocked — <why>`. Tick the checkboxes. Add one line to the feature's `progress.md`, in the form `- NN resolved: <what> — <commit>`. After each round, overwrite `<ticket>.progress.md` with 3 lines: done, next step, open reds.
 - **Keep the suites lean.** The UI suite (`pnpm e2e`) has a budget of ≤ 20 scenarios and ≤ 90 s, and a check enforces it. Prefer unit tests on pure seams. Add a UI scenario only when no existing one can absorb your check: extend an existing scenario or shared launch first, and say in your report which one you extended. Never delete a regression test for a bug that reached Andreas.
 - **Testing costs zero tokens by default.**
-  - Use the fake CLI (`tools/fake-claude/`, see its README) and add scenarios to the Electron smoke suite (`e2e/smoke.spec.ts`, `pnpm e2e`).
+  - Use the fake CLI (`tools/fake-claude/`, see its README) and extend the Electron UI suite (`e2e/*.spec.ts`, `pnpm e2e`).
   - Real CLI only when the ticket needs real behaviour: Haiku, one-line prompts, at most 3 per ticket. Run it in a temp workspace under `C:\Users\remmold\AppData\Local\Temp\claude\c85b1d19935b6b03\94ac3789-dfed-4f49-9914-b5b495f3362a\scratchpad\`.
   - Control-only probes (no prompt) are free.
   - Never copy or modify `~/.claude/.credentials.json`, `~/.claude/settings.json` or anything in `%APPDATA%\command-center`. Never touch Andreas's installed copy (`C:\Users\remmold\AppData\Local\Programs\command-center\`) or his repos.

@@ -12,7 +12,6 @@ import { readTurn } from './turn'
 import { listObservedTranscripts } from './listing'
 import { readLastItems, TranscriptFollower } from './tail'
 
-const REFRESH_MS = 10_000
 const INITIAL_MAX_BYTES = 8 * 1024 * 1024
 const SESSION_ID_RE = /^[\w-]+$/
 
@@ -36,12 +35,13 @@ export class ObservedService {
     private readonly listWorkspaces: () => Promise<Workspace[]>,
     private readonly transcriptsDirFor: (workspace: Workspace) => Promise<string>,
     private readonly pushSessions: (sessions: ObservedSession[]) => void,
-    private readonly pushItems: (event: ObservedItemsEvent) => void
+    private readonly pushItems: (event: ObservedItemsEvent) => void,
+    private readonly refreshMs: number
   ) {}
 
   start(): void {
     void this.refresh()
-    this.timer = setInterval(() => void this.refresh(), REFRESH_MS)
+    this.timer = setInterval(() => void this.refresh(), this.refreshMs)
   }
 
   stop(): void {
