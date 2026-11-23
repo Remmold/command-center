@@ -552,8 +552,8 @@ export function InputBox({
               </div>
             )}
           </div>
-          <div className="flex items-end justify-between gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-1">
+          <div className="input-footer flex items-end justify-between gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
               <button
                 onClick={handleAttachClick}
                 className="rounded p-1.5 text-muted hover:bg-list-hover hover:text-fg"
@@ -564,7 +564,7 @@ export function InputBox({
               </button>
               {footerStart}
               {/* Zero basis: the hints give way before the model pill does. */}
-              <span className="min-w-0 flex-1 truncate text-[10px] text-faint">
+              <span className="input-footer-wide min-w-0 flex-1 truncate text-[10px] text-faint">
                 {ctrlEnterSends ? 'ctrl+enter to send · enter newline' : 'enter to send · shift+enter newline'} · / commands · @ files · paste files
               </span>
             </div>

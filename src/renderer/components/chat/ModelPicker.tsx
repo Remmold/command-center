@@ -34,7 +34,7 @@ export function ModelPicker({ models, current, pill, effort, levels, onSelectMod
   const currentValue = current ?? DEFAULT_MODEL
   return (
     <>
-      <span ref={menu.setAnchor} className="inline-flex min-w-0">
+      <span ref={menu.setAnchor} className="inline-flex shrink-0">
         <Pill label={pill.label} detail={pill.effort} onClick={menu.toggle} tooltip="Switch model" expanded={menu.open} />
       </span>
       <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} side="above" label="Select a model">

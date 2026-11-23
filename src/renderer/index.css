@@ -102,3 +102,15 @@ code, kbd, pre, samp {
     animation: none;
   }
 }
+
+/* The prompt footer drops button words before the model name gets squeezed, as the extension's does. */
+.input-footer {
+  container-type: inline-size;
+}
+
+@container (max-width: 460px) {
+  .input-footer-wide,
+  .input-footer [data-pill-detail] {
+    display: none;
+  }
+}

@@ -777,7 +777,7 @@ export const ChatView = memo(function ChatView({
             />
             <Button variant="ghost" pressed={thinking} onClick={() => void toggleThinking()} tooltip="Toggle extended thinking mode">
               <Brain size={13} strokeWidth={2} />
-              Thinking
+              <span className="input-footer-wide">Thinking</span>
             </Button>
           </>
         }
