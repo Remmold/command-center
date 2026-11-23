@@ -280,9 +280,15 @@ export { expect }
 export async function startSession({ page, log, workspace }: Launched): Promise<void> {
   await page.keyboard.press('Control+2')
   await page.keyboard.press('Control+t')
-  await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+  await newChatIn(page, /e2e-workspace/)
   await expect(prompt(page)).toBeVisible()
   await expect.poll(() => log.initializedIn(workspace)).toBe(true)
+}
+
+/** In the open project picker: picks the project, then its New chat. */
+export async function newChatIn(page: Page, project: RegExp): Promise<void> {
+  await page.getByRole('option', { name: project }).first().click()
+  await page.getByRole('option', { name: 'New chat' }).click()
 }
 
 /** The folder the app lists past sessions from: Claude's per-cwd transcript folder. */

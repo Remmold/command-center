@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASIC_REPLY, FAKE_SESSION, TINY_PNG, WRITE_DONE, clipboardText, userLines } from './common'
-import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, prompt, send, startSession, test } from './harness'
+import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, newChatIn, prompt, send, startSession, test } from './harness'
 
 const modeButton = (page: Page, label: string) => page.locator('[data-chat-pane]').getByRole('button', { name: label, exact: true })
 
@@ -220,7 +220,7 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
     await delayClaudeStart(launched.app, 2500)
     await page.keyboard.press('Control+2')
     await page.keyboard.press('Control+t')
-    await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+    await newChatIn(page, /e2e-workspace/)
     await pane.getByRole('button', { name: /^(Manual|Edit automatically)$/ }).click()
     await page.getByRole('menuitemradio', { name: /^Plan/ }).click()
     await prompt(page).fill('/rc')

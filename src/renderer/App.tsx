@@ -15,7 +15,7 @@ import { useSessionInitStore } from './state/sessionInitStore'
 import { useRemoteControlStore } from './state/remoteControlStore'
 import { useModelStore } from './state/modelStore'
 import { closeSession, focusedTarget, initChatPair, paneOnScreen } from './state/sessionNavigation'
-import { useLauncherStore } from './state/launcherStore'
+import { pickPastSession, pickProject } from './state/launcherStore'
 import { SessionLauncher } from './components/work/SessionLauncher'
 import { Toasts } from './components/ui/Toasts'
 import { jumpToNextWaiting, openRowAt } from './state/workSessions'
@@ -91,8 +91,8 @@ export function App() {
     switchView: (next) => useViewStore.getState().setView(next),
     openSettings: () => useViewStore.getState().openSettings(),
     nextWaiting: jumpToNextWaiting,
-    newChat: () => useLauncherStore.getState().pickWorkspace('new-session'),
-    loadPastSession: () => useLauncherStore.getState().pickWorkspace('past-sessions'),
+    newChat: pickProject,
+    loadPastSession: () => pickPastSession(),
     closeActiveChat: () => {
       const target = paneOnScreen()
       if (target) closeSession(target)

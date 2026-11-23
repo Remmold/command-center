@@ -282,3 +282,12 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: keep "ahead by 38%" on the wide one-line layout and switch wording by width.
 150. **"Narrow" is one container query on the whole Work list (360 px)** for both the row model text and the usage layout, so both switch together.
     - Alternative: each usage block queries its own width.
+151. **"Recently used" projects (open-project 01) are the ones a chat was last started, resumed, switched to or taken over in through the picker** (start and resume count from anywhere in the app), kept in local storage (`command-center.recent-projects`, 50 at most); the rest follow in repo-name order, and the order holds while filtering.
+    - Alternative: the newest transcript per workspace, which would list every workspace's folder on each open.
+152. **Step 1 shows the account tag only with two or more accounts**, as the Dashboard does.
+153. **The chat header's "load past session…" opens the same picker at step 2 for that chat's workspace**, so the old Past conversations dialog is gone everywhere.
+154. **Back is an arrow left of the centred project name**, as VS Code's multi-step quick input. F2 renames the selected session (VS Code's rename key) besides the pencil on hover; Esc while renaming cancels only the rename. The cap row reads "Show all · N more" below a divider.
+155. **Speed: the renderer keeps each workspace's last listing for the app's life and shows it at once, then refreshes; main re-reads a transcript only when its modified time or size changed.**
+    - Alternative: a cache saved across restarts.
+156. **A session live in VS Code replaces the picker with the same Take over when done / Take over now dialog**; Cancel returns to the picker.
+157. **The picker's own words say "workspace"** ("Open a workspace", "Type to find a workspace"), as GLOSSARY.md asks for new UI text; the row keeps the ticket's "New chat". A switch to a tab that has gone resumes the session instead, as Past conversations did.

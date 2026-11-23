@@ -68,6 +68,25 @@ async function narrowListProblems(page: Page): Promise<string[]> {
   }, LIST)
 }
 
+/** A few past sessions of one workspace, for the project picker's second step. */
+function seedPastSessions(configDir: string, workspacePath: string): void {
+  const dir = join(configDir, 'projects', workspacePath.replace(/[^a-zA-Z0-9]/g, '-'))
+  mkdirSync(dir, { recursive: true })
+  const sessions: [string, string][] = [
+    ['Welcome step and workspace picker, with the long copy the designers asked for', 'feature/onboarding-welcome-step'],
+    ['Email verification links expire after 24 h', 'feature/email-verification'],
+    ['Sign-up form validation', 'main']
+  ]
+  sessions.forEach(([title, gitBranch], i) => {
+    const id = `3333333${i}-3333-4333-8333-333333333333`
+    const lines = [
+      JSON.stringify({ type: 'user', gitBranch, message: { role: 'user', content: [{ type: 'text', text: title }] } }),
+      JSON.stringify({ type: 'ai-title', aiTitle: title, sessionId: id })
+    ]
+    writeFileSync(join(dir, `${id}.jsonl`), lines.join('\n') + '\n')
+  })
+}
+
 for (const percent of [110, 125, 150]) {
   test(`layout at ${percent}%`, async () => {
     const root = mkdtempSync(join(tmpdir(), 'cc-zoom-'))
@@ -79,6 +98,7 @@ for (const percent of [110, 125, 150]) {
     writeFileSync(join(seeded.userData, 'profiles.json'), JSON.stringify([{ id: 'p-work', name: 'Work', createdAt: 1, configDir: work }]))
     const onWork = seeded.workspaces.map((w) => ({ ...w, createdAt: Date.now(), ...(w.name === 'pixel-forge' ? { profileId: 'p-work' } : {}) }))
     writeFileSync(join(seeded.userData, 'projects.json'), JSON.stringify(onWork))
+    seedPastSessions(seeded.configDir, seeded.workspaces.find((w) => w.name === 'ledger-web')!.path)
     mkdirSync(OUT, { recursive: true })
     writeFileSync(join(seeded.userData, 'zoom.json'), JSON.stringify({ level: Math.log(percent / 100) / Math.log(1.2) }))
     const app = await _electron.launch({
@@ -119,6 +139,14 @@ for (const percent of [110, 125, 150]) {
       writeFileSync(join(OUT, `zoom-${percent}-work-list-narrow.png`), Buffer.from(listPng, 'base64'))
       expect(await overflowing(page, sideways)).toEqual([])
       await workSection.click()
+
+      await page.keyboard.press('Control+l')
+      const picker = page.getByRole('dialog', { name: 'Open a workspace' })
+      await expect(picker.getByRole('option', { name: /^Sign-up form validation/ })).toBeVisible()
+      await shot('picker-sessions')
+      expect(await overflowing(page, ['body', '[role="dialog"]', '[role="dialog"] [role="option"]'])).toEqual([])
+      await page.keyboard.press('Escape')
+      await expect(picker).toHaveCount(0)
 
       await page.keyboard.press('Control+b')
       await shot('work-list-hidden')

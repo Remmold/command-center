@@ -2,7 +2,7 @@ import type { RendererApi } from '../src/shared/types'
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASIC_REPLY } from './common'
-import { delayClaudeStart, evaluateMain, expect, send, startSession, test } from './harness'
+import { delayClaudeStart, evaluateMain, expect, newChatIn, send, startSession, test } from './harness'
 
 test('a VS Code profile’s folder is offered, adopted logged in, never written to, and only forgotten on Remove', async ({ launched }) => {
   const { app, page, log, vscodeUserDir, root } = launched
@@ -179,7 +179,7 @@ test('Work shows a section per account with a waiting badge, the Board groups By
   const workLabel = 'Work · Claude Ultra'
   await startSession(launched)
   await page.keyboard.press('Control+t')
-  await page.getByRole('option', { name: /work-repo/ }).first().click()
+  await newChatIn(page, /work-repo/)
   await expect.poll(() => log.initializedIn(workRepo)).toBe(true)
   await send(page, 'say hello')
   await expect(page.getByText(BASIC_REPLY)).toBeVisible()
@@ -230,7 +230,7 @@ test('a Work chat shows the Work badge and pill, moving its workspace warns, and
   await delayClaudeStart(app, 2500)
   await page.keyboard.press('Control+2')
   await page.keyboard.press('Control+t')
-  await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+  await newChatIn(page, /e2e-workspace/)
   await expect(workBadge).toContainText('pending')
   await expect.poll(() => log.initializedIn(workspace)).toBe(true)
   await expect(workBadge).not.toContainText('pending')

@@ -1,0 +1,1 @@
+- 01 resolved: one picker, a workspace then its New chat and recent sessions — 7487fc4

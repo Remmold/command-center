@@ -1,6 +1,6 @@
 import type { ElectronApplication } from '@playwright/test'
 import { BASIC_REPLY, userLines } from './common'
-import { evaluateMain, expect, prompt, send, startSession, test } from './harness'
+import { evaluateMain, expect, newChatIn, prompt, send, startSession, test } from './harness'
 
 test.describe('auto-update', () => {
   test.use({ script: 'slow', env: { CC_UPDATE_IDLE_MS: '1500' } })
@@ -89,7 +89,7 @@ test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while
     const reply = page.locator('[data-chat-pane]').getByText(BASIC_REPLY)
     const openAnother = async () => {
       await page.keyboard.press('Control+t')
-      await page.getByRole('option', { name: /e2e-workspace/ }).first().click()
+      await newChatIn(page, /e2e-workspace/)
       await expect(reply).toBeHidden()
     }
     await openAnother()

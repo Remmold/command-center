@@ -6,6 +6,7 @@ import { chatOnScreen, type ShellOptions } from './projectViewLayout'
 import { useProjectViewsStore, type ProjectView, type ShellTab } from './projectViewsStore'
 import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
+import { useRecentProjectsStore } from './recentProjectsStore'
 
 export const NEXT_WAITING_SHORTCUT = 'Ctrl+Shift+J'
 
@@ -140,6 +141,7 @@ export function openSessionInPlaceOf(from: ChatRef, paneId: string): void {
 
 /** Opens a new chat in the workspace, on its account profile. */
 export function startSession(workspace: Workspace): boolean {
+  useRecentProjectsStore.getState().touch(workspace.id)
   const views = useProjectViewsStore.getState()
   if (!views.views[workspace.id]) {
     views.openProject(workspace)
@@ -152,6 +154,7 @@ export function startSession(workspace: Workspace): boolean {
 
 /** Resumes a past session of the workspace as a new chat. */
 export function resumeSession(workspace: Workspace, info: LocalSessionInfo): boolean {
+  useRecentProjectsStore.getState().touch(workspace.id)
   const views = useProjectViewsStore.getState()
   if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
   const loaded = useProjectViewsStore.getState().loadSessionFromLocal(workspace.id, info)

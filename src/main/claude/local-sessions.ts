@@ -1,5 +1,5 @@
 import { promises as fs, createReadStream } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { LocalSessionInfo, LocalSessionTitleSource } from '../../shared/types'
 
@@ -110,6 +110,17 @@ async function readListing(filePath: string): Promise<TranscriptListing> {
   return collector.listing()
 }
 
+const listings = new Map<string, { mtimeMs: number; size: number; listing: TranscriptListing }>()
+
+/** Reads a transcript again only once it has changed since the last listing. */
+async function cachedListing(file: string, mtimeMs: number, size: number): Promise<TranscriptListing> {
+  const known = listings.get(file)
+  if (known && known.mtimeMs === mtimeMs && known.size === size) return known.listing
+  const listing = await readListing(file)
+  listings.set(file, { mtimeMs, size, listing })
+  return listing
+}
+
 /** Lists the transcripts in one project's folder, e.g. from `transcriptsDirForWorkspace`; untitled ones are left out, as in the extension. */
 export async function listLocalSessions(dir: string): Promise<LocalSessionInfo[]> {
   let entries: string[]
@@ -117,6 +128,9 @@ export async function listLocalSessions(dir: string): Promise<LocalSessionInfo[]
     entries = await fs.readdir(dir)
   } catch {
     return []
+  }
+  for (const file of listings.keys()) {
+    if (dirname(file) === join(dir) && !entries.includes(basename(file))) listings.delete(file)
   }
   const sessions: LocalSessionInfo[] = []
   for (const entry of entries) {
@@ -129,7 +143,7 @@ export async function listLocalSessions(dir: string): Promise<LocalSessionInfo[]
       continue
     }
     if (!stat.isFile()) continue
-    const listing = await readListing(full)
+    const listing = await cachedListing(full, stat.mtimeMs, stat.size)
     if (!listing.title) continue
     sessions.push({ sessionId: entry.replace(/\.jsonl$/, ''), modifiedAt: stat.mtime.getTime(), ...listing })
   }

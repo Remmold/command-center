@@ -1,6 +1,8 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { LucideIcon } from 'lucide-react'
+import { ArrowLeft, type LucideIcon } from 'lucide-react'
+import { IconButton } from './IconButton'
+import { markMatches } from './ListRow'
 
 export interface QuickPickItem {
   key: string
@@ -9,6 +11,17 @@ export interface QuickPickItem {
   icon?: LucideIcon
   label: string
   description?: string
+  tooltip?: string
+  /** At the row's right end, such as an account tag or an age. */
+  trailing?: ReactNode
+  /** Shown at the right end while the row is hovered or selected. */
+  actions?: ReactNode
+  /** Drawn in place of the row, such as a rename field; the row can't be picked meanwhile. */
+  editor?: ReactNode
+  /** Picking it leaves the picker open, e.g. to move to another step. */
+  keepOpen?: boolean
+  /** F2 on the selected row, as rename in VS Code. */
+  onRename?: () => void
   onPick: () => void
 }
 
@@ -17,29 +30,45 @@ interface Props {
   placeholder: string
   query: string
   onQueryChange: (query: string) => void
+  /** A title bar over the input; with `onBack` it gets a Back arrow, and Backspace on an empty filter goes back. */
+  title?: string
+  onBack?: () => void
+  /** Always listed before the matches, whatever the query. */
+  pinned?: readonly QuickPickItem[]
   items: readonly QuickPickItem[]
   /** Always listed after the matches, below a divider, whatever the query. */
   footer?: readonly QuickPickItem[]
+  /** Marks this text in the labels and descriptions of `items`. */
+  highlight?: string
   empty: string
   onClose: () => void
 }
 
 /** A palette at the top centre of the window: a filter input over a list, driven by ↑ ↓ Enter and Escape. */
-export function QuickPick({ label, placeholder, query, onQueryChange, items, footer = [], empty, onClose }: Props) {
-  const all = [...items, ...footer]
-  const [selected, setSelected] = useState(0)
+export function QuickPick({ label, placeholder, query, onQueryChange, title, onBack, pinned = [], items, footer = [], highlight = '', empty, onClose }: Props) {
+  const all = [...pinned, ...items, ...footer]
+  // By key, so rows arriving or going (a refresh, Show all) never move the selection onto another row.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const found = all.findIndex((item) => item.key === selectedKey)
+  const selected = found === -1 ? 0 : found
   const listRef = useRef<HTMLUListElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const listId = useId()
+  const editing = all.some((item) => item.editor)
 
-  useEffect(() => setSelected(0), [query])
+  useEffect(() => setSelectedKey(null), [query])
+
+  useEffect(() => {
+    if (!editing) inputRef.current?.focus()
+  }, [editing])
 
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
   const pick = (item: QuickPickItem | undefined) => {
-    if (!item) return
-    onClose()
+    if (!item || item.editor) return
+    if (!item.keepOpen) onClose()
     item.onPick()
   }
 
@@ -47,7 +76,7 @@ export function QuickPick({ label, placeholder, query, onQueryChange, items, foo
     const step = { ArrowDown: 1, ArrowUp: -1 }[e.key]
     if (step !== undefined && all.length > 0) {
       e.preventDefault()
-      setSelected((i) => (i + step + all.length) % all.length)
+      setSelectedKey(all[(selected + step + all.length) % all.length].key)
     } else if (e.key === 'Enter') {
       e.preventDefault()
       pick(all[selected])
@@ -55,8 +84,18 @@ export function QuickPick({ label, placeholder, query, onQueryChange, items, foo
       e.preventDefault()
       e.stopPropagation()
       onClose()
+    } else if (e.key === 'Backspace' && query === '' && onBack) {
+      e.preventDefault()
+      onBack()
+    } else if (e.key === 'F2' && all[selected]?.onRename) {
+      e.preventDefault()
+      all[selected].onRename?.()
     }
   }
+
+  const emptyHint = <li className="px-2 py-1 text-sm text-muted">{empty}</li>
+  const firstItem = pinned.length
+  const firstFooter = pinned.length + items.length
 
   return createPortal(
     <div className="fixed inset-0 z-50" onMouseDown={onClose}>
@@ -66,7 +105,19 @@ export function QuickPick({ label, placeholder, query, onQueryChange, items, foo
         onMouseDown={(e) => e.stopPropagation()}
         className="mx-auto mt-2 flex max-h-[60vh] w-[600px] max-w-[calc(100%-32px)] flex-col overflow-hidden rounded-md border border-strong bg-widget p-1 shadow-lg"
       >
+        {title && (
+          <div className="mb-1 flex h-[22px] shrink-0 items-center gap-1 px-0.5 text-sm text-fg">
+            {onBack && (
+              <IconButton label="Back" tooltip="Back (Backspace)" onClick={onBack}>
+                <ArrowLeft size={14} />
+              </IconButton>
+            )}
+            <span className="min-w-0 flex-1 truncate text-center">{title}</span>
+            {onBack && <span className="w-[18px] shrink-0" />}
+          </div>
+        )}
         <input
+          ref={inputRef}
           aria-label={label}
           autoFocus
           role="combobox"
@@ -79,17 +130,20 @@ export function QuickPick({ label, placeholder, query, onQueryChange, items, foo
           className="mb-1 w-full rounded-sm border border-focus bg-input px-1.5 py-1 text-sm text-fg placeholder:text-faint focus:outline-none"
         />
         <ul id={listId} ref={listRef} role="listbox" aria-label={label} className="scrollbar-thin min-h-0 overflow-y-auto">
-          {items.length === 0 && <li className="px-2 py-1 text-sm text-muted">{empty}</li>}
           {all.map((item, i) => (
-            <QuickPickRow
-              key={item.key}
-              item={item}
-              selected={i === selected}
-              divided={i === items.length && i > 0}
-              onHover={() => setSelected(i)}
-              onPick={() => pick(item)}
-            />
+            <Fragment key={item.key}>
+              {i === firstItem && items.length === 0 && emptyHint}
+              <QuickPickRow
+                item={item}
+                highlight={i >= firstItem && i < firstFooter ? highlight : ''}
+                selected={i === selected}
+                divided={i === firstFooter && i > 0}
+                onHover={() => setSelectedKey(item.key)}
+                onPick={() => pick(item)}
+              />
+            </Fragment>
           ))}
+          {items.length === 0 && footer.length === 0 && emptyHint}
         </ul>
       </div>
     </div>,
@@ -99,26 +153,35 @@ export function QuickPick({ label, placeholder, query, onQueryChange, items, foo
 
 interface RowProps {
   item: QuickPickItem
+  highlight: string
   selected: boolean
   divided: boolean
   onHover: () => void
   onPick: () => void
 }
 
-function QuickPickRow({ item, selected, divided, onHover, onPick }: RowProps) {
+function QuickPickRow({ item, highlight, selected, divided, onHover, onPick }: RowProps) {
   const Icon = item.icon
+  if (item.editor) return <li className="px-2 py-0.5">{item.editor}</li>
   return (
     <li
       role="option"
       aria-selected={selected}
       onMouseMove={onHover}
       onClick={onPick}
-      className={`flex h-[22px] cursor-pointer items-center gap-1.5 rounded-sm px-2 text-sm text-fg ${selected ? 'bg-list-selected' : ''} ${divided ? 'mt-1 border-t border-subtle' : ''}`}
+      title={item.tooltip}
+      className={`group flex h-[22px] cursor-pointer items-center gap-1.5 rounded-sm px-2 text-sm text-fg ${selected ? 'bg-list-selected' : ''} ${divided ? 'mt-1 border-t border-subtle' : ''}`}
     >
       {item.leading}
       {Icon && <Icon size={14} strokeWidth={1.75} className="shrink-0 text-muted" />}
-      <span className="shrink-0 truncate">{item.label}</span>
-      {item.description && <span className="min-w-0 truncate text-xs text-muted">{item.description}</span>}
+      <span className="min-w-0 shrink truncate">{markMatches(item.label, highlight)}</span>
+      {item.description && <span className="min-w-0 flex-1 truncate text-xs text-muted">{markMatches(item.description, highlight)}</span>}
+      {(item.trailing || item.actions) && (
+        <span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted">
+          {item.trailing}
+          {item.actions && <span className={selected ? '' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'}>{item.actions}</span>}
+        </span>
+      )}
     </li>
   )
 }

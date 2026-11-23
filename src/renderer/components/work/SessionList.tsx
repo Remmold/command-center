@@ -10,7 +10,7 @@ import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useSessionListStore } from '../../state/sessionListStore'
 import { sessionRowTooltip, waitingBadge, type AccountSection, type SessionGroup, type SessionGroupId, type SessionRow } from '../../state/sessionList'
 import { useChatPairStore } from '../../state/chatPairStore'
-import { useLauncherStore } from '../../state/launcherStore'
+import { pickPastSession, pickProject } from '../../state/launcherStore'
 import { closeSession } from '../../state/sessionNavigation'
 import { renameHostedSession } from '../../state/sessionTitleSync'
 import { isShown, openRow, useAccountSectionsStore, useSessionSections, useWorkSearchStore } from '../../state/workSessions'
@@ -52,7 +52,7 @@ export function SessionList() {
     <nav aria-label="Sessions" className="work-list flex h-full min-h-0 flex-col bg-sidebar">
       <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
         <span className="min-w-0 flex-1">
-          <Button onClick={() => useLauncherStore.getState().pickWorkspace('new-session')} tooltip="Start a session in a workspace (Ctrl+T)">
+          <Button onClick={pickProject} tooltip="Start a session in a workspace (Ctrl+T)">
             <Plus size={12} />
             New session
           </Button>
@@ -129,7 +129,7 @@ function ListMenu() {
             description="Resume an earlier session of a workspace"
             onClick={() => {
               menu.close()
-              useLauncherStore.getState().pickWorkspace('past-sessions')
+              pickPastSession()
             }}
           />
         </PopoverMenu>
