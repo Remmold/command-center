@@ -5,6 +5,7 @@ import { useMenu } from '../../hooks/useMenu'
 import { useToastStore } from '../../state/toastStore'
 import { IconButton } from '../ui/IconButton'
 import { ImagePreview } from '../ui/ImagePreview'
+import { useSeen } from '../../hooks/useSeen'
 import { MenuItem } from '../ui/MenuItem'
 import { Popover, PopoverMenu } from '../ui/Popover'
 import { Thumbnail, ThumbnailGrid, ThumbnailImage, ThumbnailPlaceholder, ThumbnailVideo } from '../ui/Thumbnail'
@@ -63,21 +64,6 @@ const sameTile = (a: TileProps, b: TileProps): boolean =>
   a.revision === b.revision &&
   a.onOpen === b.onOpen &&
   a.onJump === b.onJump
-
-/** True once the element has scrolled into view; it stays loaded after. */
-function useSeen(): [(el: HTMLElement | null) => void, boolean] {
-  const [el, setEl] = useState<HTMLElement | null>(null)
-  const [seen, setSeen] = useState(false)
-  useEffect(() => {
-    if (!el || seen) return
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) setSeen(true)
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [el, seen])
-  return [setEl, seen]
-}
 
 async function openExternally(path: string): Promise<void> {
   const error = await window.api.files.openWithSystem(path)

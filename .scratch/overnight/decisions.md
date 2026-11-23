@@ -344,3 +344,14 @@ Each entry records what was decided, why, and the alternative. Review these in t
 187. **The unsupported-file notice keeps the extension's wording** ("images (PNG, JPG, GIF, WebP), text files, and PDFs") though videos are now accepted.
 188. **A pasted video without a file path** is written into its temp job folder; its original then does not appear in the Media tab (only its sheets), since the folder is deleted after sending. The UI test drops such a video.
 189. **`CC_FFMPEG`** (a path to ffmpeg, or `none`) overrides the ffmpeg lookup for tests; normal use never sets it. The `video-temp` folder in app data is emptied at start-up for jobs a quit left behind.
+190. **A sent prompt shows its attachments under its text, images as 160 px tall thumbnails wrapping to as many rows as needed**, as the ticket asks; the extension (`userMessageAttachments`) puts them above the text as 48 px tiles in one sideways-scrolling row.
+    - Alternative: the extension's row.
+191. **Images read from a transcript are not copied into chat items**: the item names the line and block (and the chat it was read from), and the image is read again from the transcript over IPC once its tile is on screen, keeping the last 48 in memory. A taken-over chat therefore still previews the original after a restart.
+    - Alternative: carry the base64 in the items.
+192. **A thumbnail is a PNG when one fits 40 kB, else a JPEG at quality 0.85, 0.7, 0.5 or 0.3 on white**, 320 px on its long side; none is kept when even that is over 40 kB.
+    - Alternative: always JPEG.
+193. **Items saved before this change are migrated when shown, not rewritten**: the marker becomes a chip "1 image (not kept)" with "Sent before attachments were kept".
+194. **In a transcript a video is recognised by its "Video: … on N sheets" text**; that many images before it fold into one video chip with the first sheet as its poster. Transcript images carry no name, so they read "image 1", "image 2".
+195. **File and video chips in a sent prompt do not open anything**; only images open the preview, stepping through that message's images.
+    - Alternative: open the PDF or video externally.
+196. **A prompt shows at once with its attachments; the thumbnails are made just after and written into the item (or the held prompt)**, so making them never delays a send or lets a later prompt overtake it. Until then the tile shows the full image from memory.

@@ -553,6 +553,8 @@ export interface RendererApi {
     turn: (workspaceId: string, sessionId: string) => Promise<ObservedTurn>
     /** The last items, read once without following. */
     read: (workspaceId: string, sessionId: string) => Promise<ObservedOpenResult>
+    /** An image a prompt carried, as a data URL, read again from its transcript line. */
+    image: (workspaceId: string, sessionId: string, uuid: string, block: number) => Promise<string | null>
     /** The config folder whose `sessions/<pid>.json` holds the session with a live process; null when none does. */
     liveConfigDir: (sessionId: string) => Promise<string | null>
     /** How often to read `liveConfigDir` and the session list again, in ms. */

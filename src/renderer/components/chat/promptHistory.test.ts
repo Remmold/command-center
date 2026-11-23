@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatItem } from './types'
-import { historyEntries, NO_RECALL, stepHistory, userItemText } from './promptHistory'
+import { historyEntries, NO_RECALL, stepHistory } from './promptHistory'
 
 const user = (text: string): ChatItem => ({ kind: 'user', id: text, text })
 const note = (text: string): ChatItem => ({ kind: 'system', id: text, text })
@@ -12,7 +12,7 @@ describe('prompt history entries', () => {
   })
 
   it('leave out the attachments marker and image-only sends', () => {
-    expect(historyEntries([user(userItemText('look at this', [{ kind: 'image' }, { kind: 'image' }])), user(userItemText('', [{ kind: 'pdf' }]))], [])).toEqual(['look at this'])
+    expect(historyEntries([user('look at this\n\n_[2 images attached]_'), user('\n\n_[1 file attached]_'), user('')], [])).toEqual(['look at this'])
   })
 
   it('trim the prompt and skip blank ones', () => {

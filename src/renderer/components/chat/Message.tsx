@@ -2,7 +2,9 @@ import { memo, type ReactNode } from 'react'
 import { Markdown } from '../ui/Markdown'
 import type { ContentBlock } from '../../../shared/types'
 import { fileBaseName } from '../../../shared/fileLinks'
-import type { AssistantMessageItem, ChatItem, ToolResultItem, ResultItem, SystemItem } from './types'
+import type { AssistantMessageItem, ChatItem, ToolResultItem, ResultItem, SystemItem, UserAttachment } from './types'
+import { SentAttachments } from './SentAttachments'
+import { userBubble } from './userAttachments'
 import { computeUnifiedDiff, trimContext, type DiffSegment } from './diff'
 import { UnifiedDiffView, isUnifiedDiff } from './UnifiedDiffView'
 import { DiffLines } from './DiffLines'
@@ -49,7 +51,7 @@ interface MessageProps {
 export const Message = memo(function Message({ item, stampAt, streamingFrom, thinkingTokens, joinAbove = false, joinBelow = false, compactSummary }: MessageProps) {
   switch (item.kind) {
     case 'user':
-      return <UserPrompt text={item.text} at={stampAt} />
+      return <UserPrompt id={item.id} {...userBubble(item)} at={stampAt} />
     case 'assistant':
       return (
         <AssistantMessage
@@ -83,7 +85,17 @@ function Stamp({ at }: { at: number }) {
 }
 
 /** `queued` is a prompt still waiting on the CLI; it looks the same, as in the extension, and only reads differently. */
-export function UserPrompt({ text, queued = false, at }: { text: string; queued?: boolean; at?: number }) {
+interface UserPromptProps {
+  id: string
+  text: string
+  attachments?: readonly UserAttachment[]
+  /** What an item saved before attachments were kept counted, e.g. "1 image (not kept)". */
+  notKept?: string | null
+  queued?: boolean
+  at?: number
+}
+
+export function UserPrompt({ id, text, attachments = [], notKept = null, queued = false, at }: UserPromptProps) {
   return (
     <div className="py-1.5">
       {at !== undefined && !queued && (
@@ -99,6 +111,7 @@ export function UserPrompt({ text, queued = false, at }: { text: string; queued?
         className="whitespace-pre-wrap break-words rounded-md border border-strong bg-input px-3 py-2 text-[13px] leading-relaxed text-fg"
       >
         {text}
+        <SentAttachments messageId={id} attachments={attachments} notKept={notKept} belowText={text !== ''} />
       </div>
     </div>
   )

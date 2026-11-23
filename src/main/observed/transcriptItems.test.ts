@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTranscriptParser, transcriptLinesToItems } from './transcriptItems'
+import { createTranscriptParser, imageInLine, transcriptLinesToItems, withTranscriptSource } from './transcriptItems'
 
 const base = {
   isSidechain: false,
@@ -219,5 +219,73 @@ describe('createTranscriptParser', () => {
       { kind: 'system', id: 'c1', text: '', compact: { trigger: 'auto', preTokens: 974_400 }, at },
       { kind: 'system', id: 'c2', text: '', compactSummary: 'This session is being continued…', at }
     ])
+  })
+})
+
+describe('attachments on a transcript prompt', () => {
+  const png = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } }
+  const sheet = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/4AAQ' } }
+  const prompt = (content: unknown[]) => ({ ...humanPrompt, message: { role: 'user', content } })
+  const at = Date.parse(base.timestamp)
+
+  it('names each image, document and video by where its original sits, never copying the data', () => {
+    const items = transcriptLinesToItems([
+      JSON.stringify(
+        prompt([
+          { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'hello' }, title: 'notes.txt' },
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'JVBE' }, title: 'paper.pdf' },
+          sheet,
+          sheet,
+          { type: 'text', text: 'Video: clip.mp4 · 0:06 · 12 frames on 2 sheets\nSheet 1: 0:00\nSheet 2: 0:03' },
+          png,
+          { type: 'text', text: 'look' }
+        ])
+      )
+    ])
+    expect(items).toEqual([
+      {
+        kind: 'user',
+        id: 'u1',
+        text: 'look',
+        at,
+        attachments: [
+          { kind: 'text', name: 'notes.txt', mediaType: 'text/plain' },
+          { kind: 'pdf', name: 'paper.pdf', mediaType: 'application/pdf' },
+          { kind: 'video', name: 'clip.mp4', mediaType: 'image/jpeg', transcript: { block: 2 } },
+          { kind: 'image', name: 'image 1', mediaType: 'image/png', transcript: { block: 5 } }
+        ]
+      }
+    ])
+    expect(JSON.stringify(items)).not.toContain('iVBORw0KGgo')
+  })
+
+  it('keeps an image-only prompt', () => {
+    expect(transcriptLinesToItems([JSON.stringify(prompt([png, png]))])).toEqual([
+      {
+        kind: 'user',
+        id: 'u1',
+        text: '',
+        at,
+        attachments: [
+          { kind: 'image', name: 'image 1', mediaType: 'image/png', transcript: { block: 0 } },
+          { kind: 'image', name: 'image 2', mediaType: 'image/png', transcript: { block: 1 } }
+        ]
+      }
+    ])
+  })
+
+  it('are told which chat they came from, so the original can be read again after a restart', () => {
+    const [item] = transcriptLinesToItems([JSON.stringify(prompt([png, { type: 'text', text: 'look' }]))])
+    const [user, other] = withTranscriptSource([item, { kind: 'system', id: 'n', text: 'x' }], 'w1', 's1')
+    expect(user).toMatchObject({ attachments: [{ transcript: { block: 0, workspaceId: 'w1', sessionId: 's1' } }] })
+    expect(other).toEqual({ kind: 'system', id: 'n', text: 'x' })
+  })
+
+  it('read back as the original image, from its line and block only', () => {
+    const line = JSON.stringify(prompt([{ type: 'text', text: 'a' }, png]))
+    expect(imageInLine(line, 'u1', 1)).toBe('data:image/png;base64,iVBORw0KGgo=')
+    expect(imageInLine(line, 'u1', 0)).toBeNull()
+    expect(imageInLine(line, 'other', 1)).toBeNull()
+    expect(imageInLine('{broken', 'u1', 1)).toBeNull()
   })
 })

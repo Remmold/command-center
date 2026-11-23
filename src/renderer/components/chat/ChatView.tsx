@@ -17,7 +17,9 @@ import { PermissionModePicker } from './PermissionModePicker'
 import { interruptNote } from './interrupt'
 import { UserPrompt } from './Message'
 import { pickUp, type HeldPrompt } from './heldPrompts'
-import { historyEntries, userItemText } from './promptHistory'
+import { historyEntries } from './promptHistory'
+import { sentAttachments } from './userAttachments'
+import { fillThumbnails } from '../../state/sentThumbnails'
 import { promptContent, terminalSnapshots, type PromptAttachment } from './attachments'
 import { readTerminal } from '../../state/terminalBuffers'
 import { overlayOpen } from '../ui/overlay'
@@ -364,7 +366,7 @@ export const ChatView = memo(function ChatView({
     appendItems(
       paneId,
       prompts.flatMap((p): ChatItem[] => [
-        { kind: 'user', id: p.uuid, text: p.text, at: Date.now() },
+        { kind: 'user', id: p.uuid, text: p.text, ...(p.attachments ? { attachments: p.attachments } : {}), at: Date.now() },
         ...(p.notice ? [{ kind: 'system' as const, id: crypto.randomUUID(), text: p.notice, at: Date.now() }] : [])
       ])
     )
@@ -623,12 +625,13 @@ export const ChatView = memo(function ChatView({
       return
     }
     const uuid = crypto.randomUUID()
-    const userText = userItemText(text, attachments)
+    const shown = attachments.length > 0 ? { attachments: sentAttachments(attachments) } : {}
     useChatMediaStore.getState().addAttachments(paneId, mediaAttachments(uuid, attachments))
     // As the extension's `turnRunningOrQueued`: the CLI queues it and says when it starts.
     const queued = turnActive || held.length > 0
-    if (queued) useHeldPromptsStore.getState().hold(paneId, { uuid, text: userText })
-    else appendItems(paneId, [{ kind: 'user', id: uuid, text: userText, at: Date.now() }])
+    if (queued) useHeldPromptsStore.getState().hold(paneId, { uuid, text, ...shown })
+    else appendItems(paneId, [{ kind: 'user', id: uuid, text, ...shown, at: Date.now() }])
+    if (attachments.length > 0) fillThumbnails(paneId, uuid, attachments)
     toBottom()
     const firstPrompt = isFirstPrompt(paneId)
     useProjectViewsStore.getState().notePrompt(paneId, text)
@@ -737,7 +740,7 @@ export const ChatView = memo(function ChatView({
               ))}
               {turnActive && pendingApprovals.length === 0 && <WorkingLine mode={mode} compacting={compacting} />}
               {held.map((p) => (
-                <UserPrompt key={p.uuid} text={p.text} queued />
+                <UserPrompt key={p.uuid} id={p.uuid} text={p.text} attachments={p.attachments} queued />
               ))}
               <div role="status" className="sr-only">
                 {held.length > 0 ? 'Message queued.' : ''}

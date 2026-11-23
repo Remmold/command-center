@@ -65,6 +65,7 @@ export const IPC = {
   OBSERVED_CLOSE: 'observed:close',
   OBSERVED_TURN: 'observed:turn',
   OBSERVED_READ: 'observed:read',
+  OBSERVED_IMAGE: 'observed:image',
   OBSERVED_LIVE_CONFIG_DIR: 'observed:liveConfigDir',
   OBSERVED_ITEMS: 'observed:items',
   START_WITH_WINDOWS_GET: 'startWithWindows:get',

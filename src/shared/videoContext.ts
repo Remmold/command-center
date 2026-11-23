@@ -137,6 +137,12 @@ export interface VideoContextInput {
   maxChars?: number
 }
 
+/** The video's name and sheet count from the first line `videoContextText` writes; null for any other text. */
+export function parseVideoHeader(text: string): { name: string; sheets: number } | null {
+  const match = /^Video: (.+) · [\d:]+ · \d+ frames? on (\d+) sheets?(?:\n|$)/.exec(text)
+  return match ? { name: match[1], sheets: Number(match[2]) } : null
+}
+
 /** The text block that goes with the sheets: what the video is, which times each sheet shows, and the transcript. */
 export function videoContextText({ name, duration, frameTimes, sheets, speech, maxChars = MAX_TRANSCRIPT_CHARS }: VideoContextInput): string {
   const lines = [`Video: ${name} · ${formatClock(duration)} · ${plural(frameTimes.length, 'frame')} on ${plural(sheets.length, 'sheet')}`]

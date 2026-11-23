@@ -93,7 +93,7 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
     await prompt(page).fill('')
   })
 
-  await test.step('text and PDF files go as document blocks, a video as its contact sheet and text, before the prompt; an over-long prompt is refused; the reply streams on the profile config dir', async () => {
+  await test.step('a pasted image, text and PDF files and a video go before the prompt and show in its bubble, the image as a thumbnail that opens the preview; an over-long prompt is refused; the reply streams on the profile config dir', async () => {
     const fileInput = page.locator('[data-chat-pane] input[type="file"]')
     const clip = ffmpegClip(workspace)
     if (clip) {
@@ -122,6 +122,14 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
     ])
     await expect(page.getByText(/^Unsupported file type: archive\.zip\. /)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Remove notes.txt' })).toBeVisible()
+    await prompt(page).evaluate((textarea, base64) => {
+      type Transfer = { items: { add: (file: unknown) => void } }
+      const transfer = new (globalThis as unknown as { DataTransfer: new () => Transfer }).DataTransfer()
+      transfer.items.add(new File([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], 'pasted.png', { type: 'image/png' }))
+      const Clipboard = (globalThis as unknown as { ClipboardEvent: new (type: string, init: object) => object }).ClipboardEvent
+      ;(textarea as unknown as { dispatchEvent: (e: object) => void }).dispatchEvent(new Clipboard('paste', { clipboardData: transfer, bubbles: true, cancelable: true }))
+    }, TINY_PNG)
+    await expect(page.getByRole('button', { name: 'Remove pasted.png' })).toBeVisible()
     await send(page, 'read these')
     await expect.poll(() => userLines(log).length).toBe(1)
     const videoBlocks = clip
@@ -136,10 +144,20 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
     expect((userLines(log)[0].line?.message as { content: unknown }).content).toEqual([
       { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'hello notes' }, title: 'notes.txt' },
       { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from('%PDF-1.4').toString('base64') }, title: 'paper.pdf' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: TINY_PNG } },
       ...videoBlocks,
       { type: 'text', text: 'read these' }
     ])
     if (clip) await expect.poll(() => readdirSync(join(launched.root, 'user-data', 'video-temp'))).toEqual([])
+    const bubble = page.locator('[data-user-prompt]').filter({ hasText: 'read these' })
+    await expect(bubble.getByRole('img', { name: 'pasted.png' })).toHaveAttribute('src', /^data:image\/(png|jpeg);base64,/)
+    await expect(bubble.getByText('paper.pdf')).toBeVisible()
+    await expect(bubble).not.toContainText('attached]_')
+    await bubble.getByRole('button', { name: 'Open pasted.png' }).click()
+    const preview = page.getByRole('dialog', { name: 'pasted.png' })
+    await expect(preview.getByRole('img', { name: 'pasted.png' })).toHaveAttribute('src', `data:image/png;base64,${TINY_PNG}`)
+    await page.keyboard.press('Escape')
+    await expect(preview).toHaveCount(0)
 
     await prompt(page).fill('x'.repeat(50_001))
     await prompt(page).press('Enter')

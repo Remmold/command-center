@@ -108,6 +108,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.on(IPC.OBSERVED_CLOSE, () => observed.close())
   ipcMain.handle(IPC.OBSERVED_TURN, (_e, workspaceId: string, sessionId: string) => observed.turn(workspaceId, sessionId))
   ipcMain.handle(IPC.OBSERVED_READ, (_e, workspaceId: string, sessionId: string) => observed.items(workspaceId, sessionId))
+  ipcMain.handle(IPC.OBSERVED_IMAGE, (_e, workspaceId: string, sessionId: string, uuid: string, block: number) =>
+    observed.image(workspaceId, sessionId, uuid, block)
+  )
   ipcMain.handle(IPC.OBSERVED_LIVE_CONFIG_DIR, async (_e, sessionId: string) =>
     /^[\w-]+$/.test(sessionId) ? liveConfigDir(await profiles.knownConfigDirs(), sessionId) : null
   )
