@@ -36,3 +36,6 @@ coverage/
 
 # Electron native build artifacts
 .electron-builder.env
+
+# Screenshots written by the zoom overflow check on every run
+.scratch/zoom-and-sidebar/shots/
