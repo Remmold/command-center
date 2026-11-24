@@ -5,6 +5,8 @@ export const IPC = {
   WORKSPACES_REMOVE: 'workspaces:remove',
   WORKSPACES_SET_PROFILE: 'workspaces:setProfile',
   WORKSPACES_REORDER: 'workspaces:reorder',
+  SIDEBAR_GROUPS_LOAD: 'sidebarGroups:load',
+  SIDEBAR_GROUPS_SAVE: 'sidebarGroups:save',
   REPO_IDENTITIES_LIST: 'repoIdentities:list',
   REPO_IDENTITIES_SET_NAME: 'repoIdentities:setName',
   REPO_IDENTITIES_SET_ICON: 'repoIdentities:setIcon',

@@ -17,6 +17,8 @@ interface ObservedState {
   loading: boolean
   error: string | null
   initialized: boolean
+  /** The first list has arrived, or failed. */
+  listed: boolean
   init: () => void
   open: (workspaceId: string, sessionId: string) => Promise<void>
   close: () => void
@@ -57,6 +59,7 @@ export const useObservedStore = create<ObservedState>((set, get) => ({
   loading: false,
   error: null,
   initialized: false,
+  listed: false,
 
   init: () => {
     if (get().initialized) return
@@ -68,8 +71,11 @@ export const useObservedStore = create<ObservedState>((set, get) => ({
     })
     window.api.observed
       .list()
-      .then((sessions) => set({ sessions: notTakenOver(sessions) }))
-      .catch((err) => console.error('failed to load observed sessions', err))
+      .then((sessions) => set({ sessions: notTakenOver(sessions), listed: true }))
+      .catch((err) => {
+        console.error('failed to load observed sessions', err)
+        set({ listed: true })
+      })
 
     syncHosted()
     useProjectViewsStore.subscribe(syncHosted)

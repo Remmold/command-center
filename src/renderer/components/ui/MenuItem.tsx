@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
+import { ChevronRight, type LucideIcon } from 'lucide-react'
 
 interface Props {
   icon?: LucideIcon
@@ -8,10 +8,12 @@ interface Props {
   disabled?: boolean
   /** Marks the current choice in a pick-one menu. */
   checked?: boolean
+  /** Opens a further list of choices in place of this menu. */
+  submenu?: boolean
 }
 
 /** One action in a popover menu. */
-export function MenuItem({ icon: Icon, label, description, onClick, disabled, checked }: Props) {
+export function MenuItem({ icon: Icon, label, description, onClick, disabled, checked, submenu }: Props) {
   return (
     <button
       type="button"
@@ -27,6 +29,7 @@ export function MenuItem({ icon: Icon, label, description, onClick, disabled, ch
         {description && <span className="block text-[11px] text-muted">{description}</span>}
       </span>
       {checked && <span className="shrink-0 text-[11px] text-muted">active</span>}
+      {submenu && <ChevronRight size={14} strokeWidth={1.75} className="mt-px shrink-0 text-muted" />}
     </button>
   )
 }

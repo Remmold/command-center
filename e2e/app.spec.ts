@@ -60,7 +60,7 @@ test.describe('auto-update', () => {
   })
 })
 
-test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while Alt+1 and Ctrl+Shift+J still open rows, and both are kept across a restart', async ({ launched }) => {
+test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while Alt+2 and Ctrl+Shift+J still open rows, and both are kept across a restart', async ({ launched }) => {
   const { app, page, log } = launched
   const zoomPercent = (electronApp: ElectronApplication): Promise<number> =>
     evaluateMain(electronApp, ({ BrowserWindow }) => Math.round(BrowserWindow.getAllWindows()[0].webContents.getZoomFactor() * 100), null)
@@ -81,7 +81,7 @@ test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while
     await expect.poll(() => zoomPercent(app)).toBe(110)
   })
 
-  await test.step('Ctrl+B hides and shows the session list, and Alt+1 and Ctrl+Shift+J still open rows while it is hidden', async () => {
+  await test.step('Ctrl+B hides and shows the session list, and Alt+2 (a new chat is first) and Ctrl+Shift+J still open rows while it is hidden', async () => {
     await send(page, 'say hello')
     await expect(page.getByText(BASIC_REPLY)).toBeVisible()
     await expect(list).toBeVisible()
@@ -96,7 +96,7 @@ test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while
       await expect(reply).toBeHidden()
     }
     await openAnother()
-    await page.keyboard.press('Alt+1')
+    await page.keyboard.press('Alt+2')
     await expect(reply).toBeVisible()
     await openAnother()
     await page.keyboard.press('Control+Shift+J')

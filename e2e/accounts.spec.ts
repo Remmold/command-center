@@ -1,6 +1,7 @@
 import type { RendererApi } from '../src/shared/types'
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { Locator } from '@playwright/test'
 import { BASIC_REPLY } from './common'
 import { delayClaudeStart, evaluateMain, expect, newChatIn, send, startSession, test } from './harness'
 
@@ -219,13 +220,13 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await expect(workHeader).not.toContainText('waiting')
   await expect(list.getByRole('region').first()).toHaveAttribute('aria-label', 'Personal · Ultra')
 
-  await expect(homeSection.getByRole('region', { name: 'e2e-workspace' }).getByRole('listitem')).toHaveCount(1)
-  const repoHeader = workSection.getByRole('region', { name: 'work-repo' }).getByRole('button', { name: /^work-repo/ })
-  await expect(repoHeader).toHaveText(/work-repo$/)
+  await expect(homeSection.getByRole('region', { name: 'Ungrouped' }).getByRole('listitem')).toHaveCount(1)
+  const repoHeader = workSection.getByRole('region', { name: 'Ungrouped' }).getByRole('button', { name: /^Ungrouped/ })
+  await expect(repoHeader).toHaveText(/Ungrouped$/)
   await repoHeader.click()
   await expect(workWaiting).toBeHidden()
-  await expect(repoHeader).toHaveText(/work-repo1 waiting1$/)
-  await expect(repoHeader.getByTitle('1 chat in work-repo is waiting on you')).toBeVisible()
+  await expect(repoHeader).toHaveText(/Ungrouped1 waiting1$/)
+  await expect(repoHeader.getByTitle('1 chat in Ungrouped is waiting on you')).toBeVisible()
   await page.getByRole('searchbox', { name: 'Search sessions' }).fill('work-repo')
   await expect(workWaiting).toBeVisible()
   await page.getByRole('searchbox', { name: 'Search sessions' }).fill('')
@@ -237,7 +238,7 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await expect(homeSection.getByRole('listitem').getByRole('button').first()).toHaveAttribute('aria-current', 'true')
   await page.keyboard.press('Control+Shift+J')
   await expect(workWaiting).toBeVisible()
-  await expect(repoHeader).toHaveText(/work-repo$/)
+  await expect(repoHeader).toHaveText(/Ungrouped$/)
 
   await page.keyboard.press('Control+3')
   await page.getByRole('tab', { name: 'By account' }).click()
@@ -249,6 +250,47 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Workspaces', { exact: true }).click()
   await expect(page.getByRole('region', { name: workLabel }).getByRole('listitem', { name: 'work-repo' })).toBeVisible()
   await expect(page.getByRole('region', { name: homeLabel }).getByRole('listitem', { name: 'e2e-workspace' })).toBeVisible()
+
+  await test.step('own groups: made from the account menu, a chat dragged into one, a group dragged above another, a drop on another account refused, Alt+Shift+Up into the group above, all kept after a reload', async () => {
+    await page.keyboard.press('Control+2')
+    const homeChat = homeSection.getByRole('listitem')
+    const groupNames = () => homeSection.locator('section').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
+    const header = (name: string) => homeSection.getByRole('region', { name }).locator('[data-section-header]')
+    const drag = async (from: Locator, to: Locator, half: 'top' | 'bottom') => {
+      const a = (await from.boundingBox())!
+      const b = (await to.boundingBox())!
+      await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2 + 6, { steps: 2 })
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height * (half === 'top' ? 0.25 : 0.75), { steps: 4 })
+      await page.mouse.up()
+    }
+    for (const name of ['Today', 'Later']) {
+      await homeSection.getByRole('button', { name: /^Personal · Ultra/ }).click({ button: 'right' })
+      await page.getByRole('menuitem', { name: 'New group' }).click()
+      await homeSection.getByRole('textbox', { name: 'Group name' }).fill(name)
+      await page.keyboard.press('Enter')
+    }
+    await expect.poll(groupNames).toEqual(['Ungrouped', 'Today', 'Later'])
+
+    await drag(homeChat, header('Today'), 'top')
+    await expect(homeSection.getByRole('region', { name: 'Today' }).getByRole('listitem')).toHaveCount(1)
+    await drag(header('Later'), header('Today'), 'top')
+    await expect.poll(groupNames).toEqual(['Later', 'Today'])
+    await drag(homeChat, workWaiting, 'top')
+    await expect(workSection.getByRole('listitem')).toHaveCount(1)
+    await expect(homeSection.getByRole('region', { name: 'Today' }).getByRole('listitem')).toHaveCount(1)
+    await homeChat.getByRole('button').first().focus()
+    await page.keyboard.press('Alt+Shift+ArrowUp')
+    await expect(homeSection.getByRole('region', { name: 'Later' }).getByRole('listitem')).toHaveCount(1)
+    await expect(homeChat.getByRole('button').first()).toBeFocused()
+
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await page.keyboard.press('Control+2')
+    await expect(homeSection.getByRole('region', { name: 'Later' }).getByRole('listitem')).toHaveCount(1)
+    await expect.poll(groupNames).toEqual(['Later', 'Today'])
+  })
 })
 
 test('a Work chat shows the Work badge and pill, moving its workspace warns, and Restart resumes on the workspace account', async ({ launched }) => {

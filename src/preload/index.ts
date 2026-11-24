@@ -48,6 +48,10 @@ const api: RendererApi = {
       ipcRenderer.invoke(IPC.WORKSPACES_SET_PROFILE, id, profileId),
     reorder: (ids: string[]): Promise<Workspace[]> => ipcRenderer.invoke(IPC.WORKSPACES_REORDER, ids)
   },
+  sidebarGroups: {
+    load: () => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_LOAD),
+    save: (layout) => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_SAVE, layout)
+  },
   repoIdentities: {
     list: () => ipcRenderer.invoke(IPC.REPO_IDENTITIES_LIST),
     setDisplayName: (repoGroupKey, name) => ipcRenderer.invoke(IPC.REPO_IDENTITIES_SET_NAME, repoGroupKey, name),

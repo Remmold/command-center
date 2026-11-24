@@ -399,3 +399,17 @@ Each entry records what was decided, why, and the alternative. Review these in t
 220. **The main process checks agents its CLI still reports working every 60 s against their files**, and a handback, interrupt or the CLI's finished mark ends them for the Running status and the update gate (silence never does; see 215).
     - Alternative: leave both to the CLI's task events alone.
 221. **"Ended (no final report)" draws the hollow "no result yet" dot**, neither the green finished nor the red failed one.
+222. **Own groups are dragged with HTML drag and drop through the `useSortable` hook taken out of `SortableItem`** (Settings → Workspaces uses the same hook). The whole row is draggable and its grip shows at the right end on hover, beside the "…" button, as the ticket's sketch; a refused drop (another account) is the browser's not-allowed cursor. A blue line shows where a drop lands.
+    - Alternative: pointer-event dragging with a drawn ghost row.
+223. **"New group" goes last and opens its name field at once; "New group from this chat" goes right after the chat's group** (first when the chat is in Ungrouped), so the chat stays near where it was.
+    - Alternative: every new group goes last.
+224. **Deleting a group puts its chats at the end of Ungrouped**, in their order; no confirmation, since nothing is lost.
+    - Alternative: at the top of Ungrouped.
+225. **A closed chat keeps its place for 30 days**, then is pruned the next time the list places chats. A chat resumed in a new pane (same Claude session) or taken over from VS Code takes the old place; a second chat on a session still open does not.
+    - Alternative: prune closed chats at the next app start.
+226. **The first layout is seeded only once workspaces, account profiles and the VS Code chat list have loaded**, so a late chat never lands in Ungrouped; until then the list shows that seed without saving it. An account with no chats at that moment starts with no groups. Seeded groups take the repo group's display name and its fold on that account.
+227. **With one account (no account header), "New group" is in the session list's "…" menu.**
+228. **A chat dropped on a group header goes to the top of that group; on a row, before or after it by the pointer's half.** Groups can't go above Ungrouped, which is pinned first.
+229. **"Move to group ▸" replaces the row menu with the list of groups and a back item** (there is no flyout submenu primitive); the chat's own group is disabled.
+230. **Group headers have no icon** (the sketch shows none); each row keeps its repo icon. The repo fold store `profileId/repoGroupKey` is now read only to seed folds; group folds live in `sidebar-groups.json`.
+231. **Alt+1..9 count rows in the new manual order**, so a new chat is now Alt+1 (the `app.spec` check moved to Alt+2).

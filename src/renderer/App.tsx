@@ -33,6 +33,7 @@ import { startRestore } from './state/restoreStore'
 import { useSessionListStore } from './state/sessionListStore'
 import { mediaKeyOf, useChatMediaStore } from './state/chatMediaStore'
 import { useZoomStore } from './state/zoomStore'
+import { useSidebarGroupsStore } from './state/sidebarGroupsStore'
 
 export function App() {
   const initUsage = useUsageStore((s) => s.init)
@@ -68,6 +69,7 @@ export function App() {
     useRemoteControlStore.getState().init()
     useUpdateStore.getState().init()
     useZoomStore.getState().init()
+    useSidebarGroupsStore.getState().init()
     void useVsCodeMatchStore.getState().load()
     startRestore()
   }, [initSessionStatus, initSessionInit, initModels])

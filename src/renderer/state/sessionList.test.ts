@@ -1,17 +1,22 @@
 import { describe, expect, it } from 'vitest'
+import { UNGROUPED, type SidebarLayout } from '../../shared/sidebarGroups'
 import type { ObservedSession, SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
 import {
+  accountChats,
   accountSections,
   listFold,
   repoFoldKey,
+  seedSource,
   sessionList,
   sessionRowTooltip,
   shownRows,
   waitingBadge,
   waitingRows,
   type HostedSessionInput,
+  type ListFold,
   type SessionListInput
 } from './sessionList'
+import { createGroup, moveChat, placeChats, seedLayout, setFolded } from './sidebarGroups'
 import type { Account } from './accounts'
 
 const workspace = (id: string, repoName: string, worktreeTag = ''): Workspace => ({
@@ -53,7 +58,8 @@ function input(over: Partial<SessionListInput>): SessionListInput {
   return { hosted: [], statuses: [], observed: [], workspaces: WORKSPACES, identities: {}, search: '', ...over }
 }
 
-const NO_FOLD = { accounts: [], repos: [] }
+const NO_FOLD: ListFold = { accounts: [], searching: false }
+const NO_LAYOUT: SidebarLayout = { accounts: {} }
 
 const shape = (list: ReturnType<typeof sessionList>) => list.map((g) => [g.id, g.rows.map((r) => r.title)])
 
@@ -169,22 +175,22 @@ describe('account sections', () => {
     statuses: [status('w1', 'your-turn', 1), status('h1', 'running', 2), status('h2', 'needs-approval', 3)],
     observed: [observed('o', 'home vscode', 1)]
   }
-  const sections = () => accountSections(sessionList(input(sessions)), ACCOUNTS, sessions.workspaces!)
+  const sections = () => accountSections(sessionList(input(sessions)), ACCOUNTS, NO_LAYOUT)
 
-  it('puts each account in its own section, in Settings order, rows sorted needs you, running, idle, In VS Code without headings', () => {
-    expect(sections().map((s) => [s.account.label, s.rows.map((r) => r.title)])).toEqual([
-      ['a@home.com · Max', ['home waiting', 'home running', 'home vscode']],
-      ['Work · Team', ['work waiting', 'work idle']]
+  it('puts each account in its own section, in Settings order; chats not placed yet sit in Ungrouped, needs you, running, idle, In VS Code', () => {
+    expect(sections().map((s) => [s.account.label, s.groups.map((g) => g.name), s.rows.map((r) => r.title)])).toEqual([
+      ['a@home.com · Max', ['Ungrouped'], ['home waiting', 'home running', 'home vscode']],
+      ['Work · Team', ['Ungrouped'], ['work waiting', 'work idle']]
     ])
   })
 
-  it('sorts newest first inside each status, waiting chats longest wait first', () => {
+  it('sorts newest first inside each status, waiting chats longest wait first, before they are placed', () => {
     const many: Partial<SessionListInput> = {
       hosted: [hosted('i1', 'old idle', 1), hosted('i2', 'new idle', 9), hosted('r1', 'old run', 2), hosted('r2', 'new run', 8), hosted('w1', 'old wait', 3), hosted('w2', 'new wait', 7)],
       statuses: [status('r1', 'running', 2), status('r2', 'running', 8), status('w1', 'your-turn', 3), status('w2', 'needs-approval', 7)],
       observed: [observed('o1', 'old vscode', 1), observed('o2', 'new vscode', 20)]
     }
-    const [only] = accountSections(sessionList(input(many)), ACCOUNTS, WORKSPACES)
+    const [only] = accountSections(sessionList(input(many)), ACCOUNTS, NO_LAYOUT)
     expect(only.rows.map((r) => r.title)).toEqual(['old wait', 'new wait', 'new run', 'old run', 'new idle', 'old idle', 'new vscode', 'old vscode'])
   })
 
@@ -203,17 +209,18 @@ describe('account sections', () => {
   it('leaves out accounts without sessions and puts sessions of a removed profile under the default account', () => {
     const orphan = { ...workspace('or', 'orphan'), profileId: 'gone' }
     const list = sessionList(input({ workspaces: [...WORKSPACES, orphan], hosted: [hosted('x', 'orphan one', 0, 'or')] }))
-    expect(accountSections(list, ACCOUNTS, [...WORKSPACES, orphan]).map((s) => [s.account.profileId, s.rows[0].title])).toEqual([['default', 'orphan one']])
+    expect(accountSections(list, ACCOUNTS, NO_LAYOUT).map((s) => [s.account.profileId, s.rows[0].title])).toEqual([['default', 'orphan one']])
+    expect(accountChats(list, ACCOUNTS)).toEqual([{ profileId: 'default', chats: [{ id: 'pane:x' }] }])
   })
 
   it('numbers rows for Alt+1..9 in the order shown, skipping collapsed sections', () => {
     expect(shownRows(sections(), NO_FOLD).map((r) => r.title)).toEqual(['home waiting', 'home running', 'home vscode', 'work waiting', 'work idle'])
-    expect(shownRows(sections(), { accounts: ['default'], repos: [] }).map((r) => r.title)).toEqual(['work waiting', 'work idle'])
+    expect(shownRows(sections(), { accounts: ['default'], searching: false }).map((r) => r.title)).toEqual(['work waiting', 'work idle'])
   })
 
   it('queues waiting sessions for Ctrl+Shift+J in the order shown, collapsed sections included', () => {
     const more = { ...sessions, statuses: [...sessions.statuses!, status('w2', 'your-turn', 0)] }
-    const list = accountSections(sessionList(input(more)), ACCOUNTS, more.workspaces!)
+    const list = accountSections(sessionList(input(more)), ACCOUNTS, NO_LAYOUT)
     expect(waitingRows(list).map((r) => r.title)).toEqual(['home waiting', 'work idle', 'work waiting'])
   })
 })
@@ -232,7 +239,7 @@ describe('sessionRowTooltip', () => {
   })
 })
 
-describe('repo groups', () => {
+describe('own groups', () => {
   const ACCOUNTS: Account[] = [
     { profileId: 'default', name: 'Personal', plan: 'Ultra', label: 'Personal · Ultra', email: null },
     { profileId: 'p-work', name: 'Work', plan: 'Team', label: 'Work · Team', email: null }
@@ -253,16 +260,18 @@ describe('repo groups', () => {
       hosted('m2', 'main waiting', 0, 'mm-main'),
       hosted('t1', 'ct running', 0, 'ct'),
       hosted('t2', 'ct waiting', 0, 'ct'),
-      hosted('n1', 'nk idle', 0, 'nk')
+      { ...hosted('n1', 'nk idle', 0, 'nk'), claudeSessionId: 's-n1' }
     ],
     statuses: [status('m2', 'needs-approval', 2), status('t1', 'running', 3), status('t2', 'your-turn', 4)],
     observed: [observed('o', 'cc vscode', 9)]
   }
-  const sections = () => accountSections(sessionList(input(sessions)), ACCOUNTS, WS)
-  const shape = () => sections().map((s) => [s.account.name, s.repos.map((g) => [g.repoName, g.rows.map((r) => r.title)])])
+  const list = (over: Partial<SessionListInput> = {}) => sessionList(input({ ...sessions, ...over }))
+  const seeded = (folded: string[] = []) => seedLayout(seedSource(list(), ACCOUNTS, WS, folded), 0)
+  const shape = (sections: ReturnType<typeof accountSections>) =>
+    sections.map((s) => [s.account.name, s.groups.map((g) => [g.name, g.rows.map((r) => r.title)])])
 
-  it('groups each account by repo in Settings → Workspaces order, worktrees together, rows in compact order', () => {
-    expect(shape()).toEqual([
+  it('seeds each account’s groups from its repo groups in Settings → Workspaces order, worktrees together, so nothing moves', () => {
+    expect(shape(accountSections(list(), ACCOUNTS, seeded()))).toEqual([
       [
         'Personal',
         [
@@ -278,38 +287,66 @@ describe('repo groups', () => {
         ]
       ]
     ])
+    expect(seeded().accounts['p-work'].known['pane:n1']).toEqual({ seen: 0, session: 's-n1' })
   })
 
-  const mmorpg = repoFoldKey('default', 'key-mmorpg')
-  const continuum = repoFoldKey('p-work', 'key-continuum')
-  const titles = (fold: { accounts: string[]; repos: string[] }) => shownRows(sections(), fold).map((r) => r.title)
-
-  it('numbers only visible rows for Alt+1..9: folded repo groups and folded accounts show none', () => {
-    expect(titles({ accounts: [], repos: [mmorpg, continuum] })).toEqual(['cc idle', 'cc vscode', 'nk idle'])
-    expect(titles({ accounts: ['p-work'], repos: [mmorpg] })).toEqual(['cc idle', 'cc vscode'])
+  it('seeds a repo group’s fold from its fold on that account only', () => {
+    const layout = seeded([repoFoldKey('default', 'key-mmorpg'), repoFoldKey('p-work', 'key-command-center')])
+    const [home, work] = accountSections(list(), ACCOUNTS, layout)
+    expect(home.groups.map((g) => g.folded)).toEqual([true, false])
+    expect(work.groups.map((g) => g.folded)).toEqual([false, false])
   })
 
-  it('remembers a fold per account and repo, so the same repo folded on one account stays open on another', () => {
-    expect(repoFoldKey('default', 'key-mmorpg')).not.toBe(repoFoldKey('p-work', 'key-mmorpg'))
-    expect(titles({ accounts: [], repos: [repoFoldKey('p-work', 'key-mmorpg')] })).toContain('main waiting')
+  it('keeps a waiting chat where it was put instead of jumping to the top', () => {
+    const layout = moveChat(seeded(), 'default', 'pane:m2', { group: 'repo:key-mmorpg', before: null })
+    const [home] = accountSections(list(), ACCOUNTS, layout)
+    expect(home.groups[0].rows.map((r) => r.title)).toEqual(['shard idle', 'main waiting'])
+    expect(waitingRows(accountSections(list(), ACCOUNTS, layout)).map((r) => r.title)).toEqual(['main waiting', 'ct waiting'])
   })
 
-  it('counts waiting chats per repo group for its folded pill', () => {
-    const [home, work] = sections()
-    expect(home.repos.map((g) => g.needsYou)).toEqual([1, 0])
-    expect(work.repos.map((g) => g.needsYou)).toEqual([0, 1])
-    expect(waitingBadge(home.repos[0].needsYou, home.repos[0].repoName, false)).toEqual({ text: '1 waiting', tooltip: '1 chat in mmorpg is waiting on you' })
-    expect(waitingBadge(home.repos[1].needsYou, home.repos[1].repoName, false)).toBeNull()
+  it('shows Ungrouped first with a new chat, and hides it when empty', () => {
+    const more = list({ hosted: [...sessions.hosted!, hosted('new', 'brand new', 0, 'cc')] })
+    const layout = placeChats(seeded(), accountChats(more, ACCOUNTS), 0)
+    const [home] = accountSections(more, ACCOUNTS, layout)
+    expect(home.groups.map((g) => [g.id, g.rows.map((r) => r.title)])[0]).toEqual([UNGROUPED, ['brand new']])
+    expect(accountSections(list(), ACCOUNTS, seeded())[0].groups.map((g) => g.id)).not.toContain(UNGROUPED)
   })
 
-  it('queues waiting chats for Ctrl+Shift+J in the order shown, folded groups included', () => {
-    expect(waitingRows(sections()).map((r) => r.title)).toEqual(['main waiting', 'ct waiting'])
+  it('shows an empty own group so a chat can be dropped in, but hides it during a search; matches stay under their group', () => {
+    const layout = createGroup(seeded(), 'default', { id: 'later', name: 'Later' })
+    expect(accountSections(list(), ACCOUNTS, layout)[0].groups.map((g) => g.name)).toEqual(['mmorpg', 'command-center', 'Later'])
+    const found = accountSections(list({ search: 'idle' }), ACCOUNTS, layout, true)
+    expect(shape(found)).toEqual([
+      [
+        'Personal',
+        [
+          ['mmorpg', ['shard idle']],
+          ['command-center', ['cc idle']]
+        ]
+      ],
+      ['Work', [['nordkastell', ['nk idle']]]]
+    ])
   })
 
-  it('opens every repo group while searching, and ignores account folds without account headers', () => {
-    const saved = { accounts: ['p-work'], repos: [mmorpg] }
-    expect(listFold(saved, { search: '', headed: true })).toEqual(saved)
-    expect(listFold(saved, { search: ' shard ', headed: true })).toEqual({ accounts: ['p-work'], repos: [] })
-    expect(listFold(saved, { search: '', headed: false })).toEqual({ accounts: [], repos: [mmorpg] })
+  const titles = (layout: ReturnType<typeof seeded>, fold: ListFold) => shownRows(accountSections(list(), ACCOUNTS, layout), fold).map((r) => r.title)
+
+  it('numbers only visible rows for Alt+1..9: folded groups and folded accounts show none, a search opens every group', () => {
+    const layout = setFolded(setFolded(seeded(), 'default', 'repo:key-mmorpg', true), 'p-work', 'repo:key-continuum', true)
+    expect(titles(layout, NO_FOLD)).toEqual(['cc idle', 'cc vscode', 'nk idle'])
+    expect(titles(layout, { accounts: ['p-work'], searching: false })).toEqual(['cc idle', 'cc vscode'])
+    expect(titles(layout, { accounts: [], searching: true })).toHaveLength(7)
+  })
+
+  it('counts waiting chats per group for its folded pill', () => {
+    const [home, work] = accountSections(list(), ACCOUNTS, seeded())
+    expect(home.groups.map((g) => g.needsYou)).toEqual([1, 0])
+    expect(work.groups.map((g) => g.needsYou)).toEqual([0, 1])
+    expect(waitingBadge(home.groups[0].needsYou, home.groups[0].name, false)).toEqual({ text: '1 waiting', tooltip: '1 chat in mmorpg is waiting on you' })
+  })
+
+  it('ignores account folds without account headers, and opens every group while searching', () => {
+    expect(listFold(['p-work'], { search: '', headed: true })).toEqual({ accounts: ['p-work'], searching: false })
+    expect(listFold(['p-work'], { search: ' shard ', headed: true })).toEqual({ accounts: ['p-work'], searching: true })
+    expect(listFold(['p-work'], { search: '', headed: false })).toEqual({ accounts: [], searching: false })
   })
 })

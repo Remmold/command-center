@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { _electron, expect, test, type Page } from '@playwright/test'
+import { _electron, expect, test, type Locator, type Page } from '@playwright/test'
 import { shutdown } from '../harness'
 import { env, resize, seed, startIn } from './seed'
 
@@ -62,14 +62,14 @@ async function narrowListProblems(page: Page): Promise<string[]> {
     const out: string[] = []
     const box = document.querySelectorAll(list)[0].getBoundingClientRect()
     if (box.width > 360) out.push(`the list is ${box.width}px wide, not narrow`)
-    const percents = document.querySelectorAll(`${list} section > button .meter-reading-percent`)
+    const percents = document.querySelectorAll(`${list} section > [data-section-header] > button .meter-reading-percent`)
     if (percents.length < 2) out.push(`${percents.length} account header percentages, not 2`)
     for (let i = 0; i < percents.length; i++) {
       const r = percents[i].getBoundingClientRect()
       if (r.width === 0 || r.right > box.right + 0.5 || !/^\d+%$/.test(percents[i].textContent ?? '')) out.push(`cut: ${percents[i].textContent}`)
     }
-    const repos = document.querySelectorAll(`${list} section section > button`)
-    if (repos.length < 3) out.push(`${repos.length} repo group headers, not 3`)
+    const repos = document.querySelectorAll(`${list} section section > [data-section-header] > button`)
+    if (repos.length < 3) out.push(`${repos.length} group headers, not 3`)
     for (let i = 0; i < repos.length; i++) if (repos[i].getBoundingClientRect().right > box.right + 0.5) out.push(`repo header past the list: ${repos[i].textContent}`)
     const models = document.querySelectorAll(`${list} .hide-in-narrow-list`)
     if (models.length === 0) out.push('no row has a model to hide')
@@ -112,6 +112,30 @@ async function footerProblems(page: Page, expectNarrow: boolean): Promise<string
   }, expectNarrow)
 }
 
+const ownGroup = (id: string, name: string) => ({ id, name, folded: false, chats: [] })
+const account = (groups: ReturnType<typeof ownGroup>[]) => ({ ungrouped: [], ungroupedFolded: false, groups, known: {} })
+/** Empty own groups, so every new chat lands in Ungrouped and the 150% run drags them in. */
+const OWN_GROUPS = {
+  accounts: {
+    default: account([ownGroup('today', 'Today'), ownGroup('review', 'Waiting on review'), ownGroup('later', 'Later')]),
+    'p-work': account([ownGroup('exports', 'Exports')])
+  }
+}
+
+/** A row's grip shows on hover, whole and inside the list. */
+async function gripProblems(page: Page, row: Locator): Promise<string[]> {
+  await row.hover()
+  const out: string[] = []
+  const list = (await page.locator(LIST).boundingBox())!
+  const grip = row.locator('[data-drag-grip]')
+  const box = await grip.boundingBox()
+  if (!box || box.width === 0) out.push('no grip on the hovered row')
+  else if (box.x + box.width > list.x + list.width + 0.5) out.push(`grip past the list (${box.x + box.width} > ${list.x + list.width})`)
+  const opacity = await grip.locator('..').evaluate((el) => (globalThis as unknown as { getComputedStyle(e: unknown): { opacity: string } }).getComputedStyle(el).opacity)
+  if (opacity !== '1') out.push(`grip hidden on hover (opacity ${opacity})`)
+  return out
+}
+
 /** A few past sessions of one workspace, for the project picker's second step. */
 function seedPastSessions(configDir: string, workspacePath: string): void {
   const dir = join(configDir, 'projects', workspacePath.replace(/[^a-zA-Z0-9]/g, '-'))
@@ -144,6 +168,7 @@ for (const percent of [110, 125, 150]) {
     writeFileSync(join(seeded.userData, 'projects.json'), JSON.stringify(onWork))
     seedPastSessions(seeded.configDir, seeded.workspaces.find((w) => w.name === 'ledger-web')!.path)
     mkdirSync(OUT, { recursive: true })
+    writeFileSync(join(seeded.userData, 'sidebar-groups.json'), JSON.stringify(OWN_GROUPS))
     writeFileSync(join(seeded.userData, 'zoom.json'), JSON.stringify({ level: Math.log(percent / 100) / Math.log(1.2) }))
     const app = await _electron.launch({
       executablePath: ELECTRON,
@@ -173,7 +198,7 @@ for (const percent of [110, 125, 150]) {
       await expect(page.getByRole('dialog', { name: 'Effort' })).toBeVisible()
       await shot('work-effort')
       await page.keyboard.press('Escape')
-      await expect(page.locator(`${LIST} section > button .meter-reading-percent`)).toHaveCount(2, { timeout: 15_000 })
+      await expect(page.locator(`${LIST} section > [data-section-header] > button .meter-reading-percent`)).toHaveCount(2, { timeout: 15_000 })
       expect(await narrowListProblems(page)).toEqual([])
       const listShot = async (name: string) => {
         const listBox = (await page.locator(LIST).boundingBox())!
@@ -277,7 +302,7 @@ for (const percent of [110, 125, 150]) {
 
         await startFocused('notes-cli', 'agents: two for the review', 'Two agents are working')
         await listShot('work-list-repos')
-        expect(await overflowing(page, [...sideways, `${LIST} section > button`])).toEqual([])
+        expect(await overflowing(page, [...sideways, `${LIST} [data-section-header] > button`])).toEqual([])
         const agentsPane = page.locator('[data-chat-pane]:visible', { has: page.getByText('Two agents are working') })
         await expect(agentsPane.locator('[data-agents-still-working]')).toContainText('2 agents still working')
         await agentsPane.getByRole('tab', { name: 'Agents 2 working' }).click()
@@ -292,6 +317,36 @@ for (const percent of [110, 125, 150]) {
         await expect(agentView.getByRole('button', { name: 'Stop agent' })).toBeVisible()
         await shot('work-split-agent-view')
         expect(await overflowing(page, [...sideways, '[data-header-row]', '[data-agent-view]'])).toEqual([])
+
+        const personal = page.getByRole('navigation', { name: 'Sessions' }).getByRole('region', { name: /^Personal/ }).first()
+        const ungrouped = personal.getByRole('region', { name: 'Ungrouped' }).getByRole('listitem')
+        const groupHeader = (name: string) => personal.getByRole('region', { name }).locator('[data-section-header]')
+        const pick = async (from: Locator) => {
+          const a = (await from.boundingBox())!
+          await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+          await page.mouse.down()
+          await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2 + 6, { steps: 2 })
+        }
+        const over = async (to: Locator) => {
+          const b = (await to.boundingBox())!
+          await page.mouse.move(b.x + b.width / 2, b.y + b.height * 0.75, { steps: 4 })
+        }
+        for (const name of ['Today', 'Waiting on review', 'Later', 'Today']) {
+          const before = await ungrouped.count()
+          await pick(ungrouped.first())
+          await over(groupHeader(name))
+          await page.mouse.up()
+          await expect(ungrouped).toHaveCount(before - 1)
+        }
+        expect(await gripProblems(page, personal.getByRole('region', { name: 'Today' }).getByRole('listitem').first())).toEqual([])
+        await listShot('work-list-groups')
+        await pick(personal.getByRole('region', { name: 'Later' }).getByRole('listitem').first())
+        await over(personal.getByRole('region', { name: 'Today' }).getByRole('listitem').first())
+        await expect(personal.locator('li > span.bg-accent')).toHaveCount(1)
+        await listShot('work-list-groups-drag')
+        await page.mouse.up()
+        await expect(personal.getByRole('region', { name: 'Today' }).getByRole('listitem')).toHaveCount(3)
+        expect(await overflowing(page, [...sideways, `${LIST} [data-section-header] > button`])).toEqual([])
       }
     } finally {
       await shutdown(app)

@@ -7,6 +7,7 @@ import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval
 import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
 import type { ZoomStep } from './zoom'
+import type { SidebarLayout } from './sidebarGroups'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
 
@@ -391,6 +392,11 @@ export interface RendererApi {
     setProfile: (id: string, profileId: string) => Promise<Workspace | null>
     /** Saves this order; ids it leaves out keep their place after the ones it names. */
     reorder: (ids: string[]) => Promise<Workspace[]>
+  }
+  sidebarGroups: {
+    /** null before the first save: the list then seeds one from its repo groups. */
+    load: () => Promise<SidebarLayout | null>
+    save: (layout: SidebarLayout) => Promise<void>
   }
   repoIdentities: {
     list: () => Promise<RepoIdentityViews>

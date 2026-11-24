@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { nextWaiting } from '../../shared/needsYou'
@@ -13,18 +13,24 @@ import { halfShowing, type ChatPair, type ChatRef, type HalfIndex } from './chat
 import { useChatPairStore } from './chatPairStore'
 import { openObserved, openSession, paneOnScreen, resolveChat, type OpenOptions, type OpenTarget } from './sessionNavigation'
 import {
+  accountChats,
   accountSections,
   listFold,
-  repoFoldKey,
+  seedSource,
   sessionList,
   shownRows,
   waitingRows,
   type AccountSection,
   type HostedSessionInput,
   type ListFold,
+  type SessionGroup,
   type SessionListInput,
   type SessionRow
 } from './sessionList'
+import { dayNumber, type SidebarLayout } from '../../shared/sidebarGroups'
+import { groupOf, placeChats, seedLayout, setFolded } from './sidebarGroups'
+import { useSidebarGroupsStore } from './sidebarGroupsStore'
+import { useProfilesStore } from './profilesStore'
 import { accountOf, type Account } from './accounts'
 import type { ChatProcess } from './chatAccount'
 import { currentAccounts, useAccounts } from './useAccounts'
@@ -44,12 +50,10 @@ export const useWorkSearchStore = create<WorkSearchState>((set) => ({
 interface AccountSectionsState {
   /** Profile ids of the account sections folded shut. */
   collapsed: string[]
-  /** Repo groups folded shut, by `repoFoldKey`. */
+  /** Repo groups folded shut before own groups, by `repoFoldKey`; read once, to seed their folds. */
   collapsedRepos: string[]
   toggle: (profileId: string) => void
   expand: (profileId: string) => void
-  toggleRepo: (key: string) => void
-  expandRepo: (key: string) => void
 }
 
 const toggled = (list: string[], id: string) => (list.includes(id) ? list.filter((c) => c !== id) : [...list, id])
@@ -60,9 +64,7 @@ export const useAccountSectionsStore = create<AccountSectionsState>()(
       collapsed: [],
       collapsedRepos: [],
       toggle: (id) => set((s) => ({ collapsed: toggled(s.collapsed, id) })),
-      expand: (id) => set((s) => (s.collapsed.includes(id) ? { collapsed: toggled(s.collapsed, id) } : s)),
-      toggleRepo: (key) => set((s) => ({ collapsedRepos: toggled(s.collapsedRepos, key) })),
-      expandRepo: (key) => set((s) => (s.collapsedRepos.includes(key) ? { collapsedRepos: toggled(s.collapsedRepos, key) } : s))
+      expand: (id) => set((s) => (s.collapsed.includes(id) ? { collapsed: toggled(s.collapsed, id) } : s))
     }),
     {
       name: 'command-center.work-accounts',
@@ -111,7 +113,8 @@ function hostedInputs(
       workspaceId: v.projectId,
       title: c.title,
       lastActivityAt: byPane[c.id]?.since ?? 0,
-      modelTag: modelTagOf(c, profileId, models)
+      modelTag: modelTagOf(c, profileId, models),
+      claudeSessionId: c.claudeSessionId
     }))
   })
 }
@@ -174,19 +177,91 @@ export function useSessionSources(): Omit<SessionListInput, 'search'> {
 
 export interface SessionSections {
   sections: AccountSection[]
-  /** False with a single account: the list then shows its status groups without an account header. */
+  /** False with a single account: the list then shows its groups without an account header. */
   headed: boolean
+  /** The saved groups are still being read; the list shows nothing yet. */
+  loading: boolean
 }
 
-function sectionsOf(sources: Omit<SessionListInput, 'search'>, search: string, accounts: readonly Account[]): SessionSections {
-  return { sections: accountSections(sessionList({ ...sources, search }), accounts, sources.workspaces), headed: accounts.length > 1 }
+/** The layout the list shows: the saved one (or, before any is saved, one seeded from the repo groups) with every chat placed. */
+function layoutFor(
+  saved: SidebarLayout | null | undefined,
+  all: readonly SessionGroup[],
+  accounts: readonly Account[],
+  workspaces: readonly Workspace[],
+  foldedRepos: readonly string[]
+): SidebarLayout | null {
+  if (saved === undefined) return null
+  const today = dayNumber(Date.now())
+  const base = saved ?? seedLayout(seedSource(all, accounts, workspaces, foldedRepos), today)
+  return placeChats(base, accountChats(all, accounts), today)
+}
+
+function sectionsOf(
+  all: SessionGroup[],
+  sources: Omit<SessionListInput, 'search'>,
+  search: string,
+  accounts: readonly Account[],
+  layout: SidebarLayout | null
+): SessionSections {
+  const headed = accounts.length > 1
+  if (!layout) return { sections: [], headed, loading: true }
+  const searching = search.trim() !== ''
+  const groups = searching ? sessionList({ ...sources, search }) : all
+  return { sections: accountSections(groups, accounts, layout, searching), headed, loading: false }
 }
 
 export function useSessionSections(): SessionSections {
   const sources = useSessionSources()
   const search = useWorkSearchStore((s) => s.search)
   const accounts = useAccounts()
-  return useMemo(() => sectionsOf(sources, search, accounts), [sources, search, accounts])
+  const saved = useSidebarGroupsStore((s) => s.saved)
+  const foldedRepos = useAccountSectionsStore((s) => s.collapsedRepos)
+  const workspacesLoaded = useWorkspacesStore((s) => s.loaded)
+  const profilesLoaded = useProfilesStore((s) => s.loaded)
+  const observedListed = useObservedStore((s) => s.listed)
+  const ready = workspacesLoaded && profilesLoaded && observedListed
+  const all = useMemo(() => sessionList({ ...sources, search: '' }), [sources])
+  const layout = useMemo(
+    () => layoutFor(saved, all, accounts, sources.workspaces, foldedRepos),
+    [saved, all, accounts, sources.workspaces, foldedRepos]
+  )
+  useEffect(() => {
+    if (ready && layout && layout !== saved) useSidebarGroupsStore.getState().commit(layout)
+  }, [layout, saved, ready])
+  return useMemo(() => sectionsOf(all, sources, search, accounts, layout), [all, sources, search, accounts, layout])
+}
+
+/**
+ * Nothing is saved until workspaces, accounts and VS Code chats have loaded: before that a chat can be missing (and
+ * land in Ungrouped when it arrives) or sit under the wrong account.
+ */
+function layoutReady(): boolean {
+  return useWorkspacesStore.getState().loaded && useProfilesStore.getState().loaded && useObservedStore.getState().listed
+}
+
+function currentLayout(): SidebarLayout | null {
+  const { search: _search, ...sources } = listInput(currentSources())
+  return layoutFor(
+    useSidebarGroupsStore.getState().saved,
+    sessionList({ ...sources, search: '' }),
+    currentAccounts(),
+    sources.workspaces,
+    useAccountSectionsStore.getState().collapsedRepos
+  )
+}
+
+/** Applies a change to the groups as shown and saves it; a change that refuses (a drop on another account) saves nothing. */
+export function changeLayout(change: (layout: SidebarLayout) => SidebarLayout): void {
+  const layout = currentLayout()
+  if (!layout || !layoutReady()) return
+  const next = change(layout)
+  if (next !== layout) useSidebarGroupsStore.getState().commit(next)
+}
+
+/** The account a row's chat sorts in. */
+function rowAccount(row: SessionRow): string {
+  return accountOf(currentAccounts(), row.workspace.profileId).profileId
 }
 
 export interface ShownChats {
@@ -212,32 +287,33 @@ export function isShown(row: SessionRow, pair: ChatPair): boolean {
 }
 
 export function openRow(row: SessionRow, options?: OpenOptions): void {
-  const profileId = accountOf(currentAccounts(), row.workspace.profileId).profileId
-  const folds = useAccountSectionsStore.getState()
-  folds.expand(profileId)
-  folds.expandRepo(repoFoldKey(profileId, row.workspace.repoGroupKey))
+  const profileId = rowAccount(row)
+  useAccountSectionsStore.getState().expand(profileId)
+  changeLayout((layout) => {
+    const group = groupOf(layout, profileId, row.placeId)
+    return group ? setFolded(layout, profileId, group, false) : layout
+  })
   if (row.kind === 'hosted') openSession(row.paneId, options)
   else openObserved(row.workspace.id, row.sessionId, options)
 }
 
 function currentSections(applySearch: boolean): SessionSections {
   const { search, ...sources } = listInput(currentSources())
-  return sectionsOf(sources, applySearch ? search : '', currentAccounts())
+  const all = sessionList({ ...sources, search: '' })
+  return sectionsOf(all, sources, applySearch ? search : '', currentAccounts(), currentLayout())
 }
 
 /** The saved folds as the list applies them. */
 export function useListFold(headed: boolean): ListFold {
   const accounts = useAccountSectionsStore((s) => s.collapsed)
-  const repos = useAccountSectionsStore((s) => s.collapsedRepos)
   const search = useWorkSearchStore((s) => s.search)
-  return useMemo(() => listFold({ accounts, repos }, { search, headed }), [accounts, repos, search, headed])
+  return useMemo(() => listFold(accounts, { search, headed }), [accounts, search, headed])
 }
 
 /** Opens the list's nth row as it is shown: search applied, folded sections and groups skipped. */
 export function openRowAt(index: number): void {
   const { sections, headed } = currentSections(true)
-  const { collapsed, collapsedRepos } = useAccountSectionsStore.getState()
-  const fold = listFold({ accounts: collapsed, repos: collapsedRepos }, { search: useWorkSearchStore.getState().search, headed })
+  const fold = listFold(useAccountSectionsStore.getState().collapsed, { search: useWorkSearchStore.getState().search, headed })
   const row = shownRows(sections, fold)[index]
   if (row) openRow(row)
 }
