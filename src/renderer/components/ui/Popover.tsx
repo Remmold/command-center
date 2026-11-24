@@ -18,6 +18,13 @@ interface Props {
 const PANEL_WIDTH = 256
 const EDGE_GAP = 8
 
+const EDGE = 8
+
+/** Keeps a panel inside the window: a menu opened near either edge slides in instead of running off it. */
+export function panelLeft(wanted: number, width: number, windowWidth: number): number {
+  return Math.max(EDGE, Math.min(wanted, windowWidth - width - EDGE))
+}
+
 /** A floating panel portalled to the body, so a scrolling parent never clips it. */
 export function Popover({ open, onClose, anchor, label, align = 'start', side = 'below', width = PANEL_WIDTH, children }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null)
@@ -26,7 +33,7 @@ export function Popover({ open, onClose, anchor, label, align = 'start', side = 
   useLayoutEffect(() => {
     if (!open || !anchor) return
     const rect = anchor.getBoundingClientRect()
-    const left = align === 'end' ? rect.right - width : rect.left
+    const left = panelLeft(align === 'end' ? rect.right - width : rect.left, width, window.innerWidth)
     setPos(side === 'above' ? { bottom: window.innerHeight - rect.top + 4, left } : { top: rect.bottom + 4, left })
   }, [open, anchor, align, side, width])
 
