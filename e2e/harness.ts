@@ -161,6 +161,13 @@ export async function delayClaudeStart(app: ElectronApplication, ms: number): Pr
   }, ms)
 }
 
+/** Gives every fake started from now on this script, so one launch can host chats on several scripts. */
+export async function useScript(app: ElectronApplication, script: ScriptName): Promise<void> {
+  await evaluateMain(app, (_electron, file: string) => {
+    process.env.FAKE_CLAUDE_SCRIPT = file
+  }, SCRIPTS[script])
+}
+
 function seedDirs(
   root: string,
   userSettings: Record<string, unknown> | null

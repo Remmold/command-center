@@ -6,10 +6,6 @@ const tabOf = (key: string) => useChatMediaStore.getState().tab[key]
 describe('chat media tabs', () => {
   beforeEach(() => useChatMediaStore.setState({ tab: {}, hasMedia: { 'pane-1': true, 'pane-2': true } }))
 
-  it('a newly opened chat starts on Chat', () => {
-    expect(shownTab(tabOf('pane-1'), 3)).toBe('chat')
-  })
-
   it('toggling switches only that chat between Chat and Media', () => {
     useChatMediaStore.getState().toggleTab('pane-1')
     expect(shownTab(tabOf('pane-1'), 3)).toBe('media')

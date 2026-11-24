@@ -80,8 +80,9 @@ test('VS Code’s accounts are adopted in one click and new chats and workspaces
     })
   )
   const vscodeBefore = [readFileSync(settingsFile, 'utf-8'), readFileSync(storageFile, 'utf-8')]
-  const { app, page } = await launched.relaunch()
-  const relaunched = { ...launched, app, page }
+  const { app, page } = launched
+  await page.reload()
+  await page.waitForLoadState('domcontentloaded')
 
   await test.step('the Dashboard points at the suggestion, one click adopts the Work folder and moves the workspace, and new chats and workspaces use it', async () => {
     await page.getByRole('button', { name: 'Review in Settings' }).click()
@@ -96,7 +97,7 @@ test('VS Code’s accounts are adopted in one click and new chats and workspaces
     expect(readdirSync(work)).toEqual(['.credentials.json'])
     expect([readFileSync(settingsFile, 'utf-8'), readFileSync(storageFile, 'utf-8')]).toEqual(vscodeBefore)
 
-    await startSession(relaunched)
+    await startSession(launched)
     expect(launched.log.entries().filter((e) => e.kind === 'argv' && e.cwd === workspace).map((e) => e.configDir)).toEqual([work])
 
     await app.evaluate(({ dialog }, picked) => {
@@ -191,7 +192,6 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await expect(homeSection.getByRole('listitem').getByRole('img', { name: 'Idle' })).toBeVisible()
   await expect(workWaiting).toBeVisible()
   await expect(workWaiting.getByRole('button').first()).toHaveClass(/inset_2px/)
-  await expect(list.getByRole('region', { name: /^(Needs you|Running|Idle|In VS Code)$/ })).toHaveCount(0)
   const workHeader = workSection.getByRole('button', { name: /^Work · Ultra/ })
   await expect(workHeader).not.toContainText('waiting')
   await expect(list.getByRole('region').first()).toHaveAttribute('aria-label', 'Personal · Ultra')

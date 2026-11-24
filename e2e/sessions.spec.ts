@@ -128,9 +128,9 @@ test.describe('a VS Code session in Work', () => {
     // A hosted chat taller than the pane, kept mounted out of sight behind the observed one.
     await startSession(launched)
     const hosted = page.locator('[data-chat-pane]')
-    await send(page, 'long answer please')
+    await send(page, 'tall answer please')
     await expect(hosted.getByText('The second part arrived.')).toBeVisible()
-    await send(page, 'long answer again')
+    await send(page, 'tall answer again')
     await expect(hosted.getByText('The second part arrived.')).toHaveCount(2)
 
     const row = page.getByTitle(/^Observed scroll check .* in VS Code \(read-only\)$/)

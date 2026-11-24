@@ -1,1 +1,2 @@
 - 01 resolved: UI suite 43 -> 18 scenarios in 4 files, 168 s -> 87 s, budget check, e2e:gate, release.md; unit 884 -> 890 — f6f4286
+- 02 resolved: audit at 0.1.14: UI suite 18 -> 14 scenarios, 88.7 s -> 71.4/70.3 s; unit 1,023 -> 1,022; release.md audit-due line — 6414aca

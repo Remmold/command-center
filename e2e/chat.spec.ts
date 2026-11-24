@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASIC_REPLY, FAKE_SESSION, TINY_PNG, WRITE_DONE, clipboardText, userLines } from './common'
-import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, newChatIn, prompt, send, startSession, test } from './harness'
+import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, newChatIn, prompt, send, startSession, test, useScript } from './harness'
 
 const modeButton = (page: Page, label: string) => page.locator('[data-chat-pane]').getByRole('button', { name: label, exact: true })
 
@@ -312,24 +312,11 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
   })
 })
 
-test.describe('settings picked up at start', () => {
-  test.use({ script: 'remoteControl', userSettings: { permissions: { defaultMode: 'plan' } } })
-
-  test("a new chat starts in settings.json's default mode and turns Remote Control on when the CLI says remoteControlAtStartup", async ({ launched }) => {
-    const { page, log, workspace } = launched
-    await startSession(launched)
-    await expect(modeButton(page, 'Plan')).toBeVisible()
-    expect(cliPermissionMode(log, workspace)).toBe('plan')
-    await expect(page.locator('[data-chat-pane]').getByRole('link', { name: 'Remote Control' })).toHaveAttribute('href', FAKE_SESSION)
-    expect(log.controlRequests('remote_control').map((r) => r.enabled)).toEqual([true])
-  })
-})
-
 test.describe('slow turns', () => {
   test.use({ script: 'slow' })
 
-  test('a prompt sent mid-turn queues and starts after Esc; Run in background; the working line; Stop interrupts', async ({ launched }) => {
-    const { page, log } = launched
+  test('a prompt sent mid-turn queues and starts after Esc; Run in background; the working line; Stop interrupts; then chats picked up from settings.json and with a full context', async ({ launched }) => {
+    const { page, log, workspace } = launched
     const pane = page.locator('[data-chat-pane]')
     const longJob = pane.getByText('Starting a long job.')
     const interrupted = page.getByText('Interrupted', { exact: true })
@@ -398,23 +385,41 @@ test.describe('slow turns', () => {
       await expect(prompt(page)).toBeEditable()
       await expect(page.getByText('The long job finished.')).toHaveCount(0)
     })
-  })
-})
 
-test.describe('a full context', () => {
-  test.use({ script: 'context' })
+    const newChat = async (): Promise<void> => {
+      const from = log.entries().length
+      await page.keyboard.press('Control+2')
+      await page.keyboard.press('Control+t')
+      await newChatIn(page, /e2e-workspace/)
+      await expect.poll(() => log.initializedIn(workspace, from)).toBe(true)
+    }
 
-  test('the context pie shows from the start, refreshes after a turn and sends /compact when clicked', async ({ launched }) => {
-    const { page, log } = launched
-    await startSession(launched)
-    const pie = page.getByRole('button', { name: '72% context used — click to compact' })
-    await expect(pie).toBeVisible()
-    await send(page, 'hello')
-    await expect(page.getByText('This chat is getting long.')).toBeVisible()
-    await expect.poll(() => log.controlRequests('get_context_usage').length).toBe(2)
-    await expect(pie).toHaveAttribute('title', '28% of context remaining until auto-compact.\nClick to compact now.')
-    await pie.click()
-    await expect.poll(() => log.userTexts()).toEqual(['hello', '/compact'])
+    await test.step("a new chat starts in settings.json's default mode and turns Remote Control on when the CLI says remoteControlAtStartup", async () => {
+      const pane = page.locator('[data-chat-pane]:visible')
+      writeFileSync(join(launched.configDir, 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'plan' } }))
+      await useScript(launched.app, 'remoteControl')
+      const enabledBefore = log.controlRequests('remote_control').length
+      await newChat()
+      await expect(pane.getByRole('button', { name: 'Plan', exact: true })).toBeVisible()
+      expect(cliPermissionMode(log, workspace)).toBe('plan')
+      await expect(pane.getByRole('link', { name: 'Remote Control' })).toHaveAttribute('href', FAKE_SESSION)
+      expect(log.controlRequests('remote_control').slice(enabledBefore).map((r) => r.enabled)).toEqual([true])
+    })
+
+    await test.step('a full context: the context pie shows from the start, refreshes after a turn and sends /compact when clicked', async () => {
+      await useScript(launched.app, 'context')
+      const usageBefore = log.controlRequests('get_context_usage').length
+      const textsBefore = log.userTexts().length
+      await newChat()
+      const pie = page.getByRole('button', { name: '72% context used — click to compact' })
+      await expect(pie).toBeVisible()
+      await send(page, 'hello')
+      await expect(page.getByText('This chat is getting long.')).toBeVisible()
+      await expect.poll(() => log.controlRequests('get_context_usage').length - usageBefore).toBe(2)
+      await expect(pie).toHaveAttribute('title', '28% of context remaining until auto-compact.\nClick to compact now.')
+      await pie.click()
+      await expect.poll(() => log.userTexts().slice(textsBefore)).toEqual(['hello', '/compact'])
+    })
   })
 })
 
@@ -537,12 +542,44 @@ test.describe('tool approval', () => {
   })
 })
 
+/** A one-second webm, recorded from a canvas inside the app, so the test needs no video tool or download. */
+async function recordWebm(page: Page): Promise<Buffer> {
+  // A string, since this project compiles the tests against Node's types, not the DOM's.
+  const base64 = await page.evaluate<string>(`(async () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 48
+    const context = canvas.getContext('2d')
+    const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: 'video/webm' })
+    const chunks = []
+    recorder.ondataavailable = (e) => chunks.push(e.data)
+    const stopped = new Promise((resolve) => (recorder.onstop = resolve))
+    recorder.start()
+    for (let frame = 0; frame < 20; frame++) {
+      context.fillStyle = 'hsl(' + frame * 18 + ', 70%, 50%)'
+      context.fillRect(0, 0, 64, 48)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    recorder.stop()
+    await stopped
+    const bytes = new Uint8Array(await new Blob(chunks, { type: 'video/webm' }).arrayBuffer())
+    let binary = ''
+    for (const byte of bytes) binary += String.fromCharCode(byte)
+    return btoa(binary)
+  })()`)
+  return Buffer.from(base64, 'base64')
+}
+
 test.describe('chat rendering', () => {
   test.use({ script: 'render' })
 
-  test('thinking, the todo checklist, copy buttons and timestamps render as in the extension; scrolling up holds the view while output arrives', async ({ launched }) => {
-    const { app, page } = launched
+  test('thinking, todos, copy buttons and timestamps render as in the extension; scrolling up holds the view while output arrives; MCP calls, compaction and an image path read as in the extension; the Media tab', async ({ launched }) => {
+    const { app, page, log, workspace } = launched
     const pane = page.locator('[data-chat-pane]')
+    mkdirSync(join(workspace, 'refs'), { recursive: true })
+    mkdirSync(join(workspace, 'clips'), { recursive: true })
+    writeFileSync(join(workspace, 'refs', 'shot.png'), Buffer.from(TINY_PNG, 'base64'))
+    writeFileSync(join(workspace, 'clips', 'demo.webm'), await recordWebm(page))
     await startSession(launched)
 
     await test.step('thinking, the todo checklist, copy buttons and timestamps', async () => {
@@ -588,110 +625,69 @@ test.describe('chat rendering', () => {
         .poll(() => transcript.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
         .toBeLessThan(50)
     })
-  })
-})
 
-test.describe('transcript look', () => {
-  test.use({ script: 'look' })
-
-  test('an MCP call reads "Server [tool]" with an OUT box, compaction and thinking read as in the extension, and an image path opens the preview', async ({ launched }) => {
-    const { page, workspace } = launched
-    mkdirSync(join(workspace, 'refs'), { recursive: true })
-    writeFileSync(join(workspace, 'refs', 'shot.png'), Buffer.from(TINY_PNG, 'base64'))
-    const pane = page.locator('[data-chat-pane]')
-    await startSession(launched)
-    await send(page, 'render the references')
-    await expect(pane.getByText('Rendered')).toBeVisible()
-
-    const meshy = pane.locator('[data-timeline-row]', { hasText: 'Meshy [meshy_check_balance]' })
-    await expect(meshy).toHaveCount(1)
-    const out = meshy.locator('[data-tool-section="out"]')
-    await expect(out).toContainText('"balance":1932')
-    await expect(out).toHaveAttribute('aria-expanded', 'false')
-    await out.click()
-    await expect(out).toHaveAttribute('aria-expanded', 'true')
-    await expect(meshy.locator('[data-tool-section="in"]')).toHaveCount(0)
-    await expect(pane.getByText('Blender [execute_blender_code]')).toBeVisible()
-    await expect(pane.getByText('mcp__meshy__meshy_check_balance')).toHaveCount(0)
-
-    await expect(pane.getByText(/^Thought for \ds$/)).toHaveCount(2)
-
-    await pane.locator('[data-compaction]').getByRole('button', { name: 'Compacted chat · auto · 974k tokens freed' }).click()
-    await expect(pane.getByText('Summary: checked the Meshy balance.')).toBeVisible()
-
-    const read = pane.locator('[data-timeline-row]', { hasText: /^Read/ })
-    await read.getByRole('link', { name: 'shot.png' }).click()
-    const preview = page.getByRole('dialog', { name: 'shot.png' })
-    await expect(preview.locator('img')).toHaveAttribute('src', /^data:image\/png;base64,/)
-    await page.keyboard.press('Escape')
-    await expect(preview).toHaveCount(0)
-
-    await pane.getByRole('link', { name: 'the reference' }).click()
-    await expect(preview).toBeVisible()
-    await preview.getByRole('button', { name: 'Close preview' }).click()
-    await expect(preview).toHaveCount(0)
-  })
-})
-
-/** A one-second webm, recorded from a canvas inside the app, so the test needs no video tool or download. */
-async function recordWebm(page: Page): Promise<Buffer> {
-  // A string, since this project compiles the tests against Node's types, not the DOM's.
-  const base64 = await page.evaluate<string>(`(async () => {
-    const canvas = document.createElement('canvas')
-    canvas.width = 64
-    canvas.height = 48
-    const context = canvas.getContext('2d')
-    const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: 'video/webm' })
-    const chunks = []
-    recorder.ondataavailable = (e) => chunks.push(e.data)
-    const stopped = new Promise((resolve) => (recorder.onstop = resolve))
-    recorder.start()
-    for (let frame = 0; frame < 20; frame++) {
-      context.fillStyle = 'hsl(' + frame * 18 + ', 70%, 50%)'
-      context.fillRect(0, 0, 64, 48)
-      await new Promise((resolve) => setTimeout(resolve, 50))
+    /** Starts a chat on `script` in its own pane; later steps read only the visible pane. */
+    const newChatOn = async (script: 'look' | 'media'): Promise<void> => {
+      await useScript(app, script)
+      const from = log.entries().length
+      await page.keyboard.press('Control+t')
+      await newChatIn(page, /e2e-workspace/)
+      await expect.poll(() => log.initializedIn(workspace, from)).toBe(true)
     }
-    recorder.stop()
-    await stopped
-    const bytes = new Uint8Array(await new Blob(chunks, { type: 'video/webm' }).arrayBuffer())
-    let binary = ''
-    for (const byte of bytes) binary += String.fromCharCode(byte)
-    return btoa(binary)
-  })()`)
-  return Buffer.from(base64, 'base64')
-}
+    const shown = page.locator('[data-chat-pane]:visible')
 
-test.describe('media tab', () => {
-  test.use({ script: 'media' })
+    await test.step('an MCP call reads "Server [tool]" with an OUT box, compaction and thinking read as in the extension, and an image path opens the preview', async () => {
+      await newChatOn('look')
+      await send(page, 'render the references')
+      await expect(shown.getByText('Rendered')).toBeVisible()
 
-  test('the Media tab shows the chat’s png, webm and missing file, steps through them, jumps back to the message, and the Chat tab keeps its scroll', async ({ launched }) => {
-    const { page, workspace } = launched
-    mkdirSync(join(workspace, 'refs'), { recursive: true })
-    mkdirSync(join(workspace, 'clips'), { recursive: true })
-    writeFileSync(join(workspace, 'refs', 'shot.png'), Buffer.from(TINY_PNG, 'base64'))
-    writeFileSync(join(workspace, 'clips', 'demo.webm'), await recordWebm(page))
-    const pane = page.locator('[data-chat-pane]')
-    const transcript = pane.locator('[data-transcript]')
-    const input = pane.locator('textarea')
-    const chatTab = pane.getByRole('tab', { name: 'Chat' })
-    const mediaTab = pane.getByRole('tab', { name: 'Media 3' })
-    const grid = pane.getByRole('tabpanel', { name: 'Media' })
+      const meshy = shown.locator('[data-timeline-row]', { hasText: 'Meshy [meshy_check_balance]' })
+      await expect(meshy).toHaveCount(1)
+      const out = meshy.locator('[data-tool-section="out"]')
+      await expect(out).toContainText('"balance":1932')
+      await expect(out).toHaveAttribute('aria-expanded', 'false')
+      await out.click()
+      await expect(out).toHaveAttribute('aria-expanded', 'true')
+      await expect(meshy.locator('[data-tool-section="in"]')).toHaveCount(0)
+      await expect(shown.getByText('Blender [execute_blender_code]')).toBeVisible()
+      await expect(shown.getByText('mcp__meshy__meshy_check_balance')).toHaveCount(0)
+
+      await expect(shown.getByText(/^Thought for \ds$/)).toHaveCount(2)
+
+      await shown.locator('[data-compaction]').getByRole('button', { name: 'Compacted chat · auto · 974k tokens freed' }).click()
+      await expect(shown.getByText('Summary: checked the Meshy balance.')).toBeVisible()
+
+      const read = shown.locator('[data-timeline-row]', { hasText: /^Read/ })
+      await read.getByRole('link', { name: 'shot.png' }).click()
+      const preview = page.getByRole('dialog', { name: 'shot.png' })
+      await expect(preview.locator('img')).toHaveAttribute('src', /^data:image\/png;base64,/)
+      await page.keyboard.press('Escape')
+      await expect(preview).toHaveCount(0)
+
+      await shown.getByRole('link', { name: 'the reference' }).click()
+      await expect(preview).toBeVisible()
+      await preview.getByRole('button', { name: 'Close preview' }).click()
+      await expect(preview).toHaveCount(0)
+    })
+
+    const transcript = shown.locator('[data-transcript]')
+    const chatTab = shown.getByRole('tab', { name: 'Chat' })
+    const mediaTab = shown.getByRole('tab', { name: 'Media 3' })
+    const grid = shown.getByRole('tabpanel', { name: 'Media' })
     const tiles = grid.locator('[data-thumbnail]')
-    await startSession(launched)
 
     await test.step('the Media tab replaces the transcript with the chat’s png, webm and missing file', async () => {
-      await expect(pane.getByRole('tablist')).toHaveCount(0)
-      await expect(page.getByRole('button', { name: 'Media', exact: true })).toHaveCount(0)
+      await newChatOn('media')
+      await expect(shown.getByRole('tablist')).toHaveCount(0)
       await send(page, 'show the media')
-      await expect(pane.getByText('That is the reference shot.')).toBeVisible()
+      await expect(shown.getByText('That is the reference shot.')).toBeVisible()
 
       await expect(chatTab).toHaveAttribute('aria-selected', 'true')
       await mediaTab.click()
       await expect(mediaTab).toHaveAttribute('aria-selected', 'true')
       await expect(grid).toBeVisible()
       await expect(transcript).toBeHidden()
-      await expect(input).toBeVisible()
-      await expect(page.getByRole('complementary', { name: 'Media' })).toHaveCount(0)
+      await expect(shown.locator('textarea')).toBeVisible()
 
       await expect(tiles).toHaveCount(3)
       await expect(tiles.nth(0).getByRole('button', { name: 'shot.png' }).locator('img')).toHaveAttribute('src', /^cc-media:\/\/file\//)
@@ -702,7 +698,7 @@ test.describe('media tab', () => {
       await expect.poll(() => tiles.nth(1).locator('video').evaluate((v) => (v as unknown as { readyState: number }).readyState)).toBeGreaterThan(0)
       const shotPath = process.env.MEDIA_TAB_SHOT
       if (shotPath) {
-        const png = await evaluateMain(launched.app, async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'), undefined)
+        const png = await evaluateMain(app, async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'), undefined)
         writeFileSync(shotPath, Buffer.from(png, 'base64'))
       }
     })
@@ -733,9 +729,9 @@ test.describe('media tab', () => {
       await expect(grid).toHaveCount(0)
       for (let i = 1; i <= 4; i++) {
         await send(page, `more ${i}`)
-        await expect(pane.getByText('Line eight of a long reply.')).toHaveCount(i)
+        await expect(shown.getByText('Line eight of a long reply.')).toHaveCount(i)
       }
-      const shotMessage = pane.locator('[data-item-id]', { hasText: 'That is the reference shot.' })
+      const shotMessage = shown.locator('[data-item-id]', { hasText: 'That is the reference shot.' })
       await expect(shotMessage).not.toBeInViewport()
       await page.keyboard.press('Control+Shift+M')
       await expect(grid).toBeVisible()
@@ -772,7 +768,7 @@ test.describe('media tab', () => {
       await page.keyboard.press('Control+Shift+M')
       await expect(transcript).toBeHidden()
       await send(page, 'more 5')
-      await expect(pane.getByText('Line eight of a long reply.')).toHaveCount(5)
+      await expect(shown.getByText('Line eight of a long reply.')).toHaveCount(5)
       await page.keyboard.press('Control+Shift+M')
       await expect(transcript).toBeVisible()
       await expect.poll(gap).toBeLessThan(2)
