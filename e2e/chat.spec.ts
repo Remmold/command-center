@@ -355,7 +355,7 @@ test.describe('slow turns', () => {
 
     await test.step('a running Bash call blinks, offers Run in background, and the click sends background_tasks for it', async () => {
       await send(page, 'build it')
-      const row = pane.locator('[data-timeline-row]', { hasText: 'pnpm build' })
+      const row = pane.locator('[data-timeline-row]', { hasText: 'Build the app' })
       await expect(row.getByRole('img', { name: 'running' })).toBeVisible()
       const action = row.getByRole('button', { name: 'Run in background' })
       await expect(action).toBeVisible()
@@ -640,17 +640,43 @@ test.describe('chat rendering', () => {
       await newChatOn('look')
       await send(page, 'render the references')
       await expect(shown.getByText('Rendered')).toBeVisible()
+      const lookShot = process.env.LOOK_SHOT
+      if (lookShot) {
+        await page.setViewportSize({ width: 1000, height: 1500 })
+        await page.waitForTimeout(300)
+        const png = await evaluateMain(app, async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'), undefined)
+        writeFileSync(lookShot, Buffer.from(png, 'base64'))
+      }
 
       const meshy = shown.locator('[data-timeline-row]', { hasText: 'Meshy [meshy_check_balance]' })
       await expect(meshy).toHaveCount(1)
       const out = meshy.locator('[data-tool-section="out"]')
+      await expect(out).toHaveCount(0)
+      await meshy.locator('[data-tool-header]').click()
       await expect(out).toContainText('"balance":1932')
       await expect(out).toHaveAttribute('aria-expanded', 'false')
       await out.click()
       await expect(out).toHaveAttribute('aria-expanded', 'true')
+      await meshy.getByRole('button', { name: 'raw' }).click()
+      await expect(out).toContainText('"balance": 1932')
       await expect(meshy.locator('[data-tool-section="in"]')).toHaveCount(0)
-      await expect(shown.getByText('Blender [execute_blender_code]')).toBeVisible()
       await expect(shown.getByText('mcp__meshy__meshy_check_balance')).toHaveCount(0)
+
+      const blender = shown.locator('[data-timeline-row]', { hasText: 'Blender [execute_blender_code]' })
+      await blender.getByRole('button', { name: 'Blender [execute_blender_code]' }).click()
+      await expect(blender.locator('[data-tool-section="out"]')).toHaveText(/^Code executed successfully/)
+
+      const bash = shown.locator('[data-timeline-row]', { hasText: 'Check formatting and types' })
+      await expect(bash).not.toContainText('pnpm exec oxfmt')
+      await bash.locator('[data-tool-header]').click()
+      await expect(bash.locator('[data-tool-section="in"]')).toContainText('pnpm exec oxfmt')
+      await expect(bash.getByRole('link', { name: 'Output saved to file (34.9 KB)' })).toBeVisible()
+      await expect(bash).not.toContainText('persisted-output')
+
+      await expect(shown.locator('[data-timeline-row]', { hasText: 'tokenStore.ts' }).getByText('accessToken: string')).toBeVisible()
+      await expect(shown.getByText('Stopped 2 background tasks')).toBeVisible()
+      await expect(shown.getByText('TaskStop')).toHaveCount(0)
+      await expect(shown.getByText(/Successfully stopped/)).toHaveCount(0)
 
       await expect(shown.getByText(/^Thought for \ds$/)).toHaveCount(2)
 

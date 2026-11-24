@@ -1,0 +1,3 @@
+- done: collapsed tool rows, Bash description label, hidden/quiet plumbing tools, readable OUT + raw toggle, persisted-output link; gate green (quick, e2e:gate 70.6 s, perf+zoom)
+- next: code review findings, then commit
+- open reds: none

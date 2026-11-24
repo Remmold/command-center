@@ -12,8 +12,14 @@ describe('tool call title', () => {
     })
   })
 
-  it('names a Bash call by the first line of its command', () => {
-    expect(toolCallTitle('Bash', { command: 'pnpm quick\necho done', description: 'Run quick tier' }, CWD).target).toBe('pnpm quick')
+  it('names a Bash or PowerShell call by its description, as the extension does', () => {
+    expect(toolCallTitle('Bash', { command: 'cd C:/x && pnpm exec oxfmt src', description: 'Format the sources' }, CWD).target).toBe('Format the sources')
+    expect(toolCallTitle('PowerShell', { command: 'Get-ChildItem -Recurse', description: 'List the files' }, CWD)).toEqual({ name: 'PowerShell', target: 'List the files', prose: true })
+  })
+
+  it('names a Bash call without a description by its command on one line', () => {
+    expect(toolCallTitle('Bash', { command: '  pnpm quick\necho done' }, CWD).target).toBe('pnpm quick')
+    expect(toolCallTitle('Bash', { command: 'pnpm quick', description: '' }, CWD).target).toBe('pnpm quick')
   })
 
   it('names a Grep by its pattern, and the folder searched when there is one', () => {

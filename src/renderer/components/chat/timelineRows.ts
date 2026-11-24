@@ -7,8 +7,11 @@ import type { TimelinePlace } from '../ui/Timeline'
 /** How a chat item draws: as timeline steps, as a block that breaks the line (a prompt, a note), or not at all. */
 export type RowKind = 'timeline' | 'plain' | 'hidden'
 
-/** Tools the extension leaves out of the chat (`hidden` on its renderer). */
-const HIDDEN_TOOLS: ReadonlySet<string> = new Set(['ToolSearch'])
+/** ToolSearch is the extension's `hidden` renderer; the rest only read a background task's output, which Claude then reports. */
+const HIDDEN_TOOLS: ReadonlySet<string> = new Set(['ToolSearch', 'TaskOutput', 'BashOutput', 'AgentOutputTool'])
+
+/** Tools that stop a background task; side by side they read as one quiet line. */
+const QUIET_TOOLS: ReadonlySet<string> = new Set(['TaskStop', 'KillShell', 'KillBash'])
 
 /** Indexes of the blocks of a reply that draw a step of their own. */
 export function visibleBlocks(content: ContentBlock[]): number[] {
@@ -19,6 +22,32 @@ export function visibleBlocks(content: ContentBlock[]): number[] {
     else if (block.type === 'tool_use' && typeof block.name === 'string' && !HIDDEN_TOOLS.has(block.name)) shown.push(i)
   })
   return shown
+}
+
+export interface TimelineStep {
+  indexes: number[]
+  /** A run of background-task stops drawn as one line. */
+  quiet: boolean
+}
+
+function isQuiet(block: ContentBlock): boolean {
+  return block.type === 'tool_use' && typeof block.name === 'string' && QUIET_TOOLS.has(block.name)
+}
+
+/** The drawn blocks of a reply as timeline steps, neighbouring background-task stops folded into one. */
+export function timelineSteps(content: ContentBlock[]): TimelineStep[] {
+  const steps: TimelineStep[] = []
+  for (const i of visibleBlocks(content)) {
+    const quiet = isQuiet(content[i])
+    const last = steps[steps.length - 1]
+    if (quiet && last?.quiet) last.indexes.push(i)
+    else steps.push({ indexes: [i], quiet })
+  }
+  return steps
+}
+
+export function quietStepLabel(count: number): string {
+  return count === 1 ? 'Stopped background task' : `Stopped ${count} background tasks`
 }
 
 export function rowKind(item: ChatItem, pairs: ToolPairs, compactions: CompactPairs): RowKind {

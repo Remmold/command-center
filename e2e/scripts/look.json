@@ -6,35 +6,176 @@
         {
           "type": "tool_use",
           "name": "mcp__meshy__meshy_check_balance",
-          "thinking": { "ms": 1000, "tokens": 40 },
+          "thinking": {
+            "ms": 1000,
+            "tokens": 40
+          },
           "approval": false,
           "input": {},
           "result": "{\"balance\":1932,\"monthly_credits\":252,\"permanent_credits\":1680,\"monthly_reset\":\"2026-12-01\"}"
         },
         {
           "type": "raw",
-          "line": { "type": "system", "subtype": "compact_boundary", "session_id": "fake", "uuid": "00000000-0000-4000-8000-00000000c0de", "compact_metadata": { "trigger": "auto", "pre_tokens": 974400 } }
+          "line": {
+            "type": "system",
+            "subtype": "compact_boundary",
+            "session_id": "fake",
+            "uuid": "00000000-0000-4000-8000-00000000c0de",
+            "compact_metadata": {
+              "trigger": "auto",
+              "pre_tokens": 974400
+            }
+          }
         },
         {
           "type": "raw",
-          "line": { "type": "user", "isSynthetic": true, "session_id": "fake", "parent_tool_use_id": null, "message": { "role": "user", "content": "This session is being continued from a previous conversation. Summary: checked the Meshy balance." } }
+          "line": {
+            "type": "user",
+            "isSynthetic": true,
+            "session_id": "fake",
+            "parent_tool_use_id": null,
+            "message": {
+              "role": "user",
+              "content": "This session is being continued from a previous conversation. Summary: checked the Meshy balance."
+            }
+          }
         },
-        { "type": "text", "text": "Balance: 1932 credits.", "thinking": { "ms": 1000 } },
+        {
+          "type": "text",
+          "text": "Balance: 1932 credits.",
+          "thinking": {
+            "ms": 1000
+          }
+        },
         {
           "type": "tool_use",
           "name": "mcp__blender__execute_blender_code",
           "approval": false,
-          "input": { "code": "render_refs()" },
+          "input": {
+            "code": "render_refs()"
+          },
           "result": "{\"result\":\"Code executed successfully: ['SM_Chr_Blacksmith_Male_01.png']\"}"
         },
         {
           "type": "tool_use",
           "name": "Read",
           "approval": false,
-          "input": { "file_path": "{cwd}{sep}refs{sep}shot.png" },
+          "input": {
+            "file_path": "{cwd}{sep}refs{sep}shot.png"
+          },
           "result": "[image]"
         },
-        { "type": "text", "text": "Rendered [the reference](refs/shot.png)." }
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "approval": false,
+          "input": {
+            "command": "cd {cwd} && pnpm exec oxfmt src --check && pnpm exec tsc --noEmit -p tsconfig.json && git status --porcelain",
+            "description": "Check formatting and types"
+          },
+          "result": "<persisted-output>\nOutput too large (34.9KB). Full output saved to: {cwd}{sep}tool-results{sep}b1check.txt\n\nPreview (first 2KB):\nAll matched files use the correct format.\n</persisted-output>"
+        },
+        {
+          "type": "tool_use",
+          "name": "Edit",
+          "approval": false,
+          "input": {
+            "file_path": "{cwd}{sep}src{sep}tokenStore.ts",
+            "old_string": "  token: string\n  expires: number",
+            "new_string": "  accessToken: string\n  expiresAt: number"
+          },
+          "result": "The file {cwd}{sep}src{sep}tokenStore.ts has been updated successfully."
+        },
+        {
+          "type": "raw",
+          "line": {
+            "type": "assistant",
+            "session_id": "fake",
+            "parent_tool_use_id": null,
+            "message": {
+              "id": "msg_fake_stops",
+              "type": "message",
+              "role": "assistant",
+              "model": "claude-haiku-4-5",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "toolu_fake_stop1",
+                  "name": "TaskStop",
+                  "input": {
+                    "task_id": "b6nq4v7pb"
+                  }
+                }
+              ],
+              "stop_reason": null
+            }
+          }
+        },
+        {
+          "type": "raw",
+          "line": {
+            "type": "assistant",
+            "session_id": "fake",
+            "parent_tool_use_id": null,
+            "message": {
+              "id": "msg_fake_stops",
+              "type": "message",
+              "role": "assistant",
+              "model": "claude-haiku-4-5",
+              "content": [
+                {
+                  "type": "tool_use",
+                  "id": "toolu_fake_stop2",
+                  "name": "TaskStop",
+                  "input": {
+                    "task_id": "bz8bryhva"
+                  }
+                }
+              ],
+              "stop_reason": null
+            }
+          }
+        },
+        {
+          "type": "raw",
+          "line": {
+            "type": "user",
+            "session_id": "fake",
+            "parent_tool_use_id": null,
+            "message": {
+              "role": "user",
+              "content": [
+                {
+                  "tool_use_id": "toolu_fake_stop1",
+                  "type": "tool_result",
+                  "content": "{\"message\":\"Successfully stopped task: b6nq4v7pb (pnpm dev)\",\"task_id\":\"b6nq4v7pb\",\"task_type\":\"local_bash\"}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "raw",
+          "line": {
+            "type": "user",
+            "session_id": "fake",
+            "parent_tool_use_id": null,
+            "message": {
+              "role": "user",
+              "content": [
+                {
+                  "tool_use_id": "toolu_fake_stop2",
+                  "type": "tool_result",
+                  "content": "{\"message\":\"Successfully stopped task: bz8bryhva (pnpm test --watch)\",\"task_id\":\"bz8bryhva\",\"task_type\":\"local_bash\"}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "text",
+          "text": "Rendered [the reference](refs/shot.png)."
+        }
       ]
     }
   ]

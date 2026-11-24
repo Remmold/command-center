@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { timelineJoins, visibleBlocks } from './timelineRows'
+import { quietStepLabel, timelineJoins, timelineSteps, visibleBlocks } from './timelineRows'
 
 describe('which steps the timeline line joins', () => {
   it('joins neighbouring timeline steps and stops at a prompt', () => {
@@ -31,5 +31,29 @@ describe('the blocks of a reply that draw a step', () => {
       { type: 'text', text: 'Balance: 1932 credits.' }
     ]
     expect(visibleBlocks(blocks)).toEqual([0, 3, 4])
+  })
+
+  it('skips the background-task plumbing that reads a task’s output', () => {
+    const blocks = ['TaskOutput', 'BashOutput', 'AgentOutputTool', 'Bash'].map((name, i) => ({ type: 'tool_use', id: `t${i}`, name, input: {} }))
+    expect(visibleBlocks(blocks)).toEqual([3])
+  })
+})
+
+describe('the steps of a reply', () => {
+  const stop = (id: string, name = 'TaskStop') => ({ type: 'tool_use', id, name, input: { task_id: id } })
+
+  it('folds side-by-side stops of background tasks into one quiet step', () => {
+    const blocks = [{ type: 'text', text: 'Stopping both.' }, stop('a'), stop('b', 'KillShell'), { type: 'text', text: 'Done.' }, stop('c')]
+    expect(timelineSteps(blocks)).toEqual([
+      { indexes: [0], quiet: false },
+      { indexes: [1, 2], quiet: true },
+      { indexes: [3], quiet: false },
+      { indexes: [4], quiet: true }
+    ])
+  })
+
+  it('reads a quiet step as how many tasks it stopped', () => {
+    expect(quietStepLabel(1)).toBe('Stopped background task')
+    expect(quietStepLabel(2)).toBe('Stopped 2 background tasks')
   })
 })

@@ -1,0 +1,1 @@
+- 01 resolved: quieter tool rows (folded IN/OUT, Bash description, hidden/quiet plumbing tools, readable OUT, saved-output link) — 75e606d

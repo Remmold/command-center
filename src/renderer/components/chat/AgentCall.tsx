@@ -47,6 +47,7 @@ export function AgentCall({ id, input, result, resultText }: Props) {
         status={AGENT_ROW_STATUS[entry.status]}
         meta={<span className="text-[11px] text-faint">{agentRowMeta(entry)}</span>}
         onOpen={chatKey ? () => showAgents(chatKey, entry.key) : undefined}
+        defaultOpen
       >
         {detail && (
           <SecondaryLine>
