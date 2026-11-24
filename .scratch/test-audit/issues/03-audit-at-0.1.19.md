@@ -9,7 +9,7 @@ Starting state: 14 UI scenarios, **74 s** of 90; 1,099 unit tests.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Inventory:** add a "0.1.19" section to `.scratch/test-audit/inventory.md`: every scenario with its runtime and steps. Flag dead or duplicate steps, especially:
   - checks of behaviour replaced since 0.1.16: repo groups, now own groups; IN/OUT boxes always open, now folded; status headings; the per-turn cost;
