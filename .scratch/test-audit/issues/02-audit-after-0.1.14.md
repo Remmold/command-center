@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
-- [ ] **Inventory:** list every UI scenario with its runtime (JSON reporter), its steps, and what each step proves. Flag steps that duplicate a unit test, or test behaviour that has since been replaced, for example:
+- [x] **Inventory:** list every UI scenario with its runtime (JSON reporter), its steps, and what each step proves. Flag steps that duplicate a unit test, or test behaviour that has since been replaced, for example:
   - the old Past sessions modal, now the picker;
   - the media column, now a tab;
   - nested subagent messages, now compact rows;
@@ -14,11 +14,11 @@
   - status headings, now the compact sidebar.
 
   Append the result to `.scratch/test-audit/inventory.md` under a "0.1.14" heading.
-- [ ] **UI suite:**
+- [x] **UI suite:**
   - remove dead or duplicate steps;
   - shorten waits that prove nothing (keep the ones that prove "nothing happens too early", as ticket 01 did);
   - **target ≤ 75 s** on a quiet machine, leaving room for new features;
   - don't drop below the regression guards. These stay exactly: the send-mid-turn queue, the update busy gate (now including background tasks), scroll-follow, the observed cut-off, processTree, the window place, the storage flush before quit, the off-screen test windows and the zoom overflow.
-- [ ] **Unit tests:** remove duplicates and tests of deleted code. Report the before and after count.
-- [ ] **Release doc:** in `docs/agents/release.md`, record that this audit ran at 0.1.14 and the next is due at 0.1.19. Add one line to the release steps saying the conductor checks the "audit due" line before every release.
-- [ ] **Proof:** `pnpm quick` green; `pnpm e2e:gate` green twice in a row on a quiet machine, with the time reported; the perf and zoom shots green. End with a before/after table: scenarios, UI time, unit count, quick time.
+- [x] **Unit tests:** remove duplicates and tests of deleted code. Report the before and after count.
+- [x] **Release doc:** in `docs/agents/release.md`, record that this audit ran at 0.1.14 and the next is due at 0.1.19. Add one line to the release steps saying the conductor checks the "audit due" line before every release.
+- [x] **Proof:** `pnpm quick` green; `pnpm e2e:gate` green twice in a row on a quiet machine, with the time reported; the perf and zoom shots green. End with a before/after table: scenarios, UI time, unit count, quick time.
