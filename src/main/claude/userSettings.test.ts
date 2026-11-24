@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mergeModelDefaults, parseDefaultMode, parseModelDefaults, readDefaultMode, readModelDefaults, saveModelDefaults } from './userSettings'
+import { mergeModelDefaults, parseDefaultMode, parseModelDefaults, promptSuggestionsAllowed, readDefaultMode, readModelDefaults, saveModelDefaults } from './userSettings'
 
 describe('mergeModelDefaults', () => {
   it('sets the model and keeps every other key', () => {
@@ -123,5 +123,15 @@ describe('readDefaultMode', () => {
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('promptSuggestionsAllowed', () => {
+  it('is off only when the settings set promptSuggestionEnabled to false, as the CLI reads it', () => {
+    expect(promptSuggestionsAllowed('{"promptSuggestionEnabled": false}')).toBe(false)
+    expect(promptSuggestionsAllowed('{"promptSuggestionEnabled": true}')).toBe(true)
+    expect(promptSuggestionsAllowed('{"model": "opus"}')).toBe(true)
+    expect(promptSuggestionsAllowed(null)).toBe(true)
+    expect(promptSuggestionsAllowed('{ broken')).toBe(true)
   })
 })

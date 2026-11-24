@@ -105,7 +105,7 @@ export class ClaudeSession {
     })
 
     this.handshake = this.control
-      .request('initialize', { hooks: null })
+      .request('initialize', { hooks: null, promptSuggestions: options.promptSuggestions === true })
       .then((response) => {
         this.init = parseInitialize(response, { teleported: options.teleported })
         options.onInit(paneId, this.init)

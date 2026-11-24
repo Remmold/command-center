@@ -15,6 +15,7 @@ import { InputBox } from './InputBox'
 import { ApprovalPrompt } from './ApprovalPrompt'
 import { PermissionModePicker } from './PermissionModePicker'
 import { interruptNote } from './interrupt'
+import { suggestionReducer, type SuggestionClear } from './promptSuggestion'
 import { UserPrompt } from './Message'
 import { pickUp, type HeldPrompt } from './heldPrompts'
 import { historyEntries } from './promptHistory'
@@ -164,6 +165,8 @@ export const ChatView = memo(function ChatView({
   const [foreground, setForeground] = useState<ForegroundCalls>(NO_FOREGROUND)
   const [backgroundRefused, setBackgroundRefused] = useState(false)
   const [compacting, setCompacting] = useState(false)
+  const [suggestion, setSuggestion] = useState<string | null>(null)
+  const clearSuggestion = (reason: SuggestionClear): void => setSuggestion((s) => suggestionReducer(s, { type: 'clear', reason }))
   /** When each thinking block of the streaming message started, by block index. */
   const thinkingStartsRef = useRef<{ messageId: string | undefined; starts: Map<number, number> }>({ messageId: undefined, starts: new Map() })
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
@@ -190,6 +193,7 @@ export const ChatView = memo(function ChatView({
   const interruptedRef = useRef(false)
   const awaitingSummaryRef = useRef(false)
   const allowBypassSetting = useGeneralSettingsStore((s) => s.allowDangerouslySkipPermissions)
+  const promptSuggestionsSetting = useGeneralSettingsStore((s) => s.promptSuggestions)
   const choice = useModelChoice(paneId, { model, effort }, profileId)
   const mode = migrateMode(permissionMode)
   const autoAvailable = choice.entry?.supportsAutoMode === true
@@ -277,6 +281,10 @@ export const ChatView = memo(function ChatView({
   }, [focusRequest])
 
   useEffect(() => {
+    if (turnActive) setSuggestion((s) => suggestionReducer(s, { type: 'clear', reason: 'turn-started' }))
+  }, [turnActive])
+
+  useEffect(() => {
     const unsubEvent = window.api.claude.onEvent(({ paneId: id, event }) => {
       if (id !== paneId) return
       handleEvent(event as ClaudeEvent)
@@ -288,6 +296,7 @@ export const ChatView = memo(function ChatView({
       setForeground(NO_FOREGROUND)
       setBackgroundRefused(false)
       setCompacting(false)
+      clearSuggestion('restarted')
       setProcessRunning(false)
       setTurnActive(false)
       setInProgress(null)
@@ -393,6 +402,10 @@ export const ChatView = memo(function ChatView({
     const sessId = (event as { session_id?: string }).session_id
     if (sessId) noteClaudeSessionId(paneId, sessId)
     if (handleQueueFrame(event)) return
+    if (event.type === 'prompt_suggestion') {
+      setSuggestion((s) => suggestionReducer(s, { type: 'line', line: event }))
+      return
+    }
 
     const parent = (event as { parent_tool_use_id?: unknown }).parent_tool_use_id
     const parentToolUseId = typeof parent === 'string' && parent !== '' ? parent : undefined
@@ -585,7 +598,8 @@ export const ChatView = memo(function ChatView({
       thinking,
       resumeSessionId,
       permissionMode: startMode,
-      allowBypass: allowBypassSetting
+      allowBypass: allowBypassSetting,
+      promptSuggestions: promptSuggestionsSetting
     })
     if (!res.ok) {
       setError(res.error ?? 'failed to start claude')
@@ -631,6 +645,7 @@ export const ChatView = memo(function ChatView({
       void toggleRemoteControl()
       return
     }
+    clearSuggestion('sent')
     const uuid = crypto.randomUUID()
     const shown = attachments.length > 0 ? { attachments: sentAttachments(attachments) } : {}
     useChatMediaStore.getState().addAttachments(paneId, mediaAttachments(uuid, attachments))
@@ -666,6 +681,7 @@ export const ChatView = memo(function ChatView({
   }
 
   const handleInterrupt = () => {
+    clearSuggestion('interrupted')
     window.api.claude.interrupt(paneId)
     setTurnActive(false)
     setInProgress(null)
@@ -765,6 +781,8 @@ export const ChatView = memo(function ChatView({
         history={history}
         onSend={handleSend}
         onInterrupt={handleInterrupt}
+        suggestion={suggestion}
+        onDismissSuggestion={() => clearSuggestion('dismissed')}
         commands={commands}
         localActions={remoteControlShown ? WITH_REMOTE_CONTROL : LOCAL_ACTIONS}
         onAction={runAction}

@@ -60,6 +60,12 @@ export function parseDefaultMode(text: string | null): string | null {
   return mode === 'manual' ? 'default' : mode
 }
 
+/** The CLI's own rule: suggestions are on unless `promptSuggestionEnabled` is false. */
+export function promptSuggestionsAllowed(text: string | null): boolean {
+  const parsed = parse(text)
+  return !parsed.ok || parsed.settings.promptSuggestionEnabled !== false
+}
+
 async function readText(file: string): Promise<string | null> {
   try {
     return await fs.readFile(file, 'utf-8')
@@ -111,4 +117,13 @@ export function saveModelDefaults(file: string, patch: ModelDefaultsPatch): Prom
   const next = queue.then(run, run)
   queue = next
   return next
+}
+
+export async function readPromptSuggestionsAllowed(file: string): Promise<boolean> {
+  try {
+    return promptSuggestionsAllowed(await readText(file))
+  } catch (err) {
+    console.error('[settings] could not read', file, (err as Error).message)
+    return true
+  }
 }

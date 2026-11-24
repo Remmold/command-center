@@ -24,6 +24,7 @@ import {
 } from './slashMenuModel'
 import { MessageColumn } from './MessageColumn'
 import { NO_RECALL, stepHistory, type HistoryCursor } from './promptHistory'
+import { shownSuggestion, suggestionKey } from './promptSuggestion'
 import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
 import type { CliCommand, MentionEntry } from '../../../shared/types'
 
@@ -33,6 +34,9 @@ interface Props {
   /** This session's earlier prompts, newest first, for ↑/↓. */
   history?: readonly string[]
   placeholder?: string
+  /** The CLI's suggested next prompt; shown as the placeholder while the box is empty, Tab fills it in. */
+  suggestion?: string | null
+  onDismissSuggestion?: () => void
   onSend: (text: string, attachments?: PromptAttachment[]) => void
   onInterrupt?: () => void
   /** The session's CLI commands, from its `initialize` reply. */
@@ -150,6 +154,8 @@ export function InputBox({
   busy = false,
   history = [],
   placeholder,
+  suggestion = null,
+  onDismissSuggestion,
   onSend,
   onInterrupt,
   commands = NO_COMMANDS,
@@ -404,6 +410,19 @@ export function InputBox({
       e.preventDefault()
       return
     }
+    const suggestionAction = suggestionKey(e, shown !== null)
+    if (suggestionAction === 'accept' && shown !== null) {
+      e.preventDefault()
+      setValue(shown)
+      detect(shown, shown.length)
+      placeCaret(ta, shown.length)
+      return
+    }
+    if (suggestionAction === 'dismiss') {
+      e.preventDefault()
+      onDismissSuggestion?.()
+      return
+    }
     if (isNewlineKey(e)) {
       e.preventDefault()
       insertAtCaret(ta, '\n')
@@ -427,6 +446,7 @@ export function InputBox({
   }
 
   const hint = argumentHint(menu, value)
+  const shown = shownSuggestion(suggestion, { value, busy })
 
   const addFiles = async (files: readonly File[]) => {
     const { read, videos, unsupported } = await readFiles(files)
@@ -571,7 +591,7 @@ export function InputBox({
               onClick={updateAutocomplete}
               onPaste={handlePaste}
               rows={1}
-              placeholder={placeholder ?? 'message claude…'}
+              placeholder={shown ?? placeholder ?? 'message claude…'}
               className="min-h-[22px] w-full resize-none bg-transparent text-[13px] leading-relaxed text-fg placeholder:text-muted focus:outline-none"
             />
             {hint && (

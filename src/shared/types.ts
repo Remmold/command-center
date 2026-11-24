@@ -185,6 +185,8 @@ export interface ClaudeStartOptions {
   permissionMode?: string
   /** Launches with `--allow-dangerously-skip-permissions`, so Bypass can be switched to later. */
   allowBypass?: boolean
+  /** The app's "Suggest next prompt" setting; the account's own `promptSuggestionEnabled: false` still wins. */
+  promptSuggestions?: boolean
 }
 
 /** The model keys of the user `settings.json` that new sessions start with. */
