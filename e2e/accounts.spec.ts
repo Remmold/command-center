@@ -265,12 +265,14 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
       await page.mouse.move(b.x + b.width / 2, b.y + b.height * (half === 'top' ? 0.25 : 0.75), { steps: 4 })
       await page.mouse.up()
     }
-    for (const name of ['Today', 'Later']) {
-      await homeSection.getByRole('button', { name: /^Personal · Ultra/ }).click({ button: 'right' })
-      await page.getByRole('menuitem', { name: 'New group' }).click()
-      await homeSection.getByRole('textbox', { name: 'Group name' }).fill(name)
-      await page.keyboard.press('Enter')
-    }
+    await homeSection.getByRole('button', { name: /^Personal · Ultra/ }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'New group' }).click()
+    await homeSection.getByRole('textbox', { name: 'Group name' }).fill('Today')
+    await page.keyboard.press('Enter')
+    await page.getByRole('button', { name: 'New group', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Personal', exact: true }).click()
+    await homeSection.getByRole('textbox', { name: 'Group name' }).fill('Later')
+    await page.keyboard.press('Enter')
     await expect.poll(groupNames).toEqual(['Ungrouped', 'Today', 'Later'])
 
     await drag(homeChat, header('Today'), 'top')
