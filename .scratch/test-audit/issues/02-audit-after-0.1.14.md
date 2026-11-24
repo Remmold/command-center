@@ -1,6 +1,6 @@
 # 02: Scheduled test audit (overdue since 0.1.13)
 
-**What to build:** the release rule in `docs/agents/release.md` calls for a test audit every 5th release. The last one was at 0.1.8 (ticket 01). Since then 6 releases added features, and each one extended scenarios. Current state: 18 UI scenarios, **85.3 s** of the 90 s budget on a quiet machine, and 1,012 unit tests.
+**What to build:** the release rule in `docs/agents/release.md` calls for a test audit every 5th release. The last one was at 0.1.8 (ticket 01). Since then 6 releases added features, and each one extended scenarios. Current state at 0.1.16: 18 UI scenarios, **85–89.6 s** of the 90 s budget on a quiet machine, and 1,023 unit tests. Releases 0.1.15 and 0.1.16 landed after this ticket was written; include their changes (compact sidebar repo groups, popover clamp, scroll leave-on-wheel).
 
 **Blocked by:** None (can start immediately)
 
