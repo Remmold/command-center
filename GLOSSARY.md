@@ -107,6 +107,10 @@ _Avoid_: Issue (in UI text), task
 One of the board's four stages: Backlog, Blocked, In progress, Done. The stage comes from the ticket's status and blockers.
 _Avoid_: Lane, state
 
+**Copy**:
+One checkout's version of a feature or ticket. The board reads a copy from every workspace of a repo group and from every other git worktree of that repo that has a `.scratch`, added or not. A card shows the most advanced copy's status (resolved, in progress, blocked, ready, needs-*), tagged with that copy's worktree tag when it isn't the main checkout.
+_Avoid_: Sighting (the code's word), mirror
+
 **Scan root**:
 A folder the board searches for repos that have tickets but are not added as workspaces yet.
 _Avoid_: Search path, watch folder

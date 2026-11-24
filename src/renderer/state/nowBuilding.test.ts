@@ -24,6 +24,8 @@ interface FeatureSpec {
   state?: FeatureState
   /** Activity per workspace id. */
   copies?: Record<string, number | null>
+  /** Worktree tag per workspace id; missing means a main checkout. */
+  tags?: Record<string, string>
 }
 
 function feature(name: string, spec: FeatureSpec = {}): BoardFeature {
@@ -31,6 +33,7 @@ function feature(name: string, spec: FeatureSpec = {}): BoardFeature {
   const copies = spec.copies ?? { main: null }
   const sightings = Object.entries(copies).map(([workspaceId, lastActivity]) => ({
     workspaceId,
+    worktreeTag: spec.tags?.[workspaceId] ?? '',
     specPath: null,
     progressPath: null,
     lastActivity
@@ -51,8 +54,8 @@ function model(...features: BoardFeature[]): BoardModel {
   return { repoGroups: [{ repoGroupKey: 'git:fs', repoName: 'FantasySurvival', features }] }
 }
 
-function input(m: BoardModel, statuses: Record<string, SessionStatus[]> = {}, worktreeTags: Record<string, string> = {}): NowBuildingInput {
-  return { model: m, statuses, worktreeTags, now: NOW }
+function input(m: BoardModel, statuses: Record<string, SessionStatus[]> = {}): NowBuildingInput {
+  return { model: m, statuses, now: NOW }
 }
 
 function names(m: BoardModel, statuses: Record<string, SessionStatus[]> = {}): string[] {
@@ -137,15 +140,17 @@ describe('now building: rows', () => {
   })
 
   it('lists the in-progress tickets and tags a row whose recent changes are only in a worktree', () => {
+    const tags = { shard: 'shard-2' }
     const m = model(
       feature('combat', {
         tickets: [ticket('01', 'done'), ticket('03', 'in-progress'), ticket('02', 'in-progress')],
-        copies: { main: NOW - 40 * HOUR, shard: NOW - HOUR }
+        copies: { main: NOW - 40 * HOUR, shard: NOW - HOUR },
+        tags
       }),
-      feature('camera', { copies: { main: NOW - 3 * HOUR, shard: NOW - 2 * HOUR } }),
-      feature('stale', { tickets: [ticket('01', 'in-progress')], copies: { main: NOW - 50 * HOUR, shard: NOW - 40 * HOUR } })
+      feature('camera', { copies: { main: NOW - 3 * HOUR, shard: NOW - 2 * HOUR }, tags }),
+      feature('stale', { tickets: [ticket('01', 'in-progress')], copies: { main: NOW - 50 * HOUR, shard: NOW - 40 * HOUR }, tags })
     )
-    const rows = nowBuilding(input(m, {}, { main: '', shard: 'shard-2' })).rows
+    const rows = nowBuilding(input(m)).rows
     expect(rows.map((r) => [r.featureName, r.inProgress.map((t) => t.number), r.worktreeTag])).toEqual([
       ['combat', ['03', '02'], 'shard-2'],
       ['camera', [], null],

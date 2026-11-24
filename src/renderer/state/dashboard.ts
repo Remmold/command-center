@@ -135,7 +135,6 @@ export function dashboard(input: DashboardInput): Dashboard {
   const building = nowBuilding({
     model: input.board,
     statuses: statusesByWorkspace(input),
-    worktreeTags: Object.fromEntries(input.workspaces.map((w) => [w.id, w.worktreeTag])),
     now: input.now
   })
   const nowBuildingByAccount: NowBuilding = {

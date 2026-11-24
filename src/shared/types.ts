@@ -625,7 +625,10 @@ export interface TicketStatus {
 
 /** One copy of a ticket file, in one workspace. */
 export interface TicketSighting extends TicketStatus {
+  /** An added workspace's id, or `worktree:<path>` for a worktree that isn't added. */
   workspaceId: string
+  /** Empty for a main checkout; a branch or folder name otherwise. */
+  worktreeTag: string
   column: BoardColumn
   blockedBy: TicketNumber[]
   filePath: string
@@ -642,12 +645,15 @@ export interface BoardTicket extends TicketStatus {
   fileName: string
   title: string
   column: BoardColumn
-  /** Highest column first, then workspace order. */
+  /** The copy that decides the status first (most advanced, main checkout on a tie), then the rest by the same order. */
   sightings: TicketSighting[]
 }
 
 export interface FeatureSighting {
+  /** An added workspace's id, or `worktree:<path>` for a worktree that isn't added. */
   workspaceId: string
+  /** Empty for a main checkout; a branch or folder name otherwise. */
+  worktreeTag: string
   specPath: string | null
   progressPath: string | null
   /** Newest modification time (epoch ms) of this copy's spec, progress notes, tickets and ticket notes. */

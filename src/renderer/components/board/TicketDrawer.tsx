@@ -81,7 +81,7 @@ export function TicketDrawer({ found, model, workspaces, onSelect, onClose, shar
             const workspace = workspaces.get(s.workspaceId)
             return (
               <ListItem key={s.workspaceId} tooltip={s.filePath}>
-                <ListRowText primary={workspace?.name ?? s.workspaceId} secondary={worktreeLabel(workspace)} />
+                <ListRowText primary={workspace?.name ?? 'Worktree (not added)'} secondary={worktreeLabel(s.worktreeTag)} />
                 {ticket.sightings.length > 1 && <Badge>{COLUMN_TITLE[s.column]}</Badge>}
                 {workspace && (
                   <Button onClick={() => openWorkspace(workspace)} tooltip={`Switch to Sessions on ${workspace.name}`}>

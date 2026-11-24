@@ -413,3 +413,10 @@ Each entry records what was decided, why, and the alternative. Review these in t
 229. **"Move to group ▸" replaces the row menu with the list of groups and a back item** (there is no flyout submenu primitive); the chat's own group is disabled.
 230. **Group headers have no icon** (the sketch shows none); each row keeps its repo icon. The repo fold store `profileId/repoGroupKey` is now read only to seed folds; group folds live in `sidebar-groups.json`.
 231. **Alt+1..9 count rows in the new manual order**, so a new chat is now Alt+1 (the `app.spec` check moved to Alt+2).
+232. **A worktree that isn't added is tagged with its branch, or its folder name when detached** (board-worktrees 01). The main checkout read as an extra (only a linked worktree added) gets no tag. Added worktrees keep their folder-derived worktree tag.
+    - Alternative: the folder-derived tag for every worktree, as for added ones.
+233. **Status precedence across copies: resolved > in progress > blocked > ready-* > needs-*** (the column first, then ready over needs-* inside Backlog). On a tie the main checkout wins, then added workspaces, then extra worktrees, so the card's worktree tag shows only when a worktree is strictly ahead. The card's tag now marks the copy that decided the status (it used to show only when every copy was a worktree), and the ticket drawer opens that copy's file.
+    - Alternative: newest-modified copy wins on a tie.
+234. **Extra worktrees are polled every 30 s, not watched.** An open watch handle on Windows can block an agent removing its `%TEMP%\cc-*` worktree. The poll lists worktrees fresh and rereads the board while any extra exists; added workspaces keep their file watches. Copies are now read in parallel: 11 added workspaces plus 38 extras read in about 0.5 s (3.4 s one after another).
+    - Alternative: watch extra worktrees like workspaces (changes show at once, but can hold up deleting them).
+235. **Sidebar and chats needed no change**: chats belong to added workspaces, whose header and project picker already show the worktree tag under the repo.

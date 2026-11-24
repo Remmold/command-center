@@ -14,7 +14,7 @@ function ticket(number: string, column: BoardColumn, title = `ticket ${number}`,
     statusLine: null,
     statusKnown: true,
     sightings: [
-      { workspaceId: 'ws', column, blockedBy: [], filePath: `x/${number}.md`, progressPath: null, status: null, statusNote, statusLine: null, statusKnown: true }
+      { workspaceId: 'ws', worktreeTag: '', column, blockedBy: [], filePath: `x/${number}.md`, progressPath: null, status: null, statusNote, statusLine: null, statusKnown: true }
     ]
   }
 }
@@ -27,7 +27,7 @@ function feature(name: string, tickets: BoardTicket[], state?: FeatureState): Bo
     progress: { done, total: tickets.length, lastNote: `${name} note` },
     lastActivity: null,
     tickets,
-    sightings: [{ workspaceId: 'ws', specPath: null, progressPath: null, lastActivity: null }]
+    sightings: [{ workspaceId: 'ws', worktreeTag: '', specPath: null, progressPath: null, lastActivity: null }]
   }
 }
 

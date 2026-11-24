@@ -9,8 +9,6 @@ export interface NowBuildingInput {
   model: BoardModel
   /** Statuses of the open hosted sessions, by workspace id. */
   statuses: Readonly<Record<string, readonly SessionStatus[]>>
-  /** Worktree tag by workspace id; empty for a main checkout. */
-  worktreeTags: Readonly<Record<string, string>>
   now: number
 }
 
@@ -52,8 +50,8 @@ function worktreeTagOf(feature: BoardFeature, input: NowBuildingInput): string |
   const recent = feature.sightings.filter((s) => isRecent(s.lastActivity, input.now))
   const newest = newestOf(recent.length > 0 ? recent : feature.sightings)
   const considered = recent.length > 0 ? recent : newest ? [newest] : []
-  if (!newest || considered.some((s) => !input.worktreeTags[s.workspaceId])) return null
-  return input.worktreeTags[newest.workspaceId]
+  if (!newest || considered.some((s) => !s.worktreeTag)) return null
+  return newest.worktreeTag
 }
 
 function mostRecentByWorkspace(group: BoardRepoGroup): Map<string, BoardFeature> {

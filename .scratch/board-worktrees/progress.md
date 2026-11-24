@@ -1,0 +1,1 @@
+- 01 resolved: the board reads every git worktree of an added repo (agent temp worktrees too), most advanced status with the deciding copy's branch tag — 7837aef

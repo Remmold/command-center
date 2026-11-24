@@ -29,6 +29,24 @@ export interface BoardFileReader {
   modifiedAt(path: string): Promise<number | null>
 }
 
+/** A git worktree of an added repo that isn't itself an added workspace, read as one more copy. */
+export interface ExtraCopy {
+  repoGroupKey: string
+  path: string
+  /** The branch, or the folder name when detached. */
+  worktreeTag: string
+}
+
+export function extraCopyId(path: string): string {
+  return `worktree:${path}`
+}
+
+interface CopySource {
+  id: string
+  path: string
+  worktreeTag: string
+}
+
 const COLUMN_RANK: Record<BoardColumn, number> = { backlog: 0, blocked: 1, 'in-progress': 2, done: 3 }
 const TICKET_FILE = /^(\d+[a-z]?)-(.+)\.md$/i
 const PROGRESS_SUFFIX = '.progress.md'
@@ -149,8 +167,8 @@ async function newestChange(paths: Array<string | null>, files: BoardFileReader)
   return newest(await Promise.all(present.map((p) => files.modifiedAt(p))))
 }
 
-async function readFeatureCopies(workspace: Workspace, files: BoardFileReader): Promise<Map<string, FeatureCopy>> {
-  const scratch = join(workspace.path, '.scratch')
+async function readFeatureCopies(source: CopySource, files: BoardFileReader): Promise<Map<string, FeatureCopy>> {
+  const scratch = join(source.path, '.scratch')
   const copies = new Map<string, FeatureCopy>()
   for (const entry of await files.listDir(scratch)) {
     if (!entry.isDirectory) continue
@@ -164,7 +182,8 @@ async function readFeatureCopies(workspace: Workspace, files: BoardFileReader): 
     const featureFiles = [specPath, progressPath, ...tickets.flatMap((t) => [t.filePath, t.progressPath])]
     copies.set(entry.name, {
       sighting: {
-        workspaceId: workspace.id,
+        workspaceId: source.id,
+        worktreeTag: source.worktreeTag,
         specPath,
         progressPath,
         lastActivity: await newestChange(featureFiles, files)
@@ -210,43 +229,44 @@ function stateOf(progress: FeatureProgress, copies: FeatureCopy[]): FeatureState
   return copies.some((c) => c.sighting.specPath !== null) ? 'spec-only' : 'empty'
 }
 
+/** resolved > in-progress > blocked > ready > needs-*, so ready outranks needs-* inside Backlog. */
+function rankOf(sighting: TicketSighting): number {
+  const ready = sighting.column === 'backlog' && sighting.status?.startsWith('ready-') === true
+  return COLUMN_RANK[sighting.column] * 2 + (ready ? 1 : 0)
+}
+
 function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
   const resolved = resolvedNumbers(copies)
-  const cards = new Map<string, BoardTicket>()
+  const byFile = new Map<string, Array<{ parsed: ParsedTicket; sighting: TicketSighting }>>()
   for (const copy of copies) {
     for (const t of copy.tickets) {
       const sighting: TicketSighting = {
         workspaceId: copy.sighting.workspaceId,
+        worktreeTag: copy.sighting.worktreeTag,
         column: columnOf(t, resolved),
         ...t.status,
         blockedBy: t.blockedBy,
         filePath: t.filePath,
         progressPath: t.progressPath
       }
-      const card = cards.get(t.fileName)
-      if (!card) {
-        cards.set(t.fileName, {
-          number: t.number,
-          fileName: t.fileName,
-          title: t.title,
-          column: sighting.column,
-          ...t.status,
-          sightings: [sighting]
-        })
-        continue
-      }
-      card.sightings.push(sighting)
-      if (COLUMN_RANK[sighting.column] > COLUMN_RANK[card.column]) {
-        card.column = sighting.column
-        Object.assign(card, t.status)
-        card.title = t.title
-      }
+      const list = byFile.get(t.fileName)
+      if (list) list.push({ parsed: t, sighting })
+      else byFile.set(t.fileName, [{ parsed: t, sighting }])
     }
   }
-  const tickets = [...cards.values()].sort(
-    (a, b) => compareTicketNumbers(a.number, b.number) || a.fileName.localeCompare(b.fileName)
-  )
-  for (const card of tickets) card.sightings.sort((a, b) => COLUMN_RANK[b.column] - COLUMN_RANK[a.column])
+  const tickets: BoardTicket[] = [...byFile].map(([fileName, list]) => {
+    const ranked = [...list].sort((a, b) => rankOf(b.sighting) - rankOf(a.sighting))
+    const { parsed, sighting } = ranked[0]
+    return {
+      number: parsed.number,
+      fileName,
+      title: parsed.title,
+      column: sighting.column,
+      ...parsed.status,
+      sightings: ranked.map((r) => r.sighting)
+    }
+  })
+  tickets.sort((a, b) => compareTicketNumbers(a.number, b.number) || a.fileName.localeCompare(b.fileName))
   const progress = progressOf(tickets, copies)
   const sightings = copies.map((c) => c.sighting)
   return {
@@ -259,12 +279,19 @@ function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
   }
 }
 
-export async function readBoard(workspaces: Workspace[], files: BoardFileReader): Promise<BoardModel> {
+/** Copies are read main checkout first, then added workspaces, then extras, so a tie keeps the main checkout's status. */
+export async function readBoard(workspaces: Workspace[], files: BoardFileReader, extras: ExtraCopy[] = []): Promise<BoardModel> {
   const repoGroups: BoardRepoGroup[] = []
   for (const group of groupByRepo(workspaces)) {
+    const sources: CopySource[] = [
+      ...group.workspaces.map((w) => ({ id: w.id, path: w.path, worktreeTag: w.worktreeTag })),
+      ...extras
+        .filter((e) => e.repoGroupKey === group.repoGroupKey)
+        .map((e) => ({ id: extraCopyId(e.path), path: e.path, worktreeTag: e.worktreeTag }))
+    ].sort((a, b) => Number(a.worktreeTag !== '') - Number(b.worktreeTag !== ''))
     const copiesByFeature = new Map<string, FeatureCopy[]>()
-    for (const workspace of group.workspaces) {
-      for (const [name, copy] of await readFeatureCopies(workspace, files)) {
+    for (const sourceCopies of await Promise.all(sources.map((s) => readFeatureCopies(s, files)))) {
+      for (const [name, copy] of sourceCopies) {
         const list = copiesByFeature.get(name)
         if (list) list.push(copy)
         else copiesByFeature.set(name, [copy])

@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import type { Workspace } from '../../../shared/types'
 import type { SpecOnlyBoardCard, TicketBoardCard } from '../../state/boardLayout'
 import { useWorkspacesStatus } from '../../state/sessionStatusStore'
 import { showsSessionStatus, statusRepeatsColumn } from '../../state/ticketPresentation'
@@ -9,10 +8,9 @@ import { Card, CardMeta, CardMetaText, CardNote, CardTitle } from '../ui/Card'
 import { StatusDot } from '../ui/StatusDot'
 import { statusText, TicketStatusBadge } from './TicketStatusBadge'
 
-/** The worktree tag when no copy of the ticket sits in a main checkout. */
-function onlyWorktreeTag(card: TicketBoardCard, workspaces: Map<string, Workspace>): string | null {
-  const tags = card.ticket.sightings.map((s) => workspaces.get(s.workspaceId)?.worktreeTag ?? '')
-  return tags.length > 0 && tags.every((t) => t !== '') ? tags[0] : null
+/** The worktree tag of the copy that decides the status, unless that copy is a main checkout. */
+function decidingWorktreeTag(card: TicketBoardCard): string | null {
+  return card.ticket.sightings[0]?.worktreeTag || null
 }
 
 export function cardAnchorId(cardKey: string): string {
@@ -21,16 +19,15 @@ export function cardAnchorId(cardKey: string): string {
 
 interface Props {
   card: TicketBoardCard
-  workspaces: Map<string, Workspace>
   selected: boolean
   onOpen: (card: TicketBoardCard) => void
 }
 
-export const TicketCard = memo(function TicketCard({ card, workspaces, selected, onOpen }: Props) {
+export const TicketCard = memo(function TicketCard({ card, selected, onOpen }: Props) {
   const { ticket } = card
   const workspaceIds = ticket.sightings.map((s) => s.workspaceId)
   const status = useWorkspacesStatus(workspaceIds)
-  const tag = onlyWorktreeTag(card, workspaces)
+  const tag = decidingWorktreeTag(card)
   const note = statusText(ticket)
   const copies = ticket.sightings.length
 
@@ -41,7 +38,7 @@ export const TicketCard = memo(function TicketCard({ card, workspaces, selected,
     <Card anchorId={cardAnchorId(card.key)} tooltip={ticket.sightings[0]?.filePath} onClick={() => onOpen(card)} selected={selected}>
       <CardMeta>
         <RepoIcon repoGroupKey={card.repoGroupKey} repoName={card.repoName} size="sm" />
-        {tag && <Badge tooltip="Only seen in this worktree">{tag}</Badge>}
+        {tag && <Badge tooltip="Status from this worktree">{tag}</Badge>}
         <CardMetaText trailing={copies > 1 ? <span title="Seen in more than one worktree">{copies} copies</span> : undefined}>
           {card.feature.name} #{ticket.number}
         </CardMetaText>
