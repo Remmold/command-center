@@ -13,13 +13,13 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 01, 02, 03
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Clicking any item with a file opens it; Ctrl+S saves, and the layers and totals refresh.
-- [ ] Invalid JSON is refused with the parse error shown, and nothing is written.
-- [ ] Adopted-folder files are read-only with the note.
-- [ ] Create works for a repo CLAUDE.md and CLAUDE.local.md, and the file is written on first save.
-- [ ] Switching file, workspace or view with unsaved edits warns first.
-- [ ] Unit tests (seam 2): it writes a listed file, refuses an unlisted path, refuses a read-only item in an adopted folder, refuses JSON that doesn't parse (with the error), and creates a missing repo CLAUDE.md.
-- [ ] UI scenario (seam 3) on the fake CLI with its temp config folder: Ctrl+4 opens Context, the row shows a start total, the layers list the seeded CLAUDE.md with its count, an edit plus Ctrl+S changes the file on disk, and broken JSON is refused. That makes 15 of the 20-scenario budget.
-- [ ] Quick tier and `pnpm e2e:gate` green.
+- [x] Clicking any item with a file opens it; Ctrl+S saves, and the layers and totals refresh.
+- [x] Invalid JSON is refused with the parse error shown, and nothing is written.
+- [x] Adopted-folder files are read-only with the note.
+- [x] Create works for a repo CLAUDE.md and CLAUDE.local.md, and the file is written on first save.
+- [x] Switching file, workspace or view with unsaved edits warns first.
+- [x] Unit tests (seam 2): it writes a listed file, refuses an unlisted path, refuses a read-only item in an adopted folder, refuses JSON that doesn't parse (with the error), and creates a missing repo CLAUDE.md.
+- [x] UI scenario (seam 3) on the fake CLI with its temp config folder: Ctrl+4 opens Context, the row shows a start total, the layers list the seeded CLAUDE.md with its count, an edit plus Ctrl+S changes the file on disk, and broken JSON is refused. That makes 15 of the 20-scenario budget.
+- [x] Quick tier and `pnpm e2e:gate` green.

@@ -4,3 +4,5 @@
 - 02 resolved: memory, skills, agents, commands and plugins in Context — 39bb1ba
 - 03 in-progress: implementation started — c3a8592
 - 03 resolved: MCP servers, settings layers and hooks in Context — 90b1977
+- 04 in-progress: implementation started — 6fbac8c
+- 04 resolved: editor and guarded save in Context — bc83755
