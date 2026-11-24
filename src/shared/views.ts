@@ -1,6 +1,6 @@
-export type AppView = 'dashboard' | 'work' | 'board'
+export type AppView = 'dashboard' | 'work' | 'board' | 'context'
 
-export const APP_VIEWS: readonly AppView[] = ['dashboard', 'work', 'board']
+export const APP_VIEWS: readonly AppView[] = ['dashboard', 'work', 'board', 'context']
 
 export const DEFAULT_VIEW: AppView = 'dashboard'
 

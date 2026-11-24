@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import Editor from '@monaco-editor/react'
-import { defineMonacoTheme, monoFont, MONACO_THEME } from '../../theme/theme'
+import { defineMonacoTheme, MONACO_THEME } from '../../theme/theme'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import type { ProjectView } from '../../state/projectViewsStore'
+import { useViewStore } from '../../state/viewStore'
+import { editorOptions } from './editorOptions'
 import { basename, detectLanguage } from './fileTreeUtil'
 
 interface Props {
@@ -24,7 +26,7 @@ export function EditorPane({ view }: Props) {
         if (!activeFile || activeFile.binary) return
         // Only consume if the active project view is "this" project
         const state = useProjectViewsStore.getState()
-        if (state.activeProjectId !== view.projectId) return
+        if (state.activeProjectId !== view.projectId || useViewStore.getState().view !== 'work') return
         e.preventDefault()
         const result = await window.api.files.write(
           view.projectPath,
@@ -103,16 +105,7 @@ export function EditorPane({ view }: Props) {
             }
             beforeMount={defineMonacoTheme}
             theme={MONACO_THEME}
-            options={{
-              fontSize: 13,
-              fontFamily: monoFont(),
-              minimap: { enabled: true },
-              automaticLayout: true,
-              wordWrap: 'on',
-              scrollBeyondLastLine: false,
-              tabSize: 2,
-              renderWhitespace: 'selection'
-            }}
+            options={editorOptions()}
           />
         )}
       </div>

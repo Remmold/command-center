@@ -7,14 +7,15 @@ const alt = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: fals
 const plain = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
 
 describe('keyboard shortcuts', () => {
-  it('Ctrl+1/2/3 pick Dashboard, Work and Board', () => {
+  it('Ctrl+1/2/3/4 pick Dashboard, Work, Board and Context', () => {
     expect(shortcutFor(ctrl('1', 'Digit1'))).toEqual({ name: 'switchView', view: 'dashboard' })
     expect(shortcutFor(ctrl('2', 'Digit2'))).toEqual({ name: 'switchView', view: 'work' })
     expect(shortcutFor(ctrl('3', 'Digit3'))).toEqual({ name: 'switchView', view: 'board' })
+    expect(shortcutFor(ctrl('4', 'Digit4'))).toEqual({ name: 'switchView', view: 'context' })
   })
 
-  it('Ctrl+4 and up do nothing', () => {
-    expect(shortcutFor(ctrl('4', 'Digit4'))).toBeNull()
+  it('Ctrl+5 and up do nothing', () => {
+    expect(shortcutFor(ctrl('5', 'Digit5'))).toBeNull()
   })
 
   it('Ctrl+, opens Settings, by key or by position', () => {
@@ -129,7 +130,7 @@ describe('keyboard shortcuts', () => {
 
   it('gives every chord at most one action', () => {
     const chords = [
-      ...['1', '2', '3'].map((d) => ctrl(d, `Digit${d}`)),
+      ...['1', '2', '3', '4'].map((d) => ctrl(d, `Digit${d}`)),
       ctrl(',', 'Comma'),
       ctrlShift('J', 'KeyJ'),
       ctrl('b', 'KeyB'),
@@ -151,7 +152,7 @@ describe('keyboard shortcuts', () => {
     const applies = (c: KeyChord, screen: Parameters<typeof shortcutApplies>[1]) => shortcutApplies(shortcutFor(c)!, screen)
 
     it('leaves the chat, row, IDE and shell shortcuts to Work', () => {
-      for (const view of ['dashboard', 'board'] as const) {
+      for (const view of ['dashboard', 'board', 'context'] as const) {
         expect(workOnly.map((c) => applies(c, { view, settingsOpen: false }))).toEqual(workOnly.map(() => false))
       }
       expect(workOnly.map((c) => applies(c, { view: 'work', settingsOpen: true }))).toEqual(workOnly.map(() => false))

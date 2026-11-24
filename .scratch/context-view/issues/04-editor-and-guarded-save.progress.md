@@ -1,0 +1,3 @@
+- Done: guarded read/write + editor pane + Create + leave guard, committed bc83755; quick 1184 passed, e2e:gate 15/15 in 89.7 s.
+- Next: ship gate / manual test of Context editing (adopted read-only note, Create, unsaved-edit warnings).
+- Open reds: none (symlink-to-.credentials.json unit test skips on this machine: no symlink privilege).

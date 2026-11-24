@@ -8,6 +8,7 @@ import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
 import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
+import type { ContextFileResult, ContextFileText, ContextReport } from './context'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
 
@@ -444,6 +445,16 @@ export interface RendererApi {
     onChanged: (cb: (model: BoardModel) => void) => () => void
     /** Reads a ticket, ticket notes, spec or progress file named in the current model; null for any other path. */
     readFile: (path: string) => Promise<string | null>
+  }
+  context: {
+    /** Read from disk on every call; null for an unknown workspace. */
+    report: (workspaceId: string) => Promise<ContextReport | null>
+    /** By workspace id; null where the folder is gone. */
+    startTotals: () => Promise<Record<string, number | null>>
+    /** A file the workspace's latest report listed, or a creatable one it marked missing (read as empty). */
+    readFile: (workspaceId: string, path: string) => Promise<ContextFileText>
+    /** Guarded: only what the latest report listed and didn't mark read-only, or a missing creatable file; a `.json` file must parse. */
+    writeFile: (workspaceId: string, path: string, content: string) => Promise<ContextFileResult>
   }
   discovery: {
     get: () => Promise<DiscoveryModel>

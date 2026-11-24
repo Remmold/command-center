@@ -26,6 +26,7 @@ import { SubagentWatchService } from './claude/subagentWatch'
 import { isTeleportedSession } from './claude/teleport'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
+import { contextReport, readListedFile, startTotals, writeListedFile } from './context/service'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
@@ -78,6 +79,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     return board.current()
   })
   ipcMain.handle(IPC.BOARD_READ_FILE, (_e, path: string) => board.readFile(path))
+  ipcMain.handle(IPC.CONTEXT_REPORT, (_e, workspaceId: string) => contextReport(workspaceId))
+  ipcMain.handle(IPC.CONTEXT_START_TOTALS, () => startTotals())
+  ipcMain.handle(IPC.CONTEXT_READ_FILE, (_e, workspaceId: string, path: string) => readListedFile(workspaceId, path))
+  ipcMain.handle(IPC.CONTEXT_WRITE_FILE, (_e, workspaceId: string, path: string, content: string) => writeListedFile(workspaceId, path, content))
   unsubscribers.push(() => board.stop())
   unsubscribers.push(registerVideoIpc())
 

@@ -10,6 +10,7 @@ import { useApprovalsStore } from './state/approvalsStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
+import { ContextView } from './components/context/ContextView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
 import { useSessionInitStore } from './state/sessionInitStore'
 import { useRemoteControlStore } from './state/remoteControlStore'
@@ -132,6 +133,11 @@ export function App() {
         {appView === 'board' && (
           <div data-testid="view-board" className="absolute inset-0 z-30">
             <BoardView />
+          </div>
+        )}
+        {appView === 'context' && (
+          <div data-testid="view-context" className="absolute inset-0 z-30">
+            <ContextView />
           </div>
         )}
         <div

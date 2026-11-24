@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { BASIC_REPLY, FAST_OBSERVED } from './common'
+import { BASIC_REPLY, FAST_OBSERVED, transcriptLine } from './common'
 import { expect, send, startSession, test, transcriptsOf, type FakeLog } from './harness'
 
 const OLD_SESSION = '11111111-1111-4111-8111-111111111111'
@@ -9,7 +9,7 @@ const UNNAMED_SESSION = '22222222-2222-4222-8222-222222222222'
 function seedPastSessions(dir: string): void {
   mkdirSync(dir, { recursive: true })
   const userLine = (text: string, gitBranch: string) =>
-    JSON.stringify({ type: 'user', uuid: crypto.randomUUID(), gitBranch, message: { role: 'user', content: [{ type: 'text', text }] } })
+    transcriptLine('user', { role: 'user', content: [{ type: 'text', text }] }, { gitBranch })
   writeFileSync(
     join(dir, `${OLD_SESSION}.jsonl`),
     [userLine('the login is broken', 'feature/oauth'), JSON.stringify({ type: 'ai-title', aiTitle: 'Old login fix', sessionId: OLD_SESSION })].join('\n') + '\n'
@@ -102,7 +102,7 @@ const OBSERVED_ID = '0b5e7e1d-0000-4000-8000-00000000c0de'
 
 function observedLine(type: 'user' | 'assistant', n: number, text: string): string {
   const message = type === 'user' ? { role: 'user', content: text } : { id: `msg_${n}`, role: 'assistant', model: 'claude-opus-4-1', content: [{ type: 'text', text }] }
-  return JSON.stringify({ type, uuid: `${type}-${n}`, entrypoint: 'claude-vscode', timestamp: new Date().toISOString(), message })
+  return transcriptLine(type, message, { uuid: `${type}-${n}`, entrypoint: 'claude-vscode' })
 }
 
 /** A VS Code transcript long enough to scroll, with the record types the reader skips between messages. */
@@ -171,7 +171,7 @@ const TAKEN_ID = '7a4e0000-0000-4000-8000-0000000007a4'
 
 function vscodeLine(type: 'user' | 'assistant', n: number, content: unknown, stopReason?: string): string {
   const message = type === 'user' ? { role: 'user', content } : { id: `msg_t${n}`, role: 'assistant', model: 'claude-opus-4-1', stop_reason: stopReason, content }
-  return JSON.stringify({ type, uuid: `t-${type}-${n}`, entrypoint: 'claude-vscode', timestamp: new Date().toISOString(), message })
+  return transcriptLine(type, message, { uuid: `t-${type}-${n}`, entrypoint: 'claude-vscode' })
 }
 
 const resumedWith = (log: FakeLog, sessionId: string): boolean =>

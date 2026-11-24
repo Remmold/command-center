@@ -251,6 +251,8 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
   env: [{}, { option: true }],
   launched: async ({ script, userSettings, env }, use) => {
     const root = mkdtempSync(join(tmpdir(), 'cc-e2e-'))
+    /** The app works offline: the window may only load the app's own files, so any web request fails the test. */
+    const online: string[] = []
     try {
       const dirs = seedDirs(root, userSettings)
       const start = async (): Promise<{ app: ElectronApplication; page: Page }> => {
@@ -259,6 +261,10 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
           args: [MAIN, `--user-data-dir=${dirs.userData}`],
           cwd: REPO,
           env: appEnv(dirs, script, env)
+        })
+        await app.context().route(/^https?:\/\//, (route) => {
+          online.push(route.request().url())
+          return route.abort()
         })
         const page = await app.firstWindow()
         await page.waitForLoadState('domcontentloaded')
@@ -275,6 +281,7 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
       } finally {
         await shutdown(current.app)
       }
+      expect(online, 'the window reached the internet').toEqual([])
     } finally {
       rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
     }
