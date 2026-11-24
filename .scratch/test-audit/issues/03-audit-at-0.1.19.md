@@ -9,11 +9,11 @@ Starting state: 14 UI scenarios, **74 s** of 90; 1,099 unit tests.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
-- [ ] **Inventory:** add a "0.1.19" section to `.scratch/test-audit/inventory.md`: every scenario with its runtime and steps. Flag dead or duplicate steps, especially:
+- [x] **Inventory:** add a "0.1.19" section to `.scratch/test-audit/inventory.md`: every scenario with its runtime and steps. Flag dead or duplicate steps, especially:
   - checks of behaviour replaced since 0.1.16: repo groups, now own groups; IN/OUT boxes always open, now folded; status headings; the per-turn cost;
   - unit tests of deleted code.
-- [ ] **Trim:** remove dead and duplicate steps and tests; keep the regression guards exactly. Don't chase time below about 70 s; a healthy suite stays as it is.
-- [ ] **Release doc:** update the "Audit due" line: ran at 0.1.19, next due at 0.1.24.
-- [ ] **Proof:** quick green; `pnpm e2e:gate` green twice; the perf and zoom shots green; a before/after table.
+- [x] **Trim:** remove dead and duplicate steps and tests; keep the regression guards exactly. Don't chase time below about 70 s; a healthy suite stays as it is.
+- [x] **Release doc:** update the "Audit due" line: ran at 0.1.19, next due at 0.1.24.
+- [x] **Proof:** quick green; `pnpm e2e:gate` green twice; the perf and zoom shots green; a before/after table.

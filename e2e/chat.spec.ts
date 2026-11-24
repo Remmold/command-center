@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASIC_REPLY, FAKE_SESSION, TINY_PNG, WRITE_DONE, clipboardText, userLines } from './common'
-import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, newChatIn, prompt, send, startSession, test, transcriptsOf, useScript } from './harness'
+import { cliPermissionMode, delayClaudeStart, expect, newChatIn, prompt, send, startSession, test, transcriptsOf, useScript } from './harness'
 
 const modeButton = (page: Page, label: string) => page.locator('[data-chat-pane]').getByRole('button', { name: label, exact: true })
 
@@ -642,13 +642,6 @@ test.describe('chat rendering', () => {
       await newChatOn('look')
       await send(page, 'render the references')
       await expect(shown.getByText('Rendered')).toBeVisible()
-      const lookShot = process.env.LOOK_SHOT
-      if (lookShot) {
-        await page.setViewportSize({ width: 1000, height: 1500 })
-        await page.waitForTimeout(300)
-        const png = await evaluateMain(app, async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'), undefined)
-        writeFileSync(lookShot, Buffer.from(png, 'base64'))
-      }
 
       const meshy = shown.locator('[data-timeline-row]', { hasText: 'Meshy [meshy_check_balance]' })
       await expect(meshy).toHaveCount(1)
@@ -724,11 +717,6 @@ test.describe('chat rendering', () => {
       await expect(tiles.nth(2)).toContainText('File not found')
       await expect.poll(() => tiles.nth(0).locator('img').evaluate((img) => (img as unknown as { naturalWidth: number }).naturalWidth)).toBe(1)
       await expect.poll(() => tiles.nth(1).locator('video').evaluate((v) => (v as unknown as { readyState: number }).readyState)).toBeGreaterThan(0)
-      const shotPath = process.env.MEDIA_TAB_SHOT
-      if (shotPath) {
-        const png = await evaluateMain(app, async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'), undefined)
-        writeFileSync(shotPath, Buffer.from(png, 'base64'))
-      }
     })
 
     await test.step('the preview steps through them; a missing file cannot be revealed', async () => {
@@ -919,7 +907,6 @@ test.describe('subagents', () => {
       await expect(pane.getByRole('button', { name: /Implement ticket 06/ })).toContainText('Ended (no final report) · 1s · 1 tool')
       await expect(pane.getByRole('button', { name: /^running Wait around/ })).toContainText('Working')
       await expect(agentsTab).toHaveAccessibleName('Agents 1 working')
-      await page.screenshot({ path: test.info().outputPath('agents-resumed.png') })
       await ticket13.click()
       await expect(view.locator('[data-agent-report]')).toContainText('Ticket 13 is done as 87130bd.')
       await page.keyboard.press('Escape')

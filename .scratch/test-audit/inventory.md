@@ -144,3 +144,49 @@ Checked and kept: every export a unit test imports has a production caller (test
 | Quick tier (`pnpm quick`, wall) | 9.4 s | 9.3 s |
 | Perf guard and zoom shots | green | green (4 passed, 1.8 min) |
 | Named regression guards | 9 | **9, assertions unchanged** |
+
+# 0.1.19
+
+Due at 0.1.19 (five releases after the 0.1.14 audit), run on `main` with 0.1.17–0.1.19 merged (quiet tool rows; model and effort memory; accurate agent status; own sidebar groups with drag sort). Baseline: 14 UI scenarios, one `pnpm e2e:gate` run on a quiet machine (CPU 24%), **76.2 s** (the ticket's 74 s was an earlier reading; this is the re-measured baseline). Times are per scenario, launch and shutdown included.
+
+**R** = a regression guard the ticket names; its assertions are unchanged.
+
+## UI scenarios
+
+| # | Scenario | Before | Steps and what they prove | Flags | R | Now |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | accounts › a VS Code profile's folder is offered… | 2.1 s | VS Code profile folder found, Add adopts it logged in, never written, Remove keeps the folder | none | | unchanged |
+| 2 | accounts › VS Code's accounts are adopted in one click… | 5.4 s | suggestion banner, one-click adopt, new chats on Work; **new (0.1.18):** a new chat on Work starts on the model and effort picked there, shown before the process is up, sent as `--model sonnet --effort high`, settings.json never written; repo icon picker, Detect again | overlaps #7's pill check, but on another account and without a reload (see #7) | | unchanged |
+| 3 | accounts › Work shows a one-line header per account… | 3.5 s | account sections, waiting badge, **Ungrouped** fold with its waiting pill (was the repo group), search opens it, Alt+1, Ctrl+Shift+J, Board By account, Settings; **new (0.1.19):** own groups made from the account menu, drag a chat in, drag a group above another, cross-account drop refused, Alt+Shift+Up, kept after reload | repo-group checks were already rewritten to Ungrouped when own groups landed: no repo-group assertion left. No status-heading check left (removed in 0.1.14) | | unchanged |
+| 4 | accounts › a Work chat shows the Work badge and pill… | 6.3 s | pending badge, Work badge and pill, mismatch, Restart on either account | none | | unchanged |
+| 5 | app › auto-update | 7.0 s | Check now; update busy gate with a running chat; 2.5 s "no restart yet" wait | none (the background-task and live-process quiet rules are unit-pinned in `busyGate.test.ts`, unchanged) | **R** (update busy gate) | unchanged |
+| 6 | app › zoom… Ctrl+B… kept across a restart | 5.1 s | zoom keys, shell, Settings, View menu, restart; Alt+2 now (a new chat sits first in Ungrouped) | none | **R** (window place, off-screen windows, storage flush before quit) | unchanged |
+| 7 | chat › a basic chat… | 7.9 s | views, usage strip, Manual start, @ menu, attachments, history, slash menu, model/effort, Shift+Tab, Remote Control, draft over reload, picks while starting | looked duplicate: the last step's two pill checks (a new chat shows Sonnet 5.5 and High) overlap #2. Kept after review: they run on the Personal account after the draft step's window reload, so they are the only check that the pick survives a reload (local storage). #2 runs on Work with no reload | | unchanged |
+| 8 | chat › slow turns | 5.2 s | send-mid-turn queue, Stop, Run in background (row now labelled by its Bash description), working line, settings.json mode + remoteControlAtStartup, full context | none | **R** (queue) | unchanged |
+| 9 | chat › tool approval | 3.3 s | 1 / 3 / 2 keys, inbox, question cards | opening "starts Manual" kept as in 0.1.14 (precondition) | | unchanged |
+| 10 | chat › chat rendering | 11.6 s | thinking, todos, copy, timestamps; scroll-follow; look: MCP names, **OUT box now folded** (opened by the header click, then raw), Blender, Bash description with IN folded and a saved-output link, hidden TaskStop, compaction, image path; Media tab, preview, Jump to message, Chat tab scroll | IN/OUT always-open checks were already rewritten to the folded rows in 0.1.17: none left. **Dead:** two env-gated screenshot hooks (`LOOK_SHOT`, `MEDIA_TAB_SHOT`) with no assertion and no reader anywhere in the repo or docs | **R** (scroll-follow) | the two hooks removed; every assertion unchanged |
+| 11 | chat › subagents | 6.6 s | compact Agent rows, Agents tab ("N working"), live view, still-working bar, own last words, turns folding, **new (0.1.19):** old agents from files (Finished, Ended with no final report), report view; stop_task | **dead:** a `page.screenshot` into the test output folder, asserting nothing and read by nothing | | the screenshot removed; every assertion unchanged |
+| 12 | sessions › session history | 3.2 s | title, rename, Past sessions picker, resume | none | | unchanged |
+| 13 | sessions › a VS Code session in Work | 3.2 s | observed cut-off behind a tall hosted chat, wheel past the end stays put, badge, follow on append | none | **R** (observed cut-off, wheel leave) | unchanged |
+| 14 | sessions › taking over a VS Code chat | 5.2 s | take-over waits for the turn; 2.5 s "not resumed yet" wait | none | | unchanged |
+
+The per-turn cost has no UI step (the context dialog's session estimate is still live code, `sessionCost.test.ts` stays). The zoom overflow and popover clamp guards are `e2e/shots/zoom.shots.ts` and `popoverPlacement.test.ts` (untouched). `processTree` stays as `e2e/processTree.test.ts` and the unchanged `shutdown` in `e2e/harness.ts`. Kept, not cut: the 2.5 s negative waits in #5 and #14, the start delays in #2, #4 and #7, and the script timings behind scroll-follow and the subagent steps. No scenario was merged: at 76 s the suite is healthy, and the ticket says not to chase time below about 70 s.
+
+## Unit tests
+
+Nothing removed. A candidate was `sessionList.test.ts` › account sections › "numbers rows for Alt+1..9 in the order shown, skipping collapsed sections", which overlaps own groups › "numbers only visible rows for Alt+1..9…". Kept after review: it is the only `shownRows` check on a layout with nothing placed yet (every chat in Ungrouped); the own-groups test always uses a seeded layout.
+
+Checked and kept: every export a unit test imports still has a production caller (scripted check over `src/`, `tools/`, `e2e/`, `scripts/`), so no tests of deleted code. `repoGroups` and `repoFoldKey` now only seed the first own-groups layout, still called at load, so their tests stay. `waitingBadge` is tested on an account name and on a group name: two callers, both kept. The extension-wording constants stay, as before.
+
+## Before / after
+
+| Measure | Before (0.1.19) | After |
+| --- | --- | --- |
+| Dead steps (no assertion, no reader): `LOOK_SHOT` and `MEDIA_TAB_SHOT` hooks, the agents-resumed screenshot | 3 | **0** |
+| Assertions removed | — | **0** |
+| UI scenarios | 14 | 14, **unchanged** |
+| UI time, quiet machine (`pnpm e2e:gate`, JSON total) | 76.2 s | **74.2 s, 73.0 s** (green twice, no rerun, final code) |
+| Unit tests | 1,099 (+1 skipped) in 116 files | 1,099 (+1 skipped), **unchanged** |
+| Quick tier (`pnpm quick`, wall) | not re-measured (9.3 s at the 0.1.14 audit) | 8.8 s |
+| Perf guard and zoom shots | green | green (4 passed, 1.8 min) |
+| Named regression guards (send-mid-turn queue; update busy gate incl. background tasks and the live-process quiet rule; scroll-follow; wheel leave; observed cut-off; processTree; window place; storage flush before quit; off-screen silent test windows; zoom overflow; popover clamp) | 11 | **11, assertions unchanged** |
