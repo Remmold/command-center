@@ -12,8 +12,8 @@ import { useChatMediaStore } from '../../state/chatMediaStore'
 import { tailOf, useSubagentTailsStore } from '../../state/subagentTailsStore'
 import { subagentSourceKey } from '../../../shared/subagentTail'
 
-/** Stopped shares Failed's red dot, as the extension's `BE` draws both as failed. */
-const AGENT_ROW_STATUS: Record<AgentStatus, ToolCallStatus> = { working: 'running', finished: 'ok', failed: 'error', stopped: 'stopped' }
+/** Stopped shares Failed's red dot, as the extension's `BE` draws both as failed; Ended has no result to show. */
+const AGENT_ROW_STATUS: Record<AgentStatus, ToolCallStatus> = { working: 'running', finished: 'ok', failed: 'error', stopped: 'stopped', ended: 'pending' }
 
 interface Props {
   id: string

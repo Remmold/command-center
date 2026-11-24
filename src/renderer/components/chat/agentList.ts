@@ -1,5 +1,7 @@
 import type { AgentTail, AgentTails } from '../../../shared/subagentTail'
 import { mcpToolTitle } from './mcpTool'
+import { stampLabel } from './messageTime'
+import { agentFileEnd, isQuiet, isRelayNotice, latestOf, type AgentFileEnd } from '../../../shared/agentEnd'
 import { AGENT_STATUS_LABEL, AGENT_TOOLS, agentStatus, duration, isBackgroundReceipt, type AgentStatus, type SubagentTask, type SubagentTasks } from './subagents'
 import { pairToolResults, toolCallTitle } from './toolCall'
 import type { ChatItem, ToolResultItem } from './types'
@@ -11,6 +13,8 @@ export interface AgentEntry {
   key: string
   agentId?: string
   toolUseId?: string
+  /** The session prompt whose turn started it. */
+  promptId?: string
   name: string
   prompt?: string
   subagentType?: string
@@ -18,11 +22,17 @@ export interface AgentEntry {
   status: AgentStatus
   startTime?: number
   elapsedMs?: number
+  /** When it, or an agent of its own, last wrote or was reported on. */
+  lastActivityAt?: number
+  /** How long a working agent its live process still reports has been silent, once that passed 10 minutes. */
+  quietMs?: number
   toolUses: number
   /** What it does right now: its latest tool call, "thinking…", or its last line of text. */
   now?: string
-  /** The first line of what it reported once done. */
+  /** The first lines of what it reported once done, as one line. */
   summary?: string
+  /** Its whole handed-back report; a report in plain text is already its last message. */
+  report?: string
   task?: SubagentTask
   /** Its own messages, from its file or else from the parent's stream. */
   items: readonly ChatItem[]
@@ -139,6 +149,8 @@ export interface AgentInputs {
   tail?: AgentTail
   /** The agent's messages as the parent's stream carried them, used until its file has any. */
   streamItems?: readonly ChatItem[]
+  /** When its call was made, for an agent nothing else is known of. */
+  callAt?: number
   running: boolean
   cwd: string | undefined
   now: number
@@ -155,16 +167,24 @@ function freshest(file: readonly ChatItem[] | undefined, stream: readonly ChatIt
 }
 
 /** One agent's row: name, status, times, tool count and now line, from whatever is known of it. */
-export function agentEntry({ toolUseId, input, result, task, tail, streamItems, running, cwd, now }: AgentInputs): AgentEntry {
+export function agentEntry({ toolUseId, input, result, task, tail, streamItems, callAt, running, cwd, now }: AgentInputs): AgentEntry {
   const call = inputOf(input)
   const meta = tail?.meta
   const items = freshest(tail?.items, streamItems)
   const callId = toolUseId ?? task?.toolUseId ?? meta?.toolUseId
-  const status = statusOf({ task, callKnown: input !== undefined, callId, result, items, running, now })
-  const startTime = task?.startTime ?? firstAt(items)
-  const endTime = task?.endTime ?? (status === 'working' ? undefined : lastAt(items))
+  const startTime = task?.startTime ?? meta?.startedAt ?? firstAt(items) ?? callAt
+  const lastActivityAt = latestOf(lastAt(items), task?.lastEventAt ?? task?.startTime) ?? callAt
+  // A task still working is reported by its live process, which tells when it ends; silence there is a long tool call.
+  const reported = task?.status === 'working'
+  const quiet = !reported && isQuiet(lastActivityAt, now)
+  const launchedOnly = !result || (!result.isError && isBackgroundReceipt(result))
+  const confirmed = !launchedOnly || (task !== undefined && task.status !== 'working')
+  const end = agentFileEnd(items, { finished: meta?.finished, confirmed, quiet })
+  const status = statusOf({ task, end, callKnown: input !== undefined, callId, result, launchedOnly, items, quiet, running })
+  const endTime = status === 'working' ? undefined : status === 'ended' ? lastActivityAt : (end?.at ?? task?.endTime ?? lastAt(items))
   const elapsedMs = startTime === undefined ? undefined : status === 'working' ? Math.max(0, now - startTime) : endTime !== undefined ? Math.max(0, endTime - startTime) : undefined
-  const done = result && !result.isError && !isBackgroundReceipt(result) ? firstLine(resultText(result)) : undefined
+  const told = result && !launchedOnly && !result.isError ? resultText(result) : undefined
+  const summary = reportPreview(told && !isRelayNotice(told) ? told : undefined) ?? reportPreview(end?.report) ?? reportPreview(task?.summary)
   const description = task?.description && task.description !== 'Agent' ? task.description : (call.description ?? meta?.description)
   const subagentType = task?.subagentType ?? call.subagent_type ?? meta?.agentType
   const prompt = task?.prompt ?? call.prompt
@@ -173,6 +193,7 @@ export function agentEntry({ toolUseId, input, result, task, tail, streamItems, 
     key: agentId ?? callId ?? 'agent',
     ...(agentId ? { agentId } : {}),
     ...(callId ? { toolUseId: callId } : {}),
+    ...(meta?.promptId ? { promptId: meta.promptId } : {}),
     name: agentName(description, subagentType, prompt),
     ...(prompt ? { prompt } : {}),
     ...(subagentType ? { subagentType } : {}),
@@ -180,42 +201,68 @@ export function agentEntry({ toolUseId, input, result, task, tail, streamItems, 
     status,
     ...(startTime !== undefined ? { startTime } : {}),
     ...(elapsedMs !== undefined ? { elapsedMs } : {}),
+    ...(lastActivityAt !== undefined ? { lastActivityAt } : {}),
+    ...(status === 'working' && reported && isQuiet(lastActivityAt, now) && lastActivityAt !== undefined ? { quietMs: now - lastActivityAt } : {}),
     toolUses: Math.max(task?.usage?.toolUses ?? 0, toolUseCount(items)),
     now: nowLine(items, cwd),
-    ...((firstLine(task?.summary) ?? done) ? { summary: firstLine(task?.summary) ?? done } : {}),
+    ...(summary ? { summary } : {}),
+    ...(end?.handedBack && end.report ? { report: end.report } : {}),
     ...(task ? { task } : {}),
     items,
     children: []
   }
 }
 
-/** A background agent's file still growing within this long counts as working after its session went quiet. */
-const QUIET_MS = 60_000
+const PREVIEW_LINES = 3
+const PREVIEW_CHARS = 300
+
+/** A report's first lines as one plain line: list marks, headings and emphasis dropped. */
+export function reportPreview(report: string | undefined): string | undefined {
+  if (!report) return undefined
+  const lines = report
+    .split('\n')
+    .map((l) =>
+      l
+        .trim()
+        .replace(/^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s*)/, '')
+        .replace(/\*\*|__|`/g, '')
+        .trim()
+    )
+    .filter((l) => l !== '')
+    .slice(0, PREVIEW_LINES)
+  if (lines.length === 0) return undefined
+  const text = lines.join(' ')
+  return text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS - 1)}…` : text
+}
 
 interface StatusInputs {
   task: SubagentTask | undefined
+  end: AgentFileEnd | undefined
   callKnown: boolean
   callId: string | undefined
   result: ToolResultItem | undefined
+  launchedOnly: boolean
   items: readonly ChatItem[]
+  quiet: boolean
   running: boolean
-  now: number
 }
 
 /**
- * The CLI's task events decide; without them (a VS Code or resumed chat) the call's result does. A background agent's
- * result is only its launch receipt, so its own file says whether it still works; so does an agent known only from its file.
+ * The agent's own file decides first: a handback or an interrupt ends it whatever else says so. Then the CLI's task
+ * events, then a final reply in its file, then the call's result; a background call's result is only its launch receipt. An agent still
+ * open by all of these and not reported by a live process works until nothing it does has written for 10 minutes, then it ended without a report.
  */
-function statusOf({ task, callKnown, callId, result, items, running, now }: StatusInputs): AgentStatus {
-  if (task) return task.status
-  const launchedOnly = !result || (!result.isError && isBackgroundReceipt(result))
-  if (callKnown && callId !== undefined && !(launchedOnly && items.length > 0)) return agentStatus(callId, {}, result, running).status
-  if (running) return 'working'
-  const last = lastAt(items)
-  return last !== undefined && now - last < QUIET_MS ? 'working' : 'finished'
+function statusOf({ task, end, callKnown, callId, result, launchedOnly, items, quiet, running }: StatusInputs): AgentStatus {
+  if (end && (end.handedBack || end.status === 'stopped')) return end.status
+  if (task && task.status !== 'working') return task.status
+  if (end) return end.status
+  if (!task && callKnown && callId !== undefined && !launchedOnly) return agentStatus(callId, {}, result, running).status
+  if (quiet) return 'ended'
+  if (task || items.length > 0) return 'working'
+  return running ? 'working' : 'stopped'
 }
 
-const STATUS_RANK: Record<AgentStatus, number> = { working: 0, failed: 1, stopped: 1, finished: 1 }
+const STATUS_RANK: Record<AgentStatus, number> = { working: 0, failed: 1, stopped: 1, finished: 1, ended: 1 }
 
 /** Working agents first, then by start time, oldest first; an agent with no known start goes last. */
 export function orderAgents(agents: readonly AgentEntry[]): AgentEntry[] {
@@ -237,9 +284,14 @@ export function collectAgents({ items, tasks, tails, running, cwd, now }: ChatAg
   const allItems = [...items, ...Object.values(tails).flatMap((t) => t.items)]
   const results = pairToolResults(allItems).resultFor
   const inputs = new Map<string, unknown>()
+  const callAt = new Map<string, number>()
   for (const item of allItems) {
     if (item.kind !== 'assistant') continue
-    for (const b of item.content) if (b.type === 'tool_use' && typeof b.id === 'string' && AGENT_TOOLS.has(b.name as string)) inputs.set(b.id, b.input)
+    for (const b of item.content) {
+      if (b.type !== 'tool_use' || typeof b.id !== 'string' || !AGENT_TOOLS.has(b.name as string)) continue
+      inputs.set(b.id, b.input)
+      if (item.at !== undefined) callAt.set(b.id, item.at)
+    }
   }
   const streamFor = new Map<string, ChatItem[]>()
   for (const item of items) {
@@ -268,6 +320,7 @@ export function collectAgents({ items, tasks, tails, running, cwd, now }: ChatAg
         task,
         tail,
         streamItems: toolUseId ? streamFor.get(toolUseId) : undefined,
+        callAt: toolUseId ? callAt.get(toolUseId) : undefined,
         running,
         cwd,
         now
@@ -292,8 +345,96 @@ export function collectAgents({ items, tasks, tails, running, cwd, now }: ChatAg
     if (parent && parent !== entry) parent.children.push(entry)
     else top.push(entry)
   }
-  const sortTree = (list: AgentEntry[]): AgentEntry[] => orderAgents(list).map((e) => ({ ...e, children: sortTree(e.children) }))
-  return sortTree(top)
+  const settle = (list: AgentEntry[]): AgentEntry[] => orderAgents(list.map((e) => withChildren(e, settle(e.children), now)))
+  return settle(top)
+}
+
+/** An agent waiting on its own agents is as active as they are: it works while one of them does. */
+function withChildren(entry: AgentEntry, children: AgentEntry[], now: number): AgentEntry {
+  const lastActivityAt = children.reduce<number | undefined>((at, c) => latestOf(at, c.lastActivityAt), entry.lastActivityAt)
+  const childWorks = children.some((c) => c.status === 'working')
+  const wakes = entry.status === 'ended' && childWorks
+  const { quietMs: _was, ...rest } = entry
+  const stillQuiet = lastActivityAt !== undefined && isQuiet(lastActivityAt, now)
+  return {
+    ...rest,
+    ...(entry.quietMs !== undefined && stillQuiet ? { quietMs: now - lastActivityAt } : {}),
+    children,
+    ...(lastActivityAt !== undefined ? { lastActivityAt } : {}),
+    ...(wakes ? { status: 'working' as const, ...(entry.startTime !== undefined ? { elapsedMs: Math.max(0, now - entry.startTime) } : {}) } : {})
+  }
+}
+
+export interface AgentGroup {
+  key: string
+  /** When its first agent started. */
+  startTime?: number
+  /** Its agents in list order, each with its own agents under it. */
+  agents: AgentEntry[]
+  /** Every agent in it, nested ones included. */
+  count: number
+  working: number
+}
+
+/** For each Agent call in the chat, the prompt whose turn made it. */
+function turnOfCalls(items: readonly ChatItem[]): Map<string, string> {
+  const turns = new Map<string, string>()
+  let turn: string | undefined
+  for (const item of items) {
+    if (item.kind === 'user') turn = item.id
+    else if (item.kind === 'assistant' && turn !== undefined)
+      for (const b of item.content) if (b.type === 'tool_use' && typeof b.id === 'string' && AGENT_TOOLS.has(b.name as string)) turns.set(b.id, turn)
+  }
+  return turns
+}
+
+/**
+ * The agents by the turn that started them, newest turn first. A turn is the prompt id in the agent's file, else the
+ * prompt before its call in the chat; an agent with both ties the two together, so file-only and call-only agents of
+ * one turn share it.
+ */
+export function groupAgents(agents: readonly AgentEntry[], items: readonly ChatItem[]): AgentGroup[] {
+  const callTurns = turnOfCalls(items)
+  const turnOf = (a: AgentEntry): string | undefined => (a.toolUseId ? callTurns.get(a.toolUseId) : undefined)
+  const promptForTurn = new Map<string, string>()
+  for (const a of agents) {
+    const turn = turnOf(a)
+    if (turn && a.promptId && !promptForTurn.has(turn)) promptForTurn.set(turn, a.promptId)
+  }
+  const byKey = new Map<string, AgentEntry[]>()
+  for (const a of agents) {
+    const turn = turnOf(a)
+    const key = a.promptId ?? (turn ? (promptForTurn.get(turn) ?? turn) : `agent:${a.key}`)
+    const list = byKey.get(key)
+    if (list) list.push(a)
+    else byKey.set(key, [a])
+  }
+  const groups = [...byKey].map(([key, list]): AgentGroup => {
+    const flat = flatAgents(list)
+    const starts = list.flatMap((a) => (a.startTime !== undefined ? [a.startTime] : []))
+    return {
+      key,
+      ...(starts.length > 0 ? { startTime: Math.min(...starts) } : {}),
+      agents: orderAgents(list),
+      count: flat.length,
+      working: flat.filter((a) => a.status === 'working').length
+    }
+  })
+  return groups.sort((a, b) => (b.startTime ?? -Infinity) - (a.startTime ?? -Infinity))
+}
+
+const DAY_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+
+/** When a turn's agents started: the time, with the day when that was not today. */
+export function startLabel(at: number, now: number): string {
+  const time = stampLabel(at)
+  return new Date(at).toDateString() === new Date(now).toDateString() ? time : `${DAY_FORMAT.format(new Date(at))}, ${time}`
+}
+
+/** The Agents tab's count: how many work, or none when none do. */
+export function agentTabCount(agents: readonly AgentEntry[]): string | undefined {
+  const working = flatAgents(agents).filter((a) => a.status === 'working').length
+  return working > 0 ? `${working} working` : undefined
 }
 
 /** The tree in reading order, each with its depth, for the list and its keys. */
@@ -301,23 +442,39 @@ export function flatAgents(agents: readonly AgentEntry[], depth = 0): FlatAgent[
   return agents.flatMap((a) => [{ ...a, depth }, ...flatAgents(a.children, depth + 1)])
 }
 
-/** Agents of the chat still working once its turn has ended; none while the turn runs, as the working line shows then. */
-export function agentsStillWorking(tasks: SubagentTasks, turnActive: boolean): number {
-  if (turnActive) return 0
-  let n = 0
-  for (const t of Object.values(tasks)) if (t.status === 'working') n++
-  return n
+/** How often a list with working agents re-reads the clock, so one that went quiet turns ended without any event. */
+export const AGENT_RECHECK_MS = 30_000
+
+/** Agents the CLI started in this process still working once its turn has ended, by the Agents tab's rules; none while the turn runs, as the working line shows then. */
+export function agentsStillWorking(tasks: SubagentTasks, tails: AgentTails, turnActive: boolean, now: number): number {
+  if (turnActive || !Object.values(tasks).some((t) => t.status === 'working')) return 0
+  return flatAgents(collectAgents({ items: [], tasks, tails, running: true, cwd: undefined, now })).filter((a) => a.task !== undefined && a.status === 'working').length
 }
 
-/** The agent as shown at `now`: a working agent's time keeps counting between updates. */
+/**
+ * The agent as shown at `now`: a working agent's time keeps counting. Once quiet for 10 minutes, one its live process
+ * still reports notes the silence; any other has ended.
+ */
 export function atTime(agent: FlatAgent, now: number): FlatAgent {
-  return agent.status === 'working' && agent.startTime !== undefined ? { ...agent, elapsedMs: Math.max(0, now - agent.startTime) } : agent
+  if (agent.status !== 'working') return agent
+  const last = agent.lastActivityAt
+  const quiet = last !== undefined && isQuiet(last, now)
+  if (quiet && agent.task?.status !== 'working') {
+    return { ...agent, status: 'ended', ...(agent.startTime !== undefined ? { elapsedMs: Math.max(0, last - agent.startTime) } : {}) }
+  }
+  const { quietMs: _was, ...rest } = agent
+  return {
+    ...rest,
+    ...(agent.startTime !== undefined ? { elapsedMs: Math.max(0, now - agent.startTime) } : {}),
+    ...(quiet ? { quietMs: now - last } : {})
+  }
 }
 
-/** Status, time so far or run length, and tool count: "Working · 1m 4s · 3 tools". */
-export function agentRowMeta(agent: Pick<AgentEntry, 'status' | 'elapsedMs' | 'toolUses'>): string {
+/** Status, time so far or run length, any long silence, and tool count: "Working · 1m 4s · 3 tools". */
+export function agentRowMeta(agent: Pick<AgentEntry, 'status' | 'elapsedMs' | 'toolUses' | 'quietMs'>): string {
   const parts: string[] = [AGENT_STATUS_LABEL[agent.status]]
   if (agent.elapsedMs !== undefined && (agent.status === 'working' || agent.elapsedMs >= 1000)) parts.push(duration(agent.elapsedMs))
+  if (agent.status === 'working' && agent.quietMs !== undefined) parts.push(`quiet ${Math.floor(agent.quietMs / 60_000)}m`)
   if (agent.toolUses > 0) parts.push(`${agent.toolUses} ${agent.toolUses === 1 ? 'tool' : 'tools'}`)
   return parts.join(' · ')
 }

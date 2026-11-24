@@ -30,6 +30,7 @@ import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, saveModelDefaults } from './claude/userSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
+import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
 import type { RateLimitInfo } from './usage/usageReply'
@@ -451,12 +452,18 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     claudeManager.onSend((paneId) => sessionStatusTracker.apply(paneId, { kind: 'user-message' })),
     claudeManager.onEvent((paneId, event) => sessionStatusTracker.apply(paneId, { kind: 'claude-event', event })),
     claudeManager.onExit((paneId) => sessionStatusTracker.apply(paneId, { kind: 'exit' })),
+    claudeManager.onSpawn((paneId, cwd) => agentSweep.spawned(paneId, cwd)),
+    claudeManager.onEvent((paneId, event) => agentSweep.event(paneId, event)),
+    claudeManager.onExit((paneId) => agentSweep.exited(paneId)),
+    agentSweep.onEnded((paneId, taskId) => sessionStatusTracker.apply(paneId, { kind: 'agent-ended', taskId })),
+    () => agentSweep.stop(),
     sessionStatusTracker.onChange((entry) => {
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) win.webContents.send(IPC.SESSION_STATUS_CHANGED, entry)
       }
     })
   )
+  agentSweep.start()
   ipcMain.handle(IPC.SESSION_STATUS_LIST, () => sessionStatusTracker.list())
   ipcMain.on(IPC.SESSION_SCREEN_FOCUS, (_e, focus: ScreenFocus) => setScreenFocus(focus))
 

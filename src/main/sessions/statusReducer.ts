@@ -8,6 +8,8 @@ export type SessionStatusEvent =
   /** One parsed stream-json line from the claude process. */
   | { kind: 'claude-event'; event: unknown; at: number }
   | { kind: 'exit'; at: number }
+  /** The app saw from the agent's own file that it ended (a handback, an interrupt, the finished mark), though the CLI never reported it. */
+  | { kind: 'agent-ended'; taskId: string; at: number }
 
 type WithoutTime<E> = E extends unknown ? Omit<E, 'at'> : never
 export type UntimedSessionStatusEvent = WithoutTime<SessionStatusEvent>
@@ -30,7 +32,7 @@ export function reduceSessionStatus(
   const next = reduceTurn(prev, event)
   if (event.kind === 'spawned' || event.kind === 'exit') return next
   const before = prev?.agents ?? []
-  const agents = event.kind === 'claude-event' ? applyAgentEvent(before, event.event) : before
+  const agents = event.kind === 'claude-event' ? applyAgentEvent(before, event.event) : event.kind === 'agent-ended' ? before.filter((id) => id !== event.taskId) : before
   const turnStarts = event.kind === 'user-message' || (event.kind === 'claude-event' && isQueuedPromptStart(event.event))
   const turnDone = event.kind === 'claude-event' && isTurnResult(event.event) ? true : turnStarts ? false : (prev?.turnDone ?? false)
   let status = next.status
@@ -58,6 +60,8 @@ function reduceTurn(prev: SessionStatusState | null, event: SessionStatusEvent):
       if (isTurnResult(event.event)) return enter(prev, 'your-turn', event.at, pending)
       if (isQueuedPromptStart(event.event) && pending.length === 0) return enter(prev, 'running', event.at, pending)
       return prev ?? enter(null, 'running', event.at, pending)
+    case 'agent-ended':
+      return prev ?? enter(null, 'idle', event.at, [])
     case 'permission-raised':
       if (pending.includes(event.requestId)) return prev ?? enter(null, 'needs-approval', event.at, pending)
       return enter(prev, 'needs-approval', event.at, [...pending, event.requestId])

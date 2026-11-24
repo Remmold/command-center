@@ -209,6 +209,14 @@ describe('session status reducer', () => {
     ])
   })
 
+  it('turns to you when the app sees from its file that the last agent ended, though the CLI never said so', () => {
+    const started = { type: 'system', subtype: 'task_started', task_id: 'a1', task_type: 'local_agent', session_id: 's1' }
+    expect(statuses([{ kind: 'spawned', at: 100 }, { kind: 'user-message', at: 200 }, claude(started, 210), claude(resultEvent, 300), { kind: 'agent-ended', taskId: 'a1', at: 900 }]).slice(-2)).toEqual([
+      ['running', 200],
+      ['your-turn', 900]
+    ])
+  })
+
   it('an agent still working when the process ends leaves the chat idle', () => {
     const started = { type: 'system', subtype: 'task_started', task_id: 'a1', task_type: 'local_agent', session_id: 's1' }
     expect(statuses([{ kind: 'spawned', at: 100 }, { kind: 'user-message', at: 200 }, claude(started, 210), claude(resultEvent, 300), { kind: 'exit', at: 400 }, { kind: 'spawned', at: 500 }, { kind: 'user-message', at: 600 }, claude(resultEvent, 700)]).at(-1)).toEqual(['your-turn', 700])

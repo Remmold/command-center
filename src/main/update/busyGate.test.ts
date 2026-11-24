@@ -22,6 +22,13 @@ describe('busy gate', () => {
     expect(busyPanes(reduceBusy(bash, { kind: 'exit', paneId: 'a' }))).toEqual([])
   })
 
+  it('an agent whose own file shows it ended, or that went quiet, stops counting though the CLI never said so', () => {
+    const started: BusyEvent = { kind: 'claude-event', paneId: 'a', event: { type: 'system', subtype: 'task_started', task_id: 't1', task_type: 'local_agent' } }
+    const state = run([{ kind: 'sent', paneId: 'a', uuid: 'u1' }, started, result])
+    expect(busyPanes(reduceBusy(state, { kind: 'agent-ended', paneId: 'a', taskId: 't1' }))).toEqual([])
+    expect(busyPanes(reduceBusy(state, { kind: 'agent-ended', paneId: 'a', taskId: 'other' }))).toEqual(['a'])
+  })
+
   it('a chat whose process is alive but idle is not busy', () => {
     expect(busyPanes(run([{ kind: 'spawned', paneId: 'a' }]))).toEqual([])
   })

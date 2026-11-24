@@ -3,6 +3,7 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import { IPC } from '../../shared/ipc-channels'
 import { claudeManager } from '../claude/manager'
 import { approvalBroker } from '../claude/approvals'
+import { agentSweep } from '../claude/agentSweepService'
 import { userDataPath } from '../util/paths'
 import { createUpdateController, type UpdateController, type UpdaterPort } from './controller'
 import { AUTO_RESTART_IDLE_MS } from './restartPlan'
@@ -57,6 +58,7 @@ export function startUpdates(): UpdateController {
   claudeManager.onSend((paneId, uuid) => controller.feed({ kind: 'sent', paneId, uuid }))
   claudeManager.onEvent((paneId, event) => controller.feed({ kind: 'claude-event', paneId, event }))
   claudeManager.onExit((paneId) => controller.feed({ kind: 'exit', paneId }))
+  agentSweep.onEnded((paneId, taskId) => controller.feed({ kind: 'agent-ended', paneId, taskId }))
   approvalBroker.onRaised((r) => controller.feed({ kind: 'approval-raised', paneId: r.paneId, requestId: r.requestId }))
   approvalBroker.onSettled((s) => controller.feed({ kind: 'approval-resolved', paneId: s.paneId, requestId: s.requestId }))
 

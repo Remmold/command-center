@@ -280,7 +280,7 @@ for (const percent of [110, 125, 150]) {
         expect(await overflowing(page, [...sideways, `${LIST} section > button`])).toEqual([])
         const agentsPane = page.locator('[data-chat-pane]:visible', { has: page.getByText('Two agents are working') })
         await expect(agentsPane.locator('[data-agents-still-working]')).toContainText('2 agents still working')
-        await agentsPane.getByRole('tab', { name: 'Agents 2' }).click()
+        await agentsPane.getByRole('tab', { name: 'Agents 2 working' }).click()
         const agentList = agentsPane.getByRole('list', { name: 'Agents' })
         await expect(agentList.getByRole('button')).toHaveCount(2)
         await expect(agentList.getByRole('button').first()).toContainText('now: ')
