@@ -3,6 +3,8 @@ import type { ChatItem, ToolResultItem } from './types'
 export interface ToolCallTitle {
   name: string
   target: string
+  /** The target is Claude's own words (a shell call's description), shown as text rather than code. */
+  prose?: true
 }
 
 function normalize(path: string): string {
@@ -39,6 +41,8 @@ function targetOf(o: Record<string, unknown>, cwd: string | undefined): string {
 /** The one-line "ToolName target" shown on a collapsed tool call row. */
 export function toolCallTitle(name: string, input: unknown, cwd: string | undefined): ToolCallTitle {
   const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
+  const description = stringField(o, 'command') && stringField(o, 'description')
+  if (description) return { name, target: description, prose: true }
   return { name, target: targetOf(o, cwd) }
 }
 

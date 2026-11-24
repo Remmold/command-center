@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react'
+import { memo, useMemo, type ReactNode } from 'react'
 import { Markdown } from '../ui/Markdown'
 import type { ContentBlock } from '../../../shared/types'
 import { fileBaseName } from '../../../shared/fileLinks'
@@ -8,14 +8,15 @@ import { userBubble } from './userAttachments'
 import { computeUnifiedDiff, trimContext, type DiffSegment } from './diff'
 import { UnifiedDiffView, isUnifiedDiff } from './UnifiedDiffView'
 import { DiffLines } from './DiffLines'
-import { ToolCallBody, ToolCallRow, ToolCallSection } from './ToolCallRow'
+import { ToolCallBody, ToolCallErrorLine, ToolCallRow, ToolCallSection } from './ToolCallRow'
 import { toolCallTitle } from './toolCall'
 import { mcpToolTitle } from './mcpTool'
 import { useToolContext } from './toolContext'
 import { ThinkingBlock } from './ThinkingBlock'
 import { CompactLine } from './CompactLine'
 import { FileLink } from './fileOpener'
-import { visibleBlocks } from './timelineRows'
+import { quietStepLabel, timelineSteps } from './timelineRows'
+import { errorLine, persistedOutput, readableOutput } from './toolOutput'
 import { parseTodos, TODO_TOOL, type Todo } from './todos'
 import { stampLabel, stampTitle } from './messageTime'
 import { CopyButton } from '../ui/CopyButton'
@@ -135,31 +136,43 @@ interface AssistantProps {
 /** A reply drawn as the extension does: each thinking, text and tool block its own step on the timeline. */
 function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens, joinAbove, joinBelow }: AssistantProps) {
   const { content } = item
-  const shown = visibleBlocks(content)
-  if (shown.length === 0) return null
+  const steps = timelineSteps(content)
+  if (steps.length === 0) return null
+  const shown = steps.map((s) => s.indexes[0])
   const copyable = streamingFrom === undefined && textBlocks(content).length > 0 && !item.parentToolUseId && !item.raw.parent_tool_use_id
   const firstText = shown.find((i) => content[i].type === 'text')
   const lastText = [...shown].reverse().find((i) => content[i].type === 'text')
   return (
     <div data-assistant-message="" className="group/message">
-      {shown.map((i, n) => (
-        <TimelinePlaceProvider key={i} value={timelinePlace(n > 0 || joinAbove, n < shown.length - 1 || joinBelow)}>
-          <ContentBlockView
-            block={content[i]}
-            streaming={streamingFrom !== undefined && i >= streamingFrom}
-            durationMs={item.thinkingMs?.[i]}
-            thinkingTokens={thinkingTokens}
-            stamp={i === firstText && stampAt !== undefined ? <Stamp at={stampAt} /> : undefined}
-            footer={
-              i === lastText && copyable ? (
-                <div className="flex h-5 items-center">
-                  <CopyButton getText={() => textBlocks(content).join(PARAGRAPH)} label="Copy response" reveal="message" />
-                </div>
-              ) : undefined
-            }
-          />
-        </TimelinePlaceProvider>
-      ))}
+      {steps.map(({ indexes, quiet }, n) => {
+        const i = indexes[0]
+        const place = timelinePlace(n > 0 || joinAbove, n < steps.length - 1 || joinBelow)
+        if (quiet) {
+          return (
+            <TimelinePlaceProvider key={i} value={place}>
+              <QuietStops blocks={indexes.map((j) => content[j] as ToolUse)} />
+            </TimelinePlaceProvider>
+          )
+        }
+        return (
+          <TimelinePlaceProvider key={i} value={place}>
+            <ContentBlockView
+              block={content[i]}
+              streaming={streamingFrom !== undefined && i >= streamingFrom}
+              durationMs={item.thinkingMs?.[i]}
+              thinkingTokens={thinkingTokens}
+              stamp={i === firstText && stampAt !== undefined ? <Stamp at={stampAt} /> : undefined}
+              footer={
+                i === lastText && copyable ? (
+                  <div className="flex h-5 items-center">
+                    <CopyButton getText={() => textBlocks(content).join(PARAGRAPH)} label="Copy response" reveal="message" />
+                  </div>
+                ) : undefined
+              }
+            />
+          </TimelinePlaceProvider>
+        )
+      })}
     </div>
   )
 }
@@ -251,11 +264,19 @@ function FileTarget({ path, suffix = '' }: { path: string; suffix?: string }) {
   )
 }
 
+/** A failed call's first line, which shows while its body is folded. */
+function errorNote(result: ToolResultItem | undefined): ReactNode {
+  if (!result?.isError) return undefined
+  const line = errorLine(stringifyToolResult(result.content))
+  return line ? <ToolCallErrorLine text={line} /> : undefined
+}
+
 function ToolCall({ block }: { block: ToolUse }) {
   const { pairs, cwd, latestTodoId, running } = useToolContext()
   const result = pairs.resultFor.get(block.id)
-  const { name, target } = toolCallTitle(block.name, block.input, cwd)
+  const { name, target, prose } = toolCallTitle(block.name, block.input, cwd)
   const status = toolCallStatus(result, running.has(block.id))
+  const note = errorNote(result)
 
   if (AGENT_TOOLS.has(block.name)) {
     return <AgentCall id={block.id} name={block.name} input={block.input} result={result} resultText={result ? stringifyToolResult(result.content) : ''} />
@@ -264,7 +285,7 @@ function ToolCall({ block }: { block: ToolUse }) {
   const mcp = mcpToolTitle(block.name, block.input)
   if (mcp) {
     return (
-      <ToolCallRow name={`${mcp.server} [${mcp.tool}]`} target={mcp.detail ?? ''} status={status}>
+      <ToolCallRow name={`${mcp.server} [${mcp.tool}]`} target={mcp.detail ?? ''} status={status} note={note}>
         {result ? (
           <ToolCallBody>
             <ResultSection result={result} />
@@ -280,7 +301,7 @@ function ToolCall({ block }: { block: ToolUse }) {
   if (todos) {
     const current = block.id === latestTodoId
     return (
-      <ToolCallRow key={current ? 'current' : 'earlier'} name="Update Todos" target="" status={status} foldable={{ defaultOpen: current }}>
+      <ToolCallRow key={current ? 'current' : 'earlier'} name="Update Todos" target="" status={status} defaultOpen={current} note={note}>
         <Checklist entries={todos.map((t) => ({ label: t.content, state: TODO_CHECK[t.status] }))} />
         {result?.isError && (
           <ToolCallBody>
@@ -293,7 +314,7 @@ function ToolCall({ block }: { block: ToolUse }) {
 
   if (block.name === 'Read' && isReadInput(block.input)) {
     return (
-      <ToolCallRow name="Read" target={<FileTarget path={block.input.file_path} suffix={readRange(block.input)} />} status={status}>
+      <ToolCallRow name="Read" target={<FileTarget path={block.input.file_path} suffix={readRange(block.input)} />} status={status} note={note}>
         {result?.isError ? (
           <ToolCallBody>
             <ResultSection result={result} />
@@ -311,6 +332,8 @@ function ToolCall({ block }: { block: ToolUse }) {
         target={<FileTarget path={block.input.file_path} />}
         status={status}
         meta={<DiffCounts adds={countSegmentLines(segments, 'add')} dels={countSegmentLines(segments, 'remove')} replaceAll={block.input.replace_all} />}
+        defaultOpen={!result?.isError}
+        note={note}
       >
         <ToolCallBody>
           <ToolCallSection label="diff">
@@ -324,7 +347,14 @@ function ToolCall({ block }: { block: ToolUse }) {
 
   if (block.name === 'Write' && isWriteInput(block.input)) {
     return (
-      <ToolCallRow name={name} target={<FileTarget path={block.input.file_path} />} status={status} meta={<DiffCounts adds={countLines(block.input.content)} />}>
+      <ToolCallRow
+        name={name}
+        target={<FileTarget path={block.input.file_path} />}
+        status={status}
+        meta={<DiffCounts adds={countLines(block.input.content)} />}
+        defaultOpen={!result?.isError}
+        note={note}
+      >
         <ToolCallBody>
           <ToolCallSection label="in" text={block.input.content} />
           {result && <ResultSection result={result} />}
@@ -336,21 +366,50 @@ function ToolCall({ block }: { block: ToolUse }) {
   const showsInput = !OUTPUT_ONLY.has(block.name) && !ERROR_ONLY.has(block.name)
   const showsResult = !!result && (!ERROR_ONLY.has(block.name) || result.isError)
   const movable = !result && BACKGROUNDABLE_TOOLS.has(block.name)
-  const hasBody = showsInput || showsResult || movable
   return (
-    <ToolCallRow name={name} target={target} status={status}>
-      {hasBody ? (
-        <>
-          {(showsInput || showsResult) && (
-            <ToolCallBody>
-              {showsInput && <ToolCallSection label="in" text={inputText(block.input)} />}
-              {showsResult && result && <ResultSection result={result} />}
-            </ToolCallBody>
-          )}
-          {movable && <RunInBackgroundLine toolUseId={block.id} />}
-        </>
+    <ToolCallRow
+      name={name}
+      target={target}
+      prose={prose}
+      status={status}
+      note={
+        movable ? (
+          <>
+            {note}
+            <RunInBackgroundLine toolUseId={block.id} />
+          </>
+        ) : (
+          note
+        )
+      }
+    >
+      {showsInput || showsResult ? (
+        <ToolCallBody>
+          {showsInput && <ToolCallSection label="in" text={inputText(block.input)} />}
+          {showsResult && result && <ResultSection result={result} />}
+        </ToolCallBody>
       ) : undefined}
     </ToolCallRow>
+  )
+}
+
+/** Background-task stops side by side as one quiet line, e.g. "Stopped 2 background tasks"; a failed stop still shows its error. */
+function QuietStops({ blocks }: { blocks: ToolUse[] }) {
+  const { pairs, running } = useToolContext()
+  const results = blocks.map((b) => pairs.resultFor.get(b.id))
+  const statuses = blocks.map((b, n) => toolCallStatus(results[n], running.has(b.id)))
+  const status = statuses.find((s) => s === 'error') ?? statuses.find((s) => s === 'running' || s === 'pending') ?? statuses[0]
+  const failed = results.filter((r): r is ToolResultItem => r?.isError === true)
+  return (
+    <ToolCallRow
+      name={quietStepLabel(blocks.length)}
+      target=""
+      status={status}
+      quiet
+      note={failed.map((r) => (
+        <ToolCallErrorLine key={r.toolUseId} text={errorLine(stringifyToolResult(r.content))} />
+      ))}
+    />
   )
 }
 
@@ -361,7 +420,7 @@ function QuestionCall({ block, result, status }: { block: ToolUse; result: ToolR
   const outcome = result ? questionOutcome(questions, stringifyToolResult(result.content), result.isError === true) : null
   const count = questions.length > 0 ? ` · ${questions.length} ${questions.length === 1 ? 'question' : 'questions'}` : ''
   return (
-    <ToolCallRow name={name} target={outcome ? `${outcome.status}${count}` : ''} status={status}>
+    <ToolCallRow name={name} target={outcome ? `${outcome.status}${count}` : ''} status={status} defaultOpen={outcome?.status === 'Answered'}>
       {outcome?.status === 'Answered' ? (
         <AnsweredQuestions questions={questions} answers={outcome.answers} />
       ) : result && !outcome ? (
@@ -374,7 +433,12 @@ function QuestionCall({ block, result, status }: { block: ToolUse; result: ToolR
 }
 
 function ResultSection({ result }: { result: ToolResultItem }) {
-  const text = stringifyToolResult(result.content)
+  const text = useMemo(() => stringifyToolResult(result.content), [result.content])
+  const shown = useMemo(() => {
+    const saved = persistedOutput(text)
+    if (saved) return { text: saved.preview, raw: undefined, saved }
+    return { ...readableOutput(text), saved: null }
+  }, [text])
   if (!result.isError && isUnifiedDiff(text)) {
     return (
       <ToolCallSection label="out">
@@ -382,14 +446,16 @@ function ResultSection({ result }: { result: ToolResultItem }) {
       </ToolCallSection>
     )
   }
-  return <ToolCallSection label="out" tone={result.isError ? 'error' : 'normal'} text={text || '(no output)'} />
+  const lead = shown.saved ? <FileLink path={shown.saved.path}>{shown.saved.label}</FileLink> : undefined
+  return <ToolCallSection label="out" tone={result.isError ? 'error' : 'normal'} text={shown.text || (lead ? '' : '(no output)')} raw={shown.raw} lead={lead} />
 }
 
 /** A result whose call is not in the chat, e.g. cut off by a shortened transcript. */
 function LooseToolResult({ item }: { item: ToolResultItem }) {
   const text = stringifyToolResult(item.content)
+  const saved = persistedOutput(text)
   return (
-    <ToolCallRow name="Result" target={oneLine(text)} status={toolCallStatus(item, false)}>
+    <ToolCallRow name="Result" target={oneLine(saved ? saved.label : readableOutput(text).text)} status={toolCallStatus(item, false)} note={errorNote(item)}>
       <ToolCallBody>
         <ResultSection result={item} />
       </ToolCallBody>
