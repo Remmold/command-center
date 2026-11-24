@@ -1,0 +1,3 @@
+- Done: roomier rows, repo groups with folds, pills, keyboard and search; unit + accounts e2e + zoom check updated (60696fc).
+- Next: Andreas judges the air and the folded-only count (test flow section 34).
+- Open reds: none (quick, e2e:gate 85.2 s, perf, zoom green).

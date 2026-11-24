@@ -21,7 +21,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Roomier rows:**
   - Session rows about 36 px tall, up from about 26.
