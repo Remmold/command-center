@@ -3,6 +3,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:pat
 import { samePath } from '../profiles/linker'
 import { listUnignoredFiles } from '../git/service'
 import { transcriptsDir } from '../profiles/transcripts'
+import { isFile } from '../repoIdentity/projectIcons'
 import {
   ADOPTED_READ_ONLY,
   estimateTokens,
@@ -87,6 +88,7 @@ async function item(r: Reading, kind: ContextItemKind, label: string, path: stri
   return {
     kind,
     label,
+    note: null,
     path,
     source,
     tokens,
@@ -232,7 +234,6 @@ async function markdownFiles(dir: string, rel = ''): Promise<string[]> {
   return out.sort()
 }
 
-/** Skills and agents add their frontmatter name and description to the start; the body is not counted. */
 /** The file's text the first time it is listed; null when it isn't there or is listed already. */
 async function unlisted(r: Reading, path: string): Promise<string | null> {
   if (r.listed.has(fileKey(path))) return null
@@ -241,11 +242,16 @@ async function unlisted(r: Reading, path: string): Promise<string | null> {
   return text
 }
 
+/**
+ * Skills and agents add their frontmatter name and description to the start; the body is not counted.
+ * A skill with `disable-model-invocation: true` is only offered as a slash command, so Claude never sees it: not counted.
+ */
 async function described(r: Reading, kind: 'skill' | 'agent', path: string, fallbackName: string, source: ContextSource): Promise<ContextItem | null> {
   const text = await unlisted(r, path)
   if (text === null) return null
   const meta = frontmatter(text)
   const name = meta.name || fallbackName
+  if (kind === 'skill' && meta['disable-model-invocation']?.toLowerCase() === 'true') return { ...(await item(r, kind, name, path, source, null)), note: 'slash command only' }
   return item(r, kind, name, path, source, estimateTokens(name + (meta.description ?? '')))
 }
 
@@ -375,6 +381,143 @@ async function plugins(r: Reading, settingsFiles: Record<ContextLayerName, strin
   return out
 }
 
+/** An item without a file of its own. */
+const pathless = (kind: ContextItemKind, label: string, note: string | null, source: ContextSource): ContextItem => ({
+  kind,
+  label,
+  note,
+  path: null,
+  source,
+  tokens: null,
+  missing: false,
+  sharedWithDefault: false,
+  readOnly: null,
+  children: []
+})
+
+/** Personal without CLAUDE_CONFIG_DIR keeps `.claude.json` beside its folder in the home folder; any other profile keeps it inside. */
+function accountClaudeJson(input: ContextReaderInput): string {
+  return samePath(input.configDir, join(input.homeDir, '.claude')) ? join(input.homeDir, '.claude.json') : join(input.configDir, '.claude.json')
+}
+
+/** What a server runs: its type, plus the program of a local one. URLs, arguments, env and headers can hold secrets and are left out. */
+function mcpNote(server: Record<string, unknown>): string {
+  const type = typeof server.type === 'string' ? server.type : typeof server.command === 'string' ? 'stdio' : 'unknown'
+  const words = typeof server.command === 'string' ? shellWords(server.command) : []
+  return words.length ? `${type}: ${words[0]}${words.length > 1 ? ' …' : ''}` : type
+}
+
+/** The servers of an `mcpServers` map, by name; never started, their tools never counted. */
+async function mcpServers(r: Reading, map: unknown, source: ContextSource, file: string | null): Promise<ContextItem[]> {
+  if (!isRecord(map)) return []
+  const servers = Object.entries(map).filter((e): e is [string, Record<string, unknown>] => isRecord(e[1]))
+  const items = await Promise.all(
+    servers.map(async ([name, server]) => ({ ...(file ? await item(r, 'mcp-server', name, file, source, null) : pathless('mcp-server', name, null, source)), note: mcpNote(server) }))
+  )
+  return byLabel(items)
+}
+
+/**
+ * The account's servers, the project entry's for this workspace, and the repo's `.mcp.json`. Only `.mcp.json` servers get
+ * a path: `.claude.json` holds the account's sign-in and every server's secrets, so it is never offered to open.
+ */
+async function mcp(r: Reading): Promise<Record<ContextLayerName, ContextItem[]>> {
+  const account = await readJson(accountClaudeJson(r.input))
+  const projects = isRecord(account) && isRecord(account.projects) ? account.projects : {}
+  // The same folder can have several entries that differ only in case or slashes; a server is listed once.
+  const fromEntries = new Map<string, ContextItem>()
+  for (const [path, entry] of Object.entries(projects)) {
+    if (!samePath(path, r.input.workspacePath) || !isRecord(entry)) continue
+    for (const server of await mcpServers(r, entry.mcpServers, 'project-entry', null)) if (!fromEntries.has(server.label)) fromEntries.set(server.label, server)
+  }
+  const mcpJson = join(r.input.workspacePath, '.mcp.json')
+  const repo = await readJson(mcpJson)
+  return {
+    account: await mcpServers(r, isRecord(account) ? account.mcpServers : null, 'account', null),
+    repo: await mcpServers(r, isRecord(repo) ? repo.mcpServers : null, 'repo', mcpJson),
+    local: byLabel([...fromEntries.values()])
+  }
+}
+
+/** A command's words as a POSIX shell splits them: quotes group and are dropped, so `"$DIR"/x.sh` is one word. */
+function shellWords(command: string): string[] {
+  const out: string[] = []
+  let word = ''
+  let started = false
+  let quote: string | null = null
+  for (const ch of command) {
+    if (quote) {
+      if (ch === quote) quote = null
+      else word += ch
+    } else if (ch === '"' || ch === "'") {
+      quote = ch
+      started = true
+    } else if (/\s/.test(ch)) {
+      if (started || word) out.push(word)
+      word = ''
+      started = false
+    } else word += ch
+  }
+  if (started || word) out.push(word)
+  return out
+}
+
+const SCRIPT_FILE = /\.(py|js|mjs|cjs|ts|sh|bash|ps1|bat|cmd|rb|pl)$/i
+
+/** The script a hook command runs, so it can open as text; null when the command names none. Hooks run in the workspace folder. */
+function hookScript(r: Reading, command: string): string | null {
+  const project = r.input.workspacePath
+  const home = r.input.homeDir
+  const word = shellWords(command).find((w) => SCRIPT_FILE.test(w))
+  if (!word) return null
+  const expanded = word
+    .replace(/\$\{CLAUDE_PROJECT_DIR\}|\$CLAUDE_PROJECT_DIR\b|%CLAUDE_PROJECT_DIR%/g, project)
+    .replace(/\$\{HOME\}|\$HOME\b|%USERPROFILE%|\$env:USERPROFILE\b/gi, home)
+    .replace(/^~(?=[\\/]|$)/, home)
+  return resolve(project, expanded)
+}
+
+/** One item per hook: the event (and matcher) it runs on and the command it runs; never run here. */
+async function hooks(r: Reading, map: unknown, source: ContextSource): Promise<ContextItem[]> {
+  if (!isRecord(map)) return []
+  const out: ContextItem[] = []
+  for (const [event, groups] of Object.entries(map)) {
+    for (const group of Array.isArray(groups) ? groups.filter(isRecord) : []) {
+      const label = typeof group.matcher === 'string' && group.matcher ? `${event} (${group.matcher})` : event
+      for (const hook of Array.isArray(group.hooks) ? group.hooks.filter(isRecord) : []) {
+        const command = typeof hook.command === 'string' ? hook.command : null
+        const note = command ?? (typeof hook.type === 'string' ? hook.type : 'hook')
+        const script = command ? hookScript(r, command) : null
+        out.push(
+          script
+            ? { ...(await item(r, 'hook', label, script, source, null)), note, missing: !(await isFile(script)) }
+            : pathless('hook', label, note, source)
+        )
+      }
+    }
+  }
+  return out
+}
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
+
+/** A settings layer with its hooks as children and its allow rules counted; null when the file isn't there. */
+async function settingsLayer(r: Reading, path: string, label: string, source: ContextSource): Promise<ContextItem | null> {
+  const text = await readText(path)
+  if (text === null) return null
+  const base = await item(r, 'settings', label, path, source, null)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return { ...base, note: 'does not parse' }
+  }
+  const settings = isRecord(parsed) ? parsed : {}
+  const children = await hooks(r, settings.hooks, source)
+  const allow = isRecord(settings.permissions) ? strings(settings.permissions.allow).length : 0
+  return { ...base, note: `${plural(children.length, 'hook')} · ${plural(allow, 'allow rule')}`, children }
+}
+
 function counted(items: readonly ContextItem[]): number {
   return items.reduce((sum, i) => sum + (i.tokens ?? 0) + counted(i.children), 0)
 }
@@ -395,15 +538,22 @@ export async function readContext(input: ContextReaderInput): Promise<ContextRep
   const subfolders = await Promise.all((await subfolderClaudeMds(root)).map((rel) => item(r, 'subfolder-claude-md', rel, join(root, rel), 'repo', null)))
   const accountKit = await toolkit(r, input.configDir, 'account')
   const repoKit = await toolkit(r, join(root, '.claude'), 'repo')
-  const enabled = await plugins(r, {
+  const settingsFiles: Record<ContextLayerName, string> = {
     account: join(input.configDir, 'settings.json'),
     repo: join(root, '.claude', 'settings.json'),
     local: join(root, '.claude', 'settings.local.json')
-  })
+  }
+  const enabled = await plugins(r, settingsFiles)
+  const servers = await mcp(r)
+  const settings = {
+    account: await settingsLayer(r, settingsFiles.account, 'settings.json', 'account'),
+    repo: await settingsLayer(r, settingsFiles.repo, '.claude/settings.json', 'repo'),
+    local: await settingsLayer(r, settingsFiles.local, '.claude/settings.local.json', 'repo')
+  }
   const layers = {
-    account: [...found([accountMd]), ...(await memory(r)), ...accountKit, ...enabled.account],
-    repo: [...found([...parents, repoMd]), ...repoKit, ...enabled.repo, ...subfolders],
-    local: [...found([localMd]), ...enabled.local]
+    account: [...found([accountMd]), ...(await memory(r)), ...accountKit, ...enabled.account, ...servers.account, ...found([settings.account])],
+    repo: [...found([...parents, repoMd]), ...repoKit, ...enabled.repo, ...servers.repo, ...found([settings.repo]), ...subfolders],
+    local: [...found([localMd]), ...enabled.local, ...servers.local, ...found([settings.local])]
   }
   const absent = async (name: string): Promise<boolean> => (await readText(join(root, name))) === null
   const missing: CreatableContextFile[] = [

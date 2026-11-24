@@ -11,7 +11,7 @@ import { AccentDot } from '../ui/AccentDot'
 import { Badge } from '../ui/Badge'
 import { CollapsibleSection } from '../ui/CollapsibleSection'
 import { EmptyState } from '../ui/EmptyState'
-import { ListItem, ListRow, ListRowLabel, ListRowMeta, ListRowText } from '../ui/ListRow'
+import { ListItem, ListRow, ListRowLabel, ListRowMeta, ListRowNote, ListRowText } from '../ui/ListRow'
 import { NoticeLine } from '../ui/NoticeLine'
 import { Pane } from '../ui/Pane'
 import { Panel } from '../ui/Panel'
@@ -116,8 +116,8 @@ function LayerPanel({ title, items, defaultName }: { title: string; items: Conte
 function ItemList({ items, defaultName }: { items: ContextItem[]; defaultName: string }) {
   return (
     <ul>
-      {items.map((item) => (
-        <ContextRow key={`${item.kind}:${item.path ?? item.label}`} item={item} defaultName={defaultName} />
+      {items.map((item, n) => (
+        <ContextRow key={`${n}:${item.kind}:${item.path ?? item.label}`} item={item} defaultName={defaultName} />
       ))}
     </ul>
   )
@@ -130,7 +130,10 @@ const KIND_WORDS: Partial<Record<ContextItemKind, string>> = {
   skill: 'skill',
   agent: 'agent',
   command: 'command',
-  plugin: 'plugin'
+  plugin: 'plugin',
+  'mcp-server': 'MCP',
+  settings: 'settings',
+  hook: 'hook'
 }
 
 function ContextRow({ item, defaultName }: { item: ContextItem; defaultName: string }) {
@@ -140,8 +143,11 @@ function ContextRow({ item, defaultName }: { item: ContextItem; defaultName: str
       <ListItem>
         {kindWord && <ListRowLabel tone="secondary">{kindWord}</ListRowLabel>}
         <ListRowLabel tooltip={item.path ?? undefined}>{item.label}</ListRowLabel>
+        {item.note && <ListRowNote>{item.note}</ListRowNote>}
         {item.source.startsWith('plugin:') && <ListRowMeta>{item.source}</ListRowMeta>}
+        {item.source === 'project-entry' && <ListRowMeta>workspace entry</ListRowMeta>}
         {item.tokens !== null && <ListRowMeta>{formatTokens(item.tokens)}</ListRowMeta>}
+        {item.kind === 'mcp-server' && <Badge>tools not counted</Badge>}
         {item.missing && <Badge tone="warning">not found</Badge>}
         {item.sharedWithDefault && <Badge>shared with {defaultName}</Badge>}
         {item.readOnly && <Badge tooltip={item.readOnly}>{item.readOnly}</Badge>}

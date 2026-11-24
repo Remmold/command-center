@@ -90,11 +90,11 @@ The view that shows, per workspace, everything Claude is configured to use there
 _Avoid_: Config view, setup, Claude view
 
 **Context layer**:
-One level of where Claude context comes from, in the order it applies: the account, then the repo, then local (CLAUDE.local.md and local settings). An item in a layer shared with Personal is one file for both accounts.
+One level of where Claude context comes from, in the order it applies: the account, then the repo, then local (CLAUDE.local.md, local settings, and the MCP servers the account's entry for this workspace adds). An item in a layer shared with Personal is one file for both accounts.
 _Avoid_: Scope, level, tier
 
 **Start total**:
-The estimated tokens every new chat in a workspace starts with from its context: CLAUDE.md files and their imports, MEMORY.md, and the names and descriptions of skills and agents. Subfolder CLAUDE.md files and MCP tools are not in it.
+The estimated tokens every new chat in a workspace starts with from its context: CLAUDE.md files and their imports, MEMORY.md, and the names and descriptions of skills and agents. Subfolder CLAUDE.md files, skills offered only as slash commands, and MCP tools are not in it.
 _Avoid_: Context size, context usage (that is a live chat's, from /context)
 
 **Settings**:

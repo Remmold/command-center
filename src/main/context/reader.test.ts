@@ -32,6 +32,9 @@ const brief = (item: ContextItem): unknown => ({
   ...(item.children.length ? { children: item.children.map(brief) } : {})
 })
 
+/** A layer without its settings item, for tests that seed settings only to turn plugins on. */
+const noSettings = (items: ContextItem[]): ContextItem[] => items.filter((i) => i.kind !== 'settings')
+
 beforeEach(async () => {
   root = await fs.mkdtemp(join(tmpdir(), 'cc-context-'))
   account = join(root, 'account')
@@ -362,7 +365,7 @@ describe('context reader: plugins', () => {
 
     const report = await readContext(input())
 
-    expect(report.layers.account.map(brief)).toEqual([
+    expect(noSettings(report.layers.account).map(brief)).toEqual([
       {
         kind: 'plugin',
         label: 'review-kit@market',
@@ -380,13 +383,13 @@ describe('context reader: plugins', () => {
     expect(plugin.source).toBe('account')
     expect(plugin.children.map((c) => c.source)).toEqual(['plugin:review-kit', 'plugin:review-kit', 'plugin:review-kit', 'plugin:review-kit'])
     expect(plugin.children[1].path).toBe(join(review, 'skills', 'engineering', 'tdd', 'SKILL.md'))
-    expect(report.layers.repo.map(brief)).toEqual([
+    expect(noSettings(report.layers.repo).map(brief)).toEqual([
       { kind: 'plugin', label: 'lint-kit@market', tokens: null, children: [{ kind: 'skill', label: 'fix', tokens: 1 }] }
     ])
     expect(report.layers.repo[0].children[0].source).toBe('plugin:lint-kit')
     expect(report.layers.repo[0].path).toBeNull()
     // Enabled again in the local layer: listed there too, its contents counted once.
-    expect(report.layers.local.map(brief)).toEqual([{ kind: 'plugin', label: 'review-kit@market', tokens: null }])
+    expect(noSettings(report.layers.local).map(brief)).toEqual([{ kind: 'plugin', label: 'review-kit@market', tokens: null }])
     expect(report.startTotal).toBe(5 + 5 + 3 + 1)
   })
 
@@ -397,8 +400,8 @@ describe('context reader: plugins', () => {
 
     const report = await readContext(input())
 
-    expect(report.layers.account.map(brief)).toEqual([{ kind: 'plugin', label: 'ghost@market', tokens: null, missing: true }])
-    expect(report.layers.local).toEqual([])
+    expect(noSettings(report.layers.account).map(brief)).toEqual([{ kind: 'plugin', label: 'ghost@market', tokens: null, missing: true }])
+    expect(noSettings(report.layers.local)).toEqual([])
     expect(report.startTotal).toBe(0)
   })
 })
@@ -415,7 +418,7 @@ describe('context reader: memory and plugins on a linked profile', () => {
 
     const report = await readContext(input({ configDir: work }))
 
-    expect(report.layers.account.map((i) => [i.kind, i.path, i.sharedWithDefault])).toEqual([
+    expect(noSettings(report.layers.account).map((i) => [i.kind, i.path, i.sharedWithDefault])).toEqual([
       ['memory-index', join(memoryDir(work), 'MEMORY.md'), true],
       ['memory-file', join(memoryDir(work), 'notes.md'), true],
       ['plugin', join(work, 'plugins', 'cache', 'market', 'review-kit', '1.0.0', '.claude-plugin', 'plugin.json'), true]
@@ -450,3 +453,134 @@ describe('context reader: edge cases of skills and plugins', () => {
   })
 })
 
+
+describe('context reader: MCP servers', () => {
+  it("lists the account's servers, the project entry's for this workspace only, and the repo's .mcp.json, never their secrets", async () => {
+    await put(
+      join(account, '.claude.json'),
+      JSON.stringify({
+        oauthAccount: { emailAddress: 'someone@example.com' },
+        mcpServers: {
+          gitlab: { type: 'http', url: 'https://gitlab.example.com/api/mcp?token=secret', headers: { Authorization: 'Bearer secret' } },
+          blender: { type: 'stdio', command: 'uvx', args: ['blender-mcp'], env: { API_KEY: 'secret' } },
+          relay: { command: 'C:/tools/relay.exe', args: [] },
+          inline: { command: 'npx tool --token=secret' }
+        },
+        projects: {
+          [repo.replace(/\\/g, '/')]: { mcpServers: { hearth: { type: 'http', url: 'http://localhost:1' } } },
+          [join(root, 'projects', 'other').replace(/\\/g, '/')]: { mcpServers: { elsewhere: { type: 'http', url: 'http://localhost:2' } } }
+        }
+      })
+    )
+    await put(join(repo, '.mcp.json'), JSON.stringify({ mcpServers: { db: { command: 'node', args: ['db.mjs'], env: { PASSWORD: 'secret' } } } }))
+
+    const report = await readContext(input())
+
+    const mcp = (items: ContextItem[]): unknown[] => items.filter((i) => i.kind === 'mcp-server').map((i) => [i.label, i.note, i.source, i.path, i.tokens])
+    expect(mcp(report.layers.account)).toEqual([
+      ['blender', 'stdio: uvx', 'account', null, null],
+      ['gitlab', 'http', 'account', null, null],
+      ['inline', 'stdio: npx …', 'account', null, null],
+      ['relay', 'stdio: C:/tools/relay.exe', 'account', null, null]
+    ])
+    expect(mcp(report.layers.repo)).toEqual([['db', 'stdio: node', 'repo', join(repo, '.mcp.json'), null]])
+    expect(mcp(report.layers.local)).toEqual([['hearth', 'http', 'project-entry', null, null]])
+    expect(JSON.stringify(report)).not.toContain('secret')
+    expect(report.startTotal).toBe(0)
+  })
+
+  it("reads Personal's servers from the .claude.json beside its folder in the home folder", async () => {
+    const home = join(root, 'home')
+    const personal = join(home, '.claude')
+    await put(join(home, '.claude.json'), JSON.stringify({ mcpServers: { meshy: { type: 'stdio', command: 'cmd' } } }))
+
+    const report = await readContext(input({ configDir: personal, defaultConfigDir: personal }))
+
+    expect(report.layers.account.map((i) => i.label)).toEqual(['meshy'])
+  })
+})
+
+describe('context reader: settings and hooks', () => {
+  it('lists each settings layer with its hooks and allow rules summarised, and each hook script as an item with a path', async () => {
+    const guard = join(root, 'home', 'hooks', 'guard.py')
+    await put(guard, 'print("never run")')
+    await put(join(repo, '.claude', 'hooks', 'check.sh'), 'exit 1')
+    await put(
+      join(account, 'settings.json'),
+      JSON.stringify({
+        permissions: { allow: ['Bash', 'Read', 'mcp__gitlab'], ask: ['Write'] },
+        hooks: {
+          PreToolUse: [{ matcher: 'Agent', hooks: [{ type: 'command', command: `python ${guard}`, timeout: 10 }] }],
+          Stop: [{ hooks: [{ type: 'command', command: 'echo done' }] }]
+        }
+      })
+    )
+    await put(
+      join(repo, '.claude', 'settings.json'),
+      JSON.stringify({
+        permissions: { allow: ['Bash(pnpm quick)'] },
+        hooks: { PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: '"$CLAUDE_PROJECT_DIR"/.claude/hooks/check.sh --fast' }] }] }
+      })
+    )
+    await put(join(repo, '.claude', 'settings.local.json'), JSON.stringify({ permissions: { allow: ['WebFetch', 'Edit'] } }))
+
+    const report = await readContext(input())
+
+    const settings = (items: ContextItem[]): unknown[] =>
+      items
+        .filter((i) => i.kind === 'settings')
+        .map((i) => ({ label: i.label, note: i.note, path: i.path, tokens: i.tokens, hooks: i.children.map((h) => [h.kind, h.label, h.note, h.path, h.missing]) }))
+    expect(settings(report.layers.account)).toEqual([
+      {
+        label: 'settings.json',
+        note: '2 hooks · 3 allow rules',
+        path: join(account, 'settings.json'),
+        tokens: null,
+        hooks: [
+          ['hook', 'PreToolUse (Agent)', `python ${guard}`, guard, false],
+          ['hook', 'Stop', 'echo done', null, false]
+        ]
+      }
+    ])
+    expect(settings(report.layers.repo)).toEqual([
+      {
+        label: '.claude/settings.json',
+        note: '1 hook · 1 allow rule',
+        path: join(repo, '.claude', 'settings.json'),
+        tokens: null,
+        hooks: [['hook', 'PostToolUse (Edit|Write)', '"$CLAUDE_PROJECT_DIR"/.claude/hooks/check.sh --fast', join(repo, '.claude', 'hooks', 'check.sh'), false]]
+      }
+    ])
+    expect(settings(report.layers.local)).toEqual([
+      { label: '.claude/settings.local.json', note: '0 hooks · 2 allow rules', path: join(repo, '.claude', 'settings.local.json'), tokens: null, hooks: [] }
+    ])
+    expect(report.layers.repo.map((i) => i.source)).toEqual(['repo'])
+    expect(report.startTotal).toBe(0)
+  })
+
+  it('shows a hook script that is not there as not found, and a settings file that does not parse', async () => {
+    await put(join(account, 'settings.json'), JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'node ~/hooks/gone.mjs' }] }] } }))
+    await put(join(repo, '.claude', 'settings.json'), '{ "permissions": ')
+
+    const report = await readContext(input())
+
+    expect(report.layers.account[0].children.map((h) => [h.label, h.path, h.missing])).toEqual([['SessionStart', join(root, 'home', 'hooks', 'gone.mjs'), true]])
+    expect(report.layers.repo.map((i) => [i.kind, i.note, i.children.length])).toEqual([['settings', 'does not parse', 0]])
+  })
+})
+
+describe('context reader: slash-command-only skills', () => {
+  it('lists a skill with disable-model-invocation: true without counting it, marked slash command only', async () => {
+    await put(join(account, 'skills', 'release', 'SKILL.md'), `---\nname: release\ndescription: ${chars(400)}\ndisable-model-invocation: True\n---\nbody`)
+    // "tdd" + 37 = 40 → 10; an explicit false still counts.
+    await put(join(account, 'skills', 'tdd', 'SKILL.md'), `---\nname: tdd\ndescription: ${chars(37)}\ndisable-model-invocation: false\n---\nbody`)
+
+    const report = await readContext(input())
+
+    expect(report.layers.account.map((i) => [i.label, i.tokens, i.note])).toEqual([
+      ['release', null, 'slash command only'],
+      ['tdd', 10, null]
+    ])
+    expect(report.startTotal).toBe(10)
+  })
+})

@@ -21,6 +21,8 @@ export type ContextLayerName = 'account' | 'repo' | 'local'
 export interface ContextItem {
   kind: ContextItemKind
   label: string
+  /** A short line beside the label: what an MCP server or a hook runs, what a settings layer holds, "slash command only". */
+  note: string | null
   /** Absolute; null for an item without a file of its own. */
   path: string | null
   source: ContextSource
