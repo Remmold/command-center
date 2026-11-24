@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type { LocalSessionInfo, Workspace } from '../../shared/types'
 import { closeHalf, dropChats, focusHalf, openChat, replaceChat, splitPair, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
 import { useChatPairStore } from './chatPairStore'
+import { useChatItemsStore } from './chatItemsStore'
+import type { ChatItem } from '../components/chat/types'
 import { chatOnScreen, type ShellOptions } from './projectViewLayout'
 import { useProjectViewsStore, type ProjectView, type ShellTab } from './projectViewsStore'
 import { useViewStore } from './viewStore'
@@ -152,13 +154,20 @@ export function startSession(workspace: Workspace): boolean {
   return created ? openSession(created.id) : false
 }
 
-/** Resumes a past session of the workspace as a new chat. */
-export function resumeSession(workspace: Workspace, info: LocalSessionInfo): boolean {
+/** Resumes a past session of the workspace as a new chat, showing its transcript so far. */
+export async function resumeSession(workspace: Workspace, info: LocalSessionInfo): Promise<boolean> {
   useRecentProjectsStore.getState().touch(workspace.id)
+  // Read before the chat mounts: it decides its paused banner from the items it starts with.
+  const read = await window.api.observed.read(workspace.id, info.sessionId)
   const views = useProjectViewsStore.getState()
   if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
   const loaded = useProjectViewsStore.getState().loadSessionFromLocal(workspace.id, info)
-  return loaded ? openSession(loaded.id) : false
+  if (!loaded) return false
+  const history: ChatItem[] = read.ok
+    ? read.items
+    : [{ kind: 'system', id: crypto.randomUUID(), text: `Could not read this session's transcript (${read.error}); Claude still has the whole conversation.`, at: Date.now() }]
+  useChatItemsStore.getState().appendItems(loaded.id, history)
+  return openSession(loaded.id)
 }
 
 /** Stops the session's process and removes it from Work; its transcript stays resumable from Past sessions. */
