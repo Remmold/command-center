@@ -1,3 +1,4 @@
+import type { AgentSummary } from './agentSummary'
 import type { ChatItem } from './chatItems'
 
 /** What a subagent's `agent-<id>.meta.json` says about it; only the id is certain. */
@@ -15,10 +16,10 @@ export interface SubagentMeta {
   startedAt?: number
 }
 
-/** What the session's `subagents/` folder holds for one agent. */
+/** What the session's `subagents/` folder holds for one agent: its meta and its file's summary, never its items. */
 export interface AgentTail {
   meta: SubagentMeta
-  items: ChatItem[]
+  summary: AgentSummary
 }
 
 /** A session's followed agent files, by agent id. */
@@ -34,11 +35,27 @@ export function subagentSourceKey(source: SubagentSource): string {
   return `${source.cwd}\n${source.sessionId}`
 }
 
-/** New items from one agent's file; `reset` replaces what was read before (the first read, or a file that shrank). */
-export interface SubagentTailEvent {
+/** One agent's meta and file summary, sent on first sight and whenever either changes. */
+export interface SubagentSummaryEvent {
+  kind: 'summary'
   key: string
   agentId: string
   meta: SubagentMeta
+  summary: AgentSummary
+}
+
+/** New items from an agent's file while its live view is open; `reset` replaces what was read before (the first read, or a file that shrank). */
+export interface SubagentItemsEvent {
+  kind: 'items'
+  key: string
+  agentId: string
   items: ChatItem[]
   reset?: boolean
+}
+
+export type SubagentTailEvent = SubagentSummaryEvent | SubagentItemsEvent
+
+/** One agent of a followed session, whose items its open live view wants. */
+export interface SubagentItemsSource extends SubagentSource {
+  agentId: string
 }

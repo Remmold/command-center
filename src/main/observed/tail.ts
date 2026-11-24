@@ -53,21 +53,65 @@ export async function readLastItems(file: string, maxItems: number, maxBytes: nu
 /** The tail's poll cadence; other followers of transcript files poll no faster. */
 export const POLL_MS = 2000
 
+/** Reads a transcript from `offset` on, the chat items of each line completed since the last read; no timers of its own. */
+export class TranscriptCursor {
+  private parser: TranscriptParser
+  /** How often the file shrank and was read again from its start. */
+  restarts = 0
+
+  constructor(
+    private readonly file: string,
+    private position: number,
+    private readonly sidechain = false
+  ) {
+    this.parser = createTranscriptParser(sidechain)
+  }
+
+  /** Bytes read so far; the file's size when it is caught up. */
+  get offset(): number {
+    return this.position
+  }
+
+  /** Reads what was appended, handing each chunk's items to `emit`; a file that shrank is read again from its start. Throws when it cannot be opened. */
+  async readNew(emit: (items: ChatItem[]) => void, stopped: () => boolean = () => false): Promise<void> {
+    const handle = await fs.open(this.file, 'r')
+    try {
+      const { size } = await handle.stat()
+      if (size < this.position) {
+        this.position = 0
+        this.parser = createTranscriptParser(this.sidechain)
+        this.restarts++
+      }
+      while (this.position < size && !stopped()) {
+        const length = Math.min(CHUNK_BYTES, size - this.position)
+        const buf = Buffer.alloc(length)
+        const { bytesRead } = await handle.read(buf, 0, length, this.position)
+        if (bytesRead === 0) break
+        this.position += bytesRead
+        const items = this.parser.push(buf.subarray(0, bytesRead))
+        if (items.length > 0 && !stopped()) emit(items)
+      }
+    } finally {
+      await handle.close()
+    }
+  }
+}
+
 /** Follows one transcript from `offset`, emitting the chat items of each newly completed line. */
 export class TranscriptFollower {
   private watcher: FSWatcher | null = null
   private poll: NodeJS.Timeout | null = null
-  private parser: TranscriptParser
+  private cursor: TranscriptCursor
   private reading: Promise<void> = Promise.resolve()
   private stopped = false
 
   constructor(
-    private readonly file: string,
-    private offset: number,
+    file: string,
+    offset: number,
     private readonly emit: (items: ChatItem[]) => void,
-    private readonly sidechain = false
+    sidechain = false
   ) {
-    this.parser = createTranscriptParser(sidechain)
+    this.cursor = new TranscriptCursor(file, offset, sidechain)
     try {
       this.watcher = watch(file, () => this.schedule())
       this.watcher.on('error', () => this.watcher?.close())
@@ -94,30 +138,11 @@ export class TranscriptFollower {
 
   private async readNew(): Promise<void> {
     if (this.stopped) return
-    let handle
     try {
-      handle = await fs.open(this.file, 'r')
+      await this.cursor.readNew(this.emit, () => this.stopped)
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') this.stop()
       throw err
-    }
-    try {
-      const { size } = await handle.stat()
-      if (size < this.offset) {
-        this.offset = 0
-        this.parser = createTranscriptParser(this.sidechain)
-      }
-      while (this.offset < size && !this.stopped) {
-        const length = Math.min(CHUNK_BYTES, size - this.offset)
-        const buf = Buffer.alloc(length)
-        const { bytesRead } = await handle.read(buf, 0, length, this.offset)
-        if (bytesRead === 0) break
-        this.offset += bytesRead
-        const items = this.parser.push(buf.subarray(0, bytesRead))
-        if (items.length > 0 && !this.stopped) this.emit(items)
-      }
-    } finally {
-      await handle.close()
     }
   }
 }

@@ -210,3 +210,41 @@ export async function resize(app: ElectronApplication, width: number, height: nu
   }, [width, height] as const)
 }
 
+
+const DAY = 24 * HOUR
+const CODE_LINE = (i: number): string => `  const entry${i} = await store.read(\`key-${i}\`) ?? fallback(${i}) // keeps the old path for legacy input, line ${i}`
+
+/**
+ * Finished agents as a long, often-resumed chat leaves them: shaped like the CLI's own files (a prompt, tool calls with
+ * their results, a SubagentHandback), five per turn, 0.2 to 1.2 MB each as in a real 222-agent session.
+ */
+export function seedFinishedAgents(subagents: string, count: number): number {
+  mkdirSync(subagents, { recursive: true })
+  const code = Array.from({ length: 120 }, (_, i) => CODE_LINE(i)).join('\n')
+  let bytes = 0
+  for (let a = 0; a < count; a++) {
+    const id = `aseed${String(a).padStart(11, '0')}`
+    const turn = Math.floor(a / 5)
+    const start = Date.now() - 3 * DAY + turn * 20 * 60_000 + (a % 5) * 1000
+    let n = 0
+    const line = (type: 'user' | 'assistant', content: unknown, at: number): string =>
+      JSON.stringify({ parentUuid: null, isSidechain: true, promptId: `seed-turn-${turn}`, agentId: id, type, uuid: `${id}-${++n}`, timestamp: new Date(at).toISOString(), message: { role: type, content } }) + '\n'
+    const lines = [line('user', `Review ticket ${a} against its spec. Read-only: do not edit files.`, start)]
+    const calls = 25 + ((a * 37) % 70)
+    for (let c = 0; c < calls; c++) {
+      const at = start + (c + 1) * 4000
+      const tool = c % 3 === 0 ? { name: 'Bash', input: { command: `pnpm test case-${c}` } } : { name: 'Read', input: { file_path: `src/module${c}.ts` } }
+      lines.push(line('assistant', [{ type: 'thinking', thinking: '', signature: 'x'.repeat(600) }, { type: 'tool_use', id: `t-${id}-${c}`, ...tool }], at))
+      lines.push(line('user', [{ type: 'tool_result', tool_use_id: `t-${id}-${c}`, content: code }], at + 500))
+    }
+    const end = start + (calls + 2) * 4000
+    const report = `Ticket ${a} matches its spec.\n\n- **Tests:** green.\n- One nit in the reader.`
+    lines.push(line('assistant', [{ type: 'tool_use', id: `h-${id}`, name: 'SubagentHandback', input: { message: report } }], end))
+    lines.push(line('user', [{ type: 'tool_result', tool_use_id: `h-${id}`, content: 'Report delivered to your caller.' }], end + 500))
+    const text = lines.join('')
+    bytes += text.length
+    writeFileSync(join(subagents, `agent-${id}.meta.json`), JSON.stringify({ agentType: 'general-purpose', description: `Review ticket ${a}`, toolUseId: `toolu_seed_${a}`, finished: true }))
+    writeFileSync(join(subagents, `agent-${id}.jsonl`), text)
+  }
+  return bytes
+}

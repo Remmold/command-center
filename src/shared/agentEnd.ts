@@ -34,6 +34,8 @@ export interface AgentEndHints {
   confirmed?: boolean
   /** Its file has not grown for `AGENT_QUIET_MS`. */
   quiet?: boolean
+  /** Known apart from the items given: a prompt came after an earlier handback. */
+  woken?: boolean
 }
 
 /** The CLI's stand-in for a report it already delivered elsewhere; it says nothing about what the agent did. */
@@ -97,7 +99,7 @@ export function agentFileEnd(items: readonly ChatItem[], hints: AgentEndHints): 
   if (handback !== undefined) return { ...ended(handback.trim() || undefined), handedBack: true }
   const text = last && plainText(last)
   if (text !== undefined && (hints.confirmed || hints.quiet || hints.finished)) return ended(text)
-  if (hints.finished && !wokenAfterHandback(items)) return ended(undefined)
+  if (hints.finished && !hints.woken && !wokenAfterHandback(items)) return ended(undefined)
   return undefined
 }
 
@@ -111,10 +113,3 @@ function wokenAfterHandback(items: readonly ChatItem[]): boolean {
   return false
 }
 
-/**
- * Whether an agent its live process still reports as working has stopped counting: only its file showing the end does,
- * never silence, as a long build writes nothing to it until it returns.
- */
-export function agentOver(items: readonly ChatItem[], hints: Pick<AgentEndHints, 'finished'>): boolean {
-  return agentFileEnd(items, hints) !== undefined
-}

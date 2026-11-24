@@ -1,7 +1,8 @@
 import type { AgentTail, AgentTails } from '../../../shared/subagentTail'
 import { mcpToolTitle } from './mcpTool'
 import { stampLabel } from './messageTime'
-import { agentFileEnd, isQuiet, isRelayNotice, latestOf, type AgentFileEnd } from '../../../shared/agentEnd'
+import { isQuiet, isRelayNotice, latestOf, type AgentFileEnd } from '../../../shared/agentEnd'
+import { agentCallIds, EMPTY_SUMMARY, summarizeAgent, summaryEnd, type AgentSummary } from '../../../shared/agentSummary'
 import { AGENT_STATUS_LABEL, AGENT_TOOLS, agentStatus, duration, isBackgroundReceipt, type AgentStatus, type SubagentTask, type SubagentTasks } from './subagents'
 import { pairToolResults, toolCallTitle } from './toolCall'
 import type { ChatItem, ToolResultItem } from './types'
@@ -34,8 +35,10 @@ export interface AgentEntry {
   /** Its whole handed-back report; a report in plain text is already its last message. */
   report?: string
   task?: SubagentTask
-  /** Its own messages, from its file or else from the parent's stream. */
-  items: readonly ChatItem[]
+  /** Its messages as the parent's stream carried them, while those are ahead of its file; its file's own are loaded by its live view. */
+  streamItems?: readonly ChatItem[]
+  /** The Agent calls it made, for nesting the agents it started under it. */
+  agentCalls: string[]
   children: AgentEntry[]
 }
 
@@ -110,34 +113,12 @@ export function nowLine(items: readonly ChatItem[], cwd: string | undefined): st
   return undefined
 }
 
-function toolUseCount(items: readonly ChatItem[]): number {
-  let n = 0
-  for (const item of items) if (item.kind === 'assistant') for (const b of item.content) if (b.type === 'tool_use') n++
-  return n
-}
-
-function agentCallIds(items: readonly ChatItem[]): string[] {
-  const ids: string[] = []
-  for (const item of items) {
-    if (item.kind !== 'assistant') continue
-    for (const b of item.content) if (b.type === 'tool_use' && typeof b.id === 'string' && AGENT_TOOLS.has(b.name as string)) ids.push(b.id)
-  }
-  return ids
-}
+const agentCalls = (items: readonly ChatItem[]): string[] => items.flatMap((item) => (item.kind === 'assistant' ? agentCallIds(item) : []))
 
 function resultText(result: ToolResultItem): string | undefined {
   const c = result.content
   if (typeof c === 'string') return c
   if (Array.isArray(c)) return (c as { type?: unknown; text?: unknown }[]).flatMap((b) => (b.type === 'text' && typeof b.text === 'string' ? [b.text] : [])).join('\n')
-  return undefined
-}
-
-function firstAt(items: readonly ChatItem[]): number | undefined {
-  return items.find((i) => i.at !== undefined)?.at
-}
-
-function lastAt(items: readonly ChatItem[]): number | undefined {
-  for (let i = items.length - 1; i >= 0; i--) if (items[i].at !== undefined) return items[i].at
   return undefined
 }
 
@@ -160,9 +141,14 @@ const NO_ITEMS: ChatItem[] = []
 
 const replies = (items: readonly ChatItem[]): number => items.reduce((n, i) => n + (i.kind === 'assistant' ? 1 : 0), 0)
 
-/** The agent's file, unless the parent's stream has carried more of its replies than the file has shown so far. */
-function freshest(file: readonly ChatItem[] | undefined, stream: readonly ChatItem[] | undefined): readonly ChatItem[] {
-  if (stream && stream.length > 0 && (!file || replies(stream) > replies(file))) return stream
+/** Whether the parent's stream has carried more of the agent's replies than its file has shown so far. */
+function streamAhead(file: AgentSummary | undefined, stream: readonly ChatItem[] | undefined): stream is readonly ChatItem[] {
+  return stream !== undefined && stream.length > 0 && (!file || file.items === 0 || replies(stream) > file.replies)
+}
+
+/** What the live view shows: the agent's file as loaded, unless the parent's stream has carried more of its replies. */
+export function liveItems(file: readonly ChatItem[] | undefined, stream: readonly ChatItem[] | undefined): readonly ChatItem[] {
+  if (stream && stream.length > 0 && (!file || file.length === 0 || replies(stream) > replies(file))) return stream
   return file && file.length > 0 ? file : NO_ITEMS
 }
 
@@ -170,18 +156,19 @@ function freshest(file: readonly ChatItem[] | undefined, stream: readonly ChatIt
 export function agentEntry({ toolUseId, input, result, task, tail, streamItems, callAt, running, cwd, now }: AgentInputs): AgentEntry {
   const call = inputOf(input)
   const meta = tail?.meta
-  const items = freshest(tail?.items, streamItems)
+  const fromStream = streamAhead(tail?.summary, streamItems)
+  const file: AgentSummary = fromStream ? summarizeAgent(streamItems) : (tail?.summary ?? EMPTY_SUMMARY)
   const callId = toolUseId ?? task?.toolUseId ?? meta?.toolUseId
-  const startTime = task?.startTime ?? meta?.startedAt ?? firstAt(items) ?? callAt
-  const lastActivityAt = latestOf(lastAt(items), task?.lastEventAt ?? task?.startTime) ?? callAt
+  const startTime = task?.startTime ?? meta?.startedAt ?? file.firstAt ?? callAt
+  const lastActivityAt = latestOf(file.lastAt, task?.lastEventAt ?? task?.startTime) ?? callAt
   // A task still working is reported by its live process, which tells when it ends; silence there is a long tool call.
   const reported = task?.status === 'working'
   const quiet = !reported && isQuiet(lastActivityAt, now)
   const launchedOnly = !result || (!result.isError && isBackgroundReceipt(result))
   const confirmed = !launchedOnly || (task !== undefined && task.status !== 'working')
-  const end = agentFileEnd(items, { finished: meta?.finished, confirmed, quiet })
-  const status = statusOf({ task, end, callKnown: input !== undefined, callId, result, launchedOnly, items, quiet, running })
-  const endTime = status === 'working' ? undefined : status === 'ended' ? lastActivityAt : (end?.at ?? task?.endTime ?? lastAt(items))
+  const end = summaryEnd(file, { finished: meta?.finished, confirmed, quiet })
+  const status = statusOf({ task, end, callKnown: input !== undefined, callId, result, launchedOnly, written: file.items > 0, quiet, running })
+  const endTime = status === 'working' ? undefined : status === 'ended' ? lastActivityAt : (end?.at ?? task?.endTime ?? file.lastAt)
   const elapsedMs = startTime === undefined ? undefined : status === 'working' ? Math.max(0, now - startTime) : endTime !== undefined ? Math.max(0, endTime - startTime) : undefined
   const told = result && !launchedOnly && !result.isError ? resultText(result) : undefined
   const summary = reportPreview(told && !isRelayNotice(told) ? told : undefined) ?? reportPreview(end?.report) ?? reportPreview(task?.summary)
@@ -203,12 +190,13 @@ export function agentEntry({ toolUseId, input, result, task, tail, streamItems, 
     ...(elapsedMs !== undefined ? { elapsedMs } : {}),
     ...(lastActivityAt !== undefined ? { lastActivityAt } : {}),
     ...(status === 'working' && reported && isQuiet(lastActivityAt, now) && lastActivityAt !== undefined ? { quietMs: now - lastActivityAt } : {}),
-    toolUses: Math.max(task?.usage?.toolUses ?? 0, toolUseCount(items)),
-    now: nowLine(items, cwd),
+    toolUses: Math.max(task?.usage?.toolUses ?? 0, file.toolUses),
+    now: nowLine(file.last, cwd),
     ...(summary ? { summary } : {}),
     ...(end?.handedBack && end.report ? { report: end.report } : {}),
     ...(task ? { task } : {}),
-    items,
+    ...(fromStream ? { streamItems } : {}),
+    agentCalls: agentCalls(fromStream ? streamItems : file.calls),
     children: []
   }
 }
@@ -242,7 +230,8 @@ interface StatusInputs {
   callId: string | undefined
   result: ToolResultItem | undefined
   launchedOnly: boolean
-  items: readonly ChatItem[]
+  /** Anything of it was read, from its file or the parent's stream. */
+  written: boolean
   quiet: boolean
   running: boolean
 }
@@ -252,13 +241,13 @@ interface StatusInputs {
  * events, then a final reply in its file, then the call's result; a background call's result is only its launch receipt. An agent still
  * open by all of these and not reported by a live process works until nothing it does has written for 10 minutes, then it ended without a report.
  */
-function statusOf({ task, end, callKnown, callId, result, launchedOnly, items, quiet, running }: StatusInputs): AgentStatus {
+function statusOf({ task, end, callKnown, callId, result, launchedOnly, written, quiet, running }: StatusInputs): AgentStatus {
   if (end && (end.handedBack || end.status === 'stopped')) return end.status
   if (task && task.status !== 'working') return task.status
   if (end) return end.status
   if (!task && callKnown && callId !== undefined && !launchedOnly) return agentStatus(callId, {}, result, running).status
   if (quiet) return 'ended'
-  if (task || items.length > 0) return 'working'
+  if (task || written) return 'working'
   return running ? 'working' : 'stopped'
 }
 
@@ -281,7 +270,7 @@ export interface ChatAgentsInput {
 
 /** Every agent of the session, from the CLI's task events, the Agent calls and the agents' own files; nested under the agent that started it. */
 export function collectAgents({ items, tasks, tails, running, cwd, now }: ChatAgentsInput): AgentEntry[] {
-  const allItems = [...items, ...Object.values(tails).flatMap((t) => t.items)]
+  const allItems = [...items, ...Object.values(tails).flatMap((t) => t.summary.calls)]
   const results = pairToolResults(allItems).resultFor
   const inputs = new Map<string, unknown>()
   const callAt = new Map<string, number>()
@@ -338,7 +327,7 @@ export function collectAgents({ items, tasks, tails, running, cwd, now }: ChatAg
   for (const id of callIds) if (!seenCalls.has(id)) add(id, undefined, undefined)
 
   const parentOf = new Map<string, AgentEntry>()
-  for (const entry of entries) for (const id of agentCallIds(entry.items)) parentOf.set(id, entry)
+  for (const entry of entries) for (const id of entry.agentCalls) parentOf.set(id, entry)
   const top: AgentEntry[] = []
   for (const entry of entries) {
     const parent = entry.toolUseId ? parentOf.get(entry.toolUseId) : undefined

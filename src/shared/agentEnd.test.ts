@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { agentFileEnd, agentOver, agentReport, isRelayNotice } from './agentEnd'
+import { agentFileEnd, agentReport, isRelayNotice } from './agentEnd'
+import { agentOver, summarizeAgent } from './agentSummary'
 import type { AssistantMessageItem, ChatItem, ToolResultItem, UserMessageItem } from './chatItems'
 
 function assistant(id: string, content: AssistantMessageItem['content'], at: number): AssistantMessageItem {
@@ -64,14 +65,14 @@ describe('an agent’s report', () => {
 
 describe('whether an agent its live process still reports has stopped counting as busy', () => {
   it('stops once its file shows the end: a handback, an interrupt or the CLI’s finished mark', () => {
-    expect(agentOver(handedBack, {})).toBe(true)
-    expect(agentOver([...working, prompt('i', '[Request interrupted by user]', 3000)], {})).toBe(true)
-    expect(agentOver(working, { finished: true })).toBe(true)
+    expect(agentOver(summarizeAgent(handedBack), {})).toBe(true)
+    expect(agentOver(summarizeAgent([...working, prompt('i', '[Request interrupted by user]', 3000)]), {})).toBe(true)
+    expect(agentOver(summarizeAgent(working), { finished: true })).toBe(true)
   })
 
   it('never for silence alone, as a long build writes nothing until it returns', () => {
-    expect(agentOver(working, {})).toBe(false)
-    expect(agentOver([...working, said('mid', 'Building now.', 3000)], {})).toBe(false)
+    expect(agentOver(summarizeAgent(working), {})).toBe(false)
+    expect(agentOver(summarizeAgent([...working, said('mid', 'Building now.', 3000)]), {})).toBe(false)
   })
 })
 

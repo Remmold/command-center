@@ -4,7 +4,7 @@ import type { ChatItem } from './types'
 import { ChatItems } from './ChatItems'
 import { MessageColumn } from './MessageColumn'
 import { useFollowOutput } from './useFollowOutput'
-import { agentDetail, agentRowMeta, atTime, flatAgents, groupAgents, startLabel, type AgentEntry, type AgentGroup } from './agentList'
+import { agentDetail, agentRowMeta, atTime, flatAgents, groupAgents, liveItems, startLabel, type AgentEntry, type AgentGroup } from './agentList'
 import { useTicking } from '../../hooks/useTicking'
 import type { AgentHost } from './toolContext'
 import { Button } from '../ui/Button'
@@ -16,6 +16,7 @@ import { Markdown } from '../ui/Markdown'
 import { SectionLabel } from '../ui/SectionLabel'
 import { overlayOpen } from '../ui/overlay'
 import { useChatMediaStore } from '../../state/chatMediaStore'
+import { useAgentItems } from '../../state/subagentTailsStore'
 
 const DOT: Record<AgentEntry['status'], Exclude<TimelineDot, 'none' | 'neutral'>> = { working: 'progress', finished: 'success', failed: 'error', stopped: 'error', ended: 'pending' }
 
@@ -123,7 +124,10 @@ function AgentLiveView({ agent, host, cwd, onBack }: ViewProps) {
   useFollowOutput(scrollRef, contentRef)
   // The row that opened it is gone; focus here keeps Esc working.
   useEffect(() => viewRef.current?.focus({ preventScroll: true }), [])
-  const items = useMemo(() => asMainItems(agent?.items ?? []), [agent?.items])
+  const fileItems = useAgentItems(host?.transcript, agent?.agentId)
+  const items = useMemo(() => asMainItems(liveItems(fileItems, agent?.streamItems)), [fileItems, agent?.streamItems])
+  // Its file is still being read; saying it has no messages would be wrong for a moment.
+  const loading = fileItems === undefined && agent?.agentId !== undefined && host?.transcript !== undefined
   const [stopping, setStopping] = useState(false)
   const [stopFailed, setStopFailed] = useState(false)
   const task = agent?.task
@@ -163,7 +167,7 @@ function AgentLiveView({ agent, host, cwd, onBack }: ViewProps) {
         <div ref={contentRef}>
           <MessageColumn className="space-y-3">
             {stopFailed && <EmptyHint>The agent could not be stopped. It may have finished already.</EmptyHint>}
-            {items.length === 0 && <EmptyHint>{agent ? 'No messages from this agent yet.' : 'This agent is not in the session any more.'}</EmptyHint>}
+            {items.length === 0 && !loading && <EmptyHint>{agent ? 'No messages from this agent yet.' : 'This agent is not in the session any more.'}</EmptyHint>}
             <ChatItems items={items} cwd={cwd} agents={host} busy={agent?.status === 'working'} />
             {agent?.report && agent.status !== 'working' && (
               <section data-agent-report="" aria-label="Report">

@@ -1,7 +1,8 @@
+import { AGENT_TOOLS } from '../../../shared/agentSummary'
 import type { ChatItem, ToolResultItem } from './types'
 
-/** Calls whose subagent's messages carry the call's id as `parent_tool_use_id`; SendMessage wakes an agent under its own id. */
-export const AGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task'])
+export { AGENT_TOOLS }
+/** SendMessage wakes an agent under its own id. */
 const GROUP_TOOLS: ReadonlySet<string> = new Set([...AGENT_TOOLS, 'SendMessage'])
 
 /** The extension's agent states (`FE`) and its wording for each, plus `ended`: gone quiet without a report. */

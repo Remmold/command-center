@@ -1,9 +1,9 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron, expect, test, type Locator, type Page } from '@playwright/test'
 import { shutdown } from '../harness'
-import { env, resize, seed, startIn } from './seed'
+import { env, resize, seed, seedFinishedAgents, startIn } from './seed'
 
 /**
  * Click-to-next-frame timings on the seeded repos, with two chats of 300 messages each open.
@@ -331,6 +331,129 @@ test('click latency on seeded data', async () => {
     // Loose bounds, a few times the measured medians, so only a real regression (seconds before the fix) fails.
     const bound = (action: string): number => (action.startsWith('keystroke') ? 16 : action === OPEN_APPROVALS ? 100 : 150)
     for (const row of rows) expect(row.frameMedian, row.action).toBeLessThan(bound(row.action))
+  } finally {
+    await shutdown(app)
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  }
+})
+
+interface Usage {
+  /** Main-process CPU time so far, in microseconds. */
+  mainCpuUs: number
+  /** The window's renderer process, in KB. */
+  rendererPrivateKb: number
+  rendererCpuPercent: number
+}
+
+const SEEDED_AGENTS = 245
+const AGENTS_CHAT = 'agents: five for the keystroke check'
+
+/**
+ * A long chat with 250 agents (245 finished ones from earlier turns, 5 working): opening it and its Agents tab, typing
+ * while the tab is open, the window's memory growth and the main process's CPU while it sits idle.
+ * Run: `pnpm build`, then `pnpm exec playwright test -c e2e/shots/playwright.config.ts perf -g "250 agents"`.
+ */
+test('a chat with 250 agents', async () => {
+  test.setTimeout(240_000)
+  const root = mkdtempSync(join(tmpdir(), 'cc-perf-agents-'))
+  const seeded = seed(root)
+  const app = await _electron.launch({ executablePath: ELECTRON, args: [MAIN, `--user-data-dir=${seeded.userData}`], cwd: REPO, env: env(seeded, join(root, 'fake.log')) })
+  try {
+    const page = await app.firstWindow()
+    await page.waitForLoadState('domcontentloaded')
+    await resize(app, 1440, 900)
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setBackgroundThrottling(false))
+    const cdp = await page.context().newCDPSession(page)
+    const usage = (): Promise<Usage> =>
+      app.evaluate(({ app: electronApp, BrowserWindow }) => {
+        const pid = BrowserWindow.getAllWindows()[0].webContents.getOSProcessId()
+        const renderer = electronApp.getAppMetrics().find((m) => m.pid === pid)
+        const cpu = process.cpuUsage()
+        return { mainCpuUs: cpu.user + cpu.system, rendererPrivateKb: renderer?.memory.privateBytes ?? renderer?.memory.workingSetSize ?? 0, rendererCpuPercent: renderer?.cpu.percentCPUUsage ?? 0 }
+      })
+    const heapMb = async (): Promise<number> => {
+      await cdp.send('HeapProfiler.collectGarbage')
+      const { usedSize } = (await cdp.send('Runtime.getHeapUsage')) as { usedSize: number }
+      return usedSize / 1024 / 1024
+    }
+
+    await startIn(page, 'ledger-web', null, null)
+    await startIn(page, 'notes-cli', AGENTS_CHAT, 'Five agents are working')
+    const pane = page.locator('[data-chat-pane]:visible').first()
+    const strip = pane.locator('[data-tab-strip]')
+    const agentsTab = strip.getByRole('tab', { name: /^Agents( \d+ working)?$/ })
+    const chatTab = strip.getByRole('tab', { name: 'Chat', exact: true })
+    await expect(agentsTab).toHaveAccessibleName('Agents 5 working')
+    await page.waitForTimeout(2000)
+    const heapBefore = await heapMb()
+    const before = await usage()
+
+    const projects = join(seeded.configDir, 'projects')
+    const subagents = readdirSync(projects)
+      .flatMap((p) => readdirSync(join(projects, p)).map((s) => join(projects, p, s, 'subagents')))
+      .find((d) => existsSync(d))
+    if (!subagents) throw new Error('the agents chat wrote no subagents folder')
+    const bytes = seedFinishedAgents(subagents, SEEDED_AGENTS)
+    console.log(`[seed] ${SEEDED_AGENTS} finished agents, ${(bytes / 1024 / 1024).toFixed(0)} MB`)
+
+    const list = page.getByRole('navigation', { name: 'Sessions' })
+    const agentsChat = list.getByText('Agents: five for the keystroke', { exact: true })
+    const otherChat = list.getByText('New session', { exact: true }).last()
+    await installProbe(page)
+    const opened: Stat[] = []
+    const timed = async (action: string, run: () => Promise<void>): Promise<void> => {
+      const at = stats.length
+      await run()
+      opened.push(...stats.splice(at).map((s) => ({ ...s, action })))
+    }
+    const agentTotal = async (): Promise<number> => {
+      const titles = await pane.getByRole('button', { name: /^started at .* · \d+ agents?/ }).allTextContents()
+      return titles.reduce((n, t) => n + Number(/· (\d+) agents?/.exec(t)?.[1] ?? 0), 0)
+    }
+    for (let i = 0; i < 5; i++) {
+      await agentsChat.click()
+      await chatTab.click()
+      await otherChat.click()
+      await page.waitForTimeout(300)
+      await timed('open the chat with 250 agents', () => sampleClick(page, 'open', agentsChat))
+      await expect(agentsTab).toBeVisible()
+      await timed('open its Agents tab', () => sampleClick(page, 'open', agentsTab))
+      await expect.poll(agentTotal, { timeout: 60_000 }).toBe(SEEDED_AGENTS + 5)
+    }
+
+    const input = page.locator('[data-chat-pane] textarea:visible').first()
+    await input.click()
+    for (let k = 0; k < 30; k++) await timed('keystroke with the Agents tab open', () => sample(page, 'key', 'keydown', () => page.keyboard.press('a')))
+    await input.fill('')
+
+    await page.waitForTimeout(3000)
+    const idleFrom = await usage()
+    const t0 = Date.now()
+    await page.waitForTimeout(10_000)
+    const idleTo = await usage()
+    const mainCpuPercent = ((idleTo.mainCpuUs - idleFrom.mainCpuUs) / 1000 / (Date.now() - t0)) * 100
+    const heapAfter = await heapMb()
+
+    const actions = [...new Set(opened.map((s) => s.action))]
+    const rows = [
+      ...actions.map((action) => {
+        const frames = opened.filter((s) => s.action === action).flatMap((s) => s.frames)
+        const settled = opened.filter((s) => s.action === action).flatMap((s) => s.settled)
+        return { measure: action, value: Math.round(median(frames)), worst: Math.round(Math.max(...frames)), settled: Math.round(median(settled)), unit: 'ms' }
+      }),
+      { measure: 'renderer JS heap growth', value: Math.round(heapAfter - heapBefore), worst: Math.round(heapAfter), settled: 0, unit: 'MB' },
+      { measure: 'renderer private memory growth', value: Math.round((idleTo.rendererPrivateKb - before.rendererPrivateKb) / 1024), worst: Math.round(idleTo.rendererPrivateKb / 1024), settled: 0, unit: 'MB' },
+      { measure: 'main CPU idle over 10 s', value: Math.round(mainCpuPercent * 10) / 10, worst: 0, settled: 0, unit: '%' },
+      { measure: 'renderer CPU idle over 10 s', value: Math.round(idleTo.rendererCpuPercent * 10) / 10, worst: 0, settled: 0, unit: '%' }
+    ]
+    console.table(rows)
+    if (process.env.PERF_OUT) writeFileSync(process.env.PERF_OUT.replace(/(\.json)?$/, '-agents.json'), JSON.stringify(rows, null, 2))
+    const value = (measure: string): number => rows.find((r) => r.measure === measure)!.value
+    expect(value('open the chat with 250 agents'), 'open the chat').toBeLessThan(300)
+    expect(value('open its Agents tab'), 'open the Agents tab').toBeLessThan(300)
+    expect(value('keystroke with the Agents tab open'), 'keystroke').toBeLessThan(16)
+    expect(value('renderer JS heap growth'), 'renderer memory growth').toBeLessThan(60)
+    expect(mainCpuPercent, 'main CPU while idle').toBeLessThan(5)
   } finally {
     await shutdown(app)
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })

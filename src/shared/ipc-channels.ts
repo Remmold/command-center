@@ -59,6 +59,8 @@ export const IPC = {
   SUBAGENTS_WATCH: 'subagents:watch',
   SUBAGENTS_UNWATCH: 'subagents:unwatch',
   SUBAGENTS_ITEMS: 'subagents:items',
+  SUBAGENTS_OPEN: 'subagents:open',
+  SUBAGENTS_CLOSE: 'subagents:close',
   SESSION_STATUS_LIST: 'sessionStatus:list',
   SESSION_STATUS_CHANGED: 'sessionStatus:changed',
   SESSION_SCREEN_FOCUS: 'sessionStatus:screenFocus',

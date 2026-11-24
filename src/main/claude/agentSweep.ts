@@ -1,13 +1,10 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { agentOver } from '../../shared/agentEnd'
-import type { ChatItem } from '../../shared/chatItems'
-import { readLastItems } from '../observed/tail'
+import { agentOver } from '../../shared/agentSummary'
+import { agentFiles, type AgentFileCache } from './agentFiles'
 
 /** How often agents still reported working are checked against their files. */
 export const SWEEP_MS = 60_000
-const TAIL_ITEMS = 40
-const TAIL_MAX_BYTES = 2 * 1024 * 1024
 const AGENT_END = new Set(['completed', 'failed', 'killed', 'stopped'])
 
 interface PaneAgents {
@@ -40,7 +37,10 @@ export class AgentSweep {
   private listeners: Ended[] = []
   private timer: NodeJS.Timeout | null = null
 
-  constructor(private readonly transcriptsDirFor: (cwd: string) => Promise<string>) {}
+  constructor(
+    private readonly transcriptsDirFor: (cwd: string) => Promise<string>,
+    private readonly files: AgentFileCache = agentFiles
+  ) {}
 
   start(): void {
     this.timer ??= setInterval(() => void this.sweep().catch((err) => console.error('[agents] sweep failed', err)), SWEEP_MS)
@@ -97,13 +97,14 @@ export class AgentSweep {
   }
 
   private async over(dir: string, taskId: string): Promise<boolean> {
-    let items: ChatItem[]
+    let summary
     try {
-      items = (await readLastItems(join(dir, `agent-${taskId}.jsonl`), TAIL_ITEMS, TAIL_MAX_BYTES, true)).items
+      // The summary the Agents tab already keeps; only bytes written since it was read are parsed.
+      summary = (await this.files.read(join(dir, `agent-${taskId}.jsonl`))).summary
     } catch {
       return false
     }
     const meta = await readJson(join(dir, `agent-${taskId}.meta.json`))
-    return agentOver(items, { finished: meta?.finished === true })
+    return agentOver(summary, { finished: meta?.finished === true })
   }
 }

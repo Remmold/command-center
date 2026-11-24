@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentDetail, agentRowMeta, agentsStillWorking, agentTabCount, atTime, collectAgents, flatAgents, groupAgents, nowLine, startLabel, type AgentTails } from './agentList'
+import { summarizeAgent } from '../../../shared/agentSummary'
 import type { SubagentTask, SubagentTasks } from './subagents'
 import type { AssistantMessageItem, ChatItem, ToolResultItem } from './types'
 
@@ -62,7 +63,7 @@ describe('collecting a chat’s agents', () => {
     const tails: AgentTails = {
       a1: {
         meta: { agentId: 'a1', toolUseId: 'c1' },
-        items: [call('t1', 'Read', { file_path: 'routes.ts' }, 1500), result('t1', 'x'), call('t2', 'Bash', { command: 'pnpm lint' }, 1800)]
+        summary: summarizeAgent([call('t1', 'Read', { file_path: 'routes.ts' }, 1500), result('t1', 'x'), call('t2', 'Bash', { command: 'pnpm lint' }, 1800)])
       }
     }
     const [agent] = collectAgents({ items: [call('c1', 'Agent', { description: 'Scan the routes' })], tasks, tails, running: true, cwd: CWD, now: 4000 })
@@ -71,7 +72,7 @@ describe('collecting a chat’s agents', () => {
 
   it('reads an agent known only from its file and its call, as in a VS Code chat: working while its file grew in the last 10 minutes, done once its result is in', () => {
     const tails: AgentTails = {
-      a2: { meta: { agentId: 'a2', toolUseId: 'c2', description: 'Watch the logs' }, items: [said('x', 'Watching the logs.', 2000), said('y', 'Logs are quiet.', 9000)] }
+      a2: { meta: { agentId: 'a2', toolUseId: 'c2', description: 'Watch the logs' }, summary: summarizeAgent([said('x', 'Watching the logs.', 2000), said('y', 'Logs are quiet.', 9000)]) }
     }
     const items: ChatItem[] = [call('c2', 'Agent', { description: 'Watch the logs', run_in_background: true }), result('c2', 'Async agent launched successfully.')]
     const live = collectAgents({ items, tasks: {}, tails, running: true, cwd: CWD, now: 10_000 })
@@ -96,7 +97,7 @@ describe('collecting a chat’s agents', () => {
       mid: task('mid', 'c3', { description: 'mid, working', startTime: 2000 }),
       inner: task('inner', 'c4', { description: 'inner', startTime: 2500 })
     }
-    const tails: AgentTails = { mid: { meta: { agentId: 'mid', toolUseId: 'c3' }, items: [call('c4', 'Agent', { description: 'inner' })] } }
+    const tails: AgentTails = { mid: { meta: { agentId: 'mid', toolUseId: 'c3' }, summary: summarizeAgent([call('c4', 'Agent', { description: 'inner' })]) } }
     const agents = collectAgents({ items: [], tasks, tails, running: true, cwd: CWD, now: 5000 })
     expect(agents.map((a) => a.name)).toEqual(['mid, working', 'late, working', 'early, done'])
     expect(agents[0].children.map((a) => a.name)).toEqual(['inner'])
@@ -131,7 +132,7 @@ describe('a resumed chat’s old agents', () => {
     result('c1', [{ type: 'text', text: RECEIPT }])
   ]
   const tails: AgentTails = {
-    a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, items: handedBackFile(start, 'Ticket 13 is done as 87130bd.\n\n- **Tests:** green.') }
+    a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, summary: summarizeAgent(handedBackFile(start, 'Ticket 13 is done as 87130bd.\n\n- **Tests:** green.')) }
   }
 
   it('are finished once their file shows the handback, though the chat runs again and days have passed', () => {
@@ -148,19 +149,19 @@ describe('a resumed chat’s old agents', () => {
 
   it('keep the CLI’s own end state over a last line of plain text, as when one was stopped mid-reply', () => {
     const tasks: SubagentTasks = { a1: task('a1', 'c1', { startTime: start, status: 'stopped', endTime: start + 5000 }) }
-    const talking: AgentTails = { a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, items: [prompt('p', 'go', start), said('s', 'Still looking.', start + 1000)] } }
+    const talking: AgentTails = { a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, summary: summarizeAgent([prompt('p', 'go', start), said('s', 'Still looking.', start + 1000)]) } }
     expect(collectAgents({ items, tasks, tails: talking, running: true, cwd: CWD, now: start + 9000 })[0].status).toBe('stopped')
   })
 
   it('show their report, not the CLI’s "delivered to you as a message" notice', () => {
     const fg: ChatItem[] = [call('c2', 'Agent', { description: 'Spec review' }, start), result('c2', [{ type: 'text', text: NOTICE }])]
-    const reviewTails: AgentTails = { a2: { meta: { agentId: 'a2', toolUseId: 'c2' }, items: handedBackFile(start, 'Spec: all boxes ticked.\nOne nit.') } }
+    const reviewTails: AgentTails = { a2: { meta: { agentId: 'a2', toolUseId: 'c2' }, summary: summarizeAgent(handedBackFile(start, 'Spec: all boxes ticked.\nOne nit.')) } }
     expect(collectAgents({ items: fg, tasks: {}, tails: reviewTails, running: false, cwd: CWD, now: start + DAY })[0].summary).toBe('Spec: all boxes ticked. One nit.')
     expect(collectAgents({ items: fg, tasks: {}, tails: {}, running: false, cwd: CWD, now: start + DAY })[0].summary).toBeUndefined()
   })
 
   it('end without a report once nothing has written for 10 minutes, and their time stops at their last line', () => {
-    const stuck: AgentTails = { a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, items: handedBackFile(start, 'r').slice(0, 2) } }
+    const stuck: AgentTails = { a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, summary: summarizeAgent(handedBackFile(start, 'r').slice(0, 2)) } }
     const before = collectAgents({ items, tasks: {}, tails: stuck, running: true, cwd: CWD, now: start + 1000 + TEN_MIN })[0]
     expect(before.status).toBe('working')
     const after = collectAgents({ items, tasks: {}, tails: stuck, running: true, cwd: CWD, now: start + 1000 + TEN_MIN + 1 })[0]
@@ -170,23 +171,23 @@ describe('a resumed chat’s old agents', () => {
   })
 
   it('a working agent turns ended on the clock once it has been quiet for 10 minutes', () => {
-    const live: AgentTails = { a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, items: handedBackFile(start, 'r').slice(0, 2) } }
+    const live: AgentTails = { a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, summary: summarizeAgent(handedBackFile(start, 'r').slice(0, 2)) } }
     const agent = { ...collectAgents({ items, tasks: {}, tails: live, running: true, cwd: CWD, now: start + 2000 })[0], depth: 0 }
     expect(atTime(agent, start + 5000)).toMatchObject({ status: 'working', elapsedMs: 5000 })
     expect(atTime(agent, start + 1000 + TEN_MIN + 1)).toMatchObject({ status: 'ended', elapsedMs: 1000 })
   })
 
   it('one its live process still reports stays working however quiet, its row noting the silence; without a process it ends after 10 quiet minutes', () => {
-    const stuck: AgentTails = { a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, items: handedBackFile(start, 'r').slice(0, 2) } }
+    const stuck: AgentTails = { a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, summary: summarizeAgent(handedBackFile(start, 'r').slice(0, 2)) } }
     const tasks: SubagentTasks = { a1: task('a1', 'c1', { startTime: start, lastEventAt: start + 1000 }) }
     const live = collectAgents({ items, tasks, tails: stuck, running: true, cwd: CWD, now: start + 1000 + 30 * 60_000 })[0]
     expect(live.status).toBe('working')
     expect(agentRowMeta(atTime({ ...live, depth: 0 }, start + 1000 + 30 * 60_000))).toBe('Working · 30m 1s · quiet 30m · 1 tool')
     const waitingOnChild: AgentTails = {
       ...stuck,
-      k: { meta: { agentId: 'k', toolUseId: 'c9' }, items: [call('g', 'Grep', { pattern: 'x' }, start + 29 * 60_000)] }
+      k: { meta: { agentId: 'k', toolUseId: 'c9' }, summary: summarizeAgent([call('g', 'Grep', { pattern: 'x' }, start + 29 * 60_000)]) }
     }
-    const withChild = { ...stuck.a1, items: [...stuck.a1.items, call('c9', 'Agent', { description: 'Review' }, start + 1000)] }
+    const withChild = { ...stuck.a1, summary: summarizeAgent([...handedBackFile(start, 'r').slice(0, 2), call('c9', 'Agent', { description: 'Review' }, start + 1000)]) }
     const parent = collectAgents({ items, tasks, tails: { ...waitingOnChild, a1: withChild }, running: true, cwd: CWD, now: start + 30 * 60_000 })[0]
     expect(agentRowMeta(atTime({ ...parent, depth: 0 }, start + 30 * 60_000))).not.toContain('quiet')
     const gone = collectAgents({ items, tasks: {}, tails: stuck, running: false, cwd: CWD, now: start + 1000 + 11 * 60_000 })[0]
@@ -195,8 +196,8 @@ describe('a resumed chat’s old agents', () => {
 
   it('an agent waiting on its own agent stays working while that one writes', () => {
     const parentTails: AgentTails = {
-      a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, items: [prompt('p', 'go', start), call('c9', 'Agent', { description: 'Review' }, start + 1000)] },
-      a9: { meta: { agentId: 'a9', toolUseId: 'c9' }, items: [prompt('q', 'review', start + 2000), call('g', 'Grep', { pattern: 'x' }, start + TEN_MIN + 5000)] }
+      a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, summary: summarizeAgent([prompt('p', 'go', start), call('c9', 'Agent', { description: 'Review' }, start + 1000)]) },
+      a9: { meta: { agentId: 'a9', toolUseId: 'c9' }, summary: summarizeAgent([prompt('q', 'review', start + 2000), call('g', 'Grep', { pattern: 'x' }, start + TEN_MIN + 5000)]) }
     }
     const [agent] = collectAgents({ items, tasks: {}, tails: parentTails, running: true, cwd: CWD, now: start + TEN_MIN + 6000 })
     expect(agent.status).toBe('working')
@@ -217,10 +218,10 @@ describe('grouping agents by the turn that started them', () => {
     call('c3', 'Agent', { description: 'Ticket 3', run_in_background: true }, t2)
   ]
   const tails: AgentTails = {
-    a1: { meta: { agentId: 'a1', toolUseId: 'c1', promptId: 'P1', startedAt: t1 }, items: [said('x1', 'Ticket 1 done.', t1 + 5000)] },
-    a2: { meta: { agentId: 'a2', toolUseId: 'c2', promptId: 'P1', startedAt: t1 + 1000 }, items: [said('x2', 'Ticket 2 done.', t1 + 6000)] },
-    a3: { meta: { agentId: 'a3', toolUseId: 'c3', promptId: 'P2', startedAt: t2 }, items: [call('g', 'Grep', { pattern: 'x' }, t2 + 1000)] },
-    old: { meta: { agentId: 'old', toolUseId: 'gone', promptId: 'P1', description: 'Ticket 0', startedAt: t1 - 500 }, items: [said('x0', 'Done.', t1 + 100)] }
+    a1: { meta: { agentId: 'a1', toolUseId: 'c1', promptId: 'P1', startedAt: t1 }, summary: summarizeAgent([said('x1', 'Ticket 1 done.', t1 + 5000)]) },
+    a2: { meta: { agentId: 'a2', toolUseId: 'c2', promptId: 'P1', startedAt: t1 + 1000 }, summary: summarizeAgent([said('x2', 'Ticket 2 done.', t1 + 6000)]) },
+    a3: { meta: { agentId: 'a3', toolUseId: 'c3', promptId: 'P2', startedAt: t2 }, summary: summarizeAgent([call('g', 'Grep', { pattern: 'x' }, t2 + 1000)]) },
+    old: { meta: { agentId: 'old', toolUseId: 'gone', promptId: 'P1', description: 'Ticket 0', startedAt: t1 - 500 }, summary: summarizeAgent([said('x0', 'Done.', t1 + 100)]) }
   }
 
   it('puts the newest turn first, each turn’s agents together, its call’s turn and its file’s prompt id agreeing', () => {
@@ -260,14 +261,14 @@ describe('agents still working after the turn', () => {
   it('counts one waiting on its own agent while that one still writes', () => {
     const waiting: SubagentTasks = { p: task('p', 'c1', { startTime: 1000 }) }
     const tails: AgentTails = {
-      p: { meta: { agentId: 'p', toolUseId: 'c1' }, items: [call('c9', 'Agent', { description: 'Review' }, 1000)] },
-      k: { meta: { agentId: 'k', toolUseId: 'c9' }, items: [call('g', 'Grep', { pattern: 'x' }, 1000 + TEN_MIN)] }
+      p: { meta: { agentId: 'p', toolUseId: 'c1' }, summary: summarizeAgent([call('c9', 'Agent', { description: 'Review' }, 1000)]) },
+      k: { meta: { agentId: 'k', toolUseId: 'c9' }, summary: summarizeAgent([call('g', 'Grep', { pattern: 'x' }, 1000 + TEN_MIN)]) }
     }
     expect(agentsStillWorking(waiting, tails, false, 2000 + TEN_MIN)).toBe(1)
   })
 
   it('by the same rules as the Agents tab: not one whose file handed back, but one silent for 30 minutes while its process lives', () => {
-    const tails: AgentTails = { a: { meta: { agentId: 'a', toolUseId: 'c1' }, items: handedBackFile(1000, 'Done.') } }
+    const tails: AgentTails = { a: { meta: { agentId: 'a', toolUseId: 'c1' }, summary: summarizeAgent(handedBackFile(1000, 'Done.')) } }
     expect(agentsStillWorking(tasks, tails, false, 70_000)).toBe(1)
     expect(agentsStillWorking(tasks, tails, false, 1000 + 30 * 60_000)).toBe(1)
   })
