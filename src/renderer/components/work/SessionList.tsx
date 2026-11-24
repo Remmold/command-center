@@ -93,7 +93,11 @@ export function SessionList() {
       </GroupSection>
     ))
   }
-  const onlyAccount = !headed ? sections[0]?.account.profileId : undefined
+  const startGroup = (profileId: string) => {
+    setSearch('')
+    useAccountSectionsStore.getState().expand(profileId)
+    setRenamingGroup(newGroup(profileId))
+  }
 
   return (
     <nav aria-label="Sessions" className="work-list flex h-full min-h-0 flex-col bg-sidebar">
@@ -104,7 +108,8 @@ export function SessionList() {
             New session
           </Button>
         </span>
-        <ListMenu onNewGroup={onlyAccount ? () => setRenamingGroup(newGroup(onlyAccount)) : undefined} />
+        <NewGroupButton accounts={sections.map((s) => s.account)} onPick={startGroup} />
+        <ListMenu />
         <IconButton onClick={() => useSessionListStore.getState().toggle()} label="Hide sessions" tooltip={`Hide sessions (${SESSION_LIST_SHORTCUT})`}>
           <PanelLeftClose size={14} />
         </IconButton>
@@ -120,7 +125,7 @@ export function SessionList() {
                 key={section.account.profileId}
                 section={section}
                 open={!fold.accounts.includes(section.account.profileId)}
-                onNewGroup={() => setRenamingGroup(newGroup(section.account.profileId))}
+                onNewGroup={() => startGroup(section.account.profileId)}
               >
                 {groups(section)}
               </AccountGroup>
@@ -266,7 +271,6 @@ function AccountGroup({ section, open, onNewGroup, children }: { section: Accoun
                 label="New group"
                 onClick={() => {
                   menu.close()
-                  useAccountSectionsStore.getState().expand(account.profileId)
                   onNewGroup()
                 }}
               />
@@ -322,7 +326,41 @@ function SessionRows({ profileId, group, section, targets, pair, renaming, setRe
   )
 }
 
-function ListMenu({ onNewGroup }: { onNewGroup?: () => void }) {
+/** Makes a group at once with one account; with several it asks which account first. */
+function NewGroupButton({ accounts, onPick }: { accounts: AccountSection['account'][]; onPick: (profileId: string) => void }) {
+  const menu = useMenu()
+  if (accounts.length === 0) return null
+  if (accounts.length === 1) {
+    return (
+      <IconButton onClick={() => onPick(accounts[0].profileId)} label="New group">
+        <FolderPlus size={14} />
+      </IconButton>
+    )
+  }
+  return (
+    <>
+      <IconButton ref={menu.setAnchor} onClick={menu.toggle} label="New group">
+        <FolderPlus size={14} />
+      </IconButton>
+      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" label="New group in">
+        <PopoverMenu label="New group in">
+          {accounts.map((account) => (
+            <MenuItem
+              key={account.profileId}
+              label={account.name}
+              onClick={() => {
+                menu.close()
+                onPick(account.profileId)
+              }}
+            />
+          ))}
+        </PopoverMenu>
+      </Popover>
+    </>
+  )
+}
+
+function ListMenu() {
   const menu = useMenu()
   return (
     <>
@@ -340,16 +378,6 @@ function ListMenu({ onNewGroup }: { onNewGroup?: () => void }) {
               pickPastSession()
             }}
           />
-          {onNewGroup && (
-            <MenuItem
-              icon={FolderPlus}
-              label="New group"
-              onClick={() => {
-                menu.close()
-                onNewGroup()
-              }}
-            />
-          )}
         </PopoverMenu>
       </Popover>
     </>
