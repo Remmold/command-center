@@ -11,6 +11,17 @@ export function isAtBottom(box: ScrollBox): boolean {
   return box.scrollHeight - box.scrollTop - box.clientHeight < FOLLOW_PX
 }
 
+const UP_KEYS = new Set(['PageUp', 'ArrowUp', 'Home'])
+
+/**
+ * Whether the reader just asked to leave the bottom: a wheel or touchpad scroll up, or an up key in the
+ * transcript. It is acted on at once, because new output re-pins the box to the bottom before the
+ * resulting scroll event arrives, which otherwise snaps the reader straight back down.
+ */
+export function readerLeavesBottom(input: { kind: 'wheel'; deltaY: number } | { kind: 'key'; key: string }): boolean {
+  return input.kind === 'wheel' ? input.deltaY < 0 : UP_KEYS.has(input.key)
+}
+
 /**
  * Whether output is followed after a scroll event. Only a scroll up leaves the bottom on purpose: the
  * app's own scroll to the bottom can be reported after more output already arrived, which would

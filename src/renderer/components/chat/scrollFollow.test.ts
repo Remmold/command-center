@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { followsAfterScroll, isAtBottom } from './scrollFollow'
+import { followsAfterScroll, isAtBottom, readerLeavesBottom } from './scrollFollow'
 
 describe('scroll-follow rule', () => {
   it('follows new output when the view is scrolled to the very bottom', () => {
@@ -17,6 +17,19 @@ describe('scroll-follow rule', () => {
 
   it('follows a view whose content is shorter than the pane', () => {
     expect(isAtBottom({ scrollHeight: 400, scrollTop: 0, clientHeight: 600 })).toBe(true)
+  })
+})
+
+describe('the reader leaving the bottom on purpose', () => {
+  it('a wheel or touchpad scroll up leaves at once', () => {
+    expect(readerLeavesBottom({ kind: 'wheel', deltaY: -100 })).toBe(true)
+    expect(readerLeavesBottom({ kind: 'wheel', deltaY: 100 })).toBe(false)
+  })
+
+  it('PageUp, ArrowUp and Home leave; other keys do not', () => {
+    for (const key of ['PageUp', 'ArrowUp', 'Home']) expect(readerLeavesBottom({ kind: 'key', key })).toBe(true)
+    expect(readerLeavesBottom({ kind: 'key', key: 'PageDown' })).toBe(false)
+    expect(readerLeavesBottom({ kind: 'key', key: 'a' })).toBe(false)
   })
 })
 

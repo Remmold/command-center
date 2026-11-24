@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { restoredScrollTop, type SavedScroll } from '../../state/restoreSnapshot'
-import { followsAfterScroll } from './scrollFollow'
+import { followsAfterScroll, readerLeavesBottom } from './scrollFollow'
 
 interface Restore {
   /** Where the box was when the app last closed; it reopens there. */
@@ -58,11 +58,32 @@ export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: R
         ownTop.current = el.scrollTop
       }
     })
+    // The reader's own move wins over the next re-pin, which would otherwise land before its scroll event.
+    const leave = (): void => {
+      following.current = false
+      ownTop.current = undefined
+    }
+    const onWheel = (e: WheelEvent): void => {
+      if (readerLeavesBottom({ kind: 'wheel', deltaY: e.deltaY })) leave()
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (readerLeavesBottom({ kind: 'key', key: e.key })) leave()
+    }
+    // A press on the scroll box itself, outside its content, is a grab of the scrollbar.
+    const onPointer = (e: PointerEvent): void => {
+      if (e.target === el) leave()
+    }
     el.addEventListener('scroll', onScroll, { passive: true })
+    el.addEventListener('wheel', onWheel, { passive: true })
+    el.addEventListener('keydown', onKey)
+    el.addEventListener('pointerdown', onPointer)
     observer.observe(content)
     observer.observe(el)
     return () => {
       el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('keydown', onKey)
+      el.removeEventListener('pointerdown', onPointer)
       observer.disconnect()
     }
   }, [scrollRef, contentRef])
