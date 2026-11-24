@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { BASIC_REPLY, FAKE_SESSION, TINY_PNG, WRITE_DONE, clipboardText, userLines } from './common'
+import { BASIC_REPLY, FAKE_SESSION, TINY_PNG, WRITE_DONE, clipboardText, transcriptLine, userLines } from './common'
 import { cliPermissionMode, delayClaudeStart, expect, newChatIn, prompt, send, startSession, test, transcriptsOf, useScript } from './harness'
 
 const modeButton = (page: Page, label: string) => page.locator('[data-chat-pane]').getByRole('button', { name: label, exact: true })
@@ -824,7 +824,7 @@ function seedOldAgents(subagents: string): void {
   const start = Date.now() - 2 * 24 * 60 * 60_000
   let n = 0
   const line = (type: 'user' | 'assistant', content: unknown, at: number): string =>
-    JSON.stringify({ isSidechain: true, promptId: 'old-turn', type, uuid: `old-${++n}`, timestamp: new Date(at).toISOString(), message: { role: type, content } }) + '\n'
+    transcriptLine(type, { role: type, content }, { isSidechain: true, promptId: 'old-turn', uuid: `old-${++n}`, timestamp: new Date(at).toISOString() }) + '\n'
   const agent = (id: string, description: string, report: string | null): void => {
     writeFileSync(join(subagents, `agent-${id}.meta.json`), JSON.stringify({ agentType: 'general-purpose', description, toolUseId: `toolu_${id}` }))
     const lines = [line('user', `${description}, please.`, start), line('assistant', [{ type: 'tool_use', id: `r-${id}`, name: 'Read', input: { file_path: 'a.ts' } }], start + 1000)]
