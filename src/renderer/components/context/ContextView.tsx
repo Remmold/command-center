@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { formatTokens, type ContextItem, type ContextReport } from '../../../shared/context'
+import { formatTokens, type ContextItem, type ContextItemKind, type ContextReport } from '../../../shared/context'
 import { DEFAULT_PROFILE_ID, type Workspace } from '../../../shared/types'
 import { workspacesByAccount, sectionTitle, type AccountWorkspaces } from '../../state/accounts'
 import { useAccountColor } from '../../state/useAccountColor'
@@ -123,11 +123,24 @@ function ItemList({ items, defaultName }: { items: ContextItem[]; defaultName: s
   )
 }
 
+/** The word shown before an item whose label alone doesn't say what it is. */
+const KIND_WORDS: Partial<Record<ContextItemKind, string>> = {
+  'memory-index': 'memory',
+  'memory-file': 'memory',
+  skill: 'skill',
+  agent: 'agent',
+  command: 'command',
+  plugin: 'plugin'
+}
+
 function ContextRow({ item, defaultName }: { item: ContextItem; defaultName: string }) {
+  const kindWord = KIND_WORDS[item.kind]
   return (
     <>
       <ListItem>
+        {kindWord && <ListRowLabel tone="secondary">{kindWord}</ListRowLabel>}
         <ListRowLabel tooltip={item.path ?? undefined}>{item.label}</ListRowLabel>
+        {item.source.startsWith('plugin:') && <ListRowMeta>{item.source}</ListRowMeta>}
         {item.tokens !== null && <ListRowMeta>{formatTokens(item.tokens)}</ListRowMeta>}
         {item.missing && <Badge tone="warning">not found</Badge>}
         {item.sharedWithDefault && <Badge>shared with {defaultName}</Badge>}

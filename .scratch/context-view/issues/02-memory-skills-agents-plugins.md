@@ -11,7 +11,7 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] The memory folder shows in the account layer, with MEMORY.md counted and the other files listed.
 - [ ] Skills, agents and commands are listed with their source; descriptions are counted, bodies are not.

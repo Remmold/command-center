@@ -1,2 +1,3 @@
 - 01 in-progress: implementation started — 61250b1
 - 01 resolved: Context view with CLAUDE.md layers and start totals — 203da4e
+- 02 in-progress: implementation started — 24f6a7e
