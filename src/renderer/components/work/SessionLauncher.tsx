@@ -61,7 +61,7 @@ function ProjectPicker({ start }: { start: PickerStep }) {
     const target = workspaceById(action.workspaceId)
     if (!target) return
     if (action.kind === 'new-chat') startSession(target)
-    else if (action.kind === 'resume' || !openSession(action.paneId)) resumeSession(target, action.session)
+    else if (action.kind === 'resume' || !openSession(action.paneId)) void resumeSession(target, action.session)
     else useRecentProjectsStore.getState().touch(target.id)
   }
 

@@ -9,7 +9,7 @@ const UNNAMED_SESSION = '22222222-2222-4222-8222-222222222222'
 function seedPastSessions(dir: string): void {
   mkdirSync(dir, { recursive: true })
   const userLine = (text: string, gitBranch: string) =>
-    JSON.stringify({ type: 'user', gitBranch, message: { role: 'user', content: [{ type: 'text', text }] } })
+    JSON.stringify({ type: 'user', uuid: crypto.randomUUID(), gitBranch, message: { role: 'user', content: [{ type: 'text', text }] } })
   writeFileSync(
     join(dir, `${OLD_SESSION}.jsonl`),
     [userLine('the login is broken', 'feature/oauth'), JSON.stringify({ type: 'ai-title', aiTitle: 'Old login fix', sessionId: OLD_SESSION })].join('\n') + '\n'
@@ -79,6 +79,7 @@ test.describe('session history', () => {
     await past.getByRole('option', { name: /^Old login fix/ }).click()
     await expect(past).toHaveCount(0)
     await expect(list.getByText('Old login fix', { exact: true })).toBeVisible()
+    await expect(page.locator('[data-chat-pane]:visible').getByText('the login is broken')).toBeVisible()
     await send(page, 'carry on')
     await expect.poll(() => log.entries().some((e) => e.kind === 'argv' && (e.argv as string[]).includes(OLD_SESSION))).toBe(true)
     expect(log.controlRequests('generate_session_title')).toHaveLength(1)
