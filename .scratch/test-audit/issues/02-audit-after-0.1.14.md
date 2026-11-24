@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Inventory:** list every UI scenario with its runtime (JSON reporter), its steps, and what each step proves. Flag steps that duplicate a unit test, or test behaviour that has since been replaced, for example:
   - the old Past sessions modal, now the picker;
