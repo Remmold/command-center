@@ -12,7 +12,7 @@ So 222 timers stat and read files every 2 s, and hundreds of thousands of items 
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Read finished agents once:**
   - On first sight, read the agent's file once.
@@ -42,11 +42,11 @@ So 222 timers stat and read files every 2 s, and hundreds of thousands of items 
 | Measure | Before (0.1.19) | After |
 | --- | --- | --- |
 | renderer JS heap growth after opening the tab | 205 MB | 3 MB |
-| renderer private memory growth | 590 MB | 36 MB |
-| main CPU, idle 10 s with the tab open (5 agents writing) | 7.5 % | 3 % |
-| renderer CPU, same 10 s | 2.5 % | 1.1 % |
-| keystroke with the tab open, median / worst | 5 / 276 ms | 5 / 8 ms |
+| renderer private memory growth | 590 MB | 37 MB |
+| main CPU, idle 10 s with the tab open (5 agents writing) | 7.5 % | 2 % |
+| renderer CPU, same 10 s | 2.5 % | 1 % |
+| keystroke with the tab open, median / worst | 5 / 276 ms | 5 / 19 ms |
 | open the chat, median | 15 ms | 10 ms |
-| open its Agents tab, median | 14 ms | 11 ms |
+| open its Agents tab, median | 14 ms | 12 ms |
 
 The memory bound is asserted on the JS heap after a forced GC; private memory is printed alongside.
