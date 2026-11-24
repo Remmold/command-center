@@ -1,3 +1,3 @@
-Done: MCP servers, settings layers with hooks and allow rules, slash-command-only skills; review fixes applied; pnpm quick green.
-Next: commit, mark resolved.
+Done: ticket 03 committed (90b1977) and resolved; pnpm quick green.
+Next: ticket 04 (editor and guarded save).
 Open reds: none.

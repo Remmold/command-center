@@ -3,3 +3,4 @@
 - 02 in-progress: implementation started — 24f6a7e
 - 02 resolved: memory, skills, agents, commands and plugins in Context — 39bb1ba
 - 03 in-progress: implementation started — c3a8592
+- 03 resolved: MCP servers, settings layers and hooks in Context — 90b1977

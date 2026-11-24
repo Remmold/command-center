@@ -11,9 +11,9 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 01
 
-**Status:** in-progress
+**Status:** resolved
 
-- [ ] MCP servers are listed per source with "tools not counted", and none is started.
-- [ ] Settings items per layer, with hooks and allow rules summarised.
-- [ ] Unit tests (seam 1): a `.claude.json` with top-level servers and a project entry for the workspace path (plus one for another path that must not show), a repo `.mcp.json`, and account, repo and local settings with hooks and allow rules.
-- [ ] Quick tier green.
+- [x] MCP servers are listed per source with "tools not counted", and none is started.
+- [x] Settings items per layer, with hooks and allow rules summarised.
+- [x] Unit tests (seam 1): a `.claude.json` with top-level servers and a project entry for the workspace path (plus one for another path that must not show), a repo `.mcp.json`, and account, repo and local settings with hooks and allow rules.
+- [x] Quick tier green.
