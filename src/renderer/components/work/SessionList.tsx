@@ -1,20 +1,22 @@
-import { useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { useAccountColor } from '../../state/useAccountColor'
 import { AccentDot } from '../ui/AccentDot'
 import { useMinuteClock } from '../../hooks/useMinuteClock'
 import { useUsageEntries } from '../../state/useUsageEntries'
 import { useMenu } from '../../hooks/useMenu'
-import { Columns2, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, X } from 'lucide-react'
+import { ChevronLeft, Columns2, FolderInput, FolderPlus, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useSessionListStore } from '../../state/sessionListStore'
-import { isNeedsYouRow, repoFoldKey, sessionRowTooltip, waitingBadge, type AccountSection, type ListFold, type RepoGroup, type SessionRow } from '../../state/sessionList'
+import { groupOpen, isNeedsYouRow, sessionRowTooltip, waitingBadge, type AccountSection, type ListFold, type ListGroup, type SessionRow } from '../../state/sessionList'
+import { UNGROUPED } from '../../../shared/sidebarGroups'
+import { createGroup, deleteGroup, groupOf, moveChat, moveChatStep, moveChatToNextGroup, moveGroup, renameGroup, setFolded } from '../../state/sidebarGroups'
 import { sectionTitle } from '../../state/accounts'
 import { headerUsage, type HeaderTone } from '../../state/usageModel'
 import { useChatPairStore } from '../../state/chatPairStore'
 import { pickPastSession, pickProject } from '../../state/launcherStore'
 import { closeSession } from '../../state/sessionNavigation'
 import { renameHostedSession } from '../../state/sessionTitleSync'
-import { isShown, openRow, useAccountSectionsStore, useListFold, useSessionSections, useWorkSearchStore } from '../../state/workSessions'
+import { changeLayout, isShown, openRow, useAccountSectionsStore, useListFold, useSessionSections, useWorkSearchStore } from '../../state/workSessions'
 import type { ChatPair } from '../../state/chatPair'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
@@ -27,25 +29,71 @@ import { MeterReading, type MeterTone } from '../ui/Meter'
 import { Popover, PopoverMenu } from '../ui/Popover'
 import { SearchField } from '../ui/SearchField'
 import { EmptyHint } from '../ui/Section'
+import { useSortable, type DragItem } from '../ui/SortableItem'
 import { StatusDot } from '../ui/StatusDot'
 import { TextField } from '../ui/TextField'
 import { VsCodeGlyph } from '../ui/VsCodeGlyph'
 
 const VSCODE_TOOLTIP = 'In VS Code — read-only; Take over to continue here'
+const NEW_GROUP_NAME = 'New group'
+
+const CHAT = 'chat'
+const GROUP = 'group'
+
+/** A group being renamed, by account and group id. */
+interface GroupRef {
+  profileId: string
+  groupId: string
+}
+
+const sameGroup = (a: GroupRef | null, b: GroupRef) => a?.profileId === b.profileId && a.groupId === b.groupId
+
+function newGroup(profileId: string, chat?: string): GroupRef {
+  const groupId = crypto.randomUUID()
+  changeLayout((layout) => createGroup(layout, profileId, { id: groupId, name: NEW_GROUP_NAME, chat }))
+  return { profileId, groupId }
+}
+
+/** After a move remounts the row, focus follows it. */
+function refocus(rowKey: string): void {
+  requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(rowKey)}"]`)?.focus())
+}
 
 export function SessionList() {
-  const { sections, headed } = useSessionSections()
+  const { sections, headed, loading } = useSessionSections()
   const pair = useChatPairStore((s) => s.pair)
   const search = useWorkSearchStore((s) => s.search)
   const setSearch = useWorkSearchStore((s) => s.setSearch)
   const fold = useListFold(headed)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const repos = (section: AccountSection) =>
-    section.repos.map((group) => (
-      <RepoSection key={group.repoGroupKey} profileId={section.account.profileId} group={group} fold={fold}>
-        <SessionRows rows={group.rows} pair={pair} renaming={renaming} setRenaming={setRenaming} />
-      </RepoSection>
+  const [renamingGroup, setRenamingGroup] = useState<GroupRef | null>(null)
+  const groups = (section: AccountSection) => {
+    const profileId = section.account.profileId
+    const targets = section.groups.filter((g) => g.id !== UNGROUPED).map((g) => ({ id: g.id, name: g.name }))
+    return section.groups.map((group) => (
+      <GroupSection
+        key={group.id}
+        profileId={profileId}
+        group={group}
+        fold={fold}
+        renaming={sameGroup(renamingGroup, { profileId, groupId: group.id })}
+        onRename={() => setRenamingGroup({ profileId, groupId: group.id })}
+        onRenamed={() => setRenamingGroup(null)}
+      >
+        <SessionRows
+          profileId={profileId}
+          group={group}
+          section={section}
+          targets={targets}
+          pair={pair}
+          renaming={renaming}
+          setRenaming={setRenaming}
+          onNewGroup={(chat) => setRenamingGroup(newGroup(profileId, chat))}
+        />
+      </GroupSection>
     ))
+  }
+  const onlyAccount = !headed ? sections[0]?.account.profileId : undefined
 
   return (
     <nav aria-label="Sessions" className="work-list flex h-full min-h-0 flex-col bg-sidebar">
@@ -56,7 +104,7 @@ export function SessionList() {
             New session
           </Button>
         </span>
-        <ListMenu />
+        <ListMenu onNewGroup={onlyAccount ? () => setRenamingGroup(newGroup(onlyAccount)) : undefined} />
         <IconButton onClick={() => useSessionListStore.getState().toggle()} label="Hide sessions" tooltip={`Hide sessions (${SESSION_LIST_SHORTCUT})`}>
           <PanelLeftClose size={14} />
         </IconButton>
@@ -65,33 +113,104 @@ export function SessionList() {
         <SearchField label="Search sessions" placeholder="Search title, repo or worktree" value={search} onChange={setSearch} />
       </div>
       <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
-        {sections.length === 0 && <EmptyHint>{search.trim() ? 'No session matches.' : 'No sessions yet.'}</EmptyHint>}
+        {!loading && sections.length === 0 && <EmptyHint>{search.trim() ? 'No session matches.' : 'No sessions yet.'}</EmptyHint>}
         {headed
           ? sections.map((section) => (
-              <AccountGroup key={section.account.profileId} section={section} open={!fold.accounts.includes(section.account.profileId)}>
-                {repos(section)}
+              <AccountGroup
+                key={section.account.profileId}
+                section={section}
+                open={!fold.accounts.includes(section.account.profileId)}
+                onNewGroup={() => setRenamingGroup(newGroup(section.account.profileId))}
+              >
+                {groups(section)}
               </AccountGroup>
             ))
-          : sections.map((section) => <div key={section.account.profileId}>{repos(section)}</div>)}
+          : sections.map((section) => <div key={section.account.profileId}>{groups(section)}</div>)}
       </div>
     </nav>
   )
 }
 
-function RepoSection({ profileId, group, fold, children }: { profileId: string; group: RepoGroup; fold: ListFold; children: ReactNode }) {
-  const key = repoFoldKey(profileId, group.repoGroupKey)
-  const open = !fold.repos.includes(key)
-  const { workspace } = group
+interface GroupSectionProps {
+  profileId: string
+  group: ListGroup
+  fold: ListFold
+  renaming: boolean
+  onRename: () => void
+  onRenamed: () => void
+  children: ReactNode
+}
+
+function GroupSection({ profileId, group, fold, renaming, onRename, onRenamed, children }: GroupSectionProps) {
+  const open = groupOpen(group, fold)
+  const own = group.id !== UNGROUPED
+  const menu = useMenu()
+  const sortable = useSortable({
+    item: { id: group.id, kind: GROUP, group: profileId },
+    armed: own,
+    accepts: (d) => d.group === profileId && (d.kind === CHAT || d.kind === GROUP),
+    onDrop: (d, side) => dropOnGroup(profileId, group, d, side),
+    sideFor: (d, pointer) => (d.kind === CHAT ? 'after' : pointer)
+  })
+  const act = (fn: () => void) => () => {
+    menu.close()
+    fn()
+  }
+
   return (
     <CollapsibleSection
       level="group"
-      title={group.repoName}
+      title={group.name}
       open={open}
-      onToggle={() => useAccountSectionsStore.getState().toggleRepo(key)}
-      marker={<RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />}
+      onToggle={() => changeLayout((layout) => setFolded(layout, profileId, group.id, !group.folded))}
+      sortable={sortable}
+      actionsPinned={menu.open}
+      onContextMenu={
+        own
+          ? (e: MouseEvent) => {
+              e.preventDefault()
+              menu.show()
+            }
+          : undefined
+      }
+      headerSlot={
+        renaming ? (
+          <TextField
+            label="Group name"
+            initialValue={group.name}
+            autoFocus
+            submitOnBlur
+            onSubmit={(name) => {
+              changeLayout((layout) => renameGroup(layout, profileId, group.id, name))
+              onRenamed()
+            }}
+            onCancel={onRenamed}
+          />
+        ) : undefined
+      }
+      actions={
+        own && (
+          <>
+            <IconButton ref={menu.setAnchor} onClick={menu.toggle} label={`Actions for ${group.name}`}>
+              <MoreHorizontal size={14} />
+            </IconButton>
+            <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" label={`Actions for ${group.name}`}>
+              <PopoverMenu label={`Actions for ${group.name}`}>
+                <MenuItem icon={Pencil} label="Rename" onClick={act(onRename)} />
+                <MenuItem
+                  icon={Trash2}
+                  label="Delete"
+                  description="Its chats move to Ungrouped"
+                  onClick={act(() => changeLayout((layout) => deleteGroup(layout, profileId, group.id)))}
+                />
+              </PopoverMenu>
+            </Popover>
+          </>
+        )
+      }
       badge={
         <>
-          <WaitingBadge needsYou={group.needsYou} name={group.repoName} open={open} />
+          <WaitingBadge needsYou={group.needsYou} name={group.name} open={open} />
           {!open && <ListRowMeta>{group.rows.length}</ListRowMeta>}
         </>
       }
@@ -101,15 +220,28 @@ function RepoSection({ profileId, group, fold, children }: { profileId: string; 
   )
 }
 
+/** A chat dropped on a header goes to the top of that group; a group goes before or after it, never above Ungrouped. */
+function dropOnGroup(profileId: string, group: ListGroup, dragged: DragItem, side: 'before' | 'after'): void {
+  changeLayout((layout) => {
+    if (dragged.kind === CHAT) return moveChat(layout, profileId, dragged.id, { group: group.id, before: group.rows[0]?.placeId ?? null })
+    const groups = layout.accounts[profileId]?.groups ?? []
+    if (group.id === UNGROUPED) return moveGroup(layout, profileId, dragged.id, groups[0]?.id ?? null)
+    const at = groups.findIndex((g) => g.id === group.id)
+    return moveGroup(layout, profileId, dragged.id, side === 'before' ? group.id : (groups[at + 1]?.id ?? null))
+  })
+}
+
 const READING_TONE: Record<HeaderTone, MeterTone> = { neutral: 'neutral', ahead: 'warn', limit: 'limit' }
 
-function AccountGroup({ section, open, children }: { section: AccountSection; open: boolean; children: ReactNode }) {
+function AccountGroup({ section, open, onNewGroup, children }: { section: AccountSection; open: boolean; onNewGroup: () => void; children: ReactNode }) {
   const { account } = section
   const color = useAccountColor(account.profileId)
   const entry = useUsageEntries(null, useMinuteClock()).find((e) => e.profileId === account.profileId)
   const usage = useMemo(() => (entry ? headerUsage(entry) : null), [entry])
+  const menu = useMenu()
   const title = sectionTitle(account)
   const fallback = [`Sessions on the account ${account.label}`, ...(account.email ? [account.email] : [])].join('\n')
+  const label = `Actions for ${account.name}`
   return (
     <CollapsibleSection
       title={title}
@@ -117,6 +249,31 @@ function AccountGroup({ section, open, children }: { section: AccountSection; op
       onToggle={() => useAccountSectionsStore.getState().toggle(account.profileId)}
       tooltip={usage?.tooltip ?? fallback}
       marker={<AccentDot color={color} />}
+      actionsPinned={menu.open}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        menu.show()
+      }}
+      actions={
+        <>
+          <IconButton ref={menu.setAnchor} onClick={menu.toggle} label={label}>
+            <MoreHorizontal size={14} />
+          </IconButton>
+          <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" label={label}>
+            <PopoverMenu label={label}>
+              <MenuItem
+                icon={FolderPlus}
+                label="New group"
+                onClick={() => {
+                  menu.close()
+                  useAccountSectionsStore.getState().expand(account.profileId)
+                  onNewGroup()
+                }}
+              />
+            </PopoverMenu>
+          </Popover>
+        </>
+      }
       badge={
         <>
           <WaitingBadge needsYou={section.needsYou} name={account.name} open={open} />
@@ -137,23 +294,35 @@ function AccountGroup({ section, open, children }: { section: AccountSection; op
 }
 
 interface SessionRowsProps {
-  rows: SessionRow[]
+  profileId: string
+  group: ListGroup
+  section: AccountSection
+  /** The account's own groups, for "Move to group". */
+  targets: { id: string; name: string }[]
   pair: ChatPair
   renaming: string | null
   setRenaming: (key: string | null) => void
+  onNewGroup: (chat: string) => void
 }
 
-function SessionRows({ rows, pair, renaming, setRenaming }: SessionRowsProps) {
-  return rows.map((row) =>
+function SessionRows({ profileId, group, section, targets, pair, renaming, setRenaming, onNewGroup }: SessionRowsProps) {
+  return group.rows.map((row, i) =>
     row.key === renaming && row.kind === 'hosted' ? (
       <RenameRow key={row.key} paneId={row.paneId} title={row.title} onDone={() => setRenaming(null)} />
     ) : (
-      <SessionListRow key={row.key} row={row} active={isShown(row, pair)} onRename={row.kind === 'hosted' ? () => setRenaming(row.key) : undefined} />
+      <SessionListRow
+        key={row.key}
+        row={row}
+        place={{ profileId, group, next: group.rows[i + 1]?.placeId ?? null, section, targets }}
+        active={isShown(row, pair)}
+        onRename={row.kind === 'hosted' ? () => setRenaming(row.key) : undefined}
+        onNewGroup={() => onNewGroup(row.placeId)}
+      />
     )
   )
 }
 
-function ListMenu() {
+function ListMenu({ onNewGroup }: { onNewGroup?: () => void }) {
   const menu = useMenu()
   return (
     <>
@@ -171,19 +340,75 @@ function ListMenu() {
               pickPastSession()
             }}
           />
+          {onNewGroup && (
+            <MenuItem
+              icon={FolderPlus}
+              label="New group"
+              onClick={() => {
+                menu.close()
+                onNewGroup()
+              }}
+            />
+          )}
         </PopoverMenu>
       </Popover>
     </>
   )
 }
 
-function SessionListRow({ row, active, onRename }: { row: SessionRow; active: boolean; onRename?: () => void }) {
+/** Where a row sits, for dropping onto it and moving it by keyboard. */
+interface RowPlace {
+  profileId: string
+  group: ListGroup
+  /** The chat shown below it in its group. */
+  next: string | null
+  section: AccountSection
+  targets: { id: string; name: string }[]
+}
+
+/** Alt+↑/↓ steps the row within its group, Alt+Shift+↑/↓ moves it to the next or previous group, opening that group. */
+function moveByKey(e: KeyboardEvent, row: SessionRow, place: RowPlace): void {
+  if (!e.altKey || e.ctrlKey || e.metaKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+  e.preventDefault()
+  const dir = e.key === 'ArrowUp' ? -1 : 1
+  const shown = new Set(place.section.rows.map((r) => r.placeId))
+  changeLayout((layout) => {
+    if (!e.shiftKey) return moveChatStep(layout, place.profileId, row.placeId, shown, dir)
+    const moved = moveChatToNextGroup(layout, place.profileId, row.placeId, dir)
+    const to = groupOf(moved, place.profileId, row.placeId)
+    return to ? setFolded(moved, place.profileId, to, false) : moved
+  })
+  refocus(row.key)
+}
+
+interface SessionListRowProps {
+  row: SessionRow
+  place: RowPlace
+  active: boolean
+  onRename?: () => void
+  onNewGroup: () => void
+}
+
+function SessionListRow({ row, place, active, onRename, onNewGroup }: SessionListRowProps) {
   const { workspace } = row
+  const { profileId, group } = place
   const menu = useMenu()
-  const act = (fn: () => void) => () => {
+  const [page, setPage] = useState<'actions' | 'move'>('actions')
+  const sortable = useSortable({
+    item: { id: row.placeId, kind: CHAT, group: profileId },
+    accepts: (d) => d.kind === CHAT && d.group === profileId,
+    onDrop: (d, side) =>
+      changeLayout((layout) => moveChat(layout, profileId, d.id, { group: group.id, before: side === 'before' ? row.placeId : place.next }))
+  })
+  const close = () => {
     menu.close()
+    setPage('actions')
+  }
+  const act = (fn: () => void) => () => {
+    close()
     fn()
   }
+  const moveTo = (to: string) => changeLayout((layout) => moveChat(layout, profileId, row.placeId, { group: to, before: null }))
   const onContextMenu = (e: MouseEvent) => {
     e.preventDefault()
     menu.show()
@@ -195,28 +420,42 @@ function SessionListRow({ row, active, onRename }: { row: SessionRow; active: bo
       onClick={(e) => openRow(row, { focus: false, beside: e.ctrlKey || e.metaKey })}
       onDoubleClick={onRename}
       onContextMenu={onContextMenu}
+      onKeyDown={(e) => moveByKey(e, row, place)}
+      rowKey={row.key}
       tooltip={sessionRowTooltip(row)}
       actionsPinned={menu.open}
       edge={isNeedsYouRow(row) ? 'waiting' : undefined}
       size="roomy"
+      sortable={sortable}
       actions={
         <>
           <IconButton ref={menu.setAnchor} onClick={menu.toggle} label="Session actions">
             <MoreHorizontal size={14} />
           </IconButton>
-          <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" label="Session actions">
-            <PopoverMenu label="Session actions">
-              <MenuItem icon={Columns2} label="Open beside" description="Ctrl+click" onClick={act(() => openRow(row, { focus: false, beside: true }))} />
-              {onRename && <MenuItem icon={Pencil} label="Rename" onClick={act(onRename)} />}
-              {row.kind === 'hosted' && (
-                <MenuItem
-                  icon={X}
-                  label="Close"
-                  description="Stops the session; resume it from Past sessions…"
-                  onClick={act(() => closeSession(row.paneId))}
-                />
-              )}
-            </PopoverMenu>
+          <Popover open={menu.open} onClose={close} anchor={menu.anchor} align="end" label="Session actions">
+            {page === 'actions' ? (
+              <PopoverMenu label="Session actions">
+                <MenuItem icon={Columns2} label="Open beside" description="Ctrl+click" onClick={act(() => openRow(row, { focus: false, beside: true }))} />
+                {onRename && <MenuItem icon={Pencil} label="Rename" onClick={act(onRename)} />}
+                <MenuItem icon={FolderInput} label="Move to group" submenu onClick={() => setPage('move')} />
+                <MenuItem icon={FolderPlus} label="New group from this chat" onClick={act(onNewGroup)} />
+                {row.kind === 'hosted' && (
+                  <MenuItem
+                    icon={X}
+                    label="Close"
+                    description="Stops the session; resume it from Past sessions…"
+                    onClick={act(() => closeSession(row.paneId))}
+                  />
+                )}
+              </PopoverMenu>
+            ) : (
+              <PopoverMenu label="Move to group">
+                <MenuItem icon={ChevronLeft} label="Move to group" onClick={() => setPage('actions')} />
+                {[{ id: UNGROUPED, name: 'Ungrouped' }, ...place.targets].map((t) => (
+                  <MenuItem key={t.id} label={t.name} disabled={t.id === group.id} onClick={act(() => moveTo(t.id))} />
+                ))}
+              </PopoverMenu>
+            )}
           </Popover>
         </>
       }

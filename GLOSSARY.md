@@ -68,6 +68,10 @@ _Avoid_: Agent panel, transcript dialog
 The worktrees of one git repository, shown together under the repo's name.
 _Avoid_: Shard set, worktree family
 
+**Own group**:
+A named group of sessions in the Work list that the user makes, names and orders by dragging, kept per account. Sessions in none of them sit in Ungrouped, first in the account. The first own groups were seeded from the repo groups.
+_Avoid_: Folder, category, channel
+
 ## Views
 
 **Dashboard**:

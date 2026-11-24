@@ -1,7 +1,9 @@
 import { isWaiting, STATUS_LABEL } from '../../shared/needsYou'
 import { accountOf, accountRank, type Account } from './accounts'
 import { repoDisplayName, type RepoIdentityViews } from '../../shared/repoIdentity'
+import { UNGROUPED, type SidebarLayout } from '../../shared/sidebarGroups'
 import { OBSERVED_STATUS_LABEL, type ObservedSession, type ObservedStatus, type SessionStatus, type SessionStatusEntry, type Workspace } from '../../shared/types'
+import type { AccountChats, SeedRepo } from './sidebarGroups'
 
 export interface HostedSessionInput {
   paneId: string
@@ -10,6 +12,7 @@ export interface HostedSessionInput {
   lastActivityAt: number
   /** `model · effort`, e.g. "Opus 5.5 · High". */
   modelTag?: string
+  claudeSessionId?: string
 }
 
 export interface SessionListInput {
@@ -28,6 +31,10 @@ interface RowBase {
   repoName: string
   title: string
   lastActivityAt: number
+  /** The chat's id in its account's own groups. */
+  placeId: string
+  /** The Claude session it runs, once known. */
+  session?: string
 }
 
 export interface HostedRow extends RowBase {
@@ -97,7 +104,9 @@ export function sessionList(input: SessionListInput): SessionGroup[] {
       lastActivityAt: h.lastActivityAt,
       status,
       statusSince: entry?.since ?? 0,
-      modelTag: h.modelTag
+      modelTag: h.modelTag,
+      placeId: `pane:${h.paneId}`,
+      session: h.claudeSessionId
     })
   }
   for (const o of input.observed) {
@@ -111,7 +120,9 @@ export function sessionList(input: SessionListInput): SessionGroup[] {
       repoName: repoName(workspace),
       title: o.title,
       lastActivityAt: o.modifiedAt,
-      status: o.status
+      status: o.status,
+      placeId: `session:${o.sessionId}`,
+      session: o.sessionId
     })
   }
 
@@ -127,44 +138,38 @@ export function sessionList(input: SessionListInput): SessionGroup[] {
 export interface RepoGroup {
   repoGroupKey: string
   repoName: string
-  /** The first of the group's workspaces in saved order, for its icon. */
-  workspace: Workspace
   /** In the compact list order: Needs you, Running, Idle, In VS Code. */
+  rows: SessionRow[]
+}
+
+/** One of an account's own groups as the list shows it, or its Ungrouped chats. */
+export interface ListGroup {
+  /** The group's id, or `UNGROUPED`. */
+  id: string
+  name: string
+  folded: boolean
+  /** In the group's saved order. */
   rows: SessionRow[]
   needsYou: number
 }
 
 export interface AccountSection {
   account: Account
-  /** The section's repo groups in Settings → Workspaces order. */
-  repos: RepoGroup[]
+  /** Ungrouped first when it has chats, then the account's own groups in their order. */
+  groups: ListGroup[]
   /** Every row of the section, top to bottom with all groups open. */
   rows: SessionRow[]
   /** Waiting sessions in the section, shown on its header when it is folded. */
   needsYou: number
 }
 
-function repoGroups(rows: readonly SessionRow[], workspaces: readonly Workspace[]): RepoGroup[] {
-  const first = new Map<string, { at: number; workspace: Workspace }>()
-  workspaces.forEach((workspace, at) => {
-    if (!first.has(workspace.repoGroupKey)) first.set(workspace.repoGroupKey, { at, workspace })
-  })
-  const groups = new Map<string, RepoGroup>()
-  for (const row of rows) {
-    const key = row.workspace.repoGroupKey
-    const group = groups.get(key) ?? { repoGroupKey: key, repoName: row.repoName, workspace: row.workspace, rows: [], needsYou: 0 }
-    group.rows.push(row)
-    if (isNeedsYouRow(row)) group.needsYou++
-    groups.set(key, group)
-  }
-  const at = (key: string) => first.get(key)?.at ?? workspaces.length
-  return [...groups.values()]
-    .sort((a, b) => at(a.repoGroupKey) - at(b.repoGroupKey))
-    .map((g) => ({ ...g, workspace: first.get(g.repoGroupKey)?.workspace ?? g.workspace }))
+interface AccountRows {
+  account: Account
+  rows: SessionRow[]
 }
 
-/** The status groups split by the account of each row's workspace, accounts in Settings order, then by repo in saved workspace order; rows keep the status order. */
-export function accountSections(groups: readonly SessionGroup[], accounts: readonly Account[], workspaces: readonly Workspace[]): AccountSection[] {
+/** The status groups split by the account of each row's workspace, accounts in Settings order; rows keep the status order. */
+export function accountRows(groups: readonly SessionGroup[], accounts: readonly Account[]): AccountRows[] {
   const rank = accountRank(accounts)
   const byAccount = new Map<string, SessionRow[]>()
   for (const group of groups) {
@@ -173,24 +178,85 @@ export function accountSections(groups: readonly SessionGroup[], accounts: reado
       byAccount.set(id, [...(byAccount.get(id) ?? []), row])
     }
   }
-  return [...byAccount]
-    .sort(([a], [b]) => rank(a) - rank(b))
-    .map(([id, rows]) => {
-      const repos = repoGroups(rows, workspaces)
-      return {
-        account: accountOf(accounts, id),
-        repos,
-        rows: repos.flatMap((g) => g.rows),
-        needsYou: repos.reduce((n, g) => n + g.needsYou, 0)
-      }
-    })
+  return [...byAccount].sort(([a], [b]) => rank(a) - rank(b)).map(([id, rows]) => ({ account: accountOf(accounts, id), rows }))
+}
+
+/** An account's rows by repo, in saved workspace order, worktrees of one repo together; what the first layout is seeded from. */
+export function repoGroups(rows: readonly SessionRow[], workspaces: readonly Workspace[]): RepoGroup[] {
+  const first = new Map<string, number>()
+  workspaces.forEach((workspace, at) => {
+    if (!first.has(workspace.repoGroupKey)) first.set(workspace.repoGroupKey, at)
+  })
+  const groups = new Map<string, RepoGroup>()
+  for (const row of rows) {
+    const key = row.workspace.repoGroupKey
+    const group = groups.get(key) ?? { repoGroupKey: key, repoName: row.repoName, rows: [] }
+    group.rows.push(row)
+    groups.set(key, group)
+  }
+  const at = (key: string) => first.get(key) ?? workspaces.length
+  return [...groups.values()].sort((a, b) => at(a.repoGroupKey) - at(b.repoGroupKey))
+}
+
+const placed = (row: SessionRow) => (row.session ? { id: row.placeId, session: row.session } : { id: row.placeId })
+
+/** Each account's chats for placing, in the compact order. */
+export function accountChats(groups: readonly SessionGroup[], accounts: readonly Account[]): AccountChats[] {
+  return accountRows(groups, accounts).map(({ account, rows }) => ({ profileId: account.profileId, chats: rows.map(placed) }))
+}
+
+/** How a repo group's fold was remembered before own groups: per account. */
+export function repoFoldKey(profileId: string, repoGroupKey: string): string {
+  return `${profileId}/${repoGroupKey}`
+}
+
+/** What the first layout is seeded from: each account's repo groups as the list showed them, folds included. */
+export function seedSource(
+  groups: readonly SessionGroup[],
+  accounts: readonly Account[],
+  workspaces: readonly Workspace[],
+  foldedRepos: readonly string[]
+): { profileId: string; repos: SeedRepo[] }[] {
+  return accountRows(groups, accounts).map(({ account, rows }) => ({
+    profileId: account.profileId,
+    repos: repoGroups(rows, workspaces).map((g) => ({
+      id: `repo:${g.repoGroupKey}`,
+      name: g.repoName,
+      folded: foldedRepos.includes(repoFoldKey(account.profileId, g.repoGroupKey)),
+      chats: g.rows.map(placed)
+    }))
+  }))
+}
+
+function listGroup(id: string, name: string, folded: boolean, ids: readonly string[], byId: ReadonlyMap<string, SessionRow>): ListGroup {
+  const rows = ids.flatMap((i) => byId.get(i) ?? [])
+  return { id, name, folded, rows, needsYou: rows.filter(isNeedsYouRow).length }
+}
+
+/**
+ * The rows split by account, accounts in Settings order, each in its own groups in their saved order; a row not
+ * placed yet shows at the top of Ungrouped. Ungrouped shows only with chats in it; while searching, so does every group.
+ */
+export function accountSections(groups: readonly SessionGroup[], accounts: readonly Account[], layout: SidebarLayout, searching = false): AccountSection[] {
+  return accountRows(groups, accounts).map(({ account, rows }) => {
+    const a = layout.accounts[account.profileId]
+    const byId = new Map(rows.map((r) => [r.placeId, r]))
+    const ungrouped = a?.ungrouped ?? []
+    const placedIds = new Set([...ungrouped, ...(a?.groups.flatMap((g) => g.chats) ?? [])])
+    const unplaced = rows.filter((r) => !placedIds.has(r.placeId)).map((r) => r.placeId)
+    const list = [
+      listGroup(UNGROUPED, 'Ungrouped', a?.ungroupedFolded ?? false, [...unplaced, ...ungrouped], byId),
+      ...(a?.groups ?? []).map((g) => listGroup(g.id, g.name, g.folded, g.chats, byId))
+    ].filter((g) => g.rows.length > 0 || (g.id !== UNGROUPED && !searching))
+    return { account, groups: list, rows: list.flatMap((g) => g.rows), needsYou: list.reduce((n, g) => n + g.needsYou, 0) }
+  })
 }
 
 export function isNeedsYouRow(row: SessionRow): row is HostedRow {
   return row.kind === 'hosted' && hostedGroup(row.status) === 'needs-you'
 }
 
-/** A folded header's pill, account or repo group; an open one shows its waiting rows. */
+/** A folded header's pill, account or group; an open one shows its waiting rows. */
 export function waitingBadge(n: number, name: string, open: boolean): { text: string; tooltip: string } | null {
   if (open || n === 0) return null
   const chats = n === 1 ? 'chat' : 'chats'
@@ -204,27 +270,27 @@ export function sessionRowTooltip(row: SessionRow): string {
   return `${row.title} · ${where} · ${model}${STATUS_LABEL[row.status]} · double-click to rename, Ctrl+click to open beside`
 }
 
-/** What is folded shut: account profile ids, and repo groups by `repoFoldKey`. */
+/** What is folded shut: account profile ids; a group's own fold is its `folded`. */
 export interface ListFold {
   accounts: readonly string[]
-  repos: readonly string[]
+  /** A search opens every group. */
+  searching: boolean
 }
 
-/** A repo group's fold is remembered per account. */
-export function repoFoldKey(profileId: string, repoGroupKey: string): string {
-  return `${profileId}/${repoGroupKey}`
+/** The folds in effect: a search opens every group, and a list without account headers folds no account. */
+export function listFold(foldedAccounts: readonly string[], view: { search: string; headed: boolean }): ListFold {
+  return { accounts: view.headed ? foldedAccounts : [], searching: view.search.trim() !== '' }
 }
 
-/** The folds in effect: a search opens every repo group, and a list without account headers folds no account. */
-export function listFold(saved: ListFold, view: { search: string; headed: boolean }): ListFold {
-  return { accounts: view.headed ? saved.accounts : [], repos: view.search.trim() ? [] : saved.repos }
+export function groupOpen(group: ListGroup, fold: ListFold): boolean {
+  return fold.searching || !group.folded
 }
 
-/** The rows on screen, top to bottom; folded accounts and repo groups show none. */
+/** The rows on screen, top to bottom; folded accounts and groups show none. */
 export function shownRows(sections: readonly AccountSection[], fold: ListFold): SessionRow[] {
   return sections
     .filter((s) => !fold.accounts.includes(s.account.profileId))
-    .flatMap((s) => s.repos.filter((g) => !fold.repos.includes(repoFoldKey(s.account.profileId, g.repoGroupKey))).flatMap((g) => g.rows))
+    .flatMap((s) => s.groups.filter((g) => groupOpen(g, fold)).flatMap((g) => g.rows))
 }
 
 /** Waiting hosted sessions in the order the list shows them, folded sections and groups included. */

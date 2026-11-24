@@ -1,4 +1,5 @@
-import type { MouseEvent, ReactNode } from 'react'
+import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
+import { DragGrip, DropLine, type Sortable } from './SortableItem'
 
 interface Props {
   children: ReactNode
@@ -16,6 +17,11 @@ interface Props {
   edge?: 'waiting'
   /** `roomy`: a 36 px row indented under a group sub-header; it ignores `nested`. */
   size?: 'compact' | 'roomy'
+  /** Makes the whole row draggable, with a grip among its actions. */
+  sortable?: Sortable
+  onKeyDown?: (e: KeyboardEvent) => void
+  /** Finds the row again, e.g. to keep focus on it after it moves. */
+  rowKey?: string
 }
 
 const ROOMY = 'h-9 pl-8 pr-2'
@@ -26,12 +32,14 @@ const DISABLED = 'cursor-default text-faint'
 const IDLE = 'text-fg hover:bg-list-hover focus-visible:bg-list-hover'
 const ACTIVE = 'bg-list-selected text-fg'
 
-export function ListRow({ children, onClick, onDoubleClick, onContextMenu, tooltip, nested = false, active = false, actions, actionsPinned = false, disabled = false, edge, size = 'compact' }: Props) {
+export function ListRow({ children, onClick, onDoubleClick, onContextMenu, tooltip, nested = false, active = false, actions, actionsPinned = false, disabled = false, edge, size = 'compact', sortable, onKeyDown, rowKey }: Props) {
   const box = size === 'roomy' ? ROOMY : `py-1 ${nested ? 'pl-9 pr-2' : 'px-3'}`
   return (
-    <li className="group relative">
+    <li className="group relative" {...sortable?.props}>
       <button
         onClick={onClick}
+        onKeyDown={onKeyDown}
+        data-row-key={rowKey}
         disabled={disabled}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
@@ -41,13 +49,15 @@ export function ListRow({ children, onClick, onDoubleClick, onContextMenu, toolt
       >
         {children}
       </button>
-      {actions && (
+      {(actions || sortable) && (
         <span
           className={`absolute inset-y-0 right-1 flex items-center ${active ? 'bg-list-selected' : 'bg-list-hover'} ${actionsPinned ? '' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'}`}
         >
           {actions}
+          {sortable?.props.draggable && <DragGrip />}
         </span>
       )}
+      {sortable && <DropLine side={sortable.over} />}
     </li>
   )
 }

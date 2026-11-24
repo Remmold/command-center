@@ -3,6 +3,8 @@ import type { AccountProfile, AdoptResult, VsCodeConfigDir, Workspace } from '..
 
 interface ProfilesState {
   profiles: AccountProfile[]
+  /** The first load has finished, whatever its outcome. */
+  loaded: boolean
   /** Re-reads logged-in state too, so call it whenever the list comes on screen. */
   load: () => Promise<void>
   create: (name: string) => Promise<AccountProfile | null>
@@ -17,14 +19,16 @@ interface ProfilesState {
 
 export const useProfilesStore = create<ProfilesState>((set, get) => ({
   profiles: [],
+  loaded: false,
   suggestions: [],
   adoptError: null,
   load: async () => {
     try {
       const [profiles, suggestions] = await Promise.all([window.api.profiles.list(), window.api.profiles.suggestions()])
-      set({ profiles, suggestions })
+      set({ profiles, suggestions, loaded: true })
     } catch (err) {
       console.error('failed to load profiles', err)
+      set({ loaded: true })
     }
   },
   create: async (name) => {

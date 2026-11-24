@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
+import { createSidebarGroupsStore } from './sidebarGroups/store'
 import { liveConfigDir } from './observed/turn'
 import * as vscodeMatch from './profiles/vscodeMatch'
 import { transcriptsDirForCwd, transcriptsDirForWorkspace } from './profiles/transcripts'
@@ -174,6 +175,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.WORKSPACES_REORDER, (_e, ids: unknown) =>
     workspaces.reorder(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])
   )
+
+  const sidebarGroups = createSidebarGroupsStore(app.getPath('userData'))
+  ipcMain.handle(IPC.SIDEBAR_GROUPS_LOAD, () => sidebarGroups.load())
+  ipcMain.handle(IPC.SIDEBAR_GROUPS_SAVE, (_e, layout: unknown) => sidebarGroups.save(layout))
 
   ipcMain.handle(IPC.REPO_IDENTITIES_LIST, () => repoIdentities.list())
   ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, (_e, key: string, name: string) =>

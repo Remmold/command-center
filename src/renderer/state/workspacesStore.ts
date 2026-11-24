@@ -5,6 +5,8 @@ import { moveWorkspace } from './accounts'
 interface WorkspacesState {
   workspaces: Workspace[]
   loading: boolean
+  /** The first load has finished, whatever its outcome. */
+  loaded: boolean
   load: () => Promise<void>
   add: () => Promise<Workspace | null>
   addPath: (path: string) => Promise<AddWorkspaceResult>
@@ -18,14 +20,15 @@ interface WorkspacesState {
 export const useWorkspacesStore = create<WorkspacesState>((set, get) => ({
   workspaces: [],
   loading: false,
+  loaded: false,
   load: async () => {
     set({ loading: true })
     try {
       const workspaces = await window.api.workspaces.list()
-      set({ workspaces, loading: false })
+      set({ workspaces, loading: false, loaded: true })
     } catch (err) {
       console.error('failed to load workspaces', err)
-      set({ loading: false })
+      set({ loading: false, loaded: true })
     }
   },
   add: async () => {
