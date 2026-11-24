@@ -1,1 +1,2 @@
 - 01 resolved: compact Agent rows, Agents tab with a live agent view (hosted and VS Code chats), still-working bar, Running while background agents work — 5953ea7
+- 02 resolved: Agents tab status from each agent's own file (handback, interrupt, 10-minute quiet rule), real report text, turn groups, working-only tab count; main sweep frees Running and the update gate — 9c77329
