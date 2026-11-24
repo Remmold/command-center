@@ -85,6 +85,18 @@ _Avoid_: Home, overview, start page
 The view with one list of every session across all workspaces beside the open session, or two sessions side by side.
 _Avoid_: Sessions view, chat view, workspace view
 
+**Context view**:
+The view that shows, per workspace, everything Claude is configured to use there (CLAUDE.md files, memory, skills, agents, commands, MCP servers, plugins, settings and hooks) as context layers, with an editor beside them. It reads files; it does not ask Claude.
+_Avoid_: Config view, setup, Claude view
+
+**Context layer**:
+One level of where Claude context comes from, in the order it applies: the account, then the repo, then local (CLAUDE.local.md and local settings). An item in a layer shared with Personal is one file for both accounts.
+_Avoid_: Scope, level, tier
+
+**Start total**:
+The estimated tokens every new chat in a workspace starts with from its context: CLAUDE.md files and their imports, MEMORY.md, and the names and descriptions of skills and agents. Subfolder CLAUDE.md files and MCP tools are not in it.
+_Avoid_: Context size, context usage (that is a live chat's, from /context)
+
 **Settings**:
 The full-window page for setup: Workspaces, Accounts, Apps, Board and General. It is not a view.
 _Avoid_: Preferences, options
