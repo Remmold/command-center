@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Remembering:** picking a model or an effort level in any chat (the model pill, the effort pill, or `/model`) records it as "last picked". Store it per account (profile), since different plans offer different models, plus a global fallback.
 - [x] **New chats:**
