@@ -515,8 +515,8 @@ export interface RendererApi {
     processProfile: (paneId: string) => Promise<string | null>
     control: (paneId: string, subtype: string, fields?: Record<string, unknown>) => Promise<ControlResult>
     getInit: (paneId: string) => Promise<SessionInit | null>
-    /** The model and effort new sessions start with, from the user `settings.json`. */
-    readDefaults: () => Promise<ModelDefaults>
+    /** The model defaults in the profile's own settings.json, as its CLI reads them. */
+    readDefaults: (profileId: string) => Promise<ModelDefaults>
     /** `permissions.defaultMode` from the user settings of the profile the workspace at `cwd` runs on; null when unset. */
     defaultPermissionMode: (cwd: string) => Promise<string | null>
     saveDefaults: (patch: ModelDefaultsPatch) => Promise<SaveDefaultsResult>

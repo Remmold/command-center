@@ -297,6 +297,8 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
     await page.keyboard.press('Control+2')
     await page.keyboard.press('Control+t')
     await newChatIn(page, /e2e-workspace/)
+    await expect(pane.locator('[title="Switch model"]')).toHaveText('Sonnet 5.5')
+    await expect(pane.getByRole('button', { name: /^Effort: / })).toHaveAccessibleName('Effort: High')
     await pane.getByRole('button', { name: /^(Manual|Edit automatically)$/ }).click()
     await page.getByRole('menuitemradio', { name: /^Plan/ }).click()
     await prompt(page).fill('/rc')
