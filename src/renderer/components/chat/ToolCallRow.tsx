@@ -23,7 +23,9 @@ interface Props {
   meta?: ReactNode
   /** The body starts open; otherwise it folds behind the header until clicked. A live call's result may turn this true after mount. */
   defaultOpen?: boolean
-  /** Lines that show under the header even while the body is folded, e.g. an error's first line. */
+  /** A failed call's first line, shown under the header while the body is folded. */
+  error?: string
+  /** Lines that always show under the header, e.g. Run in background. */
   note?: ReactNode
   /** A quiet line: the name reads muted, as a plain note rather than a tool. */
   quiet?: boolean
@@ -36,10 +38,10 @@ const HEADER = 'flex w-full min-w-0 items-center gap-2 text-left text-[13px] lea
 const FOCUS = 'focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus'
 
 /** One tool call as a timeline step: its one-line header, and the IN/OUT boxes under it that open on click. */
-export function ToolCallRow({ name, target, prose = false, status, meta, defaultOpen = false, note, quiet = false, onOpen, children }: Props) {
+export function ToolCallRow({ name, target, prose = false, status, meta, defaultOpen = false, error, note, quiet = false, onOpen, children }: Props) {
   const [open, setOpen] = useState(defaultOpen)
   useEffect(() => {
-    if (defaultOpen) setOpen(true)
+    setOpen(defaultOpen)
   }, [defaultOpen])
   const title = (
     <>
@@ -84,6 +86,7 @@ export function ToolCallRow({ name, target, prose = false, status, meta, default
           {meta && <span className="ml-auto flex shrink-0 items-center gap-2">{meta}</span>}
         </div>
       )}
+      {error && !(open && children) && <ToolCallErrorLine text={error} />}
       {note}
       {(open || onOpen) && children && <div className="mt-1">{children}</div>}
     </TimelineRow>

@@ -265,10 +265,10 @@ function FileTarget({ path, suffix = '' }: { path: string; suffix?: string }) {
 }
 
 /** A failed call's first line, which shows while its body is folded. */
-function errorNote(result: ToolResultItem | undefined): ReactNode {
-  if (!result?.isError) return undefined
-  const line = errorLine(stringifyToolResult(result.content))
-  return line ? <ToolCallErrorLine text={line} /> : undefined
+function useErrorText(result: ToolResultItem | undefined): string | undefined {
+  const failed = result?.isError === true
+  const content = result?.content
+  return useMemo(() => (failed ? errorLine(stringifyToolResult(content)) || undefined : undefined), [failed, content])
 }
 
 function ToolCall({ block }: { block: ToolUse }) {
@@ -276,7 +276,7 @@ function ToolCall({ block }: { block: ToolUse }) {
   const result = pairs.resultFor.get(block.id)
   const { name, target, prose } = toolCallTitle(block.name, block.input, cwd)
   const status = toolCallStatus(result, running.has(block.id))
-  const note = errorNote(result)
+  const error = useErrorText(result)
 
   if (AGENT_TOOLS.has(block.name)) {
     return <AgentCall id={block.id} name={block.name} input={block.input} result={result} resultText={result ? stringifyToolResult(result.content) : ''} />
@@ -285,7 +285,7 @@ function ToolCall({ block }: { block: ToolUse }) {
   const mcp = mcpToolTitle(block.name, block.input)
   if (mcp) {
     return (
-      <ToolCallRow name={`${mcp.server} [${mcp.tool}]`} target={mcp.detail ?? ''} status={status} note={note}>
+      <ToolCallRow name={`${mcp.server} [${mcp.tool}]`} target={mcp.detail ?? ''} status={status} error={error}>
         {result ? (
           <ToolCallBody>
             <ResultSection result={result} />
@@ -301,7 +301,7 @@ function ToolCall({ block }: { block: ToolUse }) {
   if (todos) {
     const current = block.id === latestTodoId
     return (
-      <ToolCallRow key={current ? 'current' : 'earlier'} name="Update Todos" target="" status={status} defaultOpen={current} note={note}>
+      <ToolCallRow key={current ? 'current' : 'earlier'} name="Update Todos" target="" status={status} defaultOpen={current} error={error}>
         <Checklist entries={todos.map((t) => ({ label: t.content, state: TODO_CHECK[t.status] }))} />
         {result?.isError && (
           <ToolCallBody>
@@ -314,7 +314,7 @@ function ToolCall({ block }: { block: ToolUse }) {
 
   if (block.name === 'Read' && isReadInput(block.input)) {
     return (
-      <ToolCallRow name="Read" target={<FileTarget path={block.input.file_path} suffix={readRange(block.input)} />} status={status} note={note}>
+      <ToolCallRow name="Read" target={<FileTarget path={block.input.file_path} suffix={readRange(block.input)} />} status={status} error={error}>
         {result?.isError ? (
           <ToolCallBody>
             <ResultSection result={result} />
@@ -333,7 +333,7 @@ function ToolCall({ block }: { block: ToolUse }) {
         status={status}
         meta={<DiffCounts adds={countSegmentLines(segments, 'add')} dels={countSegmentLines(segments, 'remove')} replaceAll={block.input.replace_all} />}
         defaultOpen={!result?.isError}
-        note={note}
+        error={error}
       >
         <ToolCallBody>
           <ToolCallSection label="diff">
@@ -353,7 +353,7 @@ function ToolCall({ block }: { block: ToolUse }) {
         status={status}
         meta={<DiffCounts adds={countLines(block.input.content)} />}
         defaultOpen={!result?.isError}
-        note={note}
+        error={error}
       >
         <ToolCallBody>
           <ToolCallSection label="in" text={block.input.content} />
@@ -372,16 +372,8 @@ function ToolCall({ block }: { block: ToolUse }) {
       target={target}
       prose={prose}
       status={status}
-      note={
-        movable ? (
-          <>
-            {note}
-            <RunInBackgroundLine toolUseId={block.id} />
-          </>
-        ) : (
-          note
-        )
-      }
+      error={error}
+      note={movable ? <RunInBackgroundLine toolUseId={block.id} /> : undefined}
     >
       {showsInput || showsResult ? (
         <ToolCallBody>
@@ -419,8 +411,9 @@ function QuestionCall({ block, result, status }: { block: ToolUse; result: ToolR
   const name = questions.length === 1 ? 'Question' : 'Questions'
   const outcome = result ? questionOutcome(questions, stringifyToolResult(result.content), result.isError === true) : null
   const count = questions.length > 0 ? ` · ${questions.length} ${questions.length === 1 ? 'question' : 'questions'}` : ''
+  const error = useErrorText(result)
   return (
-    <ToolCallRow name={name} target={outcome ? `${outcome.status}${count}` : ''} status={status} defaultOpen={outcome?.status === 'Answered'}>
+    <ToolCallRow name={name} target={outcome ? `${outcome.status}${count}` : ''} status={status} defaultOpen={outcome?.status === 'Answered'} error={outcome ? undefined : error}>
       {outcome?.status === 'Answered' ? (
         <AnsweredQuestions questions={questions} answers={outcome.answers} />
       ) : result && !outcome ? (
@@ -452,10 +445,17 @@ function ResultSection({ result }: { result: ToolResultItem }) {
 
 /** A result whose call is not in the chat, e.g. cut off by a shortened transcript. */
 function LooseToolResult({ item }: { item: ToolResultItem }) {
-  const text = stringifyToolResult(item.content)
-  const saved = persistedOutput(text)
+  const target = useMemo(() => {
+    const text = stringifyToolResult(item.content)
+    const saved = persistedOutput(text)
+    if (saved) return saved.label
+    const readable = readableOutput(text)
+    // JSON without a readable field stays out of the header; its OUT box shows it.
+    return readable.raw !== undefined && readable.text === text ? '' : oneLine(readable.text)
+  }, [item.content])
+  const error = useErrorText(item)
   return (
-    <ToolCallRow name="Result" target={oneLine(saved ? saved.label : readableOutput(text).text)} status={toolCallStatus(item, false)} note={errorNote(item)}>
+    <ToolCallRow name="Result" target={target} status={toolCallStatus(item, false)} error={error}>
       <ToolCallBody>
         <ResultSection result={item} />
       </ToolCallBody>
