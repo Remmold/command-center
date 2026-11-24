@@ -33,6 +33,8 @@ export const IPC = {
   BOARD_READ_FILE: 'board:readFile',
   CONTEXT_REPORT: 'context:report',
   CONTEXT_START_TOTALS: 'context:startTotals',
+  CONTEXT_READ_FILE: 'context:readFile',
+  CONTEXT_WRITE_FILE: 'context:writeFile',
   DISCOVERY_GET: 'discovery:get',
   DISCOVERY_CHANGED: 'discovery:changed',
   DISCOVERY_RESCAN: 'discovery:rescan',

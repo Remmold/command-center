@@ -49,6 +49,16 @@ export interface ContextReport {
   missing: CreatableContextFile[]
 }
 
+export type ContextFileResult = { ok: true } | { ok: false; error: string }
+
+export type ContextFileText = { ok: true; content: string } | { ok: false; error: string }
+
+/** Where a creatable file goes, inside the workspace folder. */
+export const CREATABLE_NAMES: Record<CreatableContextFile, string> = {
+  'repo-claude-md': 'CLAUDE.md',
+  'claude-local-md': 'CLAUDE.local.md'
+}
+
 export const ADOPTED_READ_ONLY = 'adopted folder: the app never writes here'
 
 /** Characters ÷ 4, rounded. */

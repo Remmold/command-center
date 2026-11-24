@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { formatTokens, type ContextItem, type ContextItemKind, type ContextReport } from '../../../shared/context'
+import { CREATABLE_NAMES, formatTokens, type ContextItem, type ContextItemKind, type ContextReport, type CreatableContextFile } from '../../../shared/context'
 import { DEFAULT_PROFILE_ID, type Workspace } from '../../../shared/types'
 import { workspacesByAccount, sectionTitle, type AccountWorkspaces } from '../../state/accounts'
 import { useAccountColor } from '../../state/useAccountColor'
 import { useAccounts } from '../../state/useAccounts'
 import { useContextStore } from '../../state/contextStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
+import { setViewLeaveGuard } from '../../state/viewStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { AccentDot } from '../ui/AccentDot'
 import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
 import { CollapsibleSection } from '../ui/CollapsibleSection'
 import { EmptyState } from '../ui/EmptyState'
 import { ListItem, ListRow, ListRowLabel, ListRowMeta, ListRowNote, ListRowText } from '../ui/ListRow'
@@ -17,6 +19,7 @@ import { Pane } from '../ui/Pane'
 import { Panel } from '../ui/Panel'
 import { ScrollStack } from '../ui/ScrollStack'
 import { SidebarLayout } from '../ui/SidebarLayout'
+import { ContextEditor } from './ContextEditor'
 
 /** The workspace last open in Work, else the one already picked, else the first. */
 function startWorkspace(workspaces: readonly Workspace[], openInWork: string | null, picked: string | null): string | null {
@@ -41,13 +44,29 @@ export function ContextView() {
   useEffect(() => {
     const refresh = (): void => useContextStore.getState().refresh()
     window.addEventListener('focus', refresh)
-    return () => window.removeEventListener('focus', refresh)
+    setViewLeaveGuard(() => useContextStore.getState().confirmLeave())
+    return () => {
+      window.removeEventListener('focus', refresh)
+      setViewLeaveGuard(null)
+    }
   }, [])
 
+  const defaultName = useAccounts().find((a) => a.profileId === DEFAULT_PROFILE_ID)?.name ?? 'Personal'
   const selected = workspaces.find((w) => w.id === selectedId) ?? null
   return (
     <SidebarLayout sidebar={<WorkspaceList workspaces={workspaces} selectedId={selectedId} />}>
-      {selected ? <Layers workspace={selected} report={report} /> : <EmptyState>{loaded ? 'Pick a workspace.' : 'No workspaces yet.'}</EmptyState>}
+      {selected ? (
+        <div className="flex h-full min-h-0">
+          <div className="min-h-0 w-[28rem] shrink-0 border-r border-subtle">
+            <Layers workspace={selected} report={report} defaultName={defaultName} />
+          </div>
+          <div className="min-h-0 min-w-0 flex-1">
+            <ContextEditor defaultName={defaultName} />
+          </div>
+        </div>
+      ) : (
+        <EmptyState>{loaded ? 'Pick a workspace.' : 'No workspaces yet.'}</EmptyState>
+      )}
     </SidebarLayout>
   )
 }
@@ -84,8 +103,24 @@ function AccountWorkspaceList({ group, selectedId }: { group: AccountWorkspaces;
   )
 }
 
-function Layers({ workspace, report }: { workspace: Workspace; report: ContextReport | null }) {
-  const defaultName = useAccounts().find((a) => a.profileId === DEFAULT_PROFILE_ID)?.name ?? 'Personal'
+/** A creatable file's path inside the workspace folder, in the folder's own separator. */
+function creatablePath(workspacePath: string, file: CreatableContextFile): string {
+  const sep = workspacePath.includes('\\') ? '\\' : '/'
+  return `${workspacePath.replace(/[\\/]+$/, '')}${sep}${CREATABLE_NAMES[file]}`
+}
+
+function CreateLine({ workspacePath, file }: { workspacePath: string; file: CreatableContextFile }) {
+  const name = CREATABLE_NAMES[file]
+  const create = (): void =>
+    useContextStore.getState().open({ path: creatablePath(workspacePath, file), label: name, sharedWithDefault: false, readOnly: null, creating: true })
+  return (
+    <NoticeLine action={<Button variant="secondary" onClick={create} label={`Create ${name}`}>Create</Button>}>
+      No {name} in this workspace.
+    </NoticeLine>
+  )
+}
+
+function Layers({ workspace, report, defaultName }: { workspace: Workspace; report: ContextReport | null; defaultName: string }) {
   if (!report) return <EmptyState>Reading…</EmptyState>
   if (!report.folderExists) return <EmptyState>The folder {workspace.path} is gone, so nothing loads here.</EmptyState>
   const atStart = report.layers.repo.filter((i) => i.kind !== 'subfolder-claude-md')
@@ -98,7 +133,9 @@ function Layers({ workspace, report }: { workspace: Workspace; report: ContextRe
       <ScrollStack>
         <LayerPanel title="Account" items={report.layers.account} defaultName={defaultName} />
         <LayerPanel title="Repo" items={atStart} defaultName={defaultName} />
+        {report.missing.includes('repo-claude-md') && <CreateLine workspacePath={report.workspacePath} file="repo-claude-md" />}
         <LayerPanel title="Local" items={report.layers.local} defaultName={defaultName} />
+        {report.missing.includes('claude-local-md') && <CreateLine workspacePath={report.workspacePath} file="claude-local-md" />}
         {subfolders.length > 0 && <LayerPanel title="Loads when Claude works there" items={subfolders} defaultName={defaultName} />}
       </ScrollStack>
     </Pane>
@@ -138,9 +175,10 @@ const KIND_WORDS: Partial<Record<ContextItemKind, string>> = {
 
 function ContextRow({ item, defaultName }: { item: ContextItem; defaultName: string }) {
   const kindWord = KIND_WORDS[item.kind]
-  return (
+  const openPath = useContextStore((s) => s.editor?.path ?? null)
+  const path = item.missing ? null : item.path
+  const body = (
     <>
-      <ListItem>
         {kindWord && <ListRowLabel tone="secondary">{kindWord}</ListRowLabel>}
         <ListRowLabel tooltip={item.path ?? undefined}>{item.label}</ListRowLabel>
         {item.note && <ListRowNote>{item.note}</ListRowNote>}
@@ -151,7 +189,19 @@ function ContextRow({ item, defaultName }: { item: ContextItem; defaultName: str
         {item.missing && <Badge tone="warning">not found</Badge>}
         {item.sharedWithDefault && <Badge>shared with {defaultName}</Badge>}
         {item.readOnly && <Badge tooltip={item.readOnly}>{item.readOnly}</Badge>}
-      </ListItem>
+    </>
+  )
+  const open = (file: string): void =>
+    useContextStore.getState().open({ path: file, label: item.label, sharedWithDefault: item.sharedWithDefault, readOnly: item.readOnly, creating: false })
+  return (
+    <>
+      {path ? (
+        <ListRow active={openPath === path} tooltip={path} onClick={() => open(path)}>
+          {body}
+        </ListRow>
+      ) : (
+        <ListItem>{body}</ListItem>
+      )}
       {item.children.length > 0 && (
         <li className="pl-4">
           <ItemList items={item.children} defaultName={defaultName} />
