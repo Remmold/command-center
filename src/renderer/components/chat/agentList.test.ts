@@ -176,6 +176,16 @@ describe('a resumed chat’s old agents', () => {
     expect(atTime(agent, start + 1000 + TEN_MIN + 1)).toMatchObject({ status: 'ended', elapsedMs: 1000 })
   })
 
+  it('one its live process still reports stays working however quiet, its row noting the silence; without a process it ends after 10 quiet minutes', () => {
+    const stuck: AgentTails = { a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, items: handedBackFile(start, 'r').slice(0, 2) } }
+    const tasks: SubagentTasks = { a1: task('a1', 'c1', { startTime: start, lastEventAt: start + 1000 }) }
+    const live = collectAgents({ items, tasks, tails: stuck, running: true, cwd: CWD, now: start + 1000 + 30 * 60_000 })[0]
+    expect(live.status).toBe('working')
+    expect(agentRowMeta(atTime({ ...live, depth: 0 }, start + 1000 + 30 * 60_000))).toBe('Working · 30m 1s · quiet 30m · 1 tool')
+    const gone = collectAgents({ items, tasks: {}, tails: stuck, running: false, cwd: CWD, now: start + 1000 + 11 * 60_000 })[0]
+    expect(gone.status).toBe('ended')
+  })
+
   it('an agent waiting on its own agent stays working while that one writes', () => {
     const parentTails: AgentTails = {
       a1: { meta: { agentId: 'a1', toolUseId: 'c1' }, items: [prompt('p', 'go', start), call('c9', 'Agent', { description: 'Review' }, start + 1000)] },
@@ -249,9 +259,9 @@ describe('agents still working after the turn', () => {
     expect(agentsStillWorking(waiting, tails, false, 2000 + TEN_MIN)).toBe(1)
   })
 
-  it('by the same rules as the Agents tab: not one whose file handed back, nor one quiet for 10 minutes', () => {
+  it('by the same rules as the Agents tab: not one whose file handed back, but one silent for 30 minutes while its process lives', () => {
     const tails: AgentTails = { a: { meta: { agentId: 'a', toolUseId: 'c1' }, items: handedBackFile(1000, 'Done.') } }
     expect(agentsStillWorking(tasks, tails, false, 70_000)).toBe(1)
-    expect(agentsStillWorking(tasks, tails, false, 1000 + TEN_MIN + 1)).toBe(0)
+    expect(agentsStillWorking(tasks, tails, false, 1000 + 30 * 60_000)).toBe(1)
   })
 })

@@ -1,6 +1,6 @@
 import type { AssistantMessageItem, ChatItem } from './chatItems'
 
-/** An agent whose file, and whose own agents' files, have not grown for this long is no longer working. */
+/** Without a live process to report it, an agent whose file, and whose own agents' files, have not grown for this long ended. */
 export const AGENT_QUIET_MS = 10 * 60_000
 
 /** The tool an agent calls to deliver its report; its call is the agent's last act. */
@@ -111,8 +111,10 @@ function wokenAfterHandback(items: readonly ChatItem[]): boolean {
   return false
 }
 
-/** Whether an agent its process still reports as working has stopped counting: its file shows the end, or all went quiet. */
-export function agentOver(items: readonly ChatItem[], hints: Pick<AgentEndHints, 'finished'>, lastActivityAt: number | undefined, now: number): boolean {
-  const quiet = isQuiet(lastActivityAt, now)
-  return quiet || agentFileEnd(items, { ...hints, quiet }) !== undefined
+/**
+ * Whether an agent its live process still reports as working has stopped counting: only its file showing the end does,
+ * never silence, as a long build writes nothing to it until it returns.
+ */
+export function agentOver(items: readonly ChatItem[], hints: Pick<AgentEndHints, 'finished'>): boolean {
+  return agentFileEnd(items, hints) !== undefined
 }

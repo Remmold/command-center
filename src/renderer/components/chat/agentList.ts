@@ -24,6 +24,8 @@ export interface AgentEntry {
   elapsedMs?: number
   /** When it, or an agent of its own, last wrote or was reported on. */
   lastActivityAt?: number
+  /** How long a working agent its live process still reports has been silent, once that passed 10 minutes. */
+  quietMs?: number
   toolUses: number
   /** What it does right now: its latest tool call, "thinking…", or its last line of text. */
   now?: string
@@ -172,7 +174,9 @@ export function agentEntry({ toolUseId, input, result, task, tail, streamItems, 
   const callId = toolUseId ?? task?.toolUseId ?? meta?.toolUseId
   const startTime = task?.startTime ?? meta?.startedAt ?? firstAt(items) ?? callAt
   const lastActivityAt = latestOf(lastAt(items), task?.lastEventAt ?? task?.startTime) ?? callAt
-  const quiet = isQuiet(lastActivityAt, now)
+  // A task still working is reported by its live process, which tells when it ends; silence there is a long tool call.
+  const reported = task?.status === 'working'
+  const quiet = !reported && isQuiet(lastActivityAt, now)
   const launchedOnly = !result || (!result.isError && isBackgroundReceipt(result))
   const confirmed = !launchedOnly || (task !== undefined && task.status !== 'working')
   const end = agentFileEnd(items, { finished: meta?.finished, confirmed, quiet })
@@ -198,6 +202,7 @@ export function agentEntry({ toolUseId, input, result, task, tail, streamItems, 
     ...(startTime !== undefined ? { startTime } : {}),
     ...(elapsedMs !== undefined ? { elapsedMs } : {}),
     ...(lastActivityAt !== undefined ? { lastActivityAt } : {}),
+    ...(status === 'working' && reported && isQuiet(lastActivityAt, now) && lastActivityAt !== undefined ? { quietMs: now - lastActivityAt } : {}),
     toolUses: Math.max(task?.usage?.toolUses ?? 0, toolUseCount(items)),
     now: nowLine(items, cwd),
     ...(summary ? { summary } : {}),
@@ -245,7 +250,7 @@ interface StatusInputs {
 /**
  * The agent's own file decides first: a handback or an interrupt ends it whatever else says so. Then the CLI's task
  * events, then a final reply in its file, then the call's result; a background call's result is only its launch receipt. An agent still
- * open by all of these works until nothing it does has written for 10 minutes, then it ended without a report.
+ * open by all of these and not reported by a live process works until nothing it does has written for 10 minutes, then it ended without a report.
  */
 function statusOf({ task, end, callKnown, callId, result, launchedOnly, items, quiet, running }: StatusInputs): AgentStatus {
   if (end && (end.handedBack || end.status === 'stopped')) return end.status
@@ -443,20 +448,29 @@ export function agentsStillWorking(tasks: SubagentTasks, tails: AgentTails, turn
   return flatAgents(collectAgents({ items: [], tasks, tails, running: true, cwd: undefined, now })).filter((a) => a.task !== undefined && a.status === 'working').length
 }
 
-/** The agent as shown at `now`: a working agent's time keeps counting, until it has been quiet too long and ended. */
+/**
+ * The agent as shown at `now`: a working agent's time keeps counting. Once quiet for 10 minutes, one its live process
+ * still reports notes the silence; any other has ended.
+ */
 export function atTime(agent: FlatAgent, now: number): FlatAgent {
   if (agent.status !== 'working') return agent
   const last = agent.lastActivityAt
-  if (last !== undefined && isQuiet(last, now)) {
+  const quiet = last !== undefined && isQuiet(last, now)
+  if (quiet && agent.task?.status !== 'working') {
     return { ...agent, status: 'ended', ...(agent.startTime !== undefined ? { elapsedMs: Math.max(0, last - agent.startTime) } : {}) }
   }
-  return agent.startTime !== undefined ? { ...agent, elapsedMs: Math.max(0, now - agent.startTime) } : agent
+  return {
+    ...agent,
+    ...(agent.startTime !== undefined ? { elapsedMs: Math.max(0, now - agent.startTime) } : {}),
+    ...(quiet ? { quietMs: now - last } : {})
+  }
 }
 
-/** Status, time so far or run length, and tool count: "Working · 1m 4s · 3 tools". */
-export function agentRowMeta(agent: Pick<AgentEntry, 'status' | 'elapsedMs' | 'toolUses'>): string {
+/** Status, time so far or run length, any long silence, and tool count: "Working · 1m 4s · 3 tools". */
+export function agentRowMeta(agent: Pick<AgentEntry, 'status' | 'elapsedMs' | 'toolUses' | 'quietMs'>): string {
   const parts: string[] = [AGENT_STATUS_LABEL[agent.status]]
   if (agent.elapsedMs !== undefined && (agent.status === 'working' || agent.elapsedMs >= 1000)) parts.push(duration(agent.elapsedMs))
+  if (agent.status === 'working' && agent.quietMs !== undefined) parts.push(`quiet ${Math.floor(agent.quietMs / 60_000)}m`)
   if (agent.toolUses > 0) parts.push(`${agent.toolUses} ${agent.toolUses === 1 ? 'tool' : 'tools'}`)
   return parts.join(' · ')
 }

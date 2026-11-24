@@ -65,7 +65,7 @@ The tab beside Chat and Media that lists a session's subagents grouped by the tu
 _Avoid_: Agent panel, transcript dialog
 
 **Ended (no final report)**:
-A subagent that stopped writing for 10 minutes, with nothing of its own still writing, without handing back a report or being interrupted. It never counts as working, in the Agents tab, the still-working bar, the chat's Running status or the update gate.
+A subagent no live process reports any more (a resumed, old or VS Code chat) that stopped writing for 10 minutes, with nothing of its own still writing, without handing back a report or being interrupted. It never counts as working. An agent the chat's live process still reports stays working however quiet, as a long build writes nothing until it returns.
 
 **Repo group**:
 The worktrees of one git repository, shown together under the repo's name.
