@@ -1,3 +1,3 @@
-done: reader + tests, view/Ctrl+4, IPC, ContextView; review fixes applied; quick + full e2e green
-next: commit, set ticket resolved
+done: ticket 01 committed in 203da4e, status resolved
+next: nothing (ticket 02 extends the reader)
 open reds: none
