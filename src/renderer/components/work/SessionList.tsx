@@ -7,21 +7,21 @@ import { useMenu } from '../../hooks/useMenu'
 import { Columns2, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, X } from 'lucide-react'
 import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useSessionListStore } from '../../state/sessionListStore'
-import { isNeedsYouRow, sessionRowTooltip, waitingBadge, type AccountSection, type SessionRow } from '../../state/sessionList'
+import { isNeedsYouRow, repoFoldKey, sessionRowTooltip, waitingBadge, type AccountSection, type ListFold, type RepoGroup, type SessionRow } from '../../state/sessionList'
 import { sectionTitle } from '../../state/accounts'
 import { headerUsage, type HeaderTone } from '../../state/usageModel'
 import { useChatPairStore } from '../../state/chatPairStore'
 import { pickPastSession, pickProject } from '../../state/launcherStore'
 import { closeSession } from '../../state/sessionNavigation'
 import { renameHostedSession } from '../../state/sessionTitleSync'
-import { isShown, openRow, useAccountSectionsStore, useSessionSections, useWorkSearchStore } from '../../state/workSessions'
+import { isShown, openRow, useAccountSectionsStore, useListFold, useSessionSections, useWorkSearchStore } from '../../state/workSessions'
 import type { ChatPair } from '../../state/chatPair'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { CollapsibleSection } from '../ui/CollapsibleSection'
 import { IconButton } from '../ui/IconButton'
-import { ListRow, ListRowLabel, ListRowText } from '../ui/ListRow'
+import { ListRow, ListRowLabel, ListRowMeta, ListRowSlot, ListRowText } from '../ui/ListRow'
 import { MenuItem } from '../ui/MenuItem'
 import { MeterReading, type MeterTone } from '../ui/Meter'
 import { Popover, PopoverMenu } from '../ui/Popover'
@@ -38,9 +38,14 @@ export function SessionList() {
   const pair = useChatPairStore((s) => s.pair)
   const search = useWorkSearchStore((s) => s.search)
   const setSearch = useWorkSearchStore((s) => s.setSearch)
-  const collapsed = useAccountSectionsStore((s) => s.collapsed)
+  const fold = useListFold(headed)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const rows = (section: AccountSection) => <SessionRows rows={section.rows} pair={pair} renaming={renaming} setRenaming={setRenaming} />
+  const repos = (section: AccountSection) =>
+    section.repos.map((group) => (
+      <RepoSection key={group.repoGroupKey} profileId={section.account.profileId} group={group} fold={fold}>
+        <SessionRows rows={group.rows} pair={pair} renaming={renaming} setRenaming={setRenaming} />
+      </RepoSection>
+    ))
 
   return (
     <nav aria-label="Sessions" className="work-list flex h-full min-h-0 flex-col bg-sidebar">
@@ -59,17 +64,40 @@ export function SessionList() {
       <div className="shrink-0 p-2">
         <SearchField label="Search sessions" placeholder="Search title, repo or worktree" value={search} onChange={setSearch} />
       </div>
-      <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto pb-2">
+      <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
         {sections.length === 0 && <EmptyHint>{search.trim() ? 'No session matches.' : 'No sessions yet.'}</EmptyHint>}
         {headed
           ? sections.map((section) => (
-              <AccountGroup key={section.account.profileId} section={section} open={!collapsed.includes(section.account.profileId)}>
-                {rows(section)}
+              <AccountGroup key={section.account.profileId} section={section} open={!fold.accounts.includes(section.account.profileId)}>
+                {repos(section)}
               </AccountGroup>
             ))
-          : sections.map((section) => <ul key={section.account.profileId}>{rows(section)}</ul>)}
+          : sections.map((section) => <div key={section.account.profileId}>{repos(section)}</div>)}
       </div>
     </nav>
+  )
+}
+
+function RepoSection({ profileId, group, fold, children }: { profileId: string; group: RepoGroup; fold: ListFold; children: ReactNode }) {
+  const key = repoFoldKey(profileId, group.repoGroupKey)
+  const open = !fold.repos.includes(key)
+  const { workspace } = group
+  return (
+    <CollapsibleSection
+      level="group"
+      title={group.repoName}
+      open={open}
+      onToggle={() => useAccountSectionsStore.getState().toggleRepo(key)}
+      marker={<RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />}
+      badge={
+        <>
+          <WaitingBadge needsYou={group.needsYou} name={group.repoName} open={open} />
+          {!open && <ListRowMeta>{group.rows.length}</ListRowMeta>}
+        </>
+      }
+    >
+      <ul>{children}</ul>
+    </CollapsibleSection>
   )
 }
 
@@ -91,7 +119,7 @@ function AccountGroup({ section, open, children }: { section: AccountSection; op
       marker={<AccentDot color={color} />}
       badge={
         <>
-          <WaitingBadge section={section} open={open} />
+          <WaitingBadge needsYou={section.needsYou} name={account.name} open={open} />
           {usage && (
             <MeterReading
               percent={usage.percent}
@@ -103,7 +131,7 @@ function AccountGroup({ section, open, children }: { section: AccountSection; op
         </>
       }
     >
-      <ul>{children}</ul>
+      {children}
     </CollapsibleSection>
   )
 }
@@ -170,6 +198,7 @@ function SessionListRow({ row, active, onRename }: { row: SessionRow; active: bo
       tooltip={sessionRowTooltip(row)}
       actionsPinned={menu.open}
       edge={isNeedsYouRow(row) ? 'waiting' : undefined}
+      size="roomy"
       actions={
         <>
           <IconButton ref={menu.setAnchor} onClick={menu.toggle} label="Session actions">
@@ -192,19 +221,19 @@ function SessionListRow({ row, active, onRename }: { row: SessionRow; active: bo
         </>
       }
     >
-      <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} size="sm" />
+      <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} />
       {workspace.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
       <ListRowText primary={row.title} />
       {row.kind === 'hosted' && row.modelTag && <ListRowLabel tone="secondary" hideWhenNarrow>{row.modelTag}</ListRowLabel>}
       {row.kind === 'observed' && <VsCodeGlyph tooltip={VSCODE_TOOLTIP} />}
-      <StatusDot status={row.status} />
+      <StatusDot status={row.status} look="soft" />
     </ListRow>
   )
 }
 
 function RenameRow({ paneId, title, onDone }: { paneId: string; title: string; onDone: () => void }) {
   return (
-    <li className="px-2 py-0.5">
+    <ListRowSlot>
       <TextField
         label="Session title"
         initialValue={title}
@@ -216,11 +245,11 @@ function RenameRow({ paneId, title, onDone }: { paneId: string; title: string; o
         }}
         onCancel={onDone}
       />
-    </li>
+    </ListRowSlot>
   )
 }
 
-function WaitingBadge({ section, open }: { section: AccountSection; open: boolean }) {
-  const badge = waitingBadge(section, open)
+function WaitingBadge({ needsYou, name, open }: { needsYou: number; name: string; open: boolean }) {
+  const badge = waitingBadge(needsYou, name, open)
   return badge && <Badge tone="waiting" tooltip={badge.tooltip}>{badge.text}</Badge>
 }

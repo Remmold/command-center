@@ -14,7 +14,11 @@ interface Props {
   disabled?: boolean
   /** A 2 px edge on the left that marks the row, e.g. a waiting session. */
   edge?: 'waiting'
+  /** `roomy`: a 36 px row indented under a group sub-header; it ignores `nested`. */
+  size?: 'compact' | 'roomy'
 }
+
+const ROOMY = 'h-9 pl-8 pr-2'
 
 const EDGE = { waiting: 'shadow-[inset_2px_0_0_0_rgb(var(--cc-status-approval))]' } as const
 
@@ -22,7 +26,8 @@ const DISABLED = 'cursor-default text-faint'
 const IDLE = 'text-fg hover:bg-list-hover focus-visible:bg-list-hover'
 const ACTIVE = 'bg-list-selected text-fg'
 
-export function ListRow({ children, onClick, onDoubleClick, onContextMenu, tooltip, nested = false, active = false, actions, actionsPinned = false, disabled = false, edge }: Props) {
+export function ListRow({ children, onClick, onDoubleClick, onContextMenu, tooltip, nested = false, active = false, actions, actionsPinned = false, disabled = false, edge, size = 'compact' }: Props) {
+  const box = size === 'roomy' ? ROOMY : `py-1 ${nested ? 'pl-9 pr-2' : 'px-3'}`
   return (
     <li className="group relative">
       <button
@@ -32,7 +37,7 @@ export function ListRow({ children, onClick, onDoubleClick, onContextMenu, toolt
         onContextMenu={onContextMenu}
         title={tooltip}
         aria-current={active || undefined}
-        className={`flex w-full min-w-0 items-center gap-2 py-1 text-left text-xs focus-visible:outline-none ${nested ? 'pl-9 pr-2' : 'px-3'} ${disabled ? DISABLED : active ? ACTIVE : IDLE} ${edge ? EDGE[edge] : ''}`}
+        className={`flex w-full min-w-0 items-center gap-2 text-left text-xs focus-visible:outline-none ${box} ${disabled ? DISABLED : active ? ACTIVE : IDLE} ${edge ? EDGE[edge] : ''}`}
       >
         {children}
       </button>
@@ -45,6 +50,11 @@ export function ListRow({ children, onClick, onDoubleClick, onContextMenu, toolt
       )}
     </li>
   )
+}
+
+/** A roomy row's place taken by something other than the row, e.g. its rename field. */
+export function ListRowSlot({ children }: { children: ReactNode }) {
+  return <li className={`flex items-center ${ROOMY}`}>{children}</li>
 }
 
 export function ListRowText({ primary, secondary }: { primary: string; secondary?: string }) {
