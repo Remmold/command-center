@@ -1,8 +1,10 @@
 import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import type { BoardModel, Workspace } from '../../shared/types'
-import { readBoard } from './reader'
+import { listWorktreesPorcelain } from '../git/service'
+import { readBoard, type ExtraCopy } from './reader'
 import { nodeFileReader } from './nodeFileReader'
+import { createWorktreeLister, WORKTREE_LIST_TTL_MS } from './worktrees'
 
 const DEBOUNCE_MS = 250
 
@@ -51,6 +53,10 @@ function closeWatch(w: WorkspaceWatch): void {
 
 export class BoardService {
   private workspaces: Workspace[] = []
+  private extras: ExtraCopy[] = []
+  private readonly worktrees = createWorktreeLister({ listPorcelain: listWorktreesPorcelain, files: nodeFileReader })
+  private worktreeTimer: NodeJS.Timeout | null = null
+  private stopped = false
   private watches = new Map<string, WorkspaceWatch>()
   private timer: NodeJS.Timeout | null = null
   private model: BoardModel = { repoGroups: [] }
@@ -74,16 +80,31 @@ export class BoardService {
   /** Call after any workspace is added or removed. */
   async refresh(): Promise<BoardModel> {
     this.workspaces = await this.listWorkspaces()
+    this.stopped = false
     this.syncWatches()
+    this.worktreeTimer ??= setInterval(() => void this.checkWorktrees(), WORKTREE_LIST_TTL_MS)
     await this.reread()
     return this.model
   }
 
   stop(): void {
+    this.stopped = true
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
+    if (this.worktreeTimer) clearInterval(this.worktreeTimer)
+    this.worktreeTimer = null
     for (const w of this.watches.values()) closeWatch(w)
     this.watches.clear()
+  }
+
+  /**
+   * Extra worktrees are polled, not watched: an open watch handle on Windows can block an agent
+   * deleting its worktree. So a change in one shows within 30 s.
+   */
+  private async checkWorktrees(): Promise<void> {
+    if (this.stopped) return
+    const extras = await this.worktrees.extras(this.workspaces, true)
+    if (extras.length > 0 || JSON.stringify(extras) !== JSON.stringify(this.extras)) this.schedule()
   }
 
   private syncWatches(): void {
@@ -115,6 +136,7 @@ export class BoardService {
   }
 
   private schedule(): void {
+    if (this.stopped) return
     if (this.timer) clearTimeout(this.timer)
     this.timer = setTimeout(() => {
       this.timer = null
@@ -125,7 +147,8 @@ export class BoardService {
   private reread(): Promise<void> {
     this.reading = this.reading.then(async () => {
       try {
-        const model = await readBoard(this.workspaces, nodeFileReader)
+        this.extras = await this.worktrees.extras(this.workspaces)
+        const model = await readBoard(this.workspaces, nodeFileReader, this.extras)
         const json = JSON.stringify(model)
         this.model = model
         if (json !== this.lastJson) {

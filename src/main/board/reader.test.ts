@@ -255,6 +255,53 @@ describe('board reader', () => {
     ])
   })
 
+  it('reads an extra worktree as a copy and shows the most advanced status with the copy it came from', async () => {
+    const issues = '.scratch/combat/issues/'
+    const main = fixture({
+      [issues + '01-swing.md']: ticket('01: Swing', ['**Status:** ready-for-agent']),
+      [issues + '02-block.md']: ticket('02: Block', ['**Status:** needs-triage']),
+      [issues + '03-dodge.md']: ticket('03: Dodge', ['**Status:** ready-for-human']),
+      [issues + '04-parry.md']: ticket('04: Parry', ['**Status:** resolved'])
+    })
+    const agent = fixture({
+      [issues + '01-swing.md']: ticket('01: Swing', ['**Status:** in-progress']),
+      [issues + '02-block.md']: ticket('02: Block', ['**Status:** ready-for-agent']),
+      [issues + '03-dodge.md']: ticket('03: Dodge', ['**Status:** ready-for-human']),
+      [issues + '04-parry.md']: ticket('04: Parry', ['**Status:** in-progress'])
+    })
+    const key = 'git:c:/projects/fs/.git'
+    const model = await readBoard([workspace(main, { id: 'main', repoGroupKey: key })], nodeFileReader, [
+      { repoGroupKey: key, path: agent, worktreeTag: 'feature/x' }
+    ])
+
+    const cards = tickets(model)
+    expect(cards.map((t) => [t.number, t.column, t.status, t.sightings[0].worktreeTag])).toEqual([
+      ['01', 'in-progress', 'in-progress', 'feature/x'],
+      ['02', 'backlog', 'ready-for-agent', 'feature/x'],
+      ['03', 'backlog', 'ready-for-human', ''],
+      ['04', 'done', 'resolved', '']
+    ])
+    expect(cards[0].sightings[0]).toMatchObject({ workspaceId: `worktree:${agent}`, filePath: join(agent, issues, '01-swing.md') })
+    expect(model.repoGroups[0].features[0].sightings.map((s) => s.worktreeTag)).toEqual(['', 'feature/x'])
+  })
+
+  it('keeps the main checkout’s status on a tie when it is read as an extra beside an added worktree', async () => {
+    const issues = '.scratch/combat/issues/'
+    const shard = fixture({ [issues + '01-swing.md']: ticket('01: Swing', ['**Status:** in-progress']) })
+    const main = fixture({ [issues + '01-swing.md']: ticket('01: Swing', ['**Status:** in-progress']) })
+    const key = 'git:c:/projects/fs/.git'
+    const model = await readBoard([workspace(shard, { id: 'shard', repoGroupKey: key, worktreeTag: 'shard' })], nodeFileReader, [
+      { repoGroupKey: key, path: main, worktreeTag: '' }
+    ])
+    expect(tickets(model)[0].sightings.map((s) => s.worktreeTag)).toEqual(['', 'shard'])
+  })
+
+  it('ignores extra worktrees of a repo with no added workspace', async () => {
+    const agent = fixture({ '.scratch/combat/issues/01-swing.md': ticket('01: Swing', ['**Status:** in-progress']) })
+    const model = await readBoard([], nodeFileReader, [{ repoGroupKey: 'git:c:/x/.git', path: agent, worktreeTag: 'b' }])
+    expect(model.repoGroups).toEqual([])
+  })
+
   it('ignores files that are not tickets and records each feature copy’s spec and notes', async () => {
     const root = fixture({
       '.scratch/test-flow-parked-run-R.md': '**Status:** resolved',
@@ -273,11 +320,12 @@ describe('board reader', () => {
     const features = model.repoGroups[0].features
     expect(features.map((f) => f.name)).toEqual(['camera-feel', 'controls-options'])
     expect(features[0].tickets).toEqual([])
-    expect(features[0].sightings).toEqual([{ workspaceId: 'w', specPath: null, progressPath: null, lastActivity: null }])
+    expect(features[0].sightings).toEqual([{ workspaceId: 'w', worktreeTag: '', specPath: null, progressPath: null, lastActivity: null }])
     expect(features[1].tickets.map((t) => [t.number, t.column])).toEqual([['01', 'backlog']])
     expect(features[1].sightings).toEqual([
       {
         workspaceId: 'w',
+        worktreeTag: '',
         specPath: join(root, '.scratch/controls-options/spec.md'),
         progressPath: join(root, '.scratch/controls-options/progress.md'),
         lastActivity: expect.any(Number)

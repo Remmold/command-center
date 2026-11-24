@@ -200,7 +200,7 @@ describe('dashboard: now building', () => {
                   progress: { done: 0, total: 1, lastNote: null },
                   lastActivity: NOW - 60_000,
                   tickets: [],
-                  sightings: [{ workspaceId: 'mm', specPath: null, progressPath: null, lastActivity: NOW - 60_000 }]
+                  sightings: [{ workspaceId: 'mm', worktreeTag: 'shard-2', specPath: null, progressPath: null, lastActivity: NOW - 60_000 }]
                 }
               ]
             }
@@ -231,7 +231,7 @@ describe('dashboard: accounts', () => {
     progress: { done: 0, total: 1, lastNote: null },
     lastActivity: at,
     tickets: [],
-    sightings: [{ workspaceId, specPath: null, progressPath: null, lastActivity: at }]
+    sightings: [{ workspaceId, worktreeTag: '', specPath: null, progressPath: null, lastActivity: at }]
   })
   const d = dashboard(
     input({

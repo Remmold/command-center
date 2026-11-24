@@ -86,7 +86,7 @@ export function BoardView() {
 
   const selectedKey = selected ? cardKeyOf(selected) : null
   const lanes = (
-    <BoardLanes layout={layout.lanes} grouped={groupBy !== 'none'} workspaces={workspaceById} selectedKey={selectedKey} />
+    <BoardLanes layout={layout.lanes} grouped={groupBy !== 'none'} selectedKey={selectedKey} />
   )
 
   return (
@@ -115,16 +115,15 @@ export function BoardView() {
 interface LanesProps {
   layout: BoardLane[]
   grouped: boolean
-  workspaces: Map<string, Workspace>
   selectedKey: string | null
 }
 
-function BoardLanes({ layout, grouped, workspaces, selectedKey }: LanesProps) {
+function BoardLanes({ layout, grouped, selectedKey }: LanesProps) {
   const collapsed = useBoardStore((s) => s.collapsedLanes)
   const toggleLane = useBoardStore((s) => s.toggleLane)
 
   if (!grouped) {
-    return <LaneColumns lane={layout[0]} scroll workspaces={workspaces} selectedKey={selectedKey} />
+    return <LaneColumns lane={layout[0]} scroll selectedKey={selectedKey} />
   }
   return (
     <ScrollStack>
@@ -137,7 +136,7 @@ function BoardLanes({ layout, grouped, workspaces, selectedKey }: LanesProps) {
           open={!collapsed.includes(lane.key)}
           onToggle={() => toggleLane(lane.key)}
         >
-          <LaneColumns lane={lane} scroll={false} workspaces={workspaces} selectedKey={selectedKey} />
+          <LaneColumns lane={lane} scroll={false} selectedKey={selectedKey} />
         </Swimlane>
       ))}
     </ScrollStack>
@@ -163,11 +162,10 @@ function LaneTitle({ header }: { header: LaneHeader }) {
 interface LaneColumnsProps {
   lane: BoardLane
   scroll: boolean
-  workspaces: Map<string, Workspace>
   selectedKey: string | null
 }
 
-function LaneColumns({ lane, scroll, workspaces, selectedKey }: LaneColumnsProps) {
+function LaneColumns({ lane, scroll, selectedKey }: LaneColumnsProps) {
   return (
     <ColumnRow fill={scroll}>
       {lane.columns.map((column) => (
@@ -179,7 +177,7 @@ function LaneColumns({ lane, scroll, workspaces, selectedKey }: LaneColumnsProps
           footer={<FinishedLine column={column} />}
         >
           {column.cards.map((card) => (
-            <CardView key={card.key} card={card} workspaces={workspaces} selected={card.key === selectedKey} />
+            <CardView key={card.key} card={card} selected={card.key === selectedKey} />
           ))}
         </Column>
       ))}
@@ -187,11 +185,11 @@ function LaneColumns({ lane, scroll, workspaces, selectedKey }: LaneColumnsProps
   )
 }
 
-function CardView({ card, workspaces, selected }: { card: BoardCard; workspaces: Map<string, Workspace>; selected: boolean }) {
+function CardView({ card, selected }: { card: BoardCard; selected: boolean }) {
   const select = useBoardStore((s) => s.select)
   const open = useCallback((c: TicketBoardCard) => select(c.ref), [select])
   if (card.kind === 'spec-only') return <SpecOnlyCard card={card} />
-  return <TicketCard card={card} workspaces={workspaces} selected={selected} onOpen={open} />
+  return <TicketCard card={card} selected={selected} onOpen={open} />
 }
 
 function FinishedLine({ column }: { column: LaneColumn }) {

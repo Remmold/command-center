@@ -21,8 +21,8 @@ const COLUMN_ORDER: BoardColumn[] = ['backlog', 'blocked', 'in-progress', 'done'
 
 const MAIN_TAG = 'main'
 
-export function worktreeLabel(workspace: Workspace | undefined): string {
-  return workspace?.worktreeTag || MAIN_TAG
+export function worktreeLabel(worktreeTag: string): string {
+  return worktreeTag || MAIN_TAG
 }
 
 export interface TicketRef {
