@@ -9,19 +9,47 @@ const INITIAL_MAX_BYTES = 8 * 1024 * 1024
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined)
 
+const FIRST_LINE_MAX_BYTES = 256 * 1024
+const PROMPT_ID = /"promptId":"([^"]{1,128})"/
+const TIMESTAMP = /"timestamp":"([^"]{1,64})"/
+
+/** The prompt id and time of the file's first line; a first line longer than the read still gives its prompt id, which comes early. */
+async function readStart(file: string): Promise<Pick<SubagentMeta, 'promptId' | 'startedAt'>> {
+  let handle
+  try {
+    handle = await fs.open(file, 'r')
+    const buffer = Buffer.alloc(FIRST_LINE_MAX_BYTES)
+    const { bytesRead } = await handle.read(buffer, 0, FIRST_LINE_MAX_BYTES, 0)
+    const text = buffer.subarray(0, bytesRead).toString('utf-8')
+    const end = text.indexOf('\n')
+    const first = end < 0 ? text : text.slice(0, end)
+    const promptId = PROMPT_ID.exec(first)?.[1]
+    // The line's own timestamp is its last one; quoted ones can sit inside the message before it.
+    const stamp = end < 0 ? undefined : TIMESTAMP.exec(first.slice(Math.max(0, first.lastIndexOf('"timestamp"'))))?.[1]
+    const startedAt = stamp ? Date.parse(stamp) : NaN
+    return { ...(promptId ? { promptId } : {}), ...(Number.isFinite(startedAt) ? { startedAt } : {}) }
+  } catch {
+    return {}
+  } finally {
+    await handle?.close()
+  }
+}
+
 async function readMeta(dir: string, agentId: string): Promise<SubagentMeta> {
+  const start = await readStart(join(dir, `agent-${agentId}.jsonl`))
   try {
     const raw = JSON.parse(await fs.readFile(join(dir, `agent-${agentId}.meta.json`), 'utf-8')) as Record<string, unknown>
-    const meta: SubagentMeta = { agentId }
+    const meta: SubagentMeta = { agentId, ...start }
     const agentType = str(raw.agentType)
     const description = str(raw.description)
     const toolUseId = str(raw.toolUseId)
     if (agentType) meta.agentType = agentType
     if (description) meta.description = description
     if (toolUseId) meta.toolUseId = toolUseId
+    if (raw.finished === true) meta.finished = true
     return meta
   } catch {
-    return { agentId }
+    return { agentId, ...start }
   }
 }
 

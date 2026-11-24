@@ -751,7 +751,7 @@ export const ChatView = memo(function ChatView({
           </div>
         </div>
       </HostedMediaTabs>
-      <AgentsStillWorking paneId={paneId} turnActive={turnActive} />
+      <AgentsStillWorking paneId={paneId} turnActive={turnActive} transcript={transcript} />
       <InputBox
         busy={turnActive}
         initialDraft={savedDraft(paneId)}

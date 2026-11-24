@@ -4,42 +4,65 @@ import type { ChatItem } from './types'
 import { ChatItems } from './ChatItems'
 import { MessageColumn } from './MessageColumn'
 import { useFollowOutput } from './useFollowOutput'
-import { agentDetail, agentRowMeta, atTime, flatAgents, type AgentEntry, type FlatAgent } from './agentList'
+import { agentDetail, agentRowMeta, atTime, flatAgents, groupAgents, startLabel, type AgentEntry, type AgentGroup } from './agentList'
 import { useTicking } from '../../hooks/useTicking'
 import type { AgentHost } from './toolContext'
 import { Button } from '../ui/Button'
 import { DotMark, type TimelineDot } from '../ui/Timeline'
 import { ListRow, ListRowLines, ListRowMeta } from '../ui/ListRow'
 import { EmptyHint } from '../ui/Section'
+import { CollapsibleSection } from '../ui/CollapsibleSection'
+import { Markdown } from '../ui/Markdown'
+import { SectionLabel } from '../ui/SectionLabel'
 import { overlayOpen } from '../ui/overlay'
 import { useChatMediaStore } from '../../state/chatMediaStore'
 
-const DOT: Record<AgentEntry['status'], Exclude<TimelineDot, 'none' | 'neutral'>> = { working: 'progress', finished: 'success', failed: 'error', stopped: 'error' }
+const DOT: Record<AgentEntry['status'], Exclude<TimelineDot, 'none' | 'neutral'>> = { working: 'progress', finished: 'success', failed: 'error', stopped: 'error', ended: 'pending' }
 
 interface Props {
   chatKey: string
   agents: readonly AgentEntry[]
+  /** The chat's items, for the turn each agent's call was made in. */
+  items: readonly ChatItem[]
   host: AgentHost | undefined
   cwd: string | undefined
 }
 
-/** The Agents tab: every agent of the session, or one agent's live view. */
-export function AgentsPanel({ chatKey, agents, host, cwd }: Props) {
+/** The Agents tab: every agent of the session by the turn that started it, or one agent's live view. */
+export function AgentsPanel({ chatKey, agents, items, host, cwd }: Props) {
   const openKey = useChatMediaStore((s) => s.openAgent[chatKey])
   const showAgents = useChatMediaStore((s) => s.showAgents)
   const listed = useMemo(() => flatAgents(agents), [agents])
   const now = useTicking(listed.some((a) => a.status === 'working'))
-  const flat = listed.map((a) => atTime(a, now))
-  const open = openKey === undefined ? undefined : flat.find((a) => a.key === openKey || a.toolUseId === openKey)
-  if (openKey !== undefined) return <AgentLiveView agent={open} host={host} cwd={cwd} onBack={() => showAgents(chatKey)} />
-  return <AgentList agents={flat} onOpen={(key) => showAgents(chatKey, key)} />
+  if (openKey !== undefined) {
+    const found = listed.find((a) => a.key === openKey || a.toolUseId === openKey)
+    return <AgentLiveView agent={found && atTime(found, now)} host={host} cwd={cwd} onBack={() => showAgents(chatKey)} />
+  }
+  return <AgentList groups={groupAgents(agents, items)} now={now} onOpen={(key) => showAgents(chatKey, key)} />
 }
 
-function AgentList({ agents, onOpen }: { agents: readonly FlatAgent[]; onOpen: (key: string) => void }) {
-  const listRef = useRef<HTMLUListElement | null>(null)
-  const onKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
+function groupTitle(group: AgentGroup, now: number): string {
+  const working = flatAgents(group.agents).filter((a) => atTime(a, now).status === 'working').length
+  const parts = [group.startTime !== undefined ? `started at ${startLabel(group.startTime, now)}` : 'started earlier', `${group.count} ${group.count === 1 ? 'agent' : 'agents'}`]
+  if (working > 0) parts.push(`${working} working`)
+  return parts.join(' · ')
+}
+
+function AgentList({ groups, now, onOpen }: { groups: readonly AgentGroup[]; now: number; onOpen: (key: string) => void }) {
+  const listRef = useRef<HTMLDivElement | null>(null)
+  // Only the newest turn opens by default; a fold the user flips sticks while the tab is open.
+  const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set())
+  const newest = groups[0]?.key
+  const isOpen = (key: string): boolean => (key === newest) !== flipped.has(key)
+  const toggle = (key: string): void =>
+    setFlipped((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(key)) next.add(key)
+      return next
+    })
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-    const rows = [...(listRef.current?.querySelectorAll<HTMLButtonElement>(':scope > li > button') ?? [])]
+    const rows = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('[aria-expanded], ul[aria-label="Agents"] > li > button') ?? [])]
     if (rows.length === 0) return
     e.preventDefault()
     const at = rows.indexOf(document.activeElement as HTMLButtonElement)
@@ -49,22 +72,32 @@ function AgentList({ agents, onOpen }: { agents: readonly FlatAgent[]; onOpen: (
   return (
     <div role="tabpanel" aria-label="Agents" className="absolute inset-0 overflow-y-auto py-2">
       <MessageColumn>
-        <ul ref={listRef} aria-label="Agents" onKeyDown={onKeyDown}>
-          {agents.map((agent) => (
-            <ListRow key={agent.key} nested={agent.depth > 0} onClick={() => onOpen(agent.key)} tooltip={agent.name}>
-              <DotMark dot={DOT[agent.status]} />
-              <ListRowLines
-                primary={
-                  <>
-                    <span className="min-w-0 flex-1 truncate font-medium">{agent.name}</span>
-                    <ListRowMeta>{agentRowMeta(agent)}</ListRowMeta>
-                  </>
-                }
-                secondary={agentDetail(agent) && <span data-agent-now="" className="min-w-0 truncate">{agentDetail(agent)}</span>}
-              />
-            </ListRow>
+        <div ref={listRef} onKeyDown={onKeyDown}>
+          {groups.map((group) => (
+            <CollapsibleSection key={group.key} level="group" title={groupTitle(group, now)} open={isOpen(group.key)} onToggle={() => toggle(group.key)}>
+              <ul aria-label="Agents">
+                {flatAgents(group.agents).map((listed) => {
+                  const agent = atTime(listed, now)
+                  const detail = agentDetail(agent)
+                  return (
+                    <ListRow key={agent.key} nested={agent.depth > 0} onClick={() => onOpen(agent.key)} tooltip={agent.name}>
+                      <DotMark dot={DOT[agent.status]} />
+                      <ListRowLines
+                        primary={
+                          <>
+                            <span className="min-w-0 flex-1 truncate font-medium">{agent.name}</span>
+                            <ListRowMeta>{agentRowMeta(agent)}</ListRowMeta>
+                          </>
+                        }
+                        secondary={detail && <span data-agent-now="" className="min-w-0 truncate">{detail}</span>}
+                      />
+                    </ListRow>
+                  )
+                })}
+              </ul>
+            </CollapsibleSection>
           ))}
-        </ul>
+        </div>
       </MessageColumn>
     </div>
   )
@@ -132,6 +165,12 @@ function AgentLiveView({ agent, host, cwd, onBack }: ViewProps) {
             {stopFailed && <EmptyHint>The agent could not be stopped. It may have finished already.</EmptyHint>}
             {items.length === 0 && <EmptyHint>{agent ? 'No messages from this agent yet.' : 'This agent is not in the session any more.'}</EmptyHint>}
             <ChatItems items={items} cwd={cwd} agents={host} busy={agent?.status === 'working'} />
+            {agent?.report && agent.status !== 'working' && (
+              <section data-agent-report="" aria-label="Report">
+                <SectionLabel>Report</SectionLabel>
+                <Markdown text={agent.report} />
+              </section>
+            )}
           </MessageColumn>
         </div>
       </div>

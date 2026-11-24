@@ -1,8 +1,8 @@
 interface Tab<T extends string> {
   value: T
   label: string
-  /** Shown after the label, e.g. "Media 3". */
-  count?: number
+  /** Shown after the label, e.g. "Media 3" or "Agents 2 working". */
+  count?: number | string
   title?: string
 }
 

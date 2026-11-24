@@ -384,3 +384,14 @@ Each entry records what was decided, why, and the alternative. Review these in t
     - Alternative: turn flat JSON into "key: value" lines.
 213. **A `<persisted-output>` note reads "Output saved to file (34.9 KB)" as a file link, with its preview text under it in the OUT box.** The link opens like other file links (outside a workspace: the system app). The extension strips the tags and shows the inner text.
 214. **The approval inbox needed no change**: its context shows only Claude's last text and the current task, never tool rows. Hosted, VS Code and subagent live views all draw tool rows through the same `Message`, so they all fold.
+215. **The 10-minute quiet rule applies to every agent, also one its live process still reports working** (agents-view 02). Activity is its own file, the task events for it and its own agents' files, so an agent waiting on a reviewer stays working; a foreground Bash call is capped at 10 minutes. This keeps a hung agent from holding Running or the update gate for good.
+    - Alternative: the ticket's narrower rule, quiet only counts without a live parent process.
+216. **The parent transcript's `<task-notification>` lines are not read; the agent's own file decides.** Measured on Andreas's longest chat: 204 of 209 agent files settle from their own file (handback), 3 as interrupted, 2 were really working. The call's result (foreground) and live task events still confirm a plain-text ending.
+    - Alternative: also scan the 30 MB parent transcript for notifications.
+217. **A finished row shows the report's first 3 lines as one line** (list marks, headings and emphasis dropped, at most 300 characters): the call's own result, else the handback message or final text, else the CLI's notification summary, never the "delivered to you as a message" notice. The live view adds the whole handed-back report under "Report" at its end; a plain-text report already is its last message.
+    - Alternative: one line only.
+218. **Turn headers read "started at 2:05 PM · 5 agents"** in the chat's 12-hour stamp format (the ticket wrote 14:05), with the day ("Nov 22, 2:05 PM") when not today, plus "· 1 working" when any works. Folds the user flips last while the tab is open.
+    - Alternative: 24-hour time, remembered folds.
+219. **The main process checks agents its CLI still reports working every 60 s against their files**, and a handback, interrupt or 10 quiet minutes ends them for the Running status and the update gate, as the renderer's rules do.
+    - Alternative: leave both to the CLI's task events alone.
+220. **"Ended (no final report)" draws the hollow "no result yet" dot**, neither the green finished nor the red failed one.

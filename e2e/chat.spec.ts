@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASIC_REPLY, FAKE_SESSION, TINY_PNG, WRITE_DONE, clipboardText, userLines } from './common'
-import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, newChatIn, prompt, send, startSession, test, useScript } from './harness'
+import { cliPermissionMode, delayClaudeStart, evaluateMain, expect, newChatIn, prompt, send, startSession, test, transcriptsOf, useScript } from './harness'
 
 const modeButton = (page: Page, label: string) => page.locator('[data-chat-pane]').getByRole('button', { name: label, exact: true })
 
@@ -802,6 +802,27 @@ test.describe('chat rendering', () => {
   })
 })
 
+/** Agent files a previous process of the chat left two days ago: two that handed back, one that stopped writing without a report. */
+function seedOldAgents(subagents: string): void {
+  const start = Date.now() - 2 * 24 * 60 * 60_000
+  let n = 0
+  const line = (type: 'user' | 'assistant', content: unknown, at: number): string =>
+    JSON.stringify({ isSidechain: true, promptId: 'old-turn', type, uuid: `old-${++n}`, timestamp: new Date(at).toISOString(), message: { role: type, content } }) + '\n'
+  const agent = (id: string, description: string, report: string | null): void => {
+    writeFileSync(join(subagents, `agent-${id}.meta.json`), JSON.stringify({ agentType: 'general-purpose', description, toolUseId: `toolu_${id}` }))
+    const lines = [line('user', `${description}, please.`, start), line('assistant', [{ type: 'tool_use', id: `r-${id}`, name: 'Read', input: { file_path: 'a.ts' } }], start + 1000)]
+    if (report !== null) {
+      lines.push(line('user', [{ type: 'tool_result', tool_use_id: `r-${id}`, content: 'x' }], start + 2000))
+      lines.push(line('assistant', [{ type: 'tool_use', id: `h-${id}`, name: 'SubagentHandback', input: { message: report } }], start + 60_000))
+      lines.push(line('user', [{ type: 'tool_result', tool_use_id: `h-${id}`, content: 'Report delivered to your caller.' }], start + 61_000))
+    }
+    writeFileSync(join(subagents, `agent-${id}.jsonl`), lines.join(''))
+  }
+  agent('a0ld000000000001', 'Implement ticket 13', 'Ticket 13 is done as 87130bd.\n\n- **Tests:** green.')
+  agent('a0ld000000000002', 'Spec review of ticket 13', 'Spec: every box ticked.')
+  agent('a0ld000000000003', 'Implement ticket 06', null)
+}
+
 test.describe('subagents', () => {
   test.use({ script: 'subagent' })
 
@@ -810,7 +831,7 @@ test.describe('subagents', () => {
     const pane = page.locator('[data-chat-pane]')
     const calls = pane.locator('[data-agent-call]')
     const strip = pane.locator('[data-tab-strip]')
-    const agentsTab = strip.getByRole('tab', { name: /^Agents \d+$/ })
+    const agentsTab = strip.getByRole('tab', { name: /^Agents( \d+ working)?$/ })
     const chatTab = strip.getByRole('tab', { name: 'Chat', exact: true })
     const list = pane.getByRole('list', { name: 'Agents' })
     const view = pane.locator('[data-agent-view]')
@@ -831,7 +852,7 @@ test.describe('subagents', () => {
       await expect(logsRow.locator('[data-agent-now]')).toHaveText('now: Watching the logs.')
       await expect(transcript.getByText('Watching the logs.')).toHaveCount(0)
 
-      await expect(agentsTab).toHaveAccessibleName('Agents 2')
+      await expect(agentsTab).toHaveAccessibleName(/^Agents [12] working$/)
       await agentsTab.click()
       const logs = list.getByRole('button', { name: /Watch the logs/ })
       await expect(logs).toContainText('now: Bash pnpm test --run')
@@ -853,7 +874,8 @@ test.describe('subagents', () => {
       await expect(bar).toHaveCount(0, { timeout: 15_000 })
       await expect(pane.locator('[data-agents-done]')).toBeVisible()
       await expect(page.getByRole('navigation', { name: 'Sessions' }).getByRole('img', { name: 'Running' })).toHaveCount(0)
-      await expect(calls.nth(0).locator('[data-agent-now]')).toHaveText('No dead routes.')
+      // Its own last words, not the CLI's notification summary.
+      await expect(calls.nth(0).locator('[data-agent-now]')).toHaveText('Routes look fine.')
       expect(await transcript.locator('[data-timeline-row]').count()).toBe(rowsBefore)
     })
 
@@ -869,7 +891,10 @@ test.describe('subagents', () => {
       await expect(view.getByText('Subagent says the config lives in settings.ts.')).toBeVisible()
       await expect(view.locator('[data-timeline-row]', { hasText: /^Read/ }).getByRole('link', { name: 'settings.ts' })).toBeVisible()
       await view.getByRole('button', { name: 'Back' }).click()
-      await expect(list.getByRole('listitem')).toHaveCount(3)
+      // Only the newest turn is open; the background agents' turn folds under its header.
+      await expect(list.getByRole('listitem')).toHaveCount(1)
+      await expect(pane.getByRole('button', { name: /^started at .* · 2 agents$/ })).toHaveAttribute('aria-expanded', 'false')
+      await expect(agentsTab).toHaveAccessibleName('Agents')
       await chatTab.click()
     })
 
@@ -878,6 +903,26 @@ test.describe('subagents', () => {
       await expect(calls).toHaveCount(4)
       const call = calls.nth(3)
       await expect(call).toHaveAttribute('data-agent-status', 'working')
+
+      // As after a resume: agents of an earlier process, known only from their files, finished or gone quiet days ago.
+      const session = readdirSync(transcriptsOf(launched)).find((name) => !name.endsWith('.jsonl'))
+      seedOldAgents(join(transcriptsOf(launched), session ?? 'missing', 'subagents'))
+      await agentsTab.click()
+      const old = pane.getByRole('button', { name: /^started at .* · 3 agents$/ })
+      await expect(old).toHaveAttribute('aria-expanded', 'false')
+      await old.click()
+      const ticket13 = pane.getByRole('button', { name: /Implement ticket 13 Finished/ })
+      await expect(ticket13).toContainText('Finished · 1m 1s · 2 tools')
+      await expect(ticket13.locator('[data-agent-now]')).toHaveText('Ticket 13 is done as 87130bd. Tests: green.')
+      await expect(pane.getByRole('button', { name: /Implement ticket 06/ })).toContainText('Ended (no final report) · 1s · 1 tool')
+      await expect(pane.getByRole('button', { name: /^running Wait around/ })).toContainText('Working')
+      await expect(agentsTab).toHaveAccessibleName('Agents 1 working')
+      await page.screenshot({ path: test.info().outputPath('agents-resumed.png') })
+      await ticket13.click()
+      await expect(view.locator('[data-agent-report]')).toContainText('Ticket 13 is done as 87130bd.')
+      await page.keyboard.press('Escape')
+      await chatTab.click()
+
       await call.getByRole('button', { name: /^Agent Wait around/ }).click()
       await expect(view.getByText('Subagent is still looking.')).toBeVisible()
       await view.getByRole('button', { name: 'Stop agent' }).click()

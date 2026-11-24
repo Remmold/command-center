@@ -297,7 +297,7 @@ test('click latency on seeded data', async () => {
     // Five background agents writing their own files while keys go into the prompt box.
     await startIn(page, 'notes-cli', 'agents: five for the keystroke check', 'Five agents are working')
     await expect(pane.locator('[data-agents-still-working]')).toContainText('5 agents still working')
-    await expect(pane.getByRole('tab', { name: 'Agents 5' })).toBeVisible()
+    await expect(pane.getByRole('tab', { name: 'Agents 5 working' })).toBeVisible()
     await page.waitForTimeout(2000)
     await input.click()
     for (let k = 0; k < TRIES * 5; k++) await sample(page, 'keystroke in prompt box with 5 agents running', 'keydown', () => page.keyboard.press('a'))

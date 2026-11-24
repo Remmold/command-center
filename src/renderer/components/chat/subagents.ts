@@ -4,14 +4,15 @@ import type { ChatItem, ToolResultItem } from './types'
 export const AGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task'])
 const GROUP_TOOLS: ReadonlySet<string> = new Set([...AGENT_TOOLS, 'SendMessage'])
 
-/** The extension's agent states (`FE`), and its wording for each. */
-export type AgentStatus = 'working' | 'finished' | 'failed' | 'stopped'
+/** The extension's agent states (`FE`) and its wording for each, plus `ended`: gone quiet without a report. */
+export type AgentStatus = 'working' | 'finished' | 'failed' | 'stopped' | 'ended'
 
 export const AGENT_STATUS_LABEL: Record<AgentStatus, string> = {
   working: 'Working',
   finished: 'Finished',
   failed: 'Failed',
-  stopped: 'Stopped'
+  stopped: 'Stopped',
+  ended: 'Ended (no final report)'
 }
 
 export interface SubagentTask {
@@ -24,6 +25,8 @@ export interface SubagentTask {
   status: AgentStatus
   startTime: number
   endTime?: number
+  /** The latest task event for it. */
+  lastEventAt?: number
   usage?: { totalTokens: number; toolUses: number; durationMs: number }
   lastToolName?: string
   summary?: string
@@ -109,13 +112,14 @@ export function applyTaskEvent(tasks: SubagentTasks, event: TaskEvent, now: numb
         prompt: str(event.prompt),
         isBackgrounded: typeof event.is_backgrounded === 'boolean' ? event.is_backgrounded : undefined,
         status: 'working',
-        startTime: now
+        startTime: now,
+        lastEventAt: now
       }
       return { ...tasks, [taskId]: task }
     }
     case 'task_progress': {
       if (!known) return tasks
-      return { ...tasks, [taskId]: { ...known, usage: usageOf(event.usage) ?? known.usage, lastToolName: str(event.last_tool_name) ?? known.lastToolName, summary: str(event.summary) ?? known.summary } }
+      return { ...tasks, [taskId]: { ...known, lastEventAt: now, usage: usageOf(event.usage) ?? known.usage, lastToolName: str(event.last_tool_name) ?? known.lastToolName, summary: str(event.summary) ?? known.summary } }
     }
     case 'task_notification': {
       if (!known) return tasks

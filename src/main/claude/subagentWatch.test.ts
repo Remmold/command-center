@@ -43,12 +43,19 @@ describe('SubagentWatcher', () => {
   it('reads each agent file with its meta as chat items, then follows new lines', async () => {
     const dir = tempDir()
     mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'agent-a1.meta.json'), JSON.stringify({ agentType: 'Explore', description: 'Scan the routes', toolUseId: 'toolu_1' }))
-    writeFileSync(join(dir, 'agent-a1.jsonl'), line('user', 'Scan the routes for dead ones.') + called('t1', 'Read', { file_path: 'routes.ts' }))
+    writeFileSync(join(dir, 'agent-a1.meta.json'), JSON.stringify({ agentType: 'Explore', description: 'Scan the routes', toolUseId: 'toolu_1', finished: true }))
+    const first = line('user', 'Scan the routes for dead ones.').replace('{', '{"promptId":"P1",')
+    writeFileSync(join(dir, 'agent-a1.jsonl'), first + called('t1', 'Read', { file_path: 'routes.ts' }))
     const { events } = watch(dir)
 
     await expect.poll(() => events.length).toBeGreaterThan(0)
-    expect(events[0]).toMatchObject({ key: 'k', agentId: 'a1', reset: true, meta: { agentId: 'a1', agentType: 'Explore', description: 'Scan the routes', toolUseId: 'toolu_1' } })
+    const startedAt = Date.parse((JSON.parse(first) as { timestamp: string }).timestamp)
+    expect(events[0]).toMatchObject({
+      key: 'k',
+      agentId: 'a1',
+      reset: true,
+      meta: { agentId: 'a1', agentType: 'Explore', description: 'Scan the routes', toolUseId: 'toolu_1', finished: true, promptId: 'P1', startedAt }
+    })
     expect(texts(events[0].items)).toEqual(['Scan the routes for dead ones.'])
     expect(events[0].items[1]).toMatchObject({ kind: 'assistant', content: [{ type: 'tool_use', name: 'Read' }] })
     expect(events[0].items.some((i) => 'parentToolUseId' in i && i.parentToolUseId !== undefined)).toBe(false)
@@ -65,7 +72,8 @@ describe('SubagentWatcher', () => {
     writeFileSync(join(dir, 'agent-b2.jsonl'), said('Watching the logs.'))
 
     await expect.poll(() => texts(itemsOf(events, 'b2'))).toEqual(['Watching the logs.'])
-    expect(events.find((e) => e.agentId === 'b2')?.meta).toEqual({ agentId: 'b2' })
+    expect(events.find((e) => e.agentId === 'b2')?.meta).toMatchObject({ agentId: 'b2' })
+    expect(events.find((e) => e.agentId === 'b2')?.meta.description).toBeUndefined()
   })
 
   it('stops following once stopped', async () => {

@@ -7,6 +7,12 @@ export interface SubagentMeta {
   description?: string
   /** The Agent call that started it. */
   toolUseId?: string
+  /** The CLI marked it finished. */
+  finished?: boolean
+  /** The session's prompt whose turn started it, from its file's first line. */
+  promptId?: string
+  /** Its file's first line's time, read apart from the tail so a long file still knows when it began. */
+  startedAt?: number
 }
 
 /** What the session's `subagents/` folder holds for one agent. */

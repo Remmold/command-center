@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useTicking } from '../../hooks/useTicking'
 import { MEDIA_TAB_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { mediaKeyOf, shownTab, useChatMediaStore, type ChatMediaKey, type ChatTab } from '../../state/chatMediaStore'
@@ -8,7 +9,7 @@ import { TabStrip } from '../ui/TabStrip'
 import { collectMedia, type MediaAttachment, type MediaEntry } from './chatMedia'
 import { MediaGrid } from './MediaGrid'
 import { AgentsPanel } from './AgentsPanel'
-import { collectAgents, flatAgents, type AgentEntry } from './agentList'
+import { AGENT_RECHECK_MS, agentTabCount, collectAgents, flatAgents, type AgentEntry } from './agentList'
 import { AGENT_TOOLS } from './subagents'
 import type { AgentHost } from './toolContext'
 import type { ChatItem } from './types'
@@ -47,10 +48,17 @@ function useChatAgents(items: readonly ChatItem[], host: AgentHost | undefined, 
   const known = useMemo(() => (tasks !== undefined && Object.keys(tasks).length > 0) || hasAgentCall(items), [tasks, items])
   const tails = useAgentTails(host?.transcript, known)
   const running = host?.running ?? false
-  return useMemo(
+  const [anyWorking, setAnyWorking] = useState(false)
+  // An agent that stops writing turns ended with no event to say so; a slow clock catches it.
+  const tick = useTicking(anyWorking, AGENT_RECHECK_MS)
+  const clock = anyWorking ? tick : 0
+  const agents = useMemo(
     () => (known || Object.keys(tails).length > 0 ? collectAgents({ items, tasks: tasks ?? {}, tails, running, cwd, now: Date.now() }) : NO_AGENTS),
-    [known, items, tasks, tails, running, cwd]
+    [known, items, tasks, tails, running, cwd, clock]
   )
+  const working = useMemo(() => agentTabCount(agents) !== undefined, [agents])
+  useEffect(() => setAnyWorking(working), [working])
+  return agents
 }
 
 interface TabsProps extends SessionMedia {
@@ -71,6 +79,7 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
   const setTab = useChatMediaStore((s) => s.setTab)
   const agents = useChatAgents(items, agentHost, cwd)
   const agentCount = useMemo(() => flatAgents(agents).length, [agents])
+  const agentsWorking = useMemo(() => agentTabCount(agents), [agents])
   const tab = shownTab(chosen, media.length, agentCount)
   const regionRef = useRef<HTMLDivElement | null>(null)
   const jumpTo = useRef<string | null>(null)
@@ -104,10 +113,10 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
   const tabs = useMemo(
     () => [
       { value: 'chat' as const, label: 'Chat', title: `The transcript (${MEDIA_TAB_SHORTCUT})` },
-      ...(agentCount > 0 ? [{ value: 'agents' as const, label: 'Agents', count: agentCount, title: AGENTS_TITLE }] : []),
+      ...(agentCount > 0 ? [{ value: 'agents' as const, label: 'Agents', count: agentsWorking, title: AGENTS_TITLE }] : []),
       ...(media.length > 0 ? [{ value: 'media' as const, label: 'Media', count: media.length, title: `This session's images and videos (${MEDIA_TAB_SHORTCUT})` }] : [])
     ],
-    [agentCount, media.length]
+    [agentCount, agentsWorking, media.length]
   )
   const hidden = tab !== 'chat'
   return (
@@ -118,7 +127,7 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
           {children}
         </div>
         {tab === 'media' && <MediaGrid ref={gridRef} media={media} cwd={cwd} revision={revision} onJump={jump} />}
-        {tab === 'agents' && <AgentsPanel chatKey={chatKey} agents={agents} host={agentHost} cwd={cwd} />}
+        {tab === 'agents' && <AgentsPanel chatKey={chatKey} agents={agents} items={items} host={agentHost} cwd={cwd} />}
       </div>
     </>
   )

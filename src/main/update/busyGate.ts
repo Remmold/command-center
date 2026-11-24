@@ -6,6 +6,8 @@ export type BusyEvent =
   /** One parsed stream-json line from the session's claude process. */
   | { kind: 'claude-event'; paneId: string; event: unknown }
   | { kind: 'exit'; paneId: string }
+  /** The app saw from the agent's own file that it ended, or went quiet, though the CLI never reported it. */
+  | { kind: 'agent-ended'; paneId: string; taskId: string }
 
 interface SessionBusy {
   turnRunning: boolean
@@ -43,6 +45,8 @@ export function reduceBusy(state: BusyState, event: BusyEvent): BusyState {
       return replace({ ...session, approvals: session.approvals.filter((id) => id !== event.requestId) })
     case 'claude-event':
       return replace(applyLine(session, event.event))
+    case 'agent-ended':
+      return session.tasks.includes(event.taskId) ? replace({ ...session, tasks: session.tasks.filter((t) => t !== event.taskId) }) : state
   }
 }
 
