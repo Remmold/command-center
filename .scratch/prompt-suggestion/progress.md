@@ -1,0 +1,1 @@
+- 01 resolved: suggested next prompt as the box's placeholder, Tab fills, Esc dismisses; initialize promptSuggestions with a Settings -> General toggle and the account's promptSuggestionEnabled — 37739aa
