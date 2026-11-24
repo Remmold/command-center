@@ -84,7 +84,7 @@ test('VS Code’s accounts are adopted in one click and new chats and workspaces
   await page.reload()
   await page.waitForLoadState('domcontentloaded')
 
-  await test.step('the Dashboard points at the suggestion, one click adopts the Work folder and moves the workspace, and new chats and workspaces use it', async () => {
+  await test.step('the Dashboard points at the suggestion, one click adopts the Work folder and moves the workspace, and new chats and workspaces use it; a new chat there starts on the model and effort picked there', async () => {
     await page.getByRole('button', { name: 'Review in Settings' }).click()
     const banner = page.getByRole('region', { name: 'VS Code accounts' })
     await expect(banner).toHaveText(/VS Code uses the Work account for e2e-workspace\./)
@@ -99,6 +99,29 @@ test('VS Code’s accounts are adopted in one click and new chats and workspaces
 
     await startSession(launched)
     expect(launched.log.entries().filter((e) => e.kind === 'argv' && e.cwd === workspace).map((e) => e.configDir)).toEqual([work])
+
+    const pane = page.locator('[data-chat-pane]:visible')
+    const modelPill = pane.locator('[title="Switch model"]')
+    const effortPill = pane.getByRole('button', { name: /^Effort: / })
+    await modelPill.click()
+    await page.getByRole('menuitemradio', { name: /^Sonnet 5\.5/ }).click()
+    await expect(modelPill).toHaveText('Sonnet 5.5')
+    await effortPill.click()
+    await page.getByRole('dialog', { name: 'Effort' }).getByRole('button', { name: /^Effort/ }).click()
+    await expect(effortPill).toHaveAccessibleName('Effort: High')
+    await page.keyboard.press('Escape')
+    const from = launched.log.entries().length
+    await delayClaudeStart(app, 1000)
+    await page.keyboard.press('Control+t')
+    await newChatIn(page, /e2e-workspace/)
+    await expect(modelPill).toHaveText('Sonnet 5.5')
+    await expect(effortPill).toHaveAccessibleName('Effort: High')
+    expect(launched.log.initializedIn(workspace, from)).toBe(false)
+    await expect.poll(() => launched.log.initializedIn(workspace, from)).toBe(true)
+    await delayClaudeStart(app, 0)
+    const argv = (launched.log.entries().slice(from).find((e) => e.kind === 'argv')?.argv ?? []) as string[]
+    expect(argv.join(' ')).toContain('--model sonnet --effort high')
+    expect(readdirSync(work)).not.toContain('settings.json')
 
     await app.evaluate(({ dialog }, picked) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog

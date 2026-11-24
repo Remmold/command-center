@@ -1,0 +1,1 @@
+- 01 resolved: new chats start on the last-picked model and effort (per account, then any account, then the account's settings.json); Work chats now get --model/--effort — 2d06ea0

@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { nextWaiting } from '../../shared/needsYou'
 import type { CliModel, ModelDefaults, SessionInit, SessionStatusEntry, Workspace } from '../../shared/types'
 import { currentChoice, sessionTag } from './modelPicker'
-import { useModelStore, type AppliedModel } from './modelStore'
+import { defaultsOf, useModelStore, type AppliedModel } from './modelStore'
 import { useSessionInitStore } from './sessionInitStore'
 import { useObservedStore } from './observedStore'
 import { useProjectViewsStore, type ClaudeChatSession, type ProjectView } from './projectViewsStore'
@@ -76,7 +76,7 @@ export const useAccountSectionsStore = create<AccountSectionsState>()(
 interface ModelSources {
   inits: Record<string, SessionInit>
   cachedModels: CliModel[]
-  defaults: ModelDefaults
+  settingsByProfile: Record<string, ModelDefaults>
   applied: Record<string, AppliedModel>
   defaultByProfile: Record<string, string>
   processes: Record<string, ChatProcess>
@@ -89,7 +89,7 @@ function modelTagOf(c: ClaudeChatSession, profileId: string | undefined, m: Mode
     own: m.inits[c.id]?.models,
     cachedModels: m.cachedModels,
     knownDefault: runsOn ? m.defaultByProfile[runsOn] : undefined,
-    defaults: m.defaults,
+    defaults: defaultsOf(m.settingsByProfile, runsOn),
     session: c,
     applied: m.applied[c.id]
   })
@@ -127,9 +127,9 @@ function listInput({ views, byPane, models, ...rest }: ListSources): SessionList
 }
 
 function currentModelSources(): ModelSources {
-  const { cachedModels, defaults, applied, defaultByProfile } = useModelStore.getState()
+  const { cachedModels, settingsByProfile, applied, defaultByProfile } = useModelStore.getState()
   const { byPane: inits, processByPane: processes } = useSessionInitStore.getState()
-  return { inits, cachedModels, defaults, applied, defaultByProfile, processes }
+  return { inits, cachedModels, settingsByProfile, applied, defaultByProfile, processes }
 }
 
 function currentSources(): ListSources {
@@ -153,7 +153,7 @@ export function useSessionSources(): Omit<SessionListInput, 'search'> {
   const identities = useRepoIdentitiesStore((s) => s.identities)
   const inits = useSessionInitStore((s) => s.byPane)
   const cachedModels = useModelStore((s) => s.cachedModels)
-  const defaults = useModelStore((s) => s.defaults)
+  const settingsByProfile = useModelStore((s) => s.settingsByProfile)
   const applied = useModelStore((s) => s.applied)
   const defaultByProfile = useModelStore((s) => s.defaultByProfile)
   const processes = useSessionInitStore((s) => s.processByPane)
@@ -162,13 +162,13 @@ export function useSessionSources(): Omit<SessionListInput, 'search'> {
       listInput({
         views,
         byPane,
-        models: { inits, cachedModels, defaults, applied, defaultByProfile, processes },
+        models: { inits, cachedModels, settingsByProfile, applied, defaultByProfile, processes },
         observed,
         workspaces,
         identities,
         search: ''
       }),
-    [views, byPane, inits, cachedModels, defaults, applied, defaultByProfile, processes, observed, workspaces, identities]
+    [views, byPane, inits, cachedModels, settingsByProfile, applied, defaultByProfile, processes, observed, workspaces, identities]
   )
 }
 

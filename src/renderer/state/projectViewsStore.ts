@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { PtyKind, Workspace } from '../../shared/types'
+import { DEFAULT_PROFILE_ID, type PtyKind, type Workspace } from '../../shared/types'
 import { useChatItemsStore } from './chatItemsStore'
 import {
   LAYOUT_VERSION,
@@ -12,6 +12,8 @@ import {
 } from './projectViewLayout'
 import { migratePermissionModes, unsetStoreDefault, type PermissionMode, type SavedModes } from './permissionModes'
 import { migrateModelChoices, type SavedModelChoices } from './modelPicker'
+import { startingChoiceOn } from './modelStore'
+import { useWorkspacesStore } from './workspacesStore'
 import { ATTACHED_MARKER } from '../components/chat/promptHistory'
 import {
   NEW_SESSION_TITLE,
@@ -217,6 +219,10 @@ export function storedPermissionMode(paneId: string): PermissionMode | undefined
   return findSessionByPane(useProjectViewsStore.getState(), paneId)?.session.permissionMode
 }
 
+function profileOf(workspaceId: string): string {
+  return useWorkspacesStore.getState().workspaces.find((w) => w.id === workspaceId)?.profileId ?? DEFAULT_PROFILE_ID
+}
+
 /** The shell tabs of the workspace a chat session belongs to. */
 
 export function shellTabsOfSession(paneId: string): ShellTab[] {
@@ -242,7 +248,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         const firstSession: ClaudeChatSession | null =
           options?.firstSession === false
             ? null
-            : { id: makeId(), title: NEW_SESSION_TITLE, thinking: true }
+            : { id: makeId(), title: NEW_SESSION_TITLE, ...startingChoiceOn(project.profileId), thinking: true }
         const view: ProjectView = {
           projectId: project.id,
           projectName: project.name,
@@ -315,7 +321,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         const session: ClaudeChatSession = {
           id: makeId(),
           title: NEW_SESSION_TITLE,
-          model: options?.model,
+          ...(options?.model ? { model: options.model } : startingChoiceOn(profileOf(projectId))),
           thinking: true,
           permissionMode: options?.permissionMode
         }
@@ -442,7 +448,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         const session: ClaudeChatSession = {
           id: makeId(),
           ...loadedTitle(info),
-          model,
+          ...startingChoiceOn(profileOf(projectId), { model }),
           thinking: true,
           claudeSessionId: info.sessionId
         }

@@ -46,7 +46,7 @@ import { switchSessionMode } from '../../state/sessionMode'
 import type { ApprovalRequest } from '../../../shared/approval'
 import { useFocusRequestStore } from '../../state/sessionNavigation'
 import { useSessionInit, useSessionInitStore } from '../../state/sessionInitStore'
-import { useModelStore } from '../../state/modelStore'
+import { defaultsOf, useModelStore } from '../../state/modelStore'
 import { useModelChoice } from '../../state/useModelChoice'
 import { DEFAULT_MODEL, effortLabel, launchChoice, versionedName } from '../../state/modelPicker'
 import { useGeneralSettingsStore } from '../../state/generalSettingsStore'
@@ -61,7 +61,7 @@ import { Brain } from 'lucide-react'
 import { RemoteControlPill } from './RemoteControlPill'
 import { REMOTE_CONTROL_COMMAND, REMOTE_CONTROL_DESCRIPTION, isRemoteControlCommand, remoteControlOffered } from './remoteControl'
 import { remoteControlOf, useRemoteControlStore } from '../../state/remoteControlStore'
-import { THINKING_BUDGET } from '../../../shared/types'
+import { DEFAULT_PROFILE_ID, THINKING_BUDGET } from '../../../shared/types'
 import type {
   ClaudeAssistantEvent,
   ClaudeEvent,
@@ -214,12 +214,15 @@ export const ChatView = memo(function ChatView({
     return res.ok || res.error === NOT_RUNNING
   }
 
+  const pickProfile = (): string => useSessionInitStore.getState().processByPane[paneId]?.profileId ?? profileId ?? DEFAULT_PROFILE_ID
+
   const pickModel = async (value: string): Promise<void> => {
     const setting = value === DEFAULT_MODEL ? null : value
     if (!(await applyFlags({ model: setting }))) return
     useProjectViewsStore.getState().setSessionModel(paneId, value)
     const picked = choice.models.find((m) => m.value === value)
     note(`Set model to ${picked ? versionedName(picked) : value}`)
+    useModelStore.getState().recordPick(pickProfile(), { model: value })
     await useModelStore.getState().saveDefaults({ model: setting })
   }
 
@@ -227,6 +230,7 @@ export const ChatView = memo(function ChatView({
     if (!(await applyFlags({ effortLevel: level }))) return
     useProjectViewsStore.getState().setSessionEffort(paneId, level)
     note(`Set effort to ${effortLabel(level)}`)
+    useModelStore.getState().recordPick(pickProfile(), { effort: level })
     const resolvedModel = useModelStore.getState().applied[paneId]?.model ?? choice.entry?.resolvedModel
     if (resolvedModel) await useModelStore.getState().saveDefaults({ effort: { resolvedModel, level } })
   }
@@ -570,7 +574,9 @@ export const ChatView = memo(function ChatView({
     const startMode = await launchMode()
     launchedModeRef.current = startMode
     launchedBypassRef.current = allowBypassSetting
-    const { defaults } = useModelStore.getState()
+    const runsOn = profileId ?? DEFAULT_PROFILE_ID
+    if (!(runsOn in useModelStore.getState().settingsByProfile)) await useModelStore.getState().loadDefaults(runsOn)
+    const defaults = defaultsOf(useModelStore.getState().settingsByProfile, runsOn)
     const flags = launchChoice({ models: choice.models, defaults, selection: model, effort })
     const res = await window.api.claude.start({
       paneId,
