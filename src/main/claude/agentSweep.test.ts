@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -45,8 +45,6 @@ describe('the sweep over agents the CLI still reports working', () => {
   it('keeps one silent for 30 minutes busy while its process lives: a long build writes nothing until it returns', async () => {
     const { sweep, dir, ended } = setup()
     writeFileSync(join(dir, 'agent-a1.jsonl'), line('user', 'Go.') + called('b', 'Bash', { command: 'pnpm e2e' }))
-    const longAgo = new Date(Date.now() - 30 * 60_000)
-    utimesSync(join(dir, 'agent-a1.jsonl'), longAgo, longAgo)
     sweep.event('p', started('a1'))
     await sweep.sweep()
     expect(ended).toEqual([])

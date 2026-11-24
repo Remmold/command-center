@@ -182,6 +182,13 @@ describe('a resumed chat’s old agents', () => {
     const live = collectAgents({ items, tasks, tails: stuck, running: true, cwd: CWD, now: start + 1000 + 30 * 60_000 })[0]
     expect(live.status).toBe('working')
     expect(agentRowMeta(atTime({ ...live, depth: 0 }, start + 1000 + 30 * 60_000))).toBe('Working · 30m 1s · quiet 30m · 1 tool')
+    const waitingOnChild: AgentTails = {
+      ...stuck,
+      k: { meta: { agentId: 'k', toolUseId: 'c9' }, items: [call('g', 'Grep', { pattern: 'x' }, start + 29 * 60_000)] }
+    }
+    const withChild = { ...stuck.a1, items: [...stuck.a1.items, call('c9', 'Agent', { description: 'Review' }, start + 1000)] }
+    const parent = collectAgents({ items, tasks, tails: { ...waitingOnChild, a1: withChild }, running: true, cwd: CWD, now: start + 30 * 60_000 })[0]
+    expect(agentRowMeta(atTime({ ...parent, depth: 0 }, start + 30 * 60_000))).not.toContain('quiet')
     const gone = collectAgents({ items, tasks: {}, tails: stuck, running: false, cwd: CWD, now: start + 1000 + 11 * 60_000 })[0]
     expect(gone.status).toBe('ended')
   })

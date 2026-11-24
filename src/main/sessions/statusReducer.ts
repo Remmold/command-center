@@ -8,7 +8,7 @@ export type SessionStatusEvent =
   /** One parsed stream-json line from the claude process. */
   | { kind: 'claude-event'; event: unknown; at: number }
   | { kind: 'exit'; at: number }
-  /** The app saw from the agent's own file that it ended, or went quiet, though the CLI never reported it. */
+  /** The app saw from the agent's own file that it ended (a handback, an interrupt, the finished mark), though the CLI never reported it. */
   | { kind: 'agent-ended'; taskId: string; at: number }
 
 type WithoutTime<E> = E extends unknown ? Omit<E, 'at'> : never

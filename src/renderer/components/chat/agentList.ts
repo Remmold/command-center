@@ -354,8 +354,11 @@ function withChildren(entry: AgentEntry, children: AgentEntry[], now: number): A
   const lastActivityAt = children.reduce<number | undefined>((at, c) => latestOf(at, c.lastActivityAt), entry.lastActivityAt)
   const childWorks = children.some((c) => c.status === 'working')
   const wakes = entry.status === 'ended' && childWorks
+  const { quietMs: _was, ...rest } = entry
+  const stillQuiet = lastActivityAt !== undefined && isQuiet(lastActivityAt, now)
   return {
-    ...entry,
+    ...rest,
+    ...(entry.quietMs !== undefined && stillQuiet ? { quietMs: now - lastActivityAt } : {}),
     children,
     ...(lastActivityAt !== undefined ? { lastActivityAt } : {}),
     ...(wakes ? { status: 'working' as const, ...(entry.startTime !== undefined ? { elapsedMs: Math.max(0, now - entry.startTime) } : {}) } : {})
@@ -459,8 +462,9 @@ export function atTime(agent: FlatAgent, now: number): FlatAgent {
   if (quiet && agent.task?.status !== 'working') {
     return { ...agent, status: 'ended', ...(agent.startTime !== undefined ? { elapsedMs: Math.max(0, last - agent.startTime) } : {}) }
   }
+  const { quietMs: _was, ...rest } = agent
   return {
-    ...agent,
+    ...rest,
     ...(agent.startTime !== undefined ? { elapsedMs: Math.max(0, now - agent.startTime) } : {}),
     ...(quiet ? { quietMs: now - last } : {})
   }

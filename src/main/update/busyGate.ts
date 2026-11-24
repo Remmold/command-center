@@ -6,7 +6,7 @@ export type BusyEvent =
   /** One parsed stream-json line from the session's claude process. */
   | { kind: 'claude-event'; paneId: string; event: unknown }
   | { kind: 'exit'; paneId: string }
-  /** The app saw from the agent's own file that it ended, or went quiet, though the CLI never reported it. */
+  /** The app saw from the agent's own file that it ended (a handback, an interrupt, the finished mark), though the CLI never reported it. */
   | { kind: 'agent-ended'; paneId: string; taskId: string }
 
 interface SessionBusy {
