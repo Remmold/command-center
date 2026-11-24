@@ -50,7 +50,7 @@ One JSON object per line, each with `t` (ISO time) and `kind`:
 }
 ```
 
-- A turn's `suggestion` (a string) is sent as `{"type":"prompt_suggestion","suggestion":…,"uuid","session_id"}` right after its success result, but only when `initialize` asked for `promptSuggestions: true`, the shape the CLI emits (none was recorded, so built from the CLI's bundle). The real CLI suggests after most turns; the fake only where a script says so.
+- A turn's `suggestion` (a string) is sent as `{"type":"prompt_suggestion","suggestion":…,"uuid","session_id"}` right after its success result, but only when `initialize` asked for `promptSuggestions: true` and no `set_prompt_suggestions_paused` `paused: true` is in force, the shape the CLI emits (none was recorded, so built from the CLI's bundle). The real CLI suggests after most turns; the fake only where a script says so.
 - Each user message plays the first turn whose `match` regex (with `flags`) matches its text and has not been played yet; `repeat: true` lets a turn play again. With no match the default reply plays.
 - Every turn starts with `system/init`, and each message with a `status: requesting` line. A turn without a `result` event ends with a success result carrying the last text.
 - Events (all take an optional `delayMs` before them):

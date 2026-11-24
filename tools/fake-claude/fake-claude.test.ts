@@ -299,6 +299,19 @@ describe('scripts', () => {
     await notAsked.next(isResult)
     expect(notAsked.lines.some((l) => l.type === 'prompt_suggestion')).toBe(false)
   })
+
+  it('sends no suggestion while set_prompt_suggestions_paused holds it, and does again once unpaused', async () => {
+    const fake = start([], { turns: [{ match: '', repeat: true, suggestion: 'Run the tests', events: [{ type: 'text', text: 'ok' }] }] })
+    await fake.control('initialize', { hooks: null, promptSuggestions: true })
+    expect((await fake.control('set_prompt_suggestions_paused', { paused: true })).subtype).toBe('success')
+    fake.say('hi')
+    await fake.next(isResult)
+    expect(fake.lines.some((l) => l.type === 'prompt_suggestion')).toBe(false)
+    await fake.control('set_prompt_suggestions_paused', { paused: false })
+    const seen = fake.lines.length
+    fake.say('again')
+    expect((await fake.next((l) => l.type === 'prompt_suggestion', seen)).suggestion).toBe('Run the tests')
+  })
 })
 
 describe('thinking and todos', () => {

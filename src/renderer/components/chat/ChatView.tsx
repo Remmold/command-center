@@ -15,7 +15,8 @@ import { InputBox } from './InputBox'
 import { ApprovalPrompt } from './ApprovalPrompt'
 import { PermissionModePicker } from './PermissionModePicker'
 import { interruptNote } from './interrupt'
-import { suggestionReducer, type SuggestionClear } from './promptSuggestion'
+import { pauseToSend, suggestionReducer, type SuggestionClear } from './promptSuggestion'
+import { useHostedChatOnScreen } from '../../hooks/useHostedChatOnScreen'
 import { UserPrompt } from './Message'
 import { pickUp, type HeldPrompt } from './heldPrompts'
 import { historyEntries } from './promptHistory'
@@ -194,6 +195,11 @@ export const ChatView = memo(function ChatView({
   const awaitingSummaryRef = useRef(false)
   const allowBypassSetting = useGeneralSettingsStore((s) => s.allowDangerouslySkipPermissions)
   const promptSuggestionsSetting = useGeneralSettingsStore((s) => s.promptSuggestions)
+  const onScreen = useHostedChatOnScreen(paneId)
+  /** What the running process was told; a new process starts unpaused. */
+  const suggestionsPausedRef = useRef(false)
+  const launchedSuggestionsRef = useRef(false)
+  const launchCountRef = useRef(0)
   const choice = useModelChoice(paneId, { model, effort }, profileId)
   const mode = migrateMode(permissionMode)
   const autoAvailable = choice.entry?.supportsAutoMode === true
@@ -279,6 +285,20 @@ export const ChatView = memo(function ChatView({
     })
     return () => cancelAnimationFrame(frame)
   }, [focusRequest])
+
+  useEffect(() => {
+    if (!processRunning || !launchedSuggestionsRef.current) return
+    const paused = pauseToSend(suggestionsPausedRef.current, onScreen)
+    if (paused === null) return
+    suggestionsPausedRef.current = paused
+    const launch = launchCountRef.current
+    void window.api.claude.control(paneId, 'set_prompt_suggestions_paused', { paused }).then((res) => {
+      if (res.ok) return
+      console.error('[claude] set_prompt_suggestions_paused failed', paneId, res.error)
+      // A reply from an earlier process must not touch what the current one was told.
+      if (launch === launchCountRef.current && suggestionsPausedRef.current === paused) suggestionsPausedRef.current = !paused
+    })
+  }, [paneId, onScreen, processRunning])
 
   useEffect(() => {
     if (turnActive) setSuggestion((s) => suggestionReducer(s, { type: 'clear', reason: 'turn-started' }))
@@ -587,6 +607,9 @@ export const ChatView = memo(function ChatView({
     const startMode = await launchMode()
     launchedModeRef.current = startMode
     launchedBypassRef.current = allowBypassSetting
+    launchedSuggestionsRef.current = promptSuggestionsSetting
+    suggestionsPausedRef.current = false
+    launchCountRef.current += 1
     const runsOn = profileId ?? DEFAULT_PROFILE_ID
     if (!(runsOn in useModelStore.getState().settingsByProfile)) await useModelStore.getState().loadDefaults(runsOn)
     const defaults = defaultsOf(useModelStore.getState().settingsByProfile, runsOn)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shownSuggestion, suggestionKey, suggestionReducer } from './promptSuggestion'
+import { pauseToSend, shownSuggestion, suggestionKey, suggestionReducer } from './promptSuggestion'
 
 const line = (suggestion: unknown) => ({ type: 'prompt_suggestion', suggestion, uuid: 'u1', session_id: 's1' })
 
@@ -46,5 +46,14 @@ describe('suggestionKey', () => {
     expect(suggestionKey({ key: 'Tab', ...bare, shiftKey: true }, true)).toBeNull()
     expect(suggestionKey({ key: 'Tab', ...bare, ctrlKey: true }, true)).toBeNull()
     expect(suggestionKey({ key: 'Enter', ...bare }, true)).toBeNull()
+  })
+})
+
+describe('pauseToSend', () => {
+  it('pauses a chat that went off screen and resumes it when shown, sending only changes', () => {
+    expect(pauseToSend(false, false)).toBe(true)
+    expect(pauseToSend(true, true)).toBe(false)
+    expect(pauseToSend(false, true)).toBeNull()
+    expect(pauseToSend(true, false)).toBeNull()
   })
 })

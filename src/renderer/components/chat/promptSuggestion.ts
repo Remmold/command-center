@@ -32,3 +32,12 @@ export function suggestionKey(e: KeyLike, shown: boolean): 'accept' | 'dismiss' 
   if (e.key === 'Escape') return 'dismiss'
   return null
 }
+
+/**
+ * The extension's `syncPromptSuggestionPauses`: a chat off screen asks its CLI to stop suggesting, since each
+ * suggestion costs usage. Returns the `paused` value to send, or null when the CLI already has it.
+ */
+export function pauseToSend(sent: boolean, onScreen: boolean): boolean | null {
+  const paused = !onScreen
+  return paused === sent ? null : paused
+}
