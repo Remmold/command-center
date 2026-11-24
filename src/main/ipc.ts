@@ -28,7 +28,7 @@ import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import { approvalBroker } from './claude/approvals'
-import { readDefaultMode, readModelDefaults, saveModelDefaults } from './claude/userSettings'
+import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
 import { agentSweep } from './claude/agentSweepService'
@@ -335,7 +335,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
     const { profileId, env } = await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)
     const teleported = options.resumeSessionId ? await isTeleportedSession(await transcriptsDirForCwd(options.cwd), options.resumeSessionId) : false
-    const started = claudeManager.start({ ...options, profileEnv: env, profileId, teleported })
+    const allowed = await readPromptSuggestionsAllowed(join((await profiles.get(profileId)).configDir, 'settings.json'))
+    const promptSuggestions = options.promptSuggestions !== false && allowed
+    const started = claudeManager.start({ ...options, promptSuggestions, profileEnv: env, profileId, teleported })
     return started.ok ? { ...started, profileId: claudeManager.profileOf(options.paneId) } : started
   })
   ipcMain.handle(IPC.CLAUDE_PROCESS_PROFILE, (_e, paneId: string) => (claudeManager.isAlive(paneId) ? claudeManager.profileOf(paneId) : null))

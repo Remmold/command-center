@@ -196,6 +196,33 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
     await prompt(page).fill('')
   })
 
+  await test.step('a suggested next prompt shows while the box is empty, Tab fills it without sending, typing hides it, Esc and the next send clear it', async () => {
+    const empty = 'message claude…'
+    expect(log.controlRequests('initialize').map((r) => r.promptSuggestions)).toContain(true)
+    await send(page, 'suggest a next step')
+    await expect(prompt(page)).toHaveAttribute('placeholder', 'Run the tests')
+    const texts = log.userTexts().length
+    await prompt(page).press('Tab')
+    await expect(prompt(page)).toHaveValue('Run the tests')
+    expect(log.userTexts()).toHaveLength(texts)
+    await prompt(page).fill('')
+    await expect(prompt(page)).toHaveAttribute('placeholder', 'Run the tests')
+    await prompt(page).pressSequentially('x')
+    await expect(prompt(page)).toHaveAttribute('placeholder', empty)
+    await prompt(page).fill('')
+    await prompt(page).press('Escape')
+    await expect(prompt(page)).toHaveAttribute('placeholder', empty)
+    await prompt(page).press('Tab')
+    await expect(prompt(page)).toHaveValue('')
+
+    await send(page, 'suggest again')
+    await expect(prompt(page)).toHaveAttribute('placeholder', 'Run the tests')
+    await send(page, 'thanks')
+    await expect.poll(() => log.userTexts().at(-1)).toBe('thanks')
+    await expect(page.getByText(BASIC_REPLY)).toHaveCount(6)
+    await expect(prompt(page)).toHaveAttribute('placeholder', empty)
+  })
+
   await test.step('the slash menu sends on Enter, inserts with a hint on Tab, and opens the app’s own UI', async () => {
     const menu = page.getByRole('listbox', { name: 'Actions' })
     const textsBefore = log.userTexts().length

@@ -46,6 +46,7 @@ class ClaudeManager {
         effort: options.effort,
         thinking: options.thinking,
         allowBypass: options.allowBypass,
+        promptSuggestions: options.promptSuggestions,
         resumeSessionId: options.resumeSessionId,
         permissionMode: options.permissionMode,
         profileEnv: options.profileEnv,

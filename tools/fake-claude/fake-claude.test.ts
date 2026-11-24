@@ -282,6 +282,36 @@ describe('scripts', () => {
     const event = await fake.next((l) => l.type === 'rate_limit_event')
     expect(event.rate_limit_info.unifiedWindows.seven_day.utilization).toBe(0.42)
   })
+
+  it("sends a turn's suggestion after its result only when initialize asked for prompt suggestions", async () => {
+    const script = { turns: [{ match: '', repeat: true, suggestion: 'Run the tests', events: [{ type: 'text', text: 'ok' }] }] }
+    const asked = start([], script)
+    await asked.control('initialize', { hooks: null, promptSuggestions: true })
+    asked.say('hi')
+    const result = await asked.next(isResult)
+    const suggestion = await asked.next((l) => l.type === 'prompt_suggestion')
+    expect(suggestion).toEqual({ type: 'prompt_suggestion', suggestion: 'Run the tests', uuid: expect.any(String), session_id: result.session_id })
+    expect(asked.lines.indexOf(suggestion)).toBeGreaterThan(asked.lines.indexOf(result))
+
+    const notAsked = start([], script)
+    await notAsked.control('initialize', { hooks: null, promptSuggestions: false })
+    notAsked.say('hi')
+    await notAsked.next(isResult)
+    expect(notAsked.lines.some((l) => l.type === 'prompt_suggestion')).toBe(false)
+  })
+
+  it('sends no suggestion while set_prompt_suggestions_paused holds it, and does again once unpaused', async () => {
+    const fake = start([], { turns: [{ match: '', repeat: true, suggestion: 'Run the tests', events: [{ type: 'text', text: 'ok' }] }] })
+    await fake.control('initialize', { hooks: null, promptSuggestions: true })
+    expect((await fake.control('set_prompt_suggestions_paused', { paused: true })).subtype).toBe('success')
+    fake.say('hi')
+    await fake.next(isResult)
+    expect(fake.lines.some((l) => l.type === 'prompt_suggestion')).toBe(false)
+    await fake.control('set_prompt_suggestions_paused', { paused: false })
+    const seen = fake.lines.length
+    fake.say('again')
+    expect((await fake.next((l) => l.type === 'prompt_suggestion', seen)).suggestion).toBe('Run the tests')
+  })
 })
 
 describe('thinking and todos', () => {

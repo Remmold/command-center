@@ -1,6 +1,14 @@
 {
   "turns": [
     {
+      "match": "^suggest",
+      "repeat": true,
+      "suggestion": "Run the tests",
+      "events": [
+        { "type": "text", "text": "Hello! This is a scripted reply from the fake Claude." }
+      ]
+    },
+    {
       "match": "",
       "repeat": true,
       "events": [

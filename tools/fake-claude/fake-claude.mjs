@@ -171,6 +171,8 @@ class Fake {
     const resume = [this.flags['--resume'], this.flags['--session-id']].find((v) => typeof v === 'string')
     this.sessionId = resume ?? randomUUID()
     this.permissionMode = this.flags['--permission-mode'] || 'default'
+    this.promptSuggestions = false
+    this.suggestionsPaused = false
     this.bypassAllowed =
       this.flags['--allow-dangerously-skip-permissions'] === true ||
       this.flags['--dangerously-skip-permissions'] === true ||
@@ -284,6 +286,7 @@ class Fake {
       this.send({ type: 'control_response', response: { subtype: 'success', request_id: requestId, ...(response ? { response } : {}) } })
     switch (request.subtype) {
       case 'initialize':
+        this.promptSuggestions = request.promptSuggestions === true
         return ok({
           ...clone(recorded.initialize),
           account: accountFor(clone(recorded.initialize.account)),
@@ -317,6 +320,10 @@ class Fake {
         this.model = request.model ?? 'default'
         return ok()
       case 'set_max_thinking_tokens':
+        return ok()
+      case 'set_prompt_suggestions_paused':
+        if (typeof request.paused !== 'boolean') return fail('Invalid set_prompt_suggestions_paused: paused must be a boolean')
+        this.suggestionsPaused = request.paused
         return ok()
       case 'get_settings': {
         const reply = clone(template.settings)
@@ -889,6 +896,9 @@ class Turn {
     result.result = text ?? this.lastText
     result.num_turns = this.numTurns
     this.emit(result)
+    if (this.fake.promptSuggestions && !this.fake.suggestionsPaused && typeof this.script.suggestion === 'string') {
+      this.emit({ type: 'prompt_suggestion', suggestion: this.script.suggestion, uuid: '', session_id: '' })
+    }
   }
 
   endInterrupted(pendingToolUseId, noteSent = false) {

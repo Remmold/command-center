@@ -90,6 +90,8 @@ export function GeneralSettings() {
   const setAllowBypass = useGeneralSettingsStore((s) => s.setAllowDangerouslySkipPermissions)
   const ctrlEnterSends = useGeneralSettingsStore((s) => s.useCtrlEnterToSend)
   const setCtrlEnterSends = useGeneralSettingsStore((s) => s.setUseCtrlEnterToSend)
+  const suggestions = useGeneralSettingsStore((s) => s.promptSuggestions)
+  const setSuggestions = useGeneralSettingsStore((s) => s.setPromptSuggestions)
   const update = useUpdateStore((s) => s.status)
   const checkNow = useUpdateStore((s) => s.check)
   const zoomLevel = useZoomStore((s) => s.level)
@@ -148,6 +150,13 @@ export function GeneralSettings() {
             Use Ctrl Enter To Send
           </Checkbox>
           <PageNote>When enabled, use Ctrl/Cmd+Enter to send prompts instead of just Enter. This allows Enter to create new lines.</PageNote>
+          <Checkbox checked={suggestions} onChange={setSuggestions}>
+            Suggest next prompt
+          </Checkbox>
+          <PageNote>
+            Claude suggests a next prompt after each reply (uses a little of your usage). Tab puts it in the message box. Applies to chats started
+            from now on.
+          </PageNote>
         </PageGroup>
         <VideoGroup />
       </PageBody>
