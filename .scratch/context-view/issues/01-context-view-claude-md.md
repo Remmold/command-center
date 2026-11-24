@@ -18,7 +18,7 @@ Reader rules (from the spec, word for word):
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Ctrl+4 and the sidebar open Context; Ctrl+1/2/3 are unchanged.
 - [ ] The workspace list is grouped by account with a start total per row, and starts on the last Work workspace.

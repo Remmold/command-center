@@ -31,6 +31,8 @@ export const IPC = {
   BOARD_GET: 'board:get',
   BOARD_CHANGED: 'board:changed',
   BOARD_READ_FILE: 'board:readFile',
+  CONTEXT_REPORT: 'context:report',
+  CONTEXT_START_TOTALS: 'context:startTotals',
   DISCOVERY_GET: 'discovery:get',
   DISCOVERY_CHANGED: 'discovery:changed',
   DISCOVERY_RESCAN: 'discovery:rescan',

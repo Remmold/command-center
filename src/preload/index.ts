@@ -100,6 +100,10 @@ const api: RendererApi = {
     },
     readFile: (path: string): Promise<string | null> => ipcRenderer.invoke(IPC.BOARD_READ_FILE, path)
   },
+  context: {
+    report: (workspaceId: string) => ipcRenderer.invoke(IPC.CONTEXT_REPORT, workspaceId),
+    startTotals: () => ipcRenderer.invoke(IPC.CONTEXT_START_TOTALS)
+  },
   discovery: {
     get: (): Promise<DiscoveryModel> => ipcRenderer.invoke(IPC.DISCOVERY_GET),
     onChanged: (cb) => {
