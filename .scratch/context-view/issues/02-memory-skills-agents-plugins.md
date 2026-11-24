@@ -11,11 +11,11 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 01
 
-**Status:** in-progress
+**Status:** resolved
 
-- [ ] The memory folder shows in the account layer, with MEMORY.md counted and the other files listed.
-- [ ] Skills, agents and commands are listed with their source; descriptions are counted, bodies are not.
-- [ ] Enabled plugins are listed per layer; their skills, agents and commands are sourced `plugin:<name>`.
-- [ ] The start totals in the list and the pane include the new counts.
-- [ ] Unit tests (seam 1) extend the fake folders: skills, agents and commands in the account and the repo, a plugin cache with an enabled and a disabled plugin, memory with MEMORY.md and other files, shared through the linked profile. Exact totals.
-- [ ] Quick tier green.
+- [x] The memory folder shows in the account layer, with MEMORY.md counted and the other files listed.
+- [x] Skills, agents and commands are listed with their source; descriptions are counted, bodies are not.
+- [x] Enabled plugins are listed per layer; their skills, agents and commands are sourced `plugin:<name>`.
+- [x] The start totals in the list and the pane include the new counts.
+- [x] Unit tests (seam 1) extend the fake folders: skills, agents and commands in the account and the repo, a plugin cache with an enabled and a disabled plugin, memory with MEMORY.md and other files, shared through the linked profile. Exact totals.
+- [x] Quick tier green.
