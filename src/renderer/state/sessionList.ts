@@ -124,42 +124,77 @@ export function sessionList(input: SessionListInput): SessionGroup[] {
   })).filter((g) => g.rows.length > 0)
 }
 
+export interface RepoGroup {
+  repoGroupKey: string
+  repoName: string
+  /** The first of the group's workspaces in saved order, for its icon. */
+  workspace: Workspace
+  /** In the compact list order: Needs you, Running, Idle, In VS Code. */
+  rows: SessionRow[]
+  needsYou: number
+}
+
 export interface AccountSection {
   account: Account
-  /** The section's rows in list order: Needs you, Running, Idle, In VS Code. */
+  /** The section's repo groups in Settings → Workspaces order. */
+  repos: RepoGroup[]
+  /** Every row of the section, top to bottom with all groups open. */
   rows: SessionRow[]
   /** Waiting sessions in the section, shown on its header when it is folded. */
   needsYou: number
 }
 
-/** The status groups split by the account of each row's workspace, accounts in Settings order; groups keep their order. */
-export function accountSections(groups: readonly SessionGroup[], accounts: readonly Account[]): AccountSection[] {
+function repoGroups(rows: readonly SessionRow[], workspaces: readonly Workspace[]): RepoGroup[] {
+  const first = new Map<string, { at: number; workspace: Workspace }>()
+  workspaces.forEach((workspace, at) => {
+    if (!first.has(workspace.repoGroupKey)) first.set(workspace.repoGroupKey, { at, workspace })
+  })
+  const groups = new Map<string, RepoGroup>()
+  for (const row of rows) {
+    const key = row.workspace.repoGroupKey
+    const group = groups.get(key) ?? { repoGroupKey: key, repoName: row.repoName, workspace: row.workspace, rows: [], needsYou: 0 }
+    group.rows.push(row)
+    if (isNeedsYouRow(row)) group.needsYou++
+    groups.set(key, group)
+  }
+  const at = (key: string) => first.get(key)?.at ?? workspaces.length
+  return [...groups.values()]
+    .sort((a, b) => at(a.repoGroupKey) - at(b.repoGroupKey))
+    .map((g) => ({ ...g, workspace: first.get(g.repoGroupKey)?.workspace ?? g.workspace }))
+}
+
+/** The status groups split by the account of each row's workspace, accounts in Settings order, then by repo in saved workspace order; rows keep the status order. */
+export function accountSections(groups: readonly SessionGroup[], accounts: readonly Account[], workspaces: readonly Workspace[]): AccountSection[] {
   const rank = accountRank(accounts)
-  const byAccount = new Map<string, { rows: SessionRow[]; needsYou: number }>()
+  const byAccount = new Map<string, SessionRow[]>()
   for (const group of groups) {
     for (const row of group.rows) {
       const id = accountOf(accounts, row.workspace.profileId).profileId
-      const section = byAccount.get(id) ?? { rows: [], needsYou: 0 }
-      section.rows.push(row)
-      if (isNeedsYouRow(row)) section.needsYou++
-      byAccount.set(id, section)
+      byAccount.set(id, [...(byAccount.get(id) ?? []), row])
     }
   }
   return [...byAccount]
     .sort(([a], [b]) => rank(a) - rank(b))
-    .map(([id, { rows, needsYou }]) => ({ account: accountOf(accounts, id), rows, needsYou }))
+    .map(([id, rows]) => {
+      const repos = repoGroups(rows, workspaces)
+      return {
+        account: accountOf(accounts, id),
+        repos,
+        rows: repos.flatMap((g) => g.rows),
+        needsYou: repos.reduce((n, g) => n + g.needsYou, 0)
+      }
+    })
 }
 
 export function isNeedsYouRow(row: SessionRow): row is HostedRow {
   return row.kind === 'hosted' && hostedGroup(row.status) === 'needs-you'
 }
 
-/** A folded section's header pill; an open one shows its waiting rows. */
-export function waitingBadge(section: AccountSection, open: boolean): { text: string; tooltip: string } | null {
-  const n = section.needsYou
+/** A folded header's pill, account or repo group; an open one shows its waiting rows. */
+export function waitingBadge(n: number, name: string, open: boolean): { text: string; tooltip: string } | null {
   if (open || n === 0) return null
   const chats = n === 1 ? 'chat' : 'chats'
-  return { text: `${n} waiting`, tooltip: `${n} ${chats} in ${section.account.name} ${n === 1 ? 'is' : 'are'} waiting on you` }
+  return { text: `${n} waiting`, tooltip: `${n} ${chats} in ${name} ${n === 1 ? 'is' : 'are'} waiting on you` }
 }
 
 export function sessionRowTooltip(row: SessionRow): string {
@@ -169,12 +204,30 @@ export function sessionRowTooltip(row: SessionRow): string {
   return `${row.title} · ${where} · ${model}${STATUS_LABEL[row.status]} · double-click to rename, Ctrl+click to open beside`
 }
 
-/** The rows on screen, top to bottom; collapsed sections show none. */
-export function shownRows(sections: readonly AccountSection[], collapsed: readonly string[]): SessionRow[] {
-  return sections.filter((s) => !collapsed.includes(s.account.profileId)).flatMap((s) => s.rows)
+/** What is folded shut: account profile ids, and repo groups by `repoFoldKey`. */
+export interface ListFold {
+  accounts: readonly string[]
+  repos: readonly string[]
 }
 
-/** Waiting hosted sessions in the order the list shows them, collapsed sections included. */
+/** A repo group's fold is remembered per account. */
+export function repoFoldKey(profileId: string, repoGroupKey: string): string {
+  return `${profileId}/${repoGroupKey}`
+}
+
+/** The folds in effect: a search opens every repo group, and a list without account headers folds no account. */
+export function listFold(saved: ListFold, view: { search: string; headed: boolean }): ListFold {
+  return { accounts: view.headed ? saved.accounts : [], repos: view.search.trim() ? [] : saved.repos }
+}
+
+/** The rows on screen, top to bottom; folded accounts and repo groups show none. */
+export function shownRows(sections: readonly AccountSection[], fold: ListFold): SessionRow[] {
+  return sections
+    .filter((s) => !fold.accounts.includes(s.account.profileId))
+    .flatMap((s) => s.repos.filter((g) => !fold.repos.includes(repoFoldKey(s.account.profileId, g.repoGroupKey))).flatMap((g) => g.rows))
+}
+
+/** Waiting hosted sessions in the order the list shows them, folded sections and groups included. */
 export function waitingRows(sections: readonly AccountSection[]): HostedRow[] {
   return sections.flatMap((s) => s.rows.filter(isNeedsYouRow))
 }

@@ -14,10 +14,12 @@ const TONE: Record<DotStatus, string> = {
 
 const LABEL: Record<DotStatus, string> = { ...STATUS_LABEL, ...OBSERVED_STATUS_LABEL }
 
-/** `tooltip` replaces the status name, e.g. where a past session is open. */
-export function StatusDot({ status, tooltip }: { status: DotStatus; tooltip?: string }) {
+const LOOK = { solid: 'h-1.5 w-1.5', soft: 'h-[5px] w-[5px] opacity-70' } as const
+
+/** `tooltip` replaces the status name, e.g. where a past session is open; `soft` is the calmer dot of a roomy list. */
+export function StatusDot({ status, tooltip, look = 'solid' }: { status: DotStatus; tooltip?: string; look?: keyof typeof LOOK }) {
   const label = tooltip ?? LABEL[status]
-  return <span role="img" aria-label={label} title={label} className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE[status]}`} />
+  return <span role="img" aria-label={label} title={label} className={`shrink-0 rounded-full ${LOOK[look]} ${TONE[status]}`} />
 }
 
 export function StatusTag({ status }: { status: DotStatus }) {

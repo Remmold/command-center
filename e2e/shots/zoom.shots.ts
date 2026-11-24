@@ -56,7 +56,7 @@ async function overflowing(page: Page, selectors: string[]): Promise<string[]> {
 
 const LIST = 'nav[aria-label="Sessions"]'
 
-/** The Work list at its default 300 px: each account header's percentage sits whole inside it, and rows give the model's room to the title. */
+/** The Work list at its default 300 px: each account header's percentage sits whole inside it, repo group headers fit, and rows give the model's room to the title. */
 async function narrowListProblems(page: Page): Promise<string[]> {
   return page.evaluate((list) => {
     const out: string[] = []
@@ -68,6 +68,9 @@ async function narrowListProblems(page: Page): Promise<string[]> {
       const r = percents[i].getBoundingClientRect()
       if (r.width === 0 || r.right > box.right + 0.5 || !/^\d+%$/.test(percents[i].textContent ?? '')) out.push(`cut: ${percents[i].textContent}`)
     }
+    const repos = document.querySelectorAll(`${list} section section > button`)
+    if (repos.length < 3) out.push(`${repos.length} repo group headers, not 3`)
+    for (let i = 0; i < repos.length; i++) if (repos[i].getBoundingClientRect().right > box.right + 0.5) out.push(`repo header past the list: ${repos[i].textContent}`)
     const models = document.querySelectorAll(`${list} .hide-in-narrow-list`)
     if (models.length === 0) out.push('no row has a model to hide')
     for (let i = 0; i < models.length; i++) if (models[i].getBoundingClientRect().width > 0) out.push(`model shown: ${models[i].textContent}`)
@@ -273,6 +276,8 @@ for (const percent of [110, 125, 150]) {
         expect(await overflowing(page, [...sideways, '[data-header-row]', '[data-choice-prompt]'])).toEqual([])
 
         await startFocused('notes-cli', 'agents: two for the review', 'Two agents are working')
+        await listShot('work-list-repos')
+        expect(await overflowing(page, [...sideways, `${LIST} section > button`])).toEqual([])
         const agentsPane = page.locator('[data-chat-pane]:visible', { has: page.getByText('Two agents are working') })
         await expect(agentsPane.locator('[data-agents-still-working]')).toContainText('2 agents still working')
         await agentsPane.getByRole('tab', { name: 'Agents 2' }).click()

@@ -368,3 +368,10 @@ Each entry records what was decided, why, and the alternative. Review these in t
 203. **File and video chips in a sent prompt do not open anything**; only images open the preview, stepping through that message's images.
     - Alternative: open the PDF or video externally.
 204. **A prompt shows at once with its attachments; the thumbnails are made just after and written into the item (or the held prompt)**, so making them never delays a send or lets a later prompt overtake it. Until then the tile shows the full image from memory.
+205. **Repo groups in the Work list are repo groups in the glossary's sense**: the worktrees of one repo share a group, ordered by the repo's first workspace in Settings → Workspaces; each row keeps its worktree tag. The group header uses that first workspace's icon.
+    - Alternative: one group per workspace, worktrees apart.
+206. **A repo group's chat count shows only while it is folded**, as the ticket's text says; the sketch shows "3" on an open group.
+    - Alternative: always show the count.
+207. **A search opens every repo group but leaves a folded account folded**, as account folds behaved before; Alt+N counts what the search shows.
+    - Alternative: a search opens folded accounts too.
+208. **A repo group's fold is remembered under `profileId/repoGroupKey`** in the existing `command-center.work-accounts` storage, so the same repo folded on one account stays open on another.

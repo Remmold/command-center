@@ -10,19 +10,27 @@ interface Props {
   tooltip?: string
   /** Shown before the title, e.g. an account's colour. */
   marker?: ReactNode
+  /** `pane` heads a side bar block; `group` is a lighter sub-header nested inside one. */
+  level?: 'pane' | 'group'
   children: ReactNode
 }
 
+const LEVEL = {
+  pane: { section: '', button: 'gap-1 px-1 font-bold text-fg' },
+  group: { section: 'pt-1.5', button: 'gap-1.5 px-3 font-medium text-muted' }
+} as const
+
 /** A foldable block of a side bar, headed like a VS Code view pane. */
-export function CollapsibleSection({ title, open, onToggle, badge, tooltip, marker, children }: Props) {
+export function CollapsibleSection({ title, open, onToggle, badge, tooltip, marker, level = 'pane', children }: Props) {
+  const look = LEVEL[level]
   return (
-    <section aria-label={title}>
+    <section aria-label={title} className={look.section || undefined}>
       <button
         type="button"
         aria-expanded={open}
         onClick={onToggle}
         title={tooltip}
-        className="flex h-[22px] w-full min-w-0 items-center gap-1 px-1 text-left text-[11px] font-bold text-fg hover:bg-list-hover focus-visible:bg-list-hover focus-visible:outline-none"
+        className={`flex h-[22px] w-full min-w-0 items-center text-left text-[11px] hover:bg-list-hover focus-visible:bg-list-hover focus-visible:outline-none ${look.button}`}
       >
         {open ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
         {marker}

@@ -14,11 +14,14 @@ import { useChatPairStore } from './chatPairStore'
 import { openObserved, openSession, paneOnScreen, resolveChat, type OpenOptions, type OpenTarget } from './sessionNavigation'
 import {
   accountSections,
+  listFold,
+  repoFoldKey,
   sessionList,
   shownRows,
   waitingRows,
   type AccountSection,
   type HostedSessionInput,
+  type ListFold,
   type SessionListInput,
   type SessionRow
 } from './sessionList'
@@ -41,22 +44,31 @@ export const useWorkSearchStore = create<WorkSearchState>((set) => ({
 interface AccountSectionsState {
   /** Profile ids of the account sections folded shut. */
   collapsed: string[]
+  /** Repo groups folded shut, by `repoFoldKey`. */
+  collapsedRepos: string[]
   toggle: (profileId: string) => void
   expand: (profileId: string) => void
+  toggleRepo: (key: string) => void
+  expandRepo: (key: string) => void
 }
+
+const toggled = (list: string[], id: string) => (list.includes(id) ? list.filter((c) => c !== id) : [...list, id])
 
 export const useAccountSectionsStore = create<AccountSectionsState>()(
   persist(
     (set) => ({
       collapsed: [],
-      toggle: (id) => set((s) => ({ collapsed: s.collapsed.includes(id) ? s.collapsed.filter((c) => c !== id) : [...s.collapsed, id] })),
-      expand: (id) => set((s) => (s.collapsed.includes(id) ? { collapsed: s.collapsed.filter((c) => c !== id) } : s))
+      collapsedRepos: [],
+      toggle: (id) => set((s) => ({ collapsed: toggled(s.collapsed, id) })),
+      expand: (id) => set((s) => (s.collapsed.includes(id) ? { collapsed: toggled(s.collapsed, id) } : s)),
+      toggleRepo: (key) => set((s) => ({ collapsedRepos: toggled(s.collapsedRepos, key) })),
+      expandRepo: (key) => set((s) => (s.collapsedRepos.includes(key) ? { collapsedRepos: toggled(s.collapsedRepos, key) } : s))
     }),
     {
       name: 'command-center.work-accounts',
       storage: createJSONStorage(() => localStorage),
       version: 1,
-      partialize: (s) => ({ collapsed: s.collapsed })
+      partialize: (s) => ({ collapsed: s.collapsed, collapsedRepos: s.collapsedRepos })
     }
   )
 )
@@ -167,7 +179,7 @@ export interface SessionSections {
 }
 
 function sectionsOf(sources: Omit<SessionListInput, 'search'>, search: string, accounts: readonly Account[]): SessionSections {
-  return { sections: accountSections(sessionList({ ...sources, search }), accounts), headed: accounts.length > 1 }
+  return { sections: accountSections(sessionList({ ...sources, search }), accounts, sources.workspaces), headed: accounts.length > 1 }
 }
 
 export function useSessionSections(): SessionSections {
@@ -200,7 +212,10 @@ export function isShown(row: SessionRow, pair: ChatPair): boolean {
 }
 
 export function openRow(row: SessionRow, options?: OpenOptions): void {
-  useAccountSectionsStore.getState().expand(accountOf(currentAccounts(), row.workspace.profileId).profileId)
+  const profileId = accountOf(currentAccounts(), row.workspace.profileId).profileId
+  const folds = useAccountSectionsStore.getState()
+  folds.expand(profileId)
+  folds.expandRepo(repoFoldKey(profileId, row.workspace.repoGroupKey))
   if (row.kind === 'hosted') openSession(row.paneId, options)
   else openObserved(row.workspace.id, row.sessionId, options)
 }
@@ -210,10 +225,20 @@ function currentSections(applySearch: boolean): SessionSections {
   return sectionsOf(sources, applySearch ? search : '', currentAccounts())
 }
 
-/** Opens the list's nth row as it is shown: search applied, collapsed sections skipped. */
+/** The saved folds as the list applies them. */
+export function useListFold(headed: boolean): ListFold {
+  const accounts = useAccountSectionsStore((s) => s.collapsed)
+  const repos = useAccountSectionsStore((s) => s.collapsedRepos)
+  const search = useWorkSearchStore((s) => s.search)
+  return useMemo(() => listFold({ accounts, repos }, { search, headed }), [accounts, repos, search, headed])
+}
+
+/** Opens the list's nth row as it is shown: search applied, folded sections and groups skipped. */
 export function openRowAt(index: number): void {
   const { sections, headed } = currentSections(true)
-  const row = shownRows(sections, headed ? useAccountSectionsStore.getState().collapsed : [])[index]
+  const { collapsed, collapsedRepos } = useAccountSectionsStore.getState()
+  const fold = listFold({ accounts: collapsed, repos: collapsedRepos }, { search: useWorkSearchStore.getState().search, headed })
+  const row = shownRows(sections, fold)[index]
   if (row) openRow(row)
 }
 
