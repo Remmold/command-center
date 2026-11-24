@@ -10,7 +10,7 @@ This reverses the transcript-look decision that IN and OUT boxes always show.
 
 **Blocked by:** None (can start immediately). The UI suite is at 14 scenarios, ~71 s of the 90 s budget.
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Collapsed by default:** a tool row is one line (dot, tool name, short label). IN and OUT open on click, as the extension does. Check the extension bundle for which tools it shows expanded by default, if any (Edit and Write diffs, perhaps), and match it. Errors still show their message line.
 - [x] **Bash label:** use the Bash call's `description` field (Claude's short summary) as the row label, as VS Code does. The command itself appears only in the expanded IN box. Without a description, show the command trimmed to one line.
