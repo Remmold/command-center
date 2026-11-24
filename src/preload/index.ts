@@ -213,6 +213,8 @@ const api: RendererApi = {
   subagents: {
     watch: (source) => ipcRenderer.send(IPC.SUBAGENTS_WATCH, source),
     unwatch: (source) => ipcRenderer.send(IPC.SUBAGENTS_UNWATCH, source),
+    open: (target) => ipcRenderer.send(IPC.SUBAGENTS_OPEN, target),
+    close: (target) => ipcRenderer.send(IPC.SUBAGENTS_CLOSE, target),
     onItems: (cb) => {
       const handler = (_e: IpcRendererEvent, event: SubagentTailEvent) => cb(event)
       ipcRenderer.on(IPC.SUBAGENTS_ITEMS, handler)

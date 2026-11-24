@@ -1,7 +1,7 @@
 import type { SpeechModelStatus, VideoFramesResult, VideoProgressEvent, VideoSource, VideoTranscriptResult } from './video'
 import type { ChooseImageResult, RepoIconRequest, RepoIdentityViews } from './repoIdentity'
 import type { ChatItem } from './chatItems'
-import type { SubagentSource, SubagentTailEvent } from './subagentTail'
+import type { SubagentItemsSource, SubagentSource, SubagentTailEvent } from './subagentTail'
 import type { AppView } from './views'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
@@ -538,9 +538,12 @@ export interface RendererApi {
     renameSession: (rename: SessionRename) => Promise<RenameResult>
   }
   subagents: {
-    /** Follows the session's `subagents/` files, each agent's items arriving through `onItems`; watching again starts over. */
+    /** Follows the session's `subagents/` files, each agent's summary arriving through `onItems`; watching again starts over. */
     watch: (source: SubagentSource) => void
     unwatch: (source: SubagentSource) => void
+    /** Sends one agent's items through `onItems`, then its new ones until `close`; its session must be watched. */
+    open: (target: SubagentItemsSource) => void
+    close: (target: SubagentItemsSource) => void
     onItems: (cb: (event: SubagentTailEvent) => void) => () => void
   }
   observed: {

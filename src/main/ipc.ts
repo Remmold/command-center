@@ -373,6 +373,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   const subagents = new SubagentWatchService(transcriptsDirForCwd, (event) => sendAll(IPC.SUBAGENTS_ITEMS, event))
   ipcMain.on(IPC.SUBAGENTS_WATCH, (_e, source: unknown) => void subagents.watch(source))
   ipcMain.on(IPC.SUBAGENTS_UNWATCH, (_e, source: unknown) => subagents.unwatch(source))
+  ipcMain.on(IPC.SUBAGENTS_OPEN, (_e, target: unknown) => subagents.open(target))
+  ipcMain.on(IPC.SUBAGENTS_CLOSE, (_e, target: unknown) => subagents.close(target))
   unsubscribers.push(() => subagents.stopAll())
   ipcMain.handle(IPC.CLAUDE_RENAME_SESSION, async (_e, rename: SessionRename): Promise<RenameResult> => {
     const title = cleanSessionTitle(rename.title)
