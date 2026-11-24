@@ -8,7 +8,7 @@
 
 This reverses the transcript-look decision that IN and OUT boxes always show.
 
-**Blocked by:** None. **Build after Andreas's usage limit resets** (he was at 99% on 2026-11-23).
+**Blocked by:** None (can start immediately). The UI suite is at 14 scenarios, ~71 s of the 90 s budget.
 
 **Status:** ready-for-agent
 
