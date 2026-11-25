@@ -7,6 +7,7 @@ import { isFile } from '../repoIdentity/projectIcons'
 import {
   ADOPTED_READ_ONLY,
   estimateTokens,
+  frontmatter,
   type ContextItem,
   type ContextItemKind,
   type ContextLayerName,
@@ -188,37 +189,6 @@ async function memory(r: Reading): Promise<ContextItem[]> {
     const path = join(dir, name)
     if (name === 'MEMORY.md') out.unshift(await item(r, 'memory-index', name, path, 'account', estimateTokens((await readText(path)) ?? '')))
     else out.push(await item(r, 'memory-file', name, path, 'account', null))
-  }
-  return out
-}
-
-function unquote(value: string): string {
-  if (/^".*"$/s.test(value)) {
-    try {
-      return JSON.parse(value) as string
-    } catch {
-      return value.slice(1, -1)
-    }
-  }
-  return /^'.*'$/s.test(value) ? value.slice(1, -1).replace(/''/g, "'") : value
-}
-
-/** The top-level keys of a file's YAML frontmatter: plain, quoted, folded (`>`) and literal (`|`) values. */
-export function frontmatter(text: string): Record<string, string> {
-  const lines = text.split(/\r?\n/)
-  if (lines[0]?.trim() !== '---') return {}
-  const end = lines.findIndex((line, i) => i > 0 && line.trim() === '---')
-  const body = lines.slice(1, end === -1 ? lines.length : end)
-  const out: Record<string, string> = {}
-  for (let i = 0; i < body.length; i++) {
-    const m = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(body[i])
-    if (!m) continue
-    const more: string[] = []
-    while (i + 1 < body.length && (/^\s/.test(body[i + 1]) || body[i + 1] === '')) more.push(body[++i].trim())
-    while (more.length && more[more.length - 1] === '') more.pop()
-    const value = m[2].trim()
-    if (/^[>|][+-]?$/.test(value)) out[m[1]] = more.join(value.startsWith('|') ? '\n' : ' ')
-    else out[m[1]] = unquote([value, ...more].filter(Boolean).join(' '))
   }
   return out
 }

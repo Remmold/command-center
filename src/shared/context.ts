@@ -70,3 +70,43 @@ export function estimateTokens(text: string): number {
 export function formatTokens(tokens: number): string {
   return tokens < 1000 ? `~${tokens}` : `~${(tokens / 1000).toFixed(1)}k`
 }
+
+function unquote(value: string): string {
+  if (/^".*"$/s.test(value)) {
+    try {
+      return JSON.parse(value) as string
+    } catch {
+      return value.slice(1, -1)
+    }
+  }
+  return /^'.*'$/s.test(value) ? value.slice(1, -1).replace(/''/g, "'") : value
+}
+
+/** The top-level keys of a file's YAML frontmatter: plain, quoted, folded (`>`) and literal (`|`) values. */
+export function frontmatter(text: string): Record<string, string> {
+  const lines = text.split(/\r?\n/)
+  if (lines[0]?.trim() !== '---') return {}
+  const end = lines.findIndex((line, i) => i > 0 && line.trim() === '---')
+  const body = lines.slice(1, end === -1 ? lines.length : end)
+  const out: Record<string, string> = {}
+  for (let i = 0; i < body.length; i++) {
+    const m = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(body[i])
+    if (!m) continue
+    const more: string[] = []
+    while (i + 1 < body.length && (/^\s/.test(body[i + 1]) || body[i + 1] === '')) more.push(body[++i].trim())
+    while (more.length && more[more.length - 1] === '') more.pop()
+    const value = m[2].trim()
+    if (/^[>|][+-]?$/.test(value)) out[m[1]] = more.join(value.startsWith('|') ? '\n' : ' ')
+    else out[m[1]] = unquote([value, ...more].filter(Boolean).join(' '))
+  }
+  return out
+}
+
+/** A markdown file split into its leading `---` frontmatter and the rest; no frontmatter unless the block is closed and holds a key. */
+export function splitFrontmatter(text: string): { meta: Record<string, string>; body: string } {
+  const lines = text.split(/\r?\n/)
+  const end = lines[0]?.trim() === '---' ? lines.findIndex((line, i) => i > 0 && line.trim() === '---') : -1
+  const meta = end === -1 ? {} : frontmatter(text)
+  if (Object.keys(meta).length === 0) return { meta, body: text }
+  return { meta, body: lines.slice(end + 1).join('\n') }
+}
