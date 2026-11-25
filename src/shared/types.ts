@@ -11,7 +11,7 @@ import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
-import type { DriftChecksView } from './findings'
+import type { DriftChecksView, FindingsRun, SkeletonResult } from './findings'
 import type { BackgroundProcess } from './backgroundProcesses'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
@@ -490,6 +490,8 @@ export interface RendererApi {
     show: (workspaceId: string) => Promise<DriftChecksView>
     release: () => Promise<void>
     onChanged: (cb: () => void) => () => void
+    /** Writes a new run's skeleton as `<runId>.json` in the drift-checks folder; never overwrites a file. */
+    begin: (skeleton: FindingsRun) => Promise<SkeletonResult>
   }
   discovery: {
     get: () => Promise<DiscoveryModel>

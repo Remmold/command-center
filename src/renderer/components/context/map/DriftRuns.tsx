@@ -1,6 +1,10 @@
 import type { DriftChecksView, DriftRunView, FindingsRun } from '../../../../shared/findings'
 import { timeAgo } from '../../../state/nowBuilding'
+import { useProjectViewsStore } from '../../../state/projectViewsStore'
+import { isHosted } from '../../../state/chatDrawer'
+import { openSession } from '../../../state/sessionNavigation'
 import { Badge } from '../../ui/Badge'
+import { Button } from '../../ui/Button'
 import { Checklist, type CheckState } from '../../ui/Checklist'
 import { SectionLabel } from '../../ui/SectionLabel'
 
@@ -12,6 +16,7 @@ const STEP_STATES: Record<FindingsRun['steps'][number]['status'], CheckState> = 
 function DriftRun({ shown, now }: { shown: DriftRunView; now: number }) {
   const { run } = shown
   const at = Date.parse(run.startedAt)
+  const chatOpen = useProjectViewsStore((s) => isHosted(s.views, run.sessionId))
   return (
     <section aria-label={`Drift check ${run.runId}`} className="flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted">
@@ -25,6 +30,13 @@ function DriftRun({ shown, now }: { shown: DriftRunView; now: number }) {
           </Badge>
         )}
         {shown.note && <Badge tone="quiet-warning">{shown.note}</Badge>}
+        {chatOpen && (
+          <span className="ml-auto">
+            <Button variant="ghost" onClick={() => openSession(run.sessionId)} tooltip="Show this run's session in Work">
+              Open chat
+            </Button>
+          </span>
+        )}
       </div>
       <Checklist entries={run.steps.map((s) => ({ label: s.title, state: STEP_STATES[s.status] }))} />
     </section>

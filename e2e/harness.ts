@@ -21,7 +21,8 @@ export const SCRIPTS = {
   look: join(__dirname, 'scripts', 'look.json'),
   media: join(__dirname, 'scripts', 'media.json'),
   testFlow: join(__dirname, 'scripts', 'test-flow.json'),
-  processes: join(__dirname, 'scripts', 'processes.json')
+  processes: join(__dirname, 'scripts', 'processes.json'),
+  driftCheck: join(__dirname, 'scripts', 'drift-check.json')
 } as const
 
 export type ScriptName = keyof typeof SCRIPTS

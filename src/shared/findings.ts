@@ -38,6 +38,9 @@ export interface FindingsRun {
 
 export const FINDINGS_VERSION = 1
 
+/** The app's write of a run's skeleton, the one write it makes to a run file. */
+export type SkeletonResult = { ok: true; file: string } | { ok: false; error: string }
+
 /** What a read of a run file leaves to show. */
 export interface FindingsRead {
   /** The last good parse; null when there has been none. */

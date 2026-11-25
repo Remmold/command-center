@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import type { Locator, Page } from '@playwright/test'
-import { expect, prompt, test, transcriptsOf } from './harness'
+import { expect, test, transcriptsOf, useScript } from './harness'
 
 async function typeAtEnd(page: Page, pane: Locator, text: string): Promise<void> {
   const editor = pane.locator('.monaco-editor').first()
@@ -64,24 +64,40 @@ test('Context opens the seeded CLAUDE.md rendered, saves an edit with Ctrl+S bac
   expect(readFileSync(settings, 'utf-8')).toBe('{}')
 })
 
-test('Clean up → This project opens Work on a new session with the prompt waiting, and its CLI may read the memory folder', async ({ launched }) => {
-  const { page, log, workspace } = launched
+test('Map tour: step 5 shows the seeded MEMORY.md finding, step 6 starts a drift check whose finding lands on its block while Context stays, and Open chat shows the run in Work', async ({ launched }) => {
+  const { app, page, log, workspace, root } = launched
   const claudeMd = join(workspace, 'CLAUDE.md')
   writeFileSync(claudeMd, '# Rules\n')
   const memory = join(transcriptsOf(launched), 'memory')
-  const cleanupStarts = () => log.entries().filter((e) => e.kind === 'argv' && e.cwd === workspace)
+  mkdirSync(memory, { recursive: true })
+  writeFileSync(join(memory, 'MEMORY.md'), Array.from({ length: 205 }, (_, i) => `- line ${i + 1}\n`).join(''))
+  await useScript(app, 'driftCheck')
+  const runs = join(root, 'user-data', 'drift-checks')
+  const starts = () => log.entries().filter((e) => e.kind === 'argv' && e.cwd === workspace)
 
   await page.keyboard.press('Control+4')
-  const layers = page.getByTestId('view-context').getByRole('region', { name: 'Context layers' })
-  await layers.getByRole('button', { name: 'Clean up' }).click()
-  await page.getByRole('menu', { name: 'Clean up' }).getByRole('menuitem', { name: /^This project/ }).click()
+  const view = page.getByTestId('view-context')
+  await view.getByRole('tablist', { name: 'Context pane' }).getByRole('tab', { name: 'Map' }).click()
+  const tour = view.getByRole('region', { name: 'Guided tour' })
+  for (let step = 1; step < 5; step++) await tour.getByRole('button', { name: 'Next' }).click()
+  await expect(tour.getByRole('button', { name: /^MEMORY\.md is 205 lines, but Claude loads only the first 200 lines/ })).toBeVisible()
 
-  await expect(prompt(page)).toBeVisible()
-  const draft = await prompt(page).inputValue()
-  expect(draft).toMatch(/^Context cleanup:/)
-  expect(draft).toContain(`- ${claudeMd}\n`)
+  await tour.getByRole('button', { name: 'Next' }).click()
+  await tour.getByRole('list', { name: 'What to check' }).getByRole('button', { name: /^This project/ }).click()
+  await tour.getByRole('button', { name: 'Start', exact: true }).click()
 
-  await prompt(page).press('Enter')
-  await expect.poll(() => log.userTexts().some((text) => text.startsWith('Context cleanup:'))).toBe(true)
-  expect(cleanupStarts().map((e) => e.addDirs)).toEqual([[memory]])
+  await expect.poll(() => log.userTexts().some((text) => text.startsWith('Drift check:'))).toBe(true)
+  const sent = log.userTexts().find((text) => text.startsWith('Drift check:')) ?? ''
+  expect(sent).toContain(`- ${claudeMd}\n`)
+  expect(sent).toMatch(/^Findings file: .+\.json$/m)
+  expect(sent).toContain(`Findings file: ${runs}${sep}`)
+  expect(starts().map((e) => e.addDirs)).toEqual([[memory, runs]])
+  await expect(view).toBeVisible()
+
+  const map = view.getByRole('region', { name: 'Context map' })
+  await expect(map.getByRole('region', { name: 'Repo · Every start' }).getByRole('button', { name: /^CLAUDE\.md.*1 finding/ })).toBeVisible()
+  await expect(map.getByRole('region', { name: /^Drift check / })).toContainText('e2e-workspace files')
+
+  await map.getByRole('button', { name: 'Open chat' }).click()
+  await expect(page.getByTestId('view-work').getByText('Recorded one finding in the findings file.')).toBeVisible()
 })

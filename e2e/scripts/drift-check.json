@@ -1,0 +1,33 @@
+{
+  "turns": [
+    {
+      "match": "^Drift check:",
+      "events": [
+        { "type": "write_file", "path": "{findingsPath}", "merge": true, "content": { "steps": [{ "id": "project", "title": "e2e-workspace files", "status": "running" }] } },
+        {
+          "type": "write_file",
+          "path": "{findingsPath}",
+          "merge": true,
+          "delayMs": 300,
+          "content": {
+            "steps": [{ "id": "project", "title": "e2e-workspace files", "status": "done" }],
+            "findings": [
+              {
+                "id": "F1",
+                "path": "{cwd}{sep}CLAUDE.md",
+                "verdict": "stale",
+                "severity": "problem",
+                "claim": "CLAUDE.md names a build command the repo no longer has.",
+                "evidence": "CLAUDE.md:1; package.json has no such script",
+                "fix": "Drop the line.",
+                "status": "open"
+              }
+            ],
+            "done": true
+          }
+        },
+        { "type": "text", "text": "Recorded one finding in the findings file." }
+      ]
+    }
+  ]
+}

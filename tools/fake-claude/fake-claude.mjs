@@ -160,11 +160,30 @@ function loadScript(path) {
   return script
 }
 
-function fill(value) {
-  if (typeof value === 'string') return value.replaceAll('{cwd}', process.cwd()).replaceAll('{sep}', sep)
-  if (Array.isArray(value)) return value.map(fill)
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fill(v)]))
+/** `{findingsPath}` is the path after "Findings file: " in the prompt, as a drift check's prompt names its run file. */
+function findingsPathOf(text) {
+  return /^Findings file: (.+)$/m.exec(text ?? '')?.[1]?.trim() ?? ''
+}
+
+function fill(value, vars = {}) {
+  if (typeof value === 'string') {
+    const filled = value.replaceAll('{cwd}', process.cwd()).replaceAll('{sep}', sep)
+    return vars.findingsPath === undefined ? filled : filled.replaceAll('{findingsPath}', vars.findingsPath)
+  }
+  if (Array.isArray(value)) return value.map((v) => fill(v, vars))
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fill(v, vars)]))
   return value
+}
+
+function writeScriptedFile({ path, content, merge }) {
+  if (!path) throw new Error('fake-claude: write_file has no path')
+  let body = content
+  if (typeof content !== 'string') {
+    const base = merge ? JSON.parse(readFileSync(path, 'utf-8')) : null
+    body = JSON.stringify(base ? { ...base, ...content } : content, null, 2)
+  }
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, body)
 }
 
 function textOf(message) {
@@ -642,8 +661,9 @@ class Turn {
 
   /** True once a result has been sent. */
   async play(events) {
+    const vars = { findingsPath: findingsPathOf(this.prompt.text) }
     for (const raw of events) {
-      const event = fill(raw)
+      const event = fill(raw, vars)
       if (this.halted) return false
       await this.sleep(event.delayMs)
       if (this.halted) return false
@@ -669,6 +689,9 @@ class Turn {
           break
         case 'wait':
           await this.sleep(event.ms)
+          break
+        case 'write_file':
+          writeScriptedFile(event)
           break
         default:
           throw new Error(`fake-claude: unknown event type ${event.type}`)

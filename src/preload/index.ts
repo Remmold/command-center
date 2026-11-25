@@ -116,6 +116,7 @@ const api: RendererApi = {
   driftChecks: {
     show: (workspaceId) => ipcRenderer.invoke(IPC.DRIFT_CHECKS_SHOW, workspaceId),
     release: () => ipcRenderer.invoke(IPC.DRIFT_CHECKS_RELEASE),
+    begin: (skeleton) => ipcRenderer.invoke(IPC.DRIFT_CHECKS_BEGIN, skeleton),
     onChanged: (cb) => {
       const handler = () => cb()
       ipcRenderer.on(IPC.DRIFT_CHECKS_CHANGED, handler)

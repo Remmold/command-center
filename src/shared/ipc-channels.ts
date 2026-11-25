@@ -40,6 +40,7 @@ export const IPC = {
   CONTEXT_WRITE_FILE: 'context:writeFile',
   DRIFT_CHECKS_SHOW: 'driftChecks:show',
   DRIFT_CHECKS_RELEASE: 'driftChecks:release',
+  DRIFT_CHECKS_BEGIN: 'driftChecks:begin',
   DRIFT_CHECKS_CHANGED: 'driftChecks:changed',
   DISCOVERY_GET: 'discovery:get',
   DISCOVERY_CHANGED: 'discovery:changed',

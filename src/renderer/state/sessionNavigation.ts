@@ -10,6 +10,7 @@ import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
 import { useRecentProjectsStore } from './recentProjectsStore'
 import { saveDraft } from './restoreStore'
+import { requestSendOnMount } from './startRequests'
 import { drawerShown, isHosted, useChatDrawerStore } from './chatDrawer'
 
 export const NEXT_WAITING_SHORTCUT = 'Ctrl+Shift+J'
@@ -170,13 +171,24 @@ export interface StartOptions {
   draft?: string
   /** Folders outside the workspace the session may read without asking. */
   addDirs?: string[]
+  /** Sent as the first message once the chat's process starts; the current view stays on screen. */
+  send?: SendStart
 }
 
-/** Opens a new chat in the workspace, on its account profile. */
-export function startSession(workspace: Workspace, { draft, addDirs }: StartOptions = {}): boolean {
+export interface SendStart {
+  prompt: string
+  /** Unset starts with what a new chat on the account starts with. */
+  model?: string
+  effort?: string
+  /** The new session's id, for a caller that must name the session before it starts. */
+  id?: string
+}
+
+/** Opens a new chat in the workspace, on its account profile; with `send`, starts it in Work without showing it. */
+export function startSession(workspace: Workspace, { draft, addDirs, send }: StartOptions = {}): boolean {
   useRecentProjectsStore.getState().touch(workspace.id)
   const views = useProjectViewsStore.getState()
-  const prepared = draft !== undefined || addDirs !== undefined
+  const prepared = draft !== undefined || addDirs !== undefined || send !== undefined
   if (!views.views[workspace.id]) {
     views.openProject(workspace, { firstSession: !prepared })
     if (!prepared) {
@@ -184,10 +196,14 @@ export function startSession(workspace: Workspace, { draft, addDirs }: StartOpti
       return first ? openSession(first.id) : false
     }
   }
-  const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { addDirs })
+  const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { addDirs, id: send?.id, model: send?.model, effort: send?.effort })
   if (!created) return false
   // The input box reads its draft once, as the chat mounts.
   if (draft !== undefined) saveDraft(created.id, draft)
+  if (send) {
+    requestSendOnMount(created.id, send.prompt)
+    return true
+  }
   return openSession(created.id)
 }
 

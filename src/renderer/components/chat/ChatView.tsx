@@ -27,7 +27,7 @@ import { promptContent, terminalSnapshots, type PromptAttachment } from './attac
 import { readTerminal } from '../../state/terminalBuffers'
 import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
-import { takeStartRequest } from '../../state/startRequests'
+import { takeSendRequest, takeStartRequest } from '../../state/startRequests'
 import { committedLength, thinkingDurations } from './liveItems'
 import { applyDeltas, frameBatch, landAfterWaitingDeltas, type FrameBatch, type StreamDelta } from './streamDeltas'
 import { useFollowOutput } from './useFollowOutput'
@@ -345,7 +345,9 @@ export const ChatView = memo(function ChatView({
       ])
     })
 
-    if (takeStartRequest(paneId) || (initialItemsCountRef.current === 0 && !resumeSessionId)) {
+    const firstPrompt = takeSendRequest(paneId)
+    if (firstPrompt !== undefined) void handleSend(firstPrompt)
+    else if (takeStartRequest(paneId) || (initialItemsCountRef.current === 0 && !resumeSessionId)) {
       void ensureStarted()
     }
 

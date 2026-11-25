@@ -1,6 +1,7 @@
 import type { ContextReport } from '../../../../shared/context'
 import type { Finding } from '../../../../shared/findings'
 import { useContextStore } from '../../../state/contextStore'
+import { useWorkspacesStore } from '../../../state/workspacesStore'
 import { KIND_EXPLANATIONS, KIND_TITLES } from '../../../state/mapCopy'
 import { findingTarget, stepIndex, type TourStep } from '../../../state/mapTour'
 import { Badge } from '../../ui/Badge'
@@ -12,6 +13,7 @@ import { ScrollStack } from '../../ui/ScrollStack'
 import { SectionLabel } from '../../ui/SectionLabel'
 import { StepList } from '../../ui/StepList'
 import { Toolbar } from '../../ui/Toolbar'
+import { DriftCheckControls } from './DriftCheckControls'
 
 interface Props {
   steps: readonly TourStep[]
@@ -53,6 +55,8 @@ export function GuidedTour({ steps, report, health }: Props) {
 }
 
 function StepBody({ step, report, health }: { step: TourStep; report: ContextReport; health: readonly Finding[] }) {
+  const selectedId = useContextStore((s) => s.selectedId)
+  const workspace = useWorkspacesStore((s) => s.workspaces.find((w) => w.id === selectedId) ?? null)
   return (
     <>
       {step.text.map((p) => (
@@ -67,6 +71,7 @@ function StepBody({ step, report, health }: { step: TourStep; report: ContextRep
         </section>
       ))}
       {step.id === 'health' && <HealthFindings findings={step.findings} report={report} health={health} />}
+      {step.id === 'drift' && workspace && <DriftCheckControls key={workspace.id} workspace={workspace} report={report} />}
     </>
   )
 }

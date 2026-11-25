@@ -36,7 +36,7 @@ export interface ClaudeChatSession extends SessionTitle {
   thinking: boolean
   /** Unset until the session first starts: then the last pick, else the user settings' `permissions.defaultMode`. */
   permissionMode?: PermissionMode
-  /** Folders outside the workspace it may read without asking, passed on every start; a cleanup session's. */
+  /** Folders outside the workspace it may read without asking, passed on every start; a drift check's session's. */
   addDirs?: string[]
   /** session_id reported by claude in stream-json events; used for --resume */
   claudeSessionId?: string
@@ -109,7 +109,7 @@ interface ProjectViewsState {
 
   addClaudeSession: (
     projectId: string,
-    options?: { model?: ClaudeModel; permissionMode?: PermissionMode; addDirs?: string[] }
+    options?: { id?: string; model?: ClaudeModel; effort?: string; permissionMode?: PermissionMode; addDirs?: string[] }
   ) => ClaudeChatSession | null
   closeClaudeSession: (projectId: string, sessionId: string) => void
   setActiveClaudeSession: (projectId: string, sessionId: string) => void
@@ -147,6 +147,10 @@ interface ProjectViewsState {
   closeDiff: (projectId: string, diffId: string) => void
   setActiveDiff: (projectId: string, diffId: string | null) => void
   updateDiffText: (projectId: string, diffId: string, diffText: string) => void
+}
+
+function pickedOf({ model, effort }: { model?: ClaudeModel; effort?: string }): Pick<ClaudeChatSession, 'model' | 'effort'> {
+  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
 }
 
 function makeId(): string {
@@ -321,9 +325,9 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         const view = get().views[projectId]
         if (!view) return null
         const session: ClaudeChatSession = {
-          id: makeId(),
+          id: options?.id ?? makeId(),
           title: NEW_SESSION_TITLE,
-          ...(options?.model ? { model: options.model } : startingChoiceOn(profileOf(projectId))),
+          ...(options?.model || options?.effort ? pickedOf(options) : startingChoiceOn(profileOf(projectId))),
           thinking: true,
           permissionMode: options?.permissionMode,
           ...(options?.addDirs?.length ? { addDirs: options.addDirs } : {})
