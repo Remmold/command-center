@@ -408,6 +408,8 @@ export interface RendererApi {
     loadSync: () => Record<string, ChatItem[]>
     /** Fire and forget; main writes one session's changes in the order sent. */
     apply: (paneId: string, changes: HistoryChange[]) => void
+    /** Saves the legacy localStorage entry's sessions that have no file yet; rejects when it cannot. */
+    importLegacy: (entry: string) => Promise<void>
   }
   repoIdentities: {
     list: () => Promise<RepoIdentityViews>

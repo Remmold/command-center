@@ -198,6 +198,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       }
     )
   })
+  ipcMain.handle(IPC.CHAT_HISTORY_IMPORT_LEGACY, (_e, entry: unknown) => {
+    if (typeof entry !== 'string') throw new Error('the legacy chat history is not text')
+    return chatHistory.importLegacy(entry)
+  })
   ipcMain.on(IPC.CHAT_HISTORY_APPLY, (_e, paneId: unknown, changes: unknown) => {
     if (typeof paneId !== 'string' || paneId === '' || !Array.isArray(changes)) return
     chatHistory.apply(paneId, changes.filter(isHistoryChange)).catch((err) => console.error(`could not save the chat history of ${paneId}`, err))

@@ -80,6 +80,27 @@ function windowBridge(api: RendererApi['chatHistory']): HistoryBridge {
   }
 }
 
+/** The legacy zustand-persist history entry; removed once imported. */
+const LEGACY_KEY = 'command-center.chat-items'
+
+/**
+ * Moves the legacy localStorage history into main's files, once: the entry is removed after the import resolves, and a
+ * failed import keeps it for the next start. Never rejects. The entry is handed over as read, unparsed.
+ */
+export async function migrateLegacyChatItems(
+  storage: Pick<Storage, 'getItem' | 'removeItem'>,
+  importLegacy: RendererApi['chatHistory']['importLegacy']
+): Promise<void> {
+  try {
+    const entry = storage.getItem(LEGACY_KEY)
+    if (entry === null) return
+    await importLegacy(entry)
+    storage.removeItem(LEGACY_KEY)
+  } catch (err) {
+    console.error('could not move the saved chat history over; it stays for the next start', err)
+  }
+}
+
 /** Connects the store to main's history files and shows what they hold. */
 export function loadChatHistory(api: RendererApi['chatHistory']): void {
   connectHistoryBridge(windowBridge(api))

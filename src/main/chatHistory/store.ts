@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { applyHistoryChange, isHistoryChange, type HistoryChange } from '../../shared/chatHistory'
+import { applyHistoryChange, isChatItemList, isHistoryChange, type HistoryChange } from '../../shared/chatHistory'
 import type { ChatItem } from '../../shared/chatItems'
 
 export interface ChatHistoryStore {
@@ -9,6 +9,11 @@ export interface ChatHistoryStore {
   /** Appends the changes to the session's file, after every change handed over before them. */
   apply: (paneId: string, changes: readonly HistoryChange[]) => Promise<void>
   delete: (paneId: string) => Promise<void>
+  /**
+   * Saves each session of the legacy localStorage entry (zustand persist JSON) that has no file yet; a session with a
+   * file keeps it. Rejects when the entry cannot be read (saving nothing) or a write fails (rerunning it is safe).
+   */
+  importLegacy: (entry: string) => Promise<void>
 }
 
 const EXT = '.jsonl'
@@ -40,6 +45,29 @@ function parseLog(text: string): { changes: HistoryChange[]; ok: boolean } {
   const last = tail === '' ? null : parseRecord(tail)
   if (last) changes.push(last)
   return { changes, ok: true }
+}
+
+/** The sessions of the legacy entry `{"state":{"items":{<paneId>: ChatItem[]}},"version":1}`; throws when it is not one. */
+function parseLegacy(entry: string): Record<string, ChatItem[]> {
+  const parsed: unknown = JSON.parse(entry)
+  const items = (parsed as { state?: { items?: unknown } } | null)?.state?.items
+  if (typeof items !== 'object' || items === null || Array.isArray(items)) throw new Error('the legacy chat history has no sessions')
+  const sessions: Record<string, ChatItem[]> = {}
+  for (const [paneId, list] of Object.entries(items)) {
+    if (!isChatItemList(list)) throw new Error(`the legacy chat history of ${paneId} is not a list of items`)
+    sessions[paneId] = list
+  }
+  return sessions
+}
+
+async function exists(file: string): Promise<boolean> {
+  try {
+    await fs.access(file)
+    return true
+  } catch (err) {
+    if (missing(err)) return false
+    throw err
+  }
 }
 
 /** One append-only log of history changes per hosted session, in `dir`. */
@@ -112,6 +140,16 @@ export function createChatHistoryStore(dir: string): ChatHistoryStore {
         await fs.mkdir(dir, { recursive: true })
         await fs.appendFile(file, lines, 'utf-8')
       }),
-    delete: (paneId) => serial(() => fs.rm(join(dir, fileName(paneId)), { force: true }))
+    delete: (paneId) => serial(() => fs.rm(join(dir, fileName(paneId)), { force: true })),
+    importLegacy: (entry) =>
+      serial(async () => {
+        const sessions = parseLegacy(entry)
+        await fs.mkdir(dir, { recursive: true })
+        for (const [paneId, items] of Object.entries(sessions)) {
+          const file = join(dir, fileName(paneId))
+          if (await exists(file)) continue
+          await compact(file, items)
+        }
+      })
   }
 }

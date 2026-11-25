@@ -9,7 +9,7 @@ vi.stubGlobal('localStorage', {
   removeItem: (key: string) => void storageWrites.push(key)
 })
 
-const { connectHistoryBridge, hydrateChatItems, useChatItemsStore } = await import('./chatItemsStore')
+const { connectHistoryBridge, hydrateChatItems, migrateLegacyChatItems, useChatItemsStore } = await import('./chatItemsStore')
 
 const sent: [string, HistoryChange][] = []
 const user = (id: string): ChatItem => ({ kind: 'user', id, text: id })
@@ -67,5 +67,48 @@ describe('chat items store and its history', () => {
     hydrateChatItems({ p1: [user('old')], p2: [user('saved')] })
     expect(chat().items).toEqual({ p1: [user('live')], p2: [user('saved')] })
     expect(sent).toEqual([])
+  })
+})
+
+describe('moving the legacy localStorage history over', () => {
+  const KEY = 'command-center.chat-items'
+  const ENTRY = '{"state":{"items":{"p1":[]}},"version":1}'
+  const storage = (entries: Record<string, string>) => ({
+    getItem: (key: string) => entries[key] ?? null,
+    removeItem: (key: string) => void delete entries[key]
+  })
+  const deferred = () => {
+    let resolve!: () => void
+    let reject!: (err: Error) => void
+    const promise = new Promise<void>((res, rej) => ((resolve = res), (reject = rej)))
+    return { promise, resolve, reject }
+  }
+
+  it('imports the legacy entry and removes it only after the import resolves', async () => {
+    const entries: Record<string, string> = { [KEY]: ENTRY, other: 'kept' }
+    const imported: string[] = []
+    const done = deferred()
+    const migration = migrateLegacyChatItems(storage(entries), (entry) => (imported.push(entry), done.promise))
+    await Promise.resolve()
+    expect(imported).toEqual([ENTRY])
+    expect(entries[KEY]).toBe(ENTRY)
+    done.resolve()
+    await migration
+    expect(entries).toEqual({ other: 'kept' })
+  })
+
+  it('a failed import keeps the entry for the next start', async () => {
+    const entries: Record<string, string> = { [KEY]: ENTRY }
+    const failed = deferred()
+    const migration = migrateLegacyChatItems(storage(entries), () => failed.promise)
+    failed.reject(new Error('disk full'))
+    await expect(migration).resolves.toBeUndefined()
+    expect(entries).toEqual({ [KEY]: ENTRY })
+  })
+
+  it('without a legacy entry there is nothing to import', async () => {
+    const imported: string[] = []
+    await migrateLegacyChatItems(storage({}), async (entry) => void imported.push(entry))
+    expect(imported).toEqual([])
   })
 })

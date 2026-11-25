@@ -25,6 +25,9 @@ const reply = (id: string, ...texts: string[]): AssistantMessageItem => ({
   raw: { type: 'assistant', message: { id, role: 'assistant', content: [] } } as unknown as AssistantMessageItem['raw']
 })
 
+/** The old localStorage entry, as zustand persist wrote it. */
+const legacy = (items: Record<string, ChatItem[]>): string => JSON.stringify({ state: { items }, version: 1 })
+
 const restart = (): ChatHistoryStore => createChatHistoryStore(root)
 
 describe('chat history store', () => {
@@ -89,5 +92,19 @@ describe('chat history store', () => {
     const lines = (await fs.readFile(join(root, 'pane-1.jsonl'), 'utf-8')).trimEnd().split('\n')
     expect(lines.map((l) => JSON.parse(l))).toEqual([{ kind: 'set', items: [user('u1', 'one'), user('u2', 'two'), reply('m1', 'a')] }])
     expect(await fs.readdir(root)).toEqual(['pane-1.jsonl'])
+  })
+
+  it('a legacy import fills only sessions without a file', async () => {
+    await store.apply('pane-1', [{ kind: 'append', items: [user('u1', 'newer')] }])
+    await store.apply('pane-2', [{ kind: 'append', items: [user('u2', 'x')] }, { kind: 'clear' }])
+    await store.importLegacy(legacy({ 'pane-1': [user('o1', 'old')], 'pane-2': [user('o2', 'old')], 'pane-3': [user('o3', 'old'), reply('m3', 'a')] }))
+    expect(await restart().load()).toEqual({ 'pane-1': [user('u1', 'newer')], 'pane-2': [], 'pane-3': [user('o3', 'old'), reply('m3', 'a')] })
+  })
+
+  it('a legacy entry it cannot read fails the import and saves nothing', async () => {
+    await expect(store.importLegacy('{"state":{"items":{"pane-1":[{"kind":"user"')).rejects.toThrow()
+    await expect(store.importLegacy('{"state":{"items":{"pane-1":"not a list"}},"version":1}')).rejects.toThrow()
+    await expect(store.importLegacy('{"version":1}')).rejects.toThrow()
+    expect(await restart().load()).toEqual({})
   })
 })

@@ -9,6 +9,7 @@ export const IPC = {
   SIDEBAR_GROUPS_SAVE: 'sidebarGroups:save',
   CHAT_HISTORY_LOAD: 'chatHistory:load',
   CHAT_HISTORY_APPLY: 'chatHistory:apply',
+  CHAT_HISTORY_IMPORT_LEGACY: 'chatHistory:importLegacy',
   REPO_IDENTITIES_LIST: 'repoIdentities:list',
   REPO_IDENTITIES_SET_NAME: 'repoIdentities:setName',
   REPO_IDENTITIES_SET_ICON: 'repoIdentities:setIcon',

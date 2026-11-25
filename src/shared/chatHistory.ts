@@ -37,6 +37,7 @@ export function applyHistoryChange(items: ChatItem[], change: HistoryChange): Ch
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const isItem = (v: unknown): v is ChatItem => isRecord(v) && typeof v.kind === 'string'
+export const isChatItemList = (v: unknown): v is ChatItem[] => Array.isArray(v) && v.every(isItem)
 
 /** A change as received over IPC or read from a file: its shape is checked, an item's fields past its kind are not. */
 export function isHistoryChange(v: unknown): v is HistoryChange {
@@ -44,7 +45,7 @@ export function isHistoryChange(v: unknown): v is HistoryChange {
   switch (v.kind) {
     case 'append':
     case 'set':
-      return Array.isArray(v.items) && v.items.every(isItem)
+      return isChatItemList(v.items)
     case 'replace':
       return isItem(v.item) && v.item.kind === 'assistant' && typeof v.item.id === 'string'
     case 'clear':
