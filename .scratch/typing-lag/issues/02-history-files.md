@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] Main-process chat history store, modelled on the sidebar groups store: one file per hosted session (pane id) in a folder under the app's user data folder. Load all sessions' history; apply a batch of changes for one session; delete a session. Writes for one session happen in the order they came. A file that cannot be read yields an empty history for that session and does not throw at load.
 - [x] The renderer never serialises a whole session or the whole store. Change kinds follow the chat items store's actions: append items; replace an assistant item by id (the result of joining a block to its message); set a session's items (whole list, rare: take-over, resume, legacy paths); clear; delete. The main process appends change records to the session's file (append-only log), so a run never re-serialises a whole session; it compacts a session's file to its current items when loading it. Sends may be batched per animation frame or short interval in the renderer; the main side may batch disk appends, with at most ~1 s of changes unwritten.
