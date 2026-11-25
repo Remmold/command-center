@@ -12,9 +12,9 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unit tests (seam 1) for the account and cross-project kinds: right files in, plugin items out, every covered workspace's files and memory folder named, `addDirs` exactly the outside folders each once (account folder, other workspaces, their memory folders), never the session's own workspace; the cross-project prompt asks for one subagent per project plus one for the account.
-- [ ] "Account" and "Across projects…" work from the menu; the dialog behaves as above.
-- [ ] No new UI scenario (stays at 16 of 20).
-- [ ] Quick tier green.
+- [x] Unit tests (seam 1) for the account and cross-project kinds: right files in, plugin items out, every covered workspace's files and memory folder named, `addDirs` exactly the outside folders each once (account folder, other workspaces, their memory folders), never the session's own workspace; the cross-project prompt asks for one subagent per project plus one for the account.
+- [x] "Account" and "Across projects…" work from the menu; the dialog behaves as above.
+- [x] No new UI scenario (stays at 16 of 20).
+- [x] Quick tier green.

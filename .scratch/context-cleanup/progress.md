@@ -1,3 +1,4 @@
 - 01 resolved: preview-first editor in Context, UI scenario rewritten — 1ed7106
 - 02 resolved: layers grouped by kind with icons, counts and token sums, layer share bar, quieter badges — b41b745
 - 03 resolved: Clean up → This project starts a new session with the cleanup prompt as its draft and the memory folder pre-allowed (--add-dir on every start); report gains accountFolder, memoryFolder, docs — 44af028
+- 04 resolved: Account and Across projects cleanup kinds, menu items and workspace dialog — 1e88c9b
