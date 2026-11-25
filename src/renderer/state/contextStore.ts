@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { ContextItem, ContextReport } from '../../shared/context'
-import type { DriftChecksView } from '../../shared/findings'
+import type { DriftChecksView, ShownFinding } from '../../shared/findings'
 
 /** A file open in Context's editor. */
 export interface ContextEditorFile {
@@ -23,6 +23,12 @@ export interface ContextEditorFile {
 export type ContextFileTarget = Pick<ContextEditorFile, 'path' | 'label' | 'sharedWithDefault' | 'readOnly' | 'creating'>
 
 export type ContextPane = 'files' | 'map'
+
+/** A finding's key across the shown runs and the health check: ids repeat between runs. */
+export const findingKey = (f: Pick<ShownFinding, 'id' | 'runId'>): string => `${f.runId ?? 'health'}:${f.id}`
+
+/** Only an open problem can be ticked: a note asks for nothing, and an applied or skipped finding is done. */
+export const tickable = (f: Pick<ShownFinding, 'severity' | 'status'>): boolean => f.severity === 'problem' && f.status === 'open'
 
 /** An item's file, to open in the editor. */
 export const fileTarget = (item: ContextItem, path: string): ContextFileTarget => ({
@@ -50,6 +56,13 @@ interface ContextState {
   tourStep: number
   /** The drift checks the map shows for the selected workspace; null until read. */
   drift: DriftChecksView | null
+  /** The findings ticked for "Apply N fixes", by `findingKey`. */
+  ticked: string[]
+  toggleTick: (key: string) => void
+  /** Clears the ticks once fixes are sent, and follows the runs they were sent to until another workspace is picked. */
+  sentFixes: (runIds: readonly string[]) => void
+  /** Run ids fixes were sent to; main follows their files live even when done. */
+  fixing: string[]
   /** Leaving Files asks about unsaved edits first. */
   setPane: (pane: ContextPane) => void
   selectBlock: (blockId: string | null) => void
@@ -103,6 +116,16 @@ export const useContextStore = create<ContextState>((set, get) => {
     mapExpanded: [],
     tourStep: 0,
     drift: null,
+    ticked: [],
+    toggleTick: (key) => {
+      const { ticked } = get()
+      set({ ticked: ticked.includes(key) ? ticked.filter((k) => k !== key) : [...ticked, key] })
+    },
+    fixing: [],
+    sentFixes: (runIds) => {
+      set({ ticked: [], fixing: [...new Set([...get().fixing, ...runIds])] })
+      get().showDrift()
+    },
     setPane: (pane) => {
       if (pane === get().pane) return
       if (pane === 'map' && !get().confirmLeave()) return
@@ -118,7 +141,7 @@ export const useContextStore = create<ContextState>((set, get) => {
       const { selectedId } = get()
       if (!selectedId) return
       const turn = ++driftTurn
-      window.api.driftChecks.show(selectedId).then(
+      window.api.driftChecks.show(selectedId, get().fixing).then(
         (drift) => {
           if (turn === driftTurn && get().selectedId === selectedId) set({ drift })
         },
@@ -132,7 +155,7 @@ export const useContextStore = create<ContextState>((set, get) => {
     select: (workspaceId) => {
       if (workspaceId !== get().selectedId) {
         if (!get().confirmLeave()) return
-        set({ selectedId: workspaceId, report: null, editor: null, mapSelected: null, mapExpanded: [], tourStep: 0, drift: null })
+        set({ selectedId: workspaceId, report: null, editor: null, mapSelected: null, mapExpanded: [], tourStep: 0, drift: null, ticked: [], fixing: [] })
       }
       get().refresh()
     },

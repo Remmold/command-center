@@ -29,8 +29,8 @@ async function modifiedMs(path: string): Promise<number | null> {
 export class DriftChecksReader {
   private readonly cache = new Map<string, Cached>()
 
-  /** What a workspace's map shows, and the shown run files that are not done (to follow live). */
-  async read(folder: string, workspacePath: string, accountFolder: string): Promise<{ view: DriftChecksView; watch: WatchedFile[] }> {
+  /** What a workspace's map shows, and the shown run files to follow live: those not done, and those in `fixing` (by run id). */
+  async read(folder: string, workspacePath: string, accountFolder: string, fixing: readonly string[] = []): Promise<{ view: DriftChecksView; watch: WatchedFile[] }> {
     const entries = await this.entries(folder)
     const { covering, account } = latestRuns(entries, workspacePath, accountFolder)
     const shown = [covering && { entry: covering, files: account ? 'not-account' : 'all' }, account && { entry: account, files: 'account' }].filter(
@@ -50,7 +50,7 @@ export class DriftChecksReader {
         }
       })
     )
-    const watch = shown.filter(({ entry }) => !entry.run.done).map(({ entry }) => ({ path: entry.file, stamp: entry.stamp }))
+    const watch = shown.filter(({ entry }) => !entry.run.done || fixing.includes(entry.run.runId)).map(({ entry }) => ({ path: entry.file, stamp: entry.stamp }))
     return { view: { runs }, watch }
   }
 

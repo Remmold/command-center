@@ -124,7 +124,7 @@ export function latestRuns<T extends { run: FindingsRun }>(entries: readonly T[]
 export interface ShownFinding extends Finding {
   /** The drift run it came from. */
   runId?: string
-  /** Its file was modified after the run started: "file changed since". */
+  /** Still open, and its file was modified after the run started: "file changed since". */
   stale?: boolean
   /** It concerns a file in the account folder, so it affects every workspace of the account. */
   accountWide?: boolean
@@ -139,7 +139,7 @@ export function shownFindings(run: FindingsRun, modified: Readonly<Record<string
   return run.findings
     .map((f) => {
       const changed = modified[pathKey(f.path)] ?? null
-      return { ...f, runId: run.runId, stale: changed !== null && Number.isFinite(started) && changed > started, accountWide: isUnder(f.path, accountFolder) }
+      return { ...f, runId: run.runId, stale: f.status === 'open' && changed !== null && Number.isFinite(started) && changed > started, accountWide: isUnder(f.path, accountFolder) }
     })
     .filter((f) => files === 'all' || f.accountWide === (files === 'account'))
 }

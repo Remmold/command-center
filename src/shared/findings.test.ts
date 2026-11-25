@@ -123,6 +123,12 @@ describe('shownFindings', () => {
     ])
   })
 
+  it('never marks an applied or skipped finding stale: applying it changes its file', () => {
+    const run = { ...withFindings, findings: [{ ...finding('F1', repoFile), status: 'applied' as const }, { ...finding('F2', accountFile), status: 'skipped' as const }] }
+    const modified = { [pathKey(repoFile)]: STARTED + 1, [pathKey(accountFile)]: STARTED + 1 }
+    expect(shownFindings(run, modified, ACC_A, 'all').map((f) => f.stale)).toEqual([false, false])
+  })
+
   it('never marks a finding stale whose file is gone or whose run has no readable start', () => {
     expect(shownFindings(withFindings, { [pathKey(repoFile)]: null }, ACC_A, 'all')[0].stale).toBe(false)
     expect(shownFindings({ ...withFindings, startedAt: 'soon' }, { [pathKey(repoFile)]: STARTED + 1 }, ACC_A, 'all')[0].stale).toBe(false)

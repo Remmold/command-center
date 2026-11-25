@@ -27,7 +27,7 @@ import { promptContent, terminalSnapshots, type PromptAttachment } from './attac
 import { readTerminal } from '../../state/terminalBuffers'
 import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
-import { takeSendRequest, takeStartRequest } from '../../state/startRequests'
+import { takeChatSends, takeSendRequest, takeStartRequest, useChatSendsStore } from '../../state/startRequests'
 import { committedLength, thinkingDurations } from './liveItems'
 import { applyDeltas, frameBatch, landAfterWaitingDeltas, type FrameBatch, type StreamDelta } from './streamDeltas'
 import { useFollowOutput } from './useFollowOutput'
@@ -167,6 +167,7 @@ export const ChatView = memo(function ChatView({
   const mergeAssistant = useChatItemsStore((s) => s.mergeAssistant)
   const pendingApprovals = useApprovalsStore((s) => s.byPane[paneId] ?? EMPTY_REQUESTS)
   const held = useHeldPromptsStore((s) => s.byPane[paneId] ?? EMPTY_HELD)
+  const outsideSends = useChatSendsStore((s) => s.byPane[paneId]?.length ?? 0)
   const historyRef = useRef<string[]>([])
   // The same list while the prompts stay the same, so an item commit does not redraw the prompt box.
   const history = useMemo(() => {
@@ -756,6 +757,10 @@ export const ChatView = memo(function ChatView({
   const initialDraft = useMemo(() => savedDraft(paneId), [paneId])
   const onDraftChange = useStableCallback((text: string) => saveDraft(paneId, text))
   const onSend = useStableCallback(handleSend)
+  useEffect(() => {
+    if (outsideSends === 0) return
+    for (const prompt of takeChatSends(paneId)) void onSend(prompt)
+  }, [outsideSends, paneId, onSend])
   const onInterrupt = useStableCallback(handleInterrupt)
   const onDismissSuggestion = useStableCallback(() => clearSuggestion('dismissed'))
   const onAction = useStableCallback(runAction)

@@ -41,6 +41,7 @@ export const IPC = {
   DRIFT_CHECKS_SHOW: 'driftChecks:show',
   DRIFT_CHECKS_RELEASE: 'driftChecks:release',
   DRIFT_CHECKS_BEGIN: 'driftChecks:begin',
+  DRIFT_CHECKS_DISCARD: 'driftChecks:discard',
   DRIFT_CHECKS_CHANGED: 'driftChecks:changed',
   DISCOVERY_GET: 'discovery:get',
   DISCOVERY_CHANGED: 'discovery:changed',

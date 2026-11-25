@@ -10,10 +10,10 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 05
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unit test the fix-message builder: drift ids with the file path; health findings in full; mixed ticks.
-- [ ] Apply sends to the run's live session; with the session gone, a new session starts with the run's added folders and is sent the message (via ticket 05's `send`).
-- [ ] Applied and skipped statuses show on the map; notes have no checkbox.
-- [ ] The Context UI scenario covers tick → Apply → logged message; the count is still 13 of 20.
-- [ ] Quick tier green.
+- [x] Unit test the fix-message builder: drift ids with the file path; health findings in full; mixed ticks.
+- [x] Apply sends to the run's live session; with the session gone, a new session starts with the run's added folders and is sent the message (via ticket 05's `send`).
+- [x] Applied and skipped statuses show on the map; notes have no checkbox.
+- [x] The Context UI scenario covers tick → Apply → logged message; the count is still 13 of 20.
+- [x] Quick tier green.

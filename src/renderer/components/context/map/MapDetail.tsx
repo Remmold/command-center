@@ -1,10 +1,11 @@
 import { formatTokens, type ContextItem, type ContextItemKind, type ContextLayerName } from '../../../../shared/context'
 import type { ShownFinding } from '../../../../shared/findings'
-import { fileTarget, useContextStore } from '../../../state/contextStore'
+import { fileTarget, findingKey, tickable, useContextStore } from '../../../state/contextStore'
 import { BAND_TITLES, KIND_EXPLANATIONS, KIND_TITLES, LANE_TITLES, SLASH_ONLY_SKILL, UNINDEXED_MEMORY_FILE } from '../../../state/mapCopy'
 import { blocksOf, type ContextMap, type MapBandName } from '../../../state/mapLayout'
 import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
+import { Checkbox } from '../../ui/Checkbox'
 import { EmptyState } from '../../ui/EmptyState'
 import { Pane } from '../../ui/Pane'
 import { Panel } from '../../ui/Panel'
@@ -55,6 +56,16 @@ function detailRows(s: BlockDetail): [string, string][] {
   return out
 }
 
+function FixTick({ finding }: { finding: ShownFinding }) {
+  const key = findingKey(finding)
+  const ticked = useContextStore((s) => s.ticked.includes(key))
+  return (
+    <Checkbox checked={ticked} onChange={() => useContextStore.getState().toggleTick(key)}>
+      Fix {finding.id}
+    </Checkbox>
+  )
+}
+
 export function MapDetail({ map, defaultName }: { map: ContextMap; defaultName: string }) {
   const selected = useContextStore((s) => s.mapSelected)
   const s = detailOf(map, selected)
@@ -103,8 +114,9 @@ export function MapDetail({ map, defaultName }: { map: ContextMap; defaultName: 
             {s.findings.map((f) => (
               <li key={`${f.runId ?? 'health'}:${f.id}`} data-stale={f.stale ? '' : undefined} className={`flex flex-col gap-1 ${f.stale ? 'opacity-50' : ''}`}>
                 <span className="text-fg">
-                  {f.severity === 'note' && <Badge tone="quiet">note</Badge>} {f.claim}
+                  {f.severity === 'note' && <Badge tone="quiet">note</Badge>} {f.status !== 'open' && <Badge tone="quiet">{f.status}</Badge>} {f.claim}
                 </span>
+                {tickable(f) && <FixTick finding={f} />}
                 {(f.stale || f.accountWide) && (
                   <span className="flex flex-wrap gap-1">
                     {f.stale && (

@@ -30,7 +30,14 @@ export async function startDriftCheck({ workspace, report, accountName, kind, pr
   const written = await window.api.driftChecks.begin(driftRunSkeleton({ kind, account, projects, runId: newRunId(startedAt), sessionId, startedAt }))
   if (!written.ok) return `Could not write the run file: ${written.error}`
   const { prompt, addDirs } = buildDriftCheck({ kind, sessionPath: workspace.path, account, projects, findingsFile: written.file })
-  if (!startSession(workspace, { addDirs, send: { prompt, id: sessionId, ...choice } })) return 'Could not start the session.'
+  let started = false
+  try {
+    started = startSession(workspace, { addDirs, send: { prompt, id: sessionId, ...choice } })
+  } finally {
+    // A run whose session never started would show as running forever.
+    if (!started) await window.api.driftChecks.discard(written.file)
+  }
+  if (!started) return 'Could not start the session.'
   useContextStore.getState().showDrift()
   return null
 }

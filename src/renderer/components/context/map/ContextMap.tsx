@@ -1,9 +1,11 @@
-import { useEffect, useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link2, Lock } from 'lucide-react'
 import { formatTokens, type ContextLayerName, type ContextReport } from '../../../../shared/context'
-import { shownFindings } from '../../../../shared/findings'
+import { shownFindings, type DriftChecksView, type ShownFinding } from '../../../../shared/findings'
 import { healthCheck } from '../../../../shared/healthCheck'
-import { useContextStore } from '../../../state/contextStore'
+import { applyFixes } from '../../../state/applyFixes'
+import { findingKey, tickable, useContextStore } from '../../../state/contextStore'
+import { useWorkspacesStore } from '../../../state/workspacesStore'
 import { BAND_NOTES, BAND_TITLES, LANE_TITLES } from '../../../state/mapCopy'
 import { stepIndex, tourSteps } from '../../../state/mapTour'
 import { BAND_ORDER, BLOCK_SIZE_FLOOR, mapLayout, type ContextMap as ContextMapModel, type MapBand, type MapBandName, type MapBlock } from '../../../state/mapLayout'
@@ -59,12 +61,54 @@ export function ContextMapPane({ workspacePath, report, defaultName }: { workspa
         <Pane label="Context map">
           <NoticeLine strip>Start total {formatTokens(map.startTotal)} tokens · estimates, as configured</NoticeLine>
           <DriftRuns drift={drift} />
+          <ApplyBar findings={findings} report={report} drift={drift} />
           <MapGrid map={map} highlight={steps[stepIndex(tourStep, steps)].highlight} defaultName={defaultName} />
         </Pane>
       </div>
       <div className="min-h-0 w-80 shrink-0 border-l border-subtle">
         <MapDetail map={map} defaultName={defaultName} />
       </div>
+    </div>
+  )
+}
+
+/** "Apply N fixes" for the ticked findings, while any is ticked. */
+function ApplyBar({ findings, report, drift }: { findings: readonly ShownFinding[]; report: ContextReport; drift: DriftChecksView | null }) {
+  const keys = useContextStore((s) => s.ticked)
+  const selectedId = useContextStore((s) => s.selectedId)
+  const workspace = useWorkspacesStore((s) => s.workspaces.find((w) => w.id === selectedId) ?? null)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const ticked = useMemo(() => findings.filter((f) => tickable(f) && keys.includes(findingKey(f))), [findings, keys])
+  if (ticked.length === 0 && error === null) return null
+  const apply = async (): Promise<void> => {
+    if (!workspace) return
+    setSending(true)
+    setError(null)
+    try {
+      const failed = await applyFixes({ workspace, report, drift, ticked })
+      setError(failed)
+      if (failed === null) useContextStore.getState().sentFixes([...new Set(ticked.flatMap((f) => (f.runId ? [f.runId] : [])))])
+    } catch (err) {
+      console.error('[context] could not apply fixes', err)
+      setError('Could not send the fixes.')
+    } finally {
+      setSending(false)
+    }
+  }
+  return (
+    <div className="flex shrink-0 flex-col gap-1 border-b border-subtle px-3 py-2">
+      {ticked.length > 0 && (
+        <div className="flex items-center gap-2 text-[11px] text-muted">
+          <span>Claude edits the files and marks each one applied or skipped.</span>
+          <span className="ml-auto">
+            <Button onClick={() => void apply()} disabled={sending || !workspace}>
+              {sending ? 'Sending…' : `Apply ${ticked.length} ${ticked.length === 1 ? 'fix' : 'fixes'}`}
+            </Button>
+          </span>
+        </div>
+      )}
+      {error && <NoticeLine tone="warning">{error}</NoticeLine>}
     </div>
   )
 }
@@ -160,8 +204,8 @@ function MapTile({ block, lit, defaultName }: { block: MapBlock; lit: boolean; d
     if (block.collapsed && block.groupId) store.toggleGroup(block.groupId)
     store.selectBlock(block.id)
   }
-  const problems = block.findings.filter((f) => f.severity === 'problem').length
-  const notes = block.findings.length - problems
+  const problems = block.findings.filter(tickable).length
+  const notes = block.findings.filter((f) => f.severity === 'note').length
   const marks = (
     <>
       {block.sharedWithDefault && <Link2 size={10} aria-label={`shared with ${defaultName}`} className="shrink-0" />}
@@ -175,7 +219,7 @@ function MapTile({ block, lit, defaultName }: { block: MapBlock; lit: boolean; d
       nodeId={block.id}
       label={block.label}
       meta={block.tokens === null ? undefined : formatTokens(block.tokens)}
-      marks={block.sharedWithDefault || block.readOnly || block.findings.length > 0 ? marks : undefined}
+      marks={block.sharedWithDefault || block.readOnly || problems + notes > 0 ? marks : undefined}
       width={width}
       height={height}
       selected={selected}

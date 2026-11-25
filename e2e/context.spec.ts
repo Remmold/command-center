@@ -64,7 +64,7 @@ test('Context opens the seeded CLAUDE.md rendered, saves an edit with Ctrl+S bac
   expect(readFileSync(settings, 'utf-8')).toBe('{}')
 })
 
-test('Map tour: step 5 shows the seeded MEMORY.md finding, step 6 starts a drift check whose finding lands on its block while Context stays, and Open chat shows the run in Work', async ({ launched }) => {
+test('Map tour: step 5 shows the seeded MEMORY.md finding, step 6 starts a drift check whose finding lands on its block while Context stays, ticking it and Apply sends its id to the run session, and Open chat shows the run in Work', async ({ launched }) => {
   const { app, page, log, workspace, root } = launched
   const claudeMd = join(workspace, 'CLAUDE.md')
   writeFileSync(claudeMd, '# Rules\n')
@@ -97,6 +97,14 @@ test('Map tour: step 5 shows the seeded MEMORY.md finding, step 6 starts a drift
   const map = view.getByRole('region', { name: 'Context map' })
   await expect(map.getByRole('region', { name: 'Repo · Every start' }).getByRole('button', { name: /^CLAUDE\.md.*1 finding/ })).toBeVisible()
   await expect(map.getByRole('region', { name: /^Drift check / })).toContainText('e2e-workspace files')
+
+  await map.getByRole('region', { name: 'Repo · Every start' }).getByRole('button', { name: /^CLAUDE\.md.*1 finding/ }).click()
+  const detail = view.getByRole('region', { name: 'Block detail' })
+  await detail.getByRole('checkbox', { name: 'Fix F1' }).check()
+  await map.getByRole('button', { name: 'Apply 1 fix' }).click()
+  await expect.poll(() => log.userTexts().find((text) => text.startsWith('Fix findings:')) ?? '').toMatch(/^Findings file: .+\.json\nIds: F1$/m)
+  await expect(detail.getByText('applied', { exact: true })).toBeVisible()
+  await expect(detail.getByRole('checkbox', { name: 'Fix F1' })).toHaveCount(0)
 
   await map.getByRole('button', { name: 'Open chat' }).click()
   await expect(page.getByTestId('view-work').getByText('Recorded one finding in the findings file.')).toBeVisible()

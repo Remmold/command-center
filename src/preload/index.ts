@@ -114,9 +114,10 @@ const api: RendererApi = {
     writeFile: (workspaceId: string, path: string, content: string) => ipcRenderer.invoke(IPC.CONTEXT_WRITE_FILE, workspaceId, path, content)
   },
   driftChecks: {
-    show: (workspaceId) => ipcRenderer.invoke(IPC.DRIFT_CHECKS_SHOW, workspaceId),
+    show: (workspaceId, fixing) => ipcRenderer.invoke(IPC.DRIFT_CHECKS_SHOW, workspaceId, fixing),
     release: () => ipcRenderer.invoke(IPC.DRIFT_CHECKS_RELEASE),
     begin: (skeleton) => ipcRenderer.invoke(IPC.DRIFT_CHECKS_BEGIN, skeleton),
+    discard: (file) => ipcRenderer.invoke(IPC.DRIFT_CHECKS_DISCARD, file),
     onChanged: (cb) => {
       const handler = () => cb()
       ipcRenderer.on(IPC.DRIFT_CHECKS_CHANGED, handler)

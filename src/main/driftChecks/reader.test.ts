@@ -57,6 +57,11 @@ describe('DriftChecksReader', () => {
     expect((await reader.read(folder, WS, ACC)).watch).toEqual([])
   })
 
+  it('watches a done run again while fixes sent to it may mark its findings', async () => {
+    await write('r.json', JSON.stringify(run('r', { done: true })))
+    expect((await reader.read(folder, WS, ACC, ['r'])).watch.map((w) => w.path)).toEqual([join(folder, 'r.json')])
+  })
+
   it('keeps the last good parse of a file being rewritten and says it is writing', async () => {
     await write('r.json', JSON.stringify(run('r', { steps: [{ id: 'a', title: 'A', status: 'running' }] })))
     await reader.read(folder, WS, ACC)
