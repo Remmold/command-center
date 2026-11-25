@@ -11,7 +11,7 @@ vi.stubGlobal('localStorage', {
 const { useChatDrawerStore, initChatDrawer, DRAWER_MIN_WIDTH } = await import('./chatDrawer')
 const { clampDrawerShare } = await import('../components/ui/drawerShare')
 const { openInDrawer, openNotifiedSession, paneOnScreen, useFocusRequestStore } = await import('./sessionNavigation')
-const { waitingJump } = await import('./sessionList')
+const { nextWaitingRow } = await import('./sessionList')
 const { useViewStore } = await import('./viewStore')
 const { useProjectViewsStore } = await import('./projectViewsStore')
 const { useChatPairStore } = await import('./chatPairStore')
@@ -118,23 +118,16 @@ describe('Ctrl+Shift+J', () => {
     { paneId: 'c', status: 'your-turn' as const, statusSince: 3 }
   ]
 
-  it("on the Dashboard swaps the drawer to the waiting session after the drawer's", () => {
-    expect(waitingJump(waiting, 'b', true)).toEqual({ row: waiting[2], into: 'drawer' })
-    expect(waitingJump(waiting, 'c', true)).toEqual({ row: waiting[0], into: 'drawer' })
+  it("picks the waiting session after the one on screen (the drawer's on the Dashboard), wrapping round", () => {
+    expect(nextWaitingRow(waiting, 'a')).toBe(waiting[1])
+    expect(nextWaitingRow(waiting, 'b')).toBe(waiting[2])
+    expect(nextWaitingRow(waiting, 'c')).toBe(waiting[0])
   })
 
-  it('on the Dashboard with the drawer closed opens the first waiting session in the drawer', () => {
-    expect(waitingJump(waiting, null, true)).toEqual({ row: waiting[0], into: 'drawer' })
-  })
-
-  it('does nothing with none waiting, so the Dashboard stays', () => {
-    expect(waitingJump([], null, true)).toBeNull()
-    expect(waitingJump([], 'a', false)).toBeNull()
-  })
-
-  it('in every other view opens the one after the chat on screen in Work', () => {
-    expect(waitingJump(waiting, 'a', false)).toEqual({ row: waiting[1], into: 'work' })
-    expect(waitingJump(waiting, null, false)).toEqual({ row: waiting[0], into: 'work' })
+  it('picks the first waiting session with none on screen, and nothing with none waiting', () => {
+    expect(nextWaitingRow(waiting, null)).toBe(waiting[0])
+    expect(nextWaitingRow([], null)).toBeNull()
+    expect(nextWaitingRow([], 'a')).toBeNull()
   })
 })
 

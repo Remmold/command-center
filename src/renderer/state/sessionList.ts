@@ -300,16 +300,11 @@ export function waitingRows(sections: readonly AccountSection[]): HostedRow[] {
 
 type WaitingRow = Pick<HostedRow, 'paneId' | 'status' | 'statusSince'>
 
-/** The waiting row after the one on screen, and whether it opens in the Dashboard's chat drawer or in Work. */
-export function waitingJump<R extends WaitingRow>(
-  rows: readonly R[],
-  onScreen: string | null,
-  inDrawer: boolean
-): { row: R; into: 'drawer' | 'work' } | null {
+/** The waiting row after the one on screen. */
+export function nextWaitingRow<R extends WaitingRow>(rows: readonly R[], onScreen: string | null): R | null {
   const next = nextWaiting(
     rows.map((r) => ({ paneId: r.paneId, cwd: '', status: r.status, since: r.statusSince })),
     onScreen
   )
-  const row = next && rows.find((r) => r.paneId === next.paneId)
-  return row ? { row, into: inDrawer ? 'drawer' : 'work' } : null
+  return (next && rows.find((r) => r.paneId === next.paneId)) ?? null
 }

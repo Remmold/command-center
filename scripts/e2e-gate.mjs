@@ -13,7 +13,8 @@ mkdirSync(out, { recursive: true })
 const env = { ...process.env }
 delete env.ELECTRON_RUN_AS_NODE
 
-const run = (args, extraEnv = {}) => spawnSync('pnpm', args, { cwd: root, stdio: 'inherit', shell: true, env: { ...env, ...extraEnv } }).status ?? 1
+// One command string: pnpm is a .cmd on Windows, which needs the shell, and the arguments here are all fixed.
+const run = (args, extraEnv = {}) => spawnSync(`pnpm ${args.join(' ')}`, { cwd: root, stdio: 'inherit', shell: true, env: { ...env, ...extraEnv } }).status ?? 1
 const playwright = (report, extra) => {
   rmSync(report, { force: true })
   run(['exec', 'playwright', 'test', '-c', 'e2e/playwright.config.ts', '--reporter=json,line', ...extra], { PLAYWRIGHT_JSON_OUTPUT_NAME: report })

@@ -14,6 +14,8 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+Read `docs/adr/` before changing how chats mount or where they show: every hosted chat stays mounted in Work and owns its Claude process (ADR 0004).
+
 ## Commands
 
 Package manager is pnpm (`pnpm install`).

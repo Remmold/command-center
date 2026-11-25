@@ -139,9 +139,14 @@ export function openInDrawer(paneId: string): boolean {
   return true
 }
 
+/** Opens the session in the chat drawer while the Dashboard shows it, else with `inWork`. */
+export function openWhereShown(paneId: string, inWork: () => boolean = () => openSession(paneId)): boolean {
+  return drawerShown(useViewStore.getState()) ? openInDrawer(paneId) : inWork()
+}
+
 /** A notification's session: in the chat drawer while the Dashboard shows it, else in Work. */
 export function openNotifiedSession(paneId: string): boolean {
-  return drawerShown(useViewStore.getState()) ? openInDrawer(paneId) : openSession(paneId)
+  return openWhereShown(paneId)
 }
 
 export function openObserved(workspaceId: string, sessionId: string, { beside = false }: Pick<OpenOptions, 'beside'> = {}): void {
