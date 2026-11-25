@@ -17,9 +17,9 @@ Rules (from the spec, word for word):
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unit tests (seam 1) for the drawer state: open, swap to another session, close, closes when the session no longer exists among the hosted sessions, opening leaves Work's chat pair, active workspace and active session untouched, width share default 0.4 and clamped between 420 px and 80 %, share persisted and session not. Prior art: the dashboard, session-list and chat pair state tests.
-- [ ] New UI scenario (seam 2) in a new dashboard spec file on the fake CLI: on the Dashboard, a waiting session's Needs you row opens its chat in the drawer; a reply sent there reaches the fake CLI and the view is still the Dashboard; "Open in Work" lands on it in Work. The suite goes from 12 to 13 of its 20 scenarios (counted by the budget counter) and must stay within 200 s.
-- [ ] Every hosted chat's layer in Work changes here, so the whole UI suite (`pnpm e2e`) runs once and is green before the commit, not only the new scenario.
-- [ ] Quick tier green.
+- [x] Unit tests (seam 1) for the drawer state: open, swap to another session, close, closes when the session no longer exists among the hosted sessions, opening leaves Work's chat pair, active workspace and active session untouched, width share default 0.4 and clamped between 420 px and 80 %, share persisted and session not. Prior art: the dashboard, session-list and chat pair state tests.
+- [x] New UI scenario (seam 2) in a new dashboard spec file on the fake CLI: on the Dashboard, a waiting session's Needs you row opens its chat in the drawer; a reply sent there reaches the fake CLI and the view is still the Dashboard; "Open in Work" lands on it in Work. The suite goes from 12 to 13 of its 20 scenarios (counted by the budget counter) and must stay within 200 s.
+- [x] Every hosted chat's layer in Work changes here, so the whole UI suite (`pnpm e2e`) runs once and is green before the commit, not only the new scenario.
+- [x] Quick tier green.
