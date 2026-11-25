@@ -11,7 +11,7 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Six steps with Back and Next; each highlights its map part; clicking a block still works mid-tour.
 - [ ] Step texts fill in the workspace's numbers (start total, per-layer tokens, memory file count, unindexed count, skill, agent and command counts, MCP server count). Unit-test the step-text builder with a report fixture.

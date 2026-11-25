@@ -13,12 +13,14 @@ interface Props {
   selected: boolean
   /** Drawn dashed: it stands for several things. */
   stack?: boolean
+  /** Drawn faint: outside what is being pointed at. */
+  dimmed?: boolean
   tooltip?: string
   onClick: () => void
 }
 
 /** A selectable box sized by what it weighs, for a map of blocks. */
-export function Tile({ nodeId, label, meta, marks, width, height, selected, stack = false, tooltip, onClick }: Props) {
+export function Tile({ nodeId, label, meta, marks, width, height, selected, stack = false, dimmed = false, tooltip, onClick }: Props) {
   return (
     <button
       type="button"
@@ -27,7 +29,7 @@ export function Tile({ nodeId, label, meta, marks, width, height, selected, stac
       title={tooltip}
       onClick={onClick}
       style={{ width, height }}
-      className={`relative flex max-w-full shrink-0 flex-col items-start justify-start gap-0.5 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-4 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus ${stack ? 'border-dashed' : ''} ${
+      className={`relative flex max-w-full shrink-0 flex-col items-start justify-start gap-0.5 overflow-hidden rounded border px-1.5 py-1 text-left text-[11px] leading-4 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus ${stack ? 'border-dashed' : ''} ${dimmed ? 'opacity-40' : ''} ${
         selected ? 'border-focus bg-list-selected text-fg' : 'border-strong bg-widget text-fg hover:bg-list-hover'
       }`}
     >

@@ -4,6 +4,7 @@ import { formatTokens, type ContextLayerName, type ContextReport } from '../../.
 import { healthCheck } from '../../../../shared/healthCheck'
 import { useContextStore } from '../../../state/contextStore'
 import { BAND_NOTES, BAND_TITLES, LANE_TITLES } from '../../../state/mapCopy'
+import { tourSteps } from '../../../state/mapTour'
 import { BAND_ORDER, BLOCK_SIZE_FLOOR, mapLayout, type ContextMap as ContextMapModel, type MapBand, type MapBandName, type MapBlock } from '../../../state/mapLayout'
 import { Button } from '../../ui/Button'
 import { Connectors } from '../../ui/Connectors'
@@ -14,6 +15,7 @@ import { NoticeLine } from '../../ui/NoticeLine'
 import { Pane } from '../../ui/Pane'
 import { SectionLabel } from '../../ui/SectionLabel'
 import { Tile } from '../../ui/Tile'
+import { GuidedTour } from './GuidedTour'
 import { MapDetail } from './MapDetail'
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -28,14 +30,19 @@ export function ContextMapPane({ workspacePath, report, defaultName }: { workspa
   const expanded = useContextStore((s) => s.mapExpanded)
   const health = useMemo(() => (report ? healthCheck(report) : []), [report])
   const map = useMemo(() => (report ? mapLayout(report, health, new Set(expanded)) : null), [report, health, expanded])
+  const steps = useMemo(() => (map ? tourSteps(map) : []), [map])
+  const tourStep = useContextStore((s) => s.tourStep)
   if (!report || !map) return <EmptyState>Reading…</EmptyState>
   if (!report.folderExists) return <EmptyState>The folder {workspacePath} is gone, so there is nothing to map.</EmptyState>
   return (
     <div className="flex h-full min-h-0">
+      <div className="min-h-0 w-72 shrink-0 border-r border-subtle">
+        <GuidedTour steps={steps} report={report} health={health} />
+      </div>
       <div className="min-h-0 min-w-0 flex-1">
         <Pane label="Context map">
           <NoticeLine strip>Start total {formatTokens(map.startTotal)} tokens · estimates, as configured</NoticeLine>
-          <MapGrid map={map} defaultName={defaultName} />
+          <MapGrid map={map} highlight={steps[Math.min(tourStep, steps.length - 1)].highlight} defaultName={defaultName} />
         </Pane>
       </div>
       <div className="min-h-0 w-80 shrink-0 border-l border-subtle">
@@ -45,7 +52,7 @@ export function ContextMapPane({ workspacePath, report, defaultName }: { workspa
   )
 }
 
-function MapGrid({ map, defaultName }: { map: ContextMapModel; defaultName: string }) {
+function MapGrid({ map, highlight, defaultName }: { map: ContextMapModel; highlight: ReadonlySet<string>; defaultName: string }) {
   return (
     <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
       <div className="relative grid min-w-[44rem] grid-cols-[7rem_repeat(3,minmax(0,1fr))] gap-2">
@@ -57,14 +64,14 @@ function MapGrid({ map, defaultName }: { map: ContextMapModel; defaultName: stri
           </div>
         ))}
         {BAND_ORDER.map((band, row) => (
-          <BandRow key={band} band={band} cells={map.lanes.map((lane) => ({ layer: lane.layer, band: lane.bands[row] }))} defaultName={defaultName} />
+          <BandRow key={band} band={band} cells={map.lanes.map((lane) => ({ layer: lane.layer, band: lane.bands[row] }))} highlight={highlight} defaultName={defaultName} />
         ))}
       </div>
     </div>
   )
 }
 
-function BandRow({ band, cells, defaultName }: { band: MapBandName; cells: { layer: ContextLayerName; band: MapBand }[]; defaultName: string }) {
+function BandRow({ band, cells, highlight, defaultName }: { band: MapBandName; cells: { layer: ContextLayerName; band: MapBand }[]; highlight: ReadonlySet<string>; defaultName: string }) {
   return (
     <>
       <div className="flex flex-col gap-0.5 border-t border-subtle px-1 pt-2">
@@ -72,14 +79,14 @@ function BandRow({ band, cells, defaultName }: { band: MapBandName; cells: { lay
         <span className="text-[10px] text-faint">{BAND_NOTES[band]}</span>
       </div>
       {cells.map((cell) => (
-        <BandCell key={cell.layer} label={`${LANE_TITLES[cell.layer]} · ${BAND_TITLES[band]}`} cell={cell.band} defaultName={defaultName} />
+        <BandCell key={cell.layer} label={`${LANE_TITLES[cell.layer]} · ${BAND_TITLES[band]}`} cell={cell.band} highlight={highlight} defaultName={defaultName} />
       ))}
     </>
   )
 }
 
 /** One lane's part of a band: its blocks, an expanded group's members under a Collapse button. */
-function BandCell({ label, cell, defaultName }: { label: string; cell: MapBand; defaultName: string }) {
+function BandCell({ label, cell, highlight, defaultName }: { label: string; cell: MapBand; highlight: ReadonlySet<string>; defaultName: string }) {
   return (
     <section aria-label={label} className="flex min-w-0 flex-col gap-1.5 border-t border-subtle pt-2">
       {cell.tokens !== null && <span className="px-1 text-[10px] tabular-nums text-muted">{formatTokens(cell.tokens)} tokens</span>}
@@ -91,7 +98,7 @@ function BandCell({ label, cell, defaultName }: { label: string; cell: MapBand; 
           return (
             <UnindexedStart key={block.id} show={startsUnindexed}>
               <GroupStart show={startsGroup} groupId={block.groupId}>
-                <MapTile block={block} defaultName={defaultName} />
+                <MapTile block={block} lit={highlight.has(block.id)} defaultName={defaultName} />
               </GroupStart>
             </UnindexedStart>
           )
@@ -128,7 +135,7 @@ function GroupStart({ show, groupId, children }: { show: boolean; groupId: strin
   )
 }
 
-function MapTile({ block, defaultName }: { block: MapBlock; defaultName: string }) {
+function MapTile({ block, lit, defaultName }: { block: MapBlock; lit: boolean; defaultName: string }) {
   const selected = useContextStore((s) => s.mapSelected === block.id)
   const { width, height } = tileSize(block.size)
   const click = (): void => {
@@ -156,6 +163,7 @@ function MapTile({ block, defaultName }: { block: MapBlock; defaultName: string 
       height={height}
       selected={selected}
       stack={block.collapsed}
+      dimmed={!lit && !selected}
       tooltip={block.item?.path ?? (block.collapsed ? `${block.label}: click to show each one` : block.label)}
       onClick={click}
     />
