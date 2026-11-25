@@ -63,7 +63,7 @@ When a hosted session closes, or the app quits, the app ends the CLI's whole pro
 - **Open.** The open link uses the existing external-open path and refuses anything that is not a local address.
 - **Stop.** The Stop button sends `stop_task {task_id}`. A failed stop shows the CLI's error on the row.
 - **Badge.** The session-list row shows the running count, with no badge at zero. Its tooltip has one line per running process: the command, plus `:port` when a port is confirmed. The session status reducer is untouched.
-- **Tree kill.** On Windows, killing a hosted session's CLI ends its whole process tree (`taskkill /PID <pid> /T /F`), after closing stdin as today. App quit waits for these kills to finish before it exits. Other platforms keep today's kill.
+- **Tree kill.** On Windows, killing a hosted session's CLI ends its whole process tree (`taskkill /PID <pid> /T /F`) while the CLI is still alive, then closes stdin as today. If stdin closed first, the CLI could exit and leave its children orphaned, out of reach of `/T`. App quit waits for these kills to finish before it exits. Other platforms keep today's kill.
 - **Auto-update unchanged.** The busy gate keeps waiting for every task, background processes included.
 - **Fake CLI.** It learns:
   - a Bash call with `run_in_background: true`. This sends `task_started` with `is_backgrounded: true` and a result `Command running in background with ID: <id>. Output is being written to: <path>`, and it spawns a real child process (a tiny local HTTP server on a given port that prints its URL), so ports, Stop and the tree kill can be tested for real.
