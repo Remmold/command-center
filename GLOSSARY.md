@@ -117,9 +117,25 @@ _Avoid_: Scope, level, tier
 The items of one kind within a context layer, shown together under one heading with their count and tokens: CLAUDE.md, Memory, Skills, Agents, Commands, MCP servers, Plugins, Settings & hooks, always in that order.
 _Avoid_: Category, section
 
-**Context cleanup**:
-A new hosted session, started from the Context view with a prepared prompt in its input, in which subagents check context files against the current code and report what has drifted; Andreas picks which fixes it applies. It comes in three kinds: **project** (one workspace's memory and repo files), **account** (the account's own files) and **cross-project** (chosen workspaces of one account plus that account's files).
-_Avoid_: Memory audit (that is the interactive skill), context refresh
+**Context map**:
+The Context view's picture of one workspace's context: the context layers as lanes, split into what loads at every start and what loads on demand, with each item sized by its tokens and lines for imports and for MEMORY.md's links to memory files. Findings show on the items they concern.
+_Avoid_: Graph, diagram, tree
+
+**Guided tour**:
+The numbered steps beside the context map that walk through it in plain words with the workspace's real numbers: what every chat starts with, memory, skills, agents and commands, settings, hooks and MCP, then the health check and the drift check.
+_Avoid_: Wizard, tutorial, walkthrough
+
+**Health check**:
+The checks the app runs on context files itself, at no token cost: MEMORY.md longer than Claude loads, memory files MEMORY.md never links, index lines to missing files, and CLAUDE.md files past Claude Code's size warning.
+_Avoid_: Lint, audit, validation
+
+**Drift check**:
+A hosted session, started from the Context view, in which subagents check context files against the current code and record what has drifted as findings; Andreas ticks which fixes it applies. It comes in three kinds: **project** (one workspace's memory and repo files), **account** (the account's own files) and **cross-project** (chosen workspaces of one account plus that account's files).
+_Avoid_: Context cleanup (its old name), memory audit (that is the interactive skill), context refresh
+
+**Finding**:
+One thing a health check or drift check reports about one context file: what is wrong, the evidence, and the proposed fix. Andreas ticks the findings he wants fixed; nothing is changed before he does.
+_Avoid_: Issue (that is a ticket), problem, warning
 
 **Start total**:
 The estimated tokens every new chat in a workspace starts with from its context: CLAUDE.md files and their imports, MEMORY.md, and the names and descriptions of skills and agents. Subfolder CLAUDE.md files, skills offered only as slash commands, and MCP tools are not in it.
