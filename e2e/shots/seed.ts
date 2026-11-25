@@ -212,7 +212,7 @@ export async function resize(app: ElectronApplication, width: number, height: nu
 
 
 // Browser globals of the functions that run inside the page; this project compiles against Node's types.
-declare const localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void }
+declare const localStorage: { getItem(key: string): string | null }
 
 const LONG_MESSAGES = 300
 export const CODE = Array.from({ length: 30 }, (_, i) => `  const value${i} = await store.read('key-${i}') ?? fallback(${i}) // line ${i}`).join('\n')
@@ -246,22 +246,27 @@ export function longTranscript(tag: string): unknown[] {
 
 /**
  * Saves each transcript as the history of its project's first chat, plus `extraChats` copies of the first one under
- * sessions no chat shows (old sessions' history). Reload the page afterwards so the app reads it. Returns the saved size in MB.
+ * sessions no chat shows (old sessions' history), as main's history files. Reload the page afterwards so the app reads
+ * them. Returns the saved size in MB.
  */
-export async function saveChats(page: Page, byProject: Record<string, unknown[]>, extraChats = 0): Promise<number> {
-  return page.evaluate(
-    ({ long, extra }) => {
-      const views = JSON.parse(localStorage.getItem('command-center.project-views')!).state.views as Record<string, { claudeSessions: { id: string }[] }>
-      const saved = JSON.parse(localStorage.getItem('command-center.chat-items') ?? '{"state":{"items":{}},"version":1}')
-      for (const [projectId, items] of Object.entries(long)) saved.state.items[views[projectId].claudeSessions[0].id] = items
-      const first = Object.values(long)[0]
-      for (let x = 0; x < extra; x++) saved.state.items[`seed-old-${x}`] = first
-      const text = JSON.stringify(saved)
-      localStorage.setItem('command-center.chat-items', text)
-      return text.length / 1024 / 1024
-    },
-    { long: byProject, extra: extraChats }
-  )
+export async function saveChats(page: Page, userData: string, byProject: Record<string, unknown[]>, extraChats = 0): Promise<number> {
+  const firstChat = await page.evaluate((projects) => {
+    const views = JSON.parse(localStorage.getItem('command-center.project-views')!).state.views as Record<string, { claudeSessions: { id: string }[] }>
+    return projects.map((projectId) => views[projectId].claudeSessions[0].id)
+  }, Object.keys(byProject))
+  const dir = join(userData, 'chat-history')
+  mkdirSync(dir, { recursive: true })
+  let bytes = 0
+  const save = (paneId: string, items: unknown[]): void => {
+    const text = `${JSON.stringify({ kind: 'set', items })}
+`
+    writeFileSync(join(dir, `${encodeURIComponent(paneId)}.jsonl`), text)
+    bytes += text.length
+  }
+  Object.values(byProject).forEach((items, i) => save(firstChat[i], items))
+  const first = Object.values(byProject)[0]
+  for (let x = 0; x < extraChats; x++) save(`seed-old-${x}`, first)
+  return bytes / 1024 / 1024
 }
 
 const DAY = 24 * HOUR

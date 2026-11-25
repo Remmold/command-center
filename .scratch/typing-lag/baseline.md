@@ -19,3 +19,14 @@ Setup: one visible 300-message chat plus 30 old 300-message chats, 22.8 MB of sa
 | streaming text turn | 5 | 7 | 33 | 0 | green |
 
 Earlier runs of the same scenarios: tool-call 5 / 478 / 843 / 38 and 5 / 494 / 827 / 35; streaming 5 / 12 / 24 / 0 and 5 / 8 / 43 / 0. The streaming worst key varies from 24 to 43 ms, close to the 50 ms limit.
+
+## After ticket 02, history in files per session (2026-11-25, branch feature/typing-lag)
+
+The seed now writes main's per-session history files; the check asserts the app loads 22.8 MB of history before typing.
+
+| Scenario | median ms | p90 ms | worst ms | keys over 50 ms | Result |
+| --- | --- | --- | --- | --- | --- |
+| tool-call turn (text plus a tool call once a second) | 5 | 6 | 7 | 0 | green |
+| streaming text turn | 4 | 6 | 34 | 0 | green |
+
+The streaming worst key (34 ms) is still near the limit; that scenario is ticket 04's.

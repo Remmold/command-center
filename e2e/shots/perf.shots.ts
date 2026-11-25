@@ -179,7 +179,7 @@ test('click latency on seeded data', async () => {
     await startIn(page, 'ledger-web', 'run the onboarding tests', 'Ran the onboarding suite')
     await startIn(page, 'notes-cli', null, null)
 
-    await saveChats(page, { 'pixel-forge': longTranscript('pf'), 'ledger-web': longTranscript('lw') })
+    await saveChats(page, seeded.userData, { 'pixel-forge': longTranscript('pf'), 'ledger-web': longTranscript('lw') })
     await page.reload()
     page = app.windows()[0]
     await page.waitForLoadState('domcontentloaded')

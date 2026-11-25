@@ -36,6 +36,7 @@ function script(): string {
 
 // Browser globals of the functions that run inside the page; this project compiles against Node's types.
 interface Probe {
+  api: { chatHistory: { loadSync(): Record<string, unknown[]> } }
   addEventListener(type: string, listener: (e: { type: string; timeStamp: number }) => void, capture: boolean): void
   __keyArm?: () => void
   __keyResult?: () => Promise<number>
@@ -117,7 +118,7 @@ test('typing while a 300-message chat works', async () => {
     // No turn yet, so the session has no saved history of its own and the seeded one is what loads.
     await startIn(page, 'pixel-forge', null, null)
     await page.waitForTimeout(1500)
-    const mb = await saveChats(page, { 'pixel-forge': longTranscript('pf') }, OLD_CHATS)
+    const mb = await saveChats(page, seeded.userData, { 'pixel-forge': longTranscript('pf') }, OLD_CHATS)
     console.log(`[seed] ${mb.toFixed(1)} MB of chat history`)
     await page.reload()
     page = app.windows()[0]
@@ -127,6 +128,9 @@ test('typing while a 300-message chat works', async () => {
     const pane = page.locator('[data-chat-pane]:visible').first()
     await expect(pane.getByText('step 149: refactor').first()).toBeAttached({ timeout: 30_000 })
     await page.waitForTimeout(1000)
+    const loadedMb = await page.evaluate(() => JSON.stringify(window.api.chatHistory.loadSync()).length / 1024 / 1024)
+    console.log(`[seed] the app loads ${loadedMb.toFixed(1)} MB of chat history`)
+    expect(loadedMb, 'chat history the app loads (MB)').toBeGreaterThan(15)
     await installProbe(page)
     const input = page.locator('[data-chat-pane] textarea:visible').first()
 

@@ -8,6 +8,7 @@ import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
 import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
+import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
@@ -400,6 +401,13 @@ export interface RendererApi {
     /** null before the first save: the list then seeds one from its repo groups. */
     load: () => Promise<SidebarLayout | null>
     save: (layout: SidebarLayout) => Promise<void>
+  }
+  /** Hosted sessions' chat history, one file per session saved by main. */
+  chatHistory: {
+    /** Blocks the window until read, so the first frame has every chat's history. */
+    loadSync: () => Record<string, ChatItem[]>
+    /** Fire and forget; main writes one session's changes in the order sent. */
+    apply: (paneId: string, changes: HistoryChange[]) => void
   }
   repoIdentities: {
     list: () => Promise<RepoIdentityViews>

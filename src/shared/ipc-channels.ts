@@ -7,6 +7,8 @@ export const IPC = {
   WORKSPACES_REORDER: 'workspaces:reorder',
   SIDEBAR_GROUPS_LOAD: 'sidebarGroups:load',
   SIDEBAR_GROUPS_SAVE: 'sidebarGroups:save',
+  CHAT_HISTORY_LOAD: 'chatHistory:load',
+  CHAT_HISTORY_APPLY: 'chatHistory:apply',
   REPO_IDENTITIES_LIST: 'repoIdentities:list',
   REPO_IDENTITIES_SET_NAME: 'repoIdentities:setName',
   REPO_IDENTITIES_SET_ICON: 'repoIdentities:setIcon',
