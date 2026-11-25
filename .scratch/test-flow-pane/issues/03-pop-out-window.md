@@ -10,10 +10,10 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Pop-out opens showing the focused session's test flow; a second press focuses it; it remembers its place across restarts.
-- [ ] It switches when another session is focused in Work, keeps the last one when Work isn't on screen, and reloads on file changes.
-- [ ] Hiding the main window to the tray leaves it open; quitting closes it.
-- [ ] The UI scenario is extended: the pop-out opens showing the same file, and switching to a second chat in another workspace switches the pop-out to that workspace's repo-named file (still one scenario, 16 of 20 on this branch).
-- [ ] Quick tier green.
+- [x] Pop-out opens showing the focused session's test flow; a second press focuses it; it remembers its place across restarts.
+- [x] It switches when another session is focused in Work, keeps the last one when Work isn't on screen, and reloads on file changes.
+- [x] Hiding the main window to the tray leaves it open; quitting closes it.
+- [x] The UI scenario is extended: the pop-out opens showing the same file, and switching to a second chat in another workspace switches the pop-out to that workspace's repo-named file (still one scenario, 16 of 20 on this branch).
+- [x] Quick tier green.

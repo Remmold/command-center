@@ -1,2 +1,3 @@
 - 01 resolved: Test tab shows the session's test flow (finder, reader, cc-test-flow scheme, folder setting) — accb013
 - 02 resolved: Test tab reloads on rewrite at the same scroll place, dot on another tab; finder lists picks newest-first and the reader shows the first that exists — 9073597
+- 03 resolved: pop-out test-flow window that follows the focused Work session (own saved place, off-screen in tests, closes on quit); UI scenario extended — f91f974

@@ -1,3 +1,3 @@
-Done: pop-out window, publisher, scenario; quick green; full UI suite 16/16 green in 95 s wall (Playwright 1.5m).
-Next: commit, then mark the ticket resolved.
+Done: committed f91f974; ticket resolved.
+Next: ship gate / Andreas's manual test (place across restarts, tray vs quit, split halves).
 Open reds: none.
