@@ -50,11 +50,11 @@ export function DriftCheckControls({ workspace, report }: Props) {
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const start = async (projects: DriftCheckProject[], as: DriftCheckKind): Promise<void> => {
+  const start = async (projects: DriftCheckProject[], scope: DriftCheckKind): Promise<void> => {
     setStarting(true)
     setError(null)
     try {
-      setError(await startDriftCheck({ workspace, report, accountName, kind: as, projects, choice: picked }))
+      setError(await startDriftCheck({ workspace, report, accountName, kind: scope, projects, choice: picked }))
     } catch (err) {
       console.error('[context] could not start a drift check', err)
       setError('Could not start the drift check.')

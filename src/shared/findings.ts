@@ -25,6 +25,7 @@ export interface FindingsRun {
   check: 'drift'
   scope: 'project' | 'account' | 'cross-project'
   runId: string
+  /** The id of the hosted session (its chat pane in Work) the run was sent to, not the CLI's own session id. */
   sessionId: string
   /** ISO. */
   startedAt: string
