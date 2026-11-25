@@ -23,7 +23,7 @@ const startSession = vi.fn((_workspace: Workspace, options: { send?: { delivered
 })
 const sendToChat = vi.fn(async (..._args: unknown[]) => true)
 vi.mock('./sessionNavigation', () => ({ startSession: (...args: Parameters<typeof startSession>) => startSession(...args) }))
-vi.mock('./startRequests', () => ({ sendToChat: (...args: unknown[]) => sendToChat(...args) }))
+vi.mock('./startRequests', async (actual) => ({ ...(await actual<typeof import('./startRequests')>()), sendToChat: (...args: unknown[]) => sendToChat(...args) }))
 
 const { applyFixes } = await import('./applyFixes')
 const { useProjectViewsStore } = await import('./projectViewsStore')

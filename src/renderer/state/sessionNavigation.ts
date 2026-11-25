@@ -10,7 +10,7 @@ import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
 import { useRecentProjectsStore } from './recentProjectsStore'
 import { saveDraft } from './restoreStore'
-import { requestSendOnMount } from './startRequests'
+import { dropSendsOfClosed, requestSendOnMount } from './startRequests'
 import { drawerShown, isHosted, useChatDrawerStore } from './chatDrawer'
 
 export const NEXT_WAITING_SHORTCUT = 'Ctrl+Shift+J'
@@ -266,6 +266,7 @@ export function initChatPair(): void {
   showPair(restored)
   useProjectViewsStore.subscribe((s, prev) => {
     if (s.views === prev.views) return
+    dropSendsOfClosed((paneId) => isHosted(s.views, paneId))
     const next = dropChats(currentPair(), hostedExists)
     if (next !== currentPair()) showPair(next)
   })

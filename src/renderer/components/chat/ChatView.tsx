@@ -27,7 +27,7 @@ import { promptContent, terminalSnapshots, type PromptAttachment } from './attac
 import { readTerminal } from '../../state/terminalBuffers'
 import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
-import { takeChatSends, takeSendRequest, takeStartRequest, useChatSendsStore } from '../../state/startRequests'
+import { deliver, takeChatSends, takeSendRequest, takeStartRequest, useChatSendsStore } from '../../state/startRequests'
 import { committedLength, thinkingDurations } from './liveItems'
 import { applyDeltas, frameBatch, landAfterWaitingDeltas, type FrameBatch, type StreamDelta } from './streamDeltas'
 import { useFollowOutput } from './useFollowOutput'
@@ -347,7 +347,7 @@ export const ChatView = memo(function ChatView({
     })
 
     const first = takeSendRequest(paneId)
-    if (first !== undefined) void handleSend(first.prompt).then(first.delivered, () => first.delivered(false))
+    if (first !== undefined) deliver(first, (prompt) => handleSend(prompt))
     else if (takeStartRequest(paneId) || (initialItemsCountRef.current === 0 && !resumeSessionId)) {
       void ensureStarted()
     }
@@ -674,7 +674,7 @@ export const ChatView = memo(function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [switchTo, processRunning, turnActive, held.length])
 
-  /** True once the prompt reached the running process; false when the process failed to start. */
+  /** False when the process failed to start; true once the prompt went to the running process, or a command was handled here. */
   const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []): Promise<boolean> => {
     if (attachments.length === 0 && remoteControlShown && isRemoteControlCommand(text)) {
       void toggleRemoteControl()
@@ -761,7 +761,7 @@ export const ChatView = memo(function ChatView({
   const onSend = useStableCallback(handleSend)
   useEffect(() => {
     if (outsideSends === 0) return
-    for (const send of takeChatSends(paneId)) void onSend(send.prompt).then(send.delivered, () => send.delivered(false))
+    for (const send of takeChatSends(paneId)) deliver(send, (prompt) => onSend(prompt))
   }, [outsideSends, paneId, onSend])
   const onInterrupt = useStableCallback(handleInterrupt)
   const onDismissSuggestion = useStableCallback(() => clearSuggestion('dismissed'))

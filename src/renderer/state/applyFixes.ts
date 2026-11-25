@@ -6,7 +6,7 @@ import type { Workspace } from '../../shared/types'
 import { isHosted } from './chatDrawer'
 import { useProjectViewsStore } from './projectViewsStore'
 import { startSession } from './sessionNavigation'
-import { sendToChat } from './startRequests'
+import { sendToChat, settleable } from './startRequests'
 import { useWorkspacesStore } from './workspacesStore'
 
 export interface ApplyFixes {
@@ -60,8 +60,7 @@ export async function applyFixes({ workspace, report, drift, ticked }: ApplyFixe
   // Each run with a ticked finding brings its folders, so the new session can edit and mark them all.
   const sources = runs.filter((r) => r === latest || ticked.some((f) => f.runId === r.run.runId))
   const addDirs = latest ? [...new Set((await Promise.all(sources.map((r) => runAddDirs(r, workspace, report)))).flat())] : healthAddDirs(ticked, workspace, report)
-  let reached: (ok: boolean) => void = () => {}
-  const delivered = new Promise<boolean>((resolve) => (reached = resolve))
-  if (!startSession(workspace, { addDirs, send: { prompt, delivered: reached } })) return 'Could not start a session for the fixes.'
-  return (await delivered) ? null : "The fix session's process did not start; its error shows in that chat in Work."
+  const reached = settleable()
+  if (!startSession(workspace, { addDirs, send: { prompt, delivered: reached.settle } })) return 'Could not start a session for the fixes.'
+  return (await reached.settled) ? null : "The fix session's process did not start; its error shows in that chat in Work."
 }

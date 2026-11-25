@@ -1,3 +1,3 @@
 **Status:** resolved
-Round 1: outside sends and first prompts settle whether they reached a running process; applyFixes waits on that, so a failed send or start returns an error and the ticks stay.
-quick, build, e2e 13/13 green; review next.
+Round 2 (review): a send waiting on a chat closed before taking it settles as not reached, so Apply never sticks on Sending; shared settleable and deliver helpers.
+quick, build, e2e 13/13 green.
