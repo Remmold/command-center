@@ -9,8 +9,8 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unit tests (seam 1): next-waiting selection with the drawer open (the one after the drawer's session), closed (the first waiting one) and with nothing waiting (nothing happens, the view stays the Dashboard); the shortcut outside the Dashboard unchanged; notification routing by current view (Dashboard → drawer, Dashboard with Settings open → Work, any other view → Work); the drawer's session counts as on screen only while the Dashboard shows.
-- [ ] Extend ticket 01's dashboard UI scenario (no new scenario; the suite stays at 13 of 20): Ctrl+Shift+J swaps the drawer to the second waiting session; Board and back keeps the drawer on that session. It must stay within 200 s.
-- [ ] Quick tier green.
+- [x] Unit tests (seam 1): next-waiting selection with the drawer open (the one after the drawer's session), closed (the first waiting one) and with nothing waiting (nothing happens, the view stays the Dashboard); the shortcut outside the Dashboard unchanged; notification routing by current view (Dashboard → drawer, Dashboard with Settings open → Work, any other view → Work); the drawer's session counts as on screen only while the Dashboard shows.
+- [x] Extend ticket 01's dashboard UI scenario (no new scenario; the suite stays at 13 of 20): Ctrl+Shift+J swaps the drawer to the second waiting session; Board and back keeps the drawer on that session. It must stay within 200 s.
+- [x] Quick tier green.

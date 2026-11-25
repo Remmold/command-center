@@ -1,0 +1,3 @@
+- done: ticket 02 committed (4bb779d) plus review fixes (0b63a56); quick, dashboard+processes e2e green
+- next: ship gate for the branch
+- open reds: none
