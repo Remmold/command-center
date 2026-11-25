@@ -1,9 +1,11 @@
+import { ExternalLink } from 'lucide-react'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { fileBaseName } from '../../../shared/fileLinks'
 import type { TestFlowPick, TestFlowView } from '../../../shared/testFlow'
 import { MessageColumn } from '../chat/MessageColumn'
 import { EmptyState } from '../ui/EmptyState'
 import { HeaderRow } from '../ui/HeaderRow'
+import { IconButton } from '../ui/IconButton'
 import { Markdown } from '../ui/Markdown'
 import { SandboxedPage } from '../ui/SandboxedPage'
 import { Toolbar } from '../ui/Toolbar'
@@ -38,16 +40,27 @@ interface Props {
   view: TestFlowView | null
   folder: string
   repoName: string
+  /** The session's title, shown before the file name where the session is not on screen beside it. */
+  session?: string
+  onPopOut?: () => void
 }
 
 /** A session's test flow: its HTML twin in a sandboxed frame, else its markdown, else why there is none. Each file keeps its scroll place. */
-export function TestFlowPanel({ picks, view, folder, repoName }: Props) {
+export function TestFlowPanel({ picks, view, folder, repoName, session, onPopOut }: Props) {
   const missing = picks.length === 0 || (view !== null && !view.kind)
   const looked = picks.length > 0 ? picks.map((p) => fileBaseName(p.path)).join(', ') : 'a file'
   return (
     <div role="tabpanel" aria-label="Test" className="absolute inset-0 flex flex-col bg-editor">
-      <Toolbar>
-        <HeaderRow title={view?.kind ? view.name : picks.length > 0 ? fileBaseName(picks[0].path) : 'Test flow'} />
+      <Toolbar
+        actions={
+          onPopOut && (
+            <IconButton onClick={onPopOut} label="Pop out" tooltip="Open the test flow in its own window, following the focused session">
+              <ExternalLink size={14} />
+            </IconButton>
+          )
+        }
+      >
+        <HeaderRow subtitle={session} title={view?.kind ? view.name : picks.length > 0 ? fileBaseName(picks[0].path) : 'Test flow'} />
       </Toolbar>
       {missing ? (
         <EmptyState>

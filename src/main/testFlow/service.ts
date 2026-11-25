@@ -1,6 +1,8 @@
 import { ipcMain, webContents, type WebContents } from 'electron'
 import { IPC } from '../../shared/ipc-channels'
 import type { TestFlowView } from '../../shared/testFlow'
+import { getMainWindow } from '../window'
+import { openTestFlowWindow, publishTestFlowFocus, testFlowFocus } from './popOut'
 import { readTestFlow } from './reader'
 import { readTestFlowsFolder, writeTestFlowsFolder } from './settings'
 import { TestFlowWatches } from './watch'
@@ -64,5 +66,10 @@ export function registerTestFlowIpc(): () => void {
   })
   ipcMain.handle(IPC.TEST_FLOW_FOLDER_GET, () => readTestFlowsFolder())
   ipcMain.handle(IPC.TEST_FLOW_FOLDER_SET, (_e, folder: string) => writeTestFlowsFolder(folder))
+  ipcMain.handle(IPC.TEST_FLOW_POP_OUT, () => openTestFlowWindow())
+  ipcMain.on(IPC.TEST_FLOW_PUBLISH, (event, focus: unknown) => {
+    if (event.sender === getMainWindow()?.webContents) publishTestFlowFocus(focus)
+  })
+  ipcMain.handle(IPC.TEST_FLOW_FOCUS_GET, () => testFlowFocus())
   return () => watches.dispose()
 }

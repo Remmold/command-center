@@ -100,6 +100,17 @@ export const TEST_FLOW_SCHEME = 'cc-test-flow'
 
 export const DEFAULT_TEST_FLOWS_FOLDER = 'C:\\projects\\test-flows'
 
+/** The focused Work session's test flow as the main window publishes it for the pop-out. */
+export interface TestFlowFocus {
+  picks: TestFlowPick[]
+  folder: string
+  repoName: string
+  title: string
+}
+
+/** The query flag that loads the renderer as the pop-out test-flow window. */
+export const TEST_FLOW_WINDOW_QUERY = { mode: 'test-flow' } as const
+
 /** What the Test tab shows for a picked file; `name` is the file shown, the twin when there is one. */
 export type TestFlowView = { found: false; kind?: never } | { kind: 'html'; name: string; url: string } | { kind: 'md'; name: string; text: string }
 

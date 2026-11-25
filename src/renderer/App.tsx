@@ -28,6 +28,7 @@ import { useVsCodeMatchStore } from './state/vscodeMatchStore'
 import { useReportScreenFocus } from './hooks/useReportScreenFocus'
 import { useMainNavigation } from './hooks/useMainNavigation'
 import { useNotificationIcons } from './hooks/useNotificationIcons'
+import { usePublishTestFlow } from './hooks/usePublishTestFlow'
 import { useObservedStore } from './state/observedStore'
 import { useUpdateStore } from './state/updateStore'
 import { startRestore } from './state/restoreStore'
@@ -83,6 +84,7 @@ export function App() {
   useReportScreenFocus()
   useMainNavigation()
   useNotificationIcons()
+  usePublishTestFlow()
 
   useEffect(() => {
     initApprovals()

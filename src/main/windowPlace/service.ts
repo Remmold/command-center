@@ -6,8 +6,11 @@ import { restorePlace, type DisplayInfo, type Placement, type SavedPlace } from 
 
 const SAVE_DEBOUNCE_MS = 500
 
-function placeFile(): string {
-  return userDataPath('window-place.json')
+/** Which window a place belongs to; the main window's file keeps its original name. */
+export type WindowKey = 'main' | 'test-flow'
+
+function placeFile(key: WindowKey): string {
+  return userDataPath(key === 'main' ? 'window-place.json' : `window-place-${key}.json`)
 }
 
 function displayInfo(d: Electron.Display): DisplayInfo {
@@ -15,10 +18,10 @@ function displayInfo(d: Electron.Display): DisplayInfo {
 }
 
 /** Read synchronously, because the window needs its bounds before it is first shown. */
-export function savedPlacement(): Placement | null {
+export function savedPlacement(key: WindowKey = 'main'): Placement | null {
   let raw: unknown
   try {
-    raw = JSON.parse(readFileSync(placeFile(), 'utf-8'))
+    raw = JSON.parse(readFileSync(placeFile(key), 'utf-8'))
   } catch {
     return null
   }
@@ -36,8 +39,8 @@ function capture(win: BrowserWindow): SavedPlace {
   }
 }
 
-function write(place: SavedPlace): void {
-  const file = placeFile()
+function write(key: WindowKey, place: SavedPlace): void {
+  const file = placeFile(key)
   try {
     mkdirSync(dirname(file), { recursive: true })
     const tmp = `${file}.tmp`
@@ -48,14 +51,14 @@ function write(place: SavedPlace): void {
   }
 }
 
-let flushPending: () => void = () => undefined
+const flushes = new Map<WindowKey, () => void>()
 
-/** The update install quits without closing the window first. */
+/** The update install quits without closing the windows first. */
 export function flushWindowPlace(): void {
-  flushPending()
+  for (const flush of flushes.values()) flush()
 }
 
-export function trackWindowPlace(win: BrowserWindow): void {
+export function trackWindowPlace(win: BrowserWindow, key: WindowKey = 'main'): void {
   let timer: NodeJS.Timeout | null = null
   // Before its first show a window has not had its maximised state applied, and minimised it reports none.
   let shown = win.isVisible()
@@ -63,7 +66,7 @@ export function trackWindowPlace(win: BrowserWindow): void {
   const save = (): void => {
     if (timer) clearTimeout(timer)
     timer = null
-    if (!win.isDestroyed() && shown && !win.isMinimized()) write(capture(win))
+    if (!win.isDestroyed() && shown && !win.isMinimized()) write(key, capture(win))
   }
   const later = (): void => {
     if (timer) clearTimeout(timer)
@@ -80,6 +83,7 @@ export function trackWindowPlace(win: BrowserWindow): void {
   win.on('closed', () => {
     if (timer) clearTimeout(timer)
     app.removeListener('before-quit', save)
+    if (flushes.get(key) === save) flushes.delete(key)
   })
-  flushPending = save
+  flushes.set(key, save)
 }

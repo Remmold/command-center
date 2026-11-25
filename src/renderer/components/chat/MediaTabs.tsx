@@ -99,6 +99,10 @@ interface TabsProps extends SessionMedia {
 
 const AGENTS_TITLE = "This session's subagents and what they are doing"
 
+function popOut(): void {
+  window.api.testFlow.popOut().catch((err) => console.error('could not open the test-flow window', err))
+}
+
 /**
  * The Chat, Agents, Media and Test tabs over a transcript. The transcript stays mounted and laid out under the other
  * tabs, only invisible, so its scroll position and scroll-follow carry on.
@@ -159,7 +163,7 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
           {children}
         </div>
         {tab === 'media' && <MediaGrid ref={gridRef} media={media} cwd={cwd} revision={revision} onJump={jump} />}
-        {tab === 'test' && <TestFlowPanel {...testFlow} />}
+        {tab === 'test' && <TestFlowPanel {...testFlow} onPopOut={popOut} />}
         {tab === 'agents' && <AgentsPanel chatKey={chatKey} agents={agents} items={items} host={agentHost} cwd={cwd} />}
       </div>
     </>
