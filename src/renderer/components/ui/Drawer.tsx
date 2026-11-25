@@ -3,8 +3,7 @@ import { X } from 'lucide-react'
 import { Button } from './Button'
 import { overlayOpen } from './overlay'
 import { SectionLabel } from './SectionLabel'
-
-const MAX_SHARE = 0.8
+import { clampDrawerShare } from './drawerShare'
 
 /** Lays content and a docked Drawer side by side. */
 export function DrawerHost({ children }: { children: ReactNode }) {
@@ -25,14 +24,18 @@ interface Props {
   share: number
   minWidth: number
   onResize: (share: number) => void
+  /** Buttons in the header, before Close. */
+  actions?: ReactNode
+  /** The body fills the drawer edge to edge and scrolls itself, for content such as a chat. */
+  flush?: boolean
 }
 
-export function Drawer({ label, title, onClose, children, share, minWidth, onResize }: Props) {
+export function Drawer({ label, title, onClose, children, share, minWidth, onResize, actions, flush = false }: Props) {
   const panel = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !overlayOpen()) onClose()
+      if (e.key === 'Escape' && !e.defaultPrevented && !overlayOpen()) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -47,7 +50,7 @@ export function Drawer({ label, title, onClose, children, share, minWidth, onRes
     const move = (ev: PointerEvent): void => {
       const rect = host.getBoundingClientRect()
       const next = (rect.right - ev.clientX) / rect.width
-      onResize(Math.min(MAX_SHARE, Math.max(minWidth / rect.width, next)))
+      onResize(clampDrawerShare(next, minWidth, rect.width))
     }
     const stop = (): void => {
       handle.removeEventListener('pointermove', move)
@@ -73,11 +76,16 @@ export function Drawer({ label, title, onClose, children, share, minWidth, onRes
       />
       <header className="flex shrink-0 items-start gap-2 border-b border-subtle px-4 py-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1">{title}</div>
+        {actions}
         <Button variant="ghost" onClick={onClose} label="Close" tooltip="Close (Esc)">
           <X size={14} />
         </Button>
       </header>
-      <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">{children}</div>
+      {flush ? (
+        <div className="relative min-h-0 flex-1">{children}</div>
+      ) : (
+        <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">{children}</div>
+      )}
     </aside>
   )
 }

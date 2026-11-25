@@ -37,6 +37,7 @@ import { useSessionListStore } from './state/sessionListStore'
 import { mediaKeyOf, useChatMediaStore } from './state/chatMediaStore'
 import { useZoomStore } from './state/zoomStore'
 import { useSidebarGroupsStore } from './state/sidebarGroupsStore'
+import { initChatDrawer, useDrawerBorrow } from './state/chatDrawer'
 
 export function App() {
   const initUsage = useUsageStore((s) => s.init)
@@ -50,6 +51,7 @@ export function App() {
   const initObserved = useObservedStore((s) => s.init)
   const loadWorkspaces = useWorkspacesStore((s) => s.load)
   const loadProfiles = useProfilesStore((s) => s.load)
+  const drawerBorrow = useDrawerBorrow()
 
   const focusInputRef = useRef<() => void>()
   const registerFocus = useCallback((fn: () => void) => {
@@ -81,6 +83,7 @@ export function App() {
   useEffect(() => {
     initObserved()
     initChatPair()
+    initChatDrawer()
   }, [initObserved])
 
   useReportScreenFocus()
@@ -147,7 +150,8 @@ export function App() {
         <div
           data-testid="view-work"
           className={'min-h-0 min-w-0 flex-1 ' + (appView === 'work' ? '' : 'invisible')}
-          aria-hidden={appView !== 'work'}
+          // The rest of Work stays invisible while the Dashboard's chat drawer borrows one chat, so only that chat is exposed.
+          aria-hidden={appView !== 'work' && !drawerBorrow}
         >
           <WorkView registerFocus={registerFocus} />
         </div>

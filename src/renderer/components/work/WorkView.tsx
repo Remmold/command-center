@@ -2,6 +2,7 @@ import { memo, useEffect, useRef } from 'react'
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels'
 import { halfShowing, type HalfIndex } from '../../state/chatPair'
 import { useChatPairStore } from '../../state/chatPairStore'
+import { useDrawerBorrow, type DrawerSlot } from '../../state/chatDrawer'
 import { useObservedStore } from '../../state/observedStore'
 import { chatOnScreen } from '../../state/projectViewLayout'
 import { useProjectViewsStore, type ProjectView } from '../../state/projectViewsStore'
@@ -41,13 +42,25 @@ interface LayerProps {
   /** Called on any click or focus inside, so the half it shows becomes the focused one. */
   onActivate?: () => void
   children: React.ReactNode
+  /** Lays the layer over the Dashboard's chat drawer instead, visible though Work is not (ADR 0004). */
+  over?: DrawerSlot
 }
 
 /**
  * Kept mounted but out of sight while `slot` is null, so processes, terminals and scroll positions survive.
  * Clipped, because anything sticking out of any layer would make the surrounding panel scrollable and shift every layer.
  */
-function Layer({ slot, onActivate, children }: LayerProps) {
+function Layer({ slot, onActivate, children, over }: LayerProps) {
+  if (over) {
+    return (
+      <div
+        className="visible fixed z-[31] flex flex-col overflow-clip"
+        style={{ top: over.top, left: over.left, width: over.width, height: over.height }}
+      >
+        {children}
+      </div>
+    )
+  }
   return (
     <div
       className={'absolute flex flex-col overflow-clip ' + (slot ? SLOT[slot] : 'inset-0 invisible')}
@@ -96,6 +109,7 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
   const order = useProjectViewsStore((s) => s.order)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const observedSessions = useObservedStore((s) => s.sessions)
+  const borrow = useDrawerBorrow()
 
   const split = halves.length === 2
   const slotOf = (half: HalfIndex | null): Slot | null => (half === null ? null : split ? (half === 0 ? 'left' : 'right') : 'full')
@@ -130,9 +144,15 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
                 return view.claudeSessions.map((c) => {
                   const half = halfShowing(pair, { kind: 'hosted', paneId: c.id })
                   const editing = half === focused && view === toolsView && !chatOnScreen(view)
+                  const over = borrow?.paneId === c.id ? borrow.slot : undefined
                   return (
-                    <Layer key={c.id} slot={editing ? null : slotOf(half)} onActivate={half === null ? undefined : () => focusChatHalf(half)}>
-                      {half !== null && workspace && (
+                    <Layer
+                      key={c.id}
+                      slot={editing ? null : slotOf(half)}
+                      onActivate={half === null || over ? undefined : () => focusChatHalf(half)}
+                      over={over}
+                    >
+                      {half !== null && !over && workspace && (
                         <HostedSessionHeader workspace={workspace} view={view} session={c} place={placeOf(half)} />
                       )}
                       <div className="min-h-0 flex-1">
@@ -147,6 +167,7 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
                           addDirs={c.addDirs}
                           profileId={workspace?.profileId}
                           registerFocus={half === focused ? registerFocus : undefined}
+                          tabs={!over}
                         />
                       </div>
                     </Layer>

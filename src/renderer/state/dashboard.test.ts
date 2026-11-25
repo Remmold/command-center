@@ -271,3 +271,28 @@ describe('dashboard: accounts', () => {
     expect(one.accountTags).toEqual({})
   })
 })
+
+describe('dashboard: chat drawer', () => {
+  it("is the drawer session's row, even once it has gone idle, tagged with its account", () => {
+    const ACCOUNTS: Account[] = [
+      { profileId: 'default', name: 'a@home.com', plan: 'Max', label: 'a@home.com · Max', email: null },
+      { profileId: 'p-work', name: 'Work', plan: 'Team', label: 'Work · Team', email: null }
+    ]
+    const d = dashboard(
+      input({
+        workspaces: [workspace('wk', 'work-repo', 'wt-1', 'p-work'), ...WORKSPACES],
+        accounts: ACCOUNTS,
+        hosted: [hosted('quiet', 'went idle', 'wk'), hosted('h', 'home waits')],
+        statuses: [status('h', 'your-turn', 1)],
+        drawerPaneId: 'quiet'
+      })
+    )
+    expect([d.drawer?.title, d.drawer?.status, d.drawer?.workspace.worktreeTag]).toEqual(['went idle', 'idle', 'wt-1'])
+    expect(d.accountTags['hosted:quiet']).toBe('Work · Team')
+  })
+
+  it('is null while the drawer is closed or its session is gone', () => {
+    expect(dashboard(input({ hosted: [hosted('h', 'home')] })).drawer).toBeNull()
+    expect(dashboard(input({ hosted: [hosted('h', 'home')], drawerPaneId: 'gone' })).drawer).toBeNull()
+  })
+})
