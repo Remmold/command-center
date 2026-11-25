@@ -1,0 +1,3 @@
+- Done: ticket 01 resolved (4f86e74 feature, c4353f5 review fixes); quick tier and full pnpm e2e (13/13) green.
+- Next: ticket 02 (Ctrl+Shift+J, notification routing, drawer session as pane on screen).
+- Open reds: none.

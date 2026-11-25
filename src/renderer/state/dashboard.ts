@@ -23,6 +23,8 @@ export interface DashboardInput extends Omit<SessionListInput, 'search'> {
   now: number
   /** Settings order; rows are grouped by these. */
   accounts?: readonly Account[]
+  /** The hosted session in the chat drawer, if any. */
+  drawerPaneId?: string | null
 }
 
 export interface LiveCard {
@@ -37,6 +39,8 @@ export interface Dashboard {
   needsYou: HostedRow[]
   nowBuilding: NowBuilding
   live: LiveCard[]
+  /** The chat drawer's session, whatever its status; null while the drawer is closed or its session is gone. */
+  drawer: HostedRow | null
   usage: UsageEntry[]
   /** Account label by row key (session rows and Now building rows); empty with a single account. */
   accountTags: Readonly<Record<string, string>>
@@ -132,6 +136,8 @@ export function dashboard(input: DashboardInput): Dashboard {
     (c) => rowProfile(c.row),
     rank
   )
+  const drawer =
+    groups.flatMap((g) => g.rows).find((r): r is HostedRow => r.kind === 'hosted' && r.paneId === input.drawerPaneId) ?? null
   const building = nowBuilding({
     model: input.board,
     statuses: statusesByWorkspace(input),
@@ -145,8 +151,9 @@ export function dashboard(input: DashboardInput): Dashboard {
   return {
     needsYou,
     live,
+    drawer,
     nowBuilding: nowBuildingByAccount,
     usage: usageEntries({ profiles: input.profiles, usage: input.usage, activeProfileId: null, now: input.now }),
-    accountTags: accountTagsOf([...needsYou, ...live.map((c) => c.row)], nowBuildingByAccount, accounts, byRepo)
+    accountTags: accountTagsOf([...needsYou, ...live.map((c) => c.row), ...(drawer ? [drawer] : [])], nowBuildingByAccount, accounts, byRepo)
   }
 }

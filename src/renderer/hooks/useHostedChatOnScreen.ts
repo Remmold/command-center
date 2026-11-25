@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { useChatPairStore } from '../state/chatPairStore'
+import { useChatDrawerStore } from '../state/chatDrawer'
 import { hostedChatOnScreen } from '../state/chatsOnScreen'
 import { chatOnScreen } from '../state/projectViewLayout'
 import { useProjectViewsStore } from '../state/projectViewsStore'
@@ -21,6 +22,7 @@ export function useHostedChatOnScreen(paneId: string): boolean {
     const own = Object.values(s.views).find((v) => v.claudeSessions.some((c) => c.id === paneId))
     return own !== undefined && chatOnScreen(own)
   })
+  const inDrawer = useChatDrawerStore((s) => s.paneId === paneId)
   const visible = useSyncExternalStore(subscribeVisibility, windowVisible)
-  return hostedChatOnScreen(paneId, { view, settingsOpen, windowVisible: visible, pair, chatTabShown })
+  return hostedChatOnScreen(paneId, { view, settingsOpen, windowVisible: visible, pair, chatTabShown, inDrawer })
 }

@@ -101,6 +101,8 @@ interface TabsProps extends SessionMedia {
   processesPane?: string
   /** Running background processes, shown on the Processes tab. */
   processesRunning?: number
+  /** Shows the transcript alone, without the tab strip. */
+  transcriptOnly?: boolean
   children: ReactNode
 }
 
@@ -115,13 +117,13 @@ function popOut(): void {
  * The Chat, Agents, Media, Processes and Test tabs over a transcript. The transcript stays mounted and laid out under the other
  * tabs, only invisible, so its scroll position and scroll-follow carry on.
  */
-function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, processesPane, processesRunning = 0, children }: TabsProps) {
+function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, processesPane, processesRunning = 0, transcriptOnly = false, children }: TabsProps) {
   const chosen = useChatMediaStore((s) => s.tab[chatKey])
   const setTab = useChatMediaStore((s) => s.setTab)
   const agents = useChatAgents(items, agentHost, cwd)
   const agentCount = useMemo(() => flatAgents(agents).length, [agents])
   const agentsWorking = useMemo(() => agentTabCount(agents), [agents])
-  const tab = shownTab(chosen, media.length, agentCount, processesPane !== undefined)
+  const tab = transcriptOnly ? 'chat' : shownTab(chosen, media.length, agentCount, processesPane !== undefined)
   const testFlow = useSessionTestFlow(items, cwd)
   const testFlowChanged = useTestFlowDot(testFlow.view, tab === 'test')
   const regionRef = useRef<HTMLDivElement | null>(null)
@@ -168,7 +170,7 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, processesPa
   const hidden = tab !== 'chat'
   return (
     <>
-      <TabStrip<ChatTab> label="Chat, agents, media, processes or test" value={tab} onChange={(t) => setTab(chatKey, t)} tabs={tabs} />
+      {!transcriptOnly && <TabStrip<ChatTab> label="Chat, agents, media, processes or test" value={tab} onChange={(t) => setTab(chatKey, t)} tabs={tabs} />}
       <div ref={regionRef} className="relative flex min-h-0 flex-1 flex-col">
         <div ref={transcriptRef} className={'flex min-h-0 flex-1 flex-col' + (hidden ? ' invisible' : '')} aria-hidden={hidden || undefined}>
           {children}
@@ -183,12 +185,12 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, processesPa
 }
 
 /** A hosted chat's transcript under its Chat, Agents, Media, Processes and Test tabs. */
-export function HostedMediaTabs({ paneId, cwd, agents, children }: { paneId: string; cwd: string; agents: AgentHost; children: ReactNode }) {
+export function HostedMediaTabs({ paneId, cwd, agents, transcriptOnly, children }: { paneId: string; cwd: string; agents: AgentHost; transcriptOnly?: boolean; children: ReactNode }) {
   const session = useHostedMedia(paneId, cwd)
   const processes = usePaneProcesses(paneId)
   const running = useMemo(() => runningCount(processes), [processes])
   return (
-    <ChatTabs chatKey={paneId} {...session} cwd={cwd} agentHost={agents} processesPane={paneId} processesRunning={running}>
+    <ChatTabs chatKey={paneId} {...session} cwd={cwd} agentHost={agents} processesPane={paneId} processesRunning={running} transcriptOnly={transcriptOnly}>
       {children}
     </ChatTabs>
   )

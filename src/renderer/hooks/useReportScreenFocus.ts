@@ -3,6 +3,7 @@ import { useProjectViewsStore } from '../state/projectViewsStore'
 import { useViewStore } from '../state/viewStore'
 import { paneOnScreen } from '../state/sessionNavigation'
 import { useObservedStore } from '../state/observedStore'
+import { useChatDrawerStore } from '../state/chatDrawer'
 
 export function useReportScreenFocus(): void {
   useEffect(() => {
@@ -18,7 +19,8 @@ export function useReportScreenFocus(): void {
     const unsubs = [
       useViewStore.subscribe(report),
       useProjectViewsStore.subscribe(report),
-      useObservedStore.subscribe(report)
+      useObservedStore.subscribe(report),
+      useChatDrawerStore.subscribe(report)
     ]
     document.addEventListener('visibilitychange', report)
     return () => {
