@@ -19,7 +19,7 @@ With `CC_CLAUDE_BIN` set, the app's Default profile reads `CLAUDE_CONFIG_DIR` in
 ## Log
 
 One JSON object per line, each with `t` (ISO time) and `kind`:
-- `argv`: `argv`, `cwd`, `configDir` (its `CLAUDE_CONFIG_DIR` or null). One per process start.
+- `argv`: `argv`, `cwd`, `configDir` (its `CLAUDE_CONFIG_DIR` or null) and `addDirs` (every `--add-dir` folder, in order; `[]` without one). One per process start.
 - `received`: `line`, each parsed stdin line (user messages, control requests, control responses), or `raw` when it was not JSON.
 - `sent`: `line`, each `control_request` (`can_use_tool`) and `control_cancel_request` the fake sent.
 

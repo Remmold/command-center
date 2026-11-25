@@ -269,6 +269,13 @@ describe('scripts', () => {
     expect(fake.lines.some((l) => l.type === 'stream_event')).toBe(false)
   })
 
+  it('logs every --add-dir folder of its launch, in order', async () => {
+    const fake = start(['--add-dir', 'C:\a', '--model', 'haiku', '--add-dir', 'C:\b'])
+    fake.say('hi')
+    await fake.next(isResult)
+    expect(fake.log().find((e) => e.kind === 'argv')).toMatchObject({ addDirs: ['C:\a', 'C:\b'] })
+  })
+
   it('carries the resumed session id', async () => {
     const fake = start(['--resume', 'abc-123'])
     fake.say('hi')

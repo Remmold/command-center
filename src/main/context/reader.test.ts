@@ -267,6 +267,25 @@ describe('context reader: memory', () => {
     expect(report.layers.account[0].path).toBe(join(memoryDir(account), 'MEMORY.md'))
     expect(report.startTotal).toBe(50)
   })
+
+  it('names the account folder and the memory folder, even before the memory folder exists', async () => {
+    const report = await readContext(input())
+
+    expect(report.accountFolder).toBe(account)
+    expect(report.memoryFolder).toBe(memoryDir(account))
+  })
+})
+
+describe('context reader: project docs', () => {
+  it('lists GLOSSARY.md, docs/adr and docs/agents only when they are in the workspace', async () => {
+    await put(join(repo, 'GLOSSARY.md'), 'terms')
+    await put(join(repo, 'docs', 'agents', 'release.md'), 'steps')
+    await put(join(repo, 'docs', 'adr'), 'a file, not a folder')
+
+    const report = await readContext(input())
+
+    expect(report.docs).toEqual([join(repo, 'GLOSSARY.md'), join(repo, 'docs', 'agents')])
+  })
 })
 
 /** A skill or agent file whose name and description add up to a known number of characters, with a long body that doesn't count. */

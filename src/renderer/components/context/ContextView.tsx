@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bot, Brain, FileText, Plug, Puzzle, Settings2, Sparkles, SquareSlash, type LucideIcon } from 'lucide-react'
+import { Bot, Brain, ChevronDown, FileText, FolderGit2, Plug, Puzzle, Settings2, Sparkles, SquareSlash, type LucideIcon } from 'lucide-react'
+import { buildCleanup } from '../../../shared/cleanup'
 import {
   CREATABLE_NAMES,
   KIND_GROUP_TITLES,
@@ -18,6 +19,8 @@ import { workspacesByAccount, sectionTitle, type AccountWorkspaces } from '../..
 import { useAccountColor } from '../../state/useAccountColor'
 import { useAccounts } from '../../state/useAccounts'
 import { useContextStore } from '../../state/contextStore'
+import { useMenu } from '../../hooks/useMenu'
+import { startSession } from '../../state/sessionNavigation'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { setViewLeaveGuard } from '../../state/viewStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
@@ -27,9 +30,11 @@ import { Button } from '../ui/Button'
 import { CollapsibleSection } from '../ui/CollapsibleSection'
 import { EmptyState } from '../ui/EmptyState'
 import { ListItem, ListRow, ListRowLabel, ListRowMeta, ListRowNote, ListRowText } from '../ui/ListRow'
+import { MenuItem } from '../ui/MenuItem'
 import { NoticeLine } from '../ui/NoticeLine'
 import { Pane } from '../ui/Pane'
 import { Panel } from '../ui/Panel'
+import { Popover, PopoverMenu } from '../ui/Popover'
 import { ScrollStack } from '../ui/ScrollStack'
 import { ShareBar } from '../ui/ShareBar'
 import { SidebarLayout } from '../ui/SidebarLayout'
@@ -167,7 +172,7 @@ function Layers({ workspace, report, defaultName }: { workspace: Workspace; repo
   const subfolders = report.layers.repo.filter((i) => i.kind === 'subfolder-claude-md')
   return (
     <Pane label="Context layers">
-      <NoticeLine strip>
+      <NoticeLine strip action={<CleanupMenu workspace={workspace} report={report} />}>
         Start total {formatTokens(report.startTotal)} tokens · estimates, as configured
       </NoticeLine>
       <ScrollStack padded>
@@ -184,6 +189,47 @@ function Layers({ workspace, report, defaultName }: { workspace: Workspace; repo
         )}
       </ScrollStack>
     </Pane>
+  )
+}
+
+/** A new session in the workspace, on its account, with the cleanup prompt waiting in its input; unsaved edits asked about first. */
+function startProjectCleanup(workspace: Workspace, report: ContextReport, accountName: string): void {
+  if (!useContextStore.getState().confirmLeave()) return
+  const { prompt, addDirs } = buildCleanup({
+    kind: 'project',
+    sessionPath: workspace.path,
+    account: { name: accountName, folder: report.accountFolder, items: report.layers.account },
+    projects: [{ name: workspace.name, report }]
+  })
+  startSession(workspace, { draft: prompt, addDirs })
+}
+
+function CleanupMenu({ workspace, report }: { workspace: Workspace; report: ContextReport }) {
+  const menu = useMenu()
+  const accountName = useAccounts().find((a) => a.profileId === workspace.profileId)?.name ?? workspace.profileId
+  const act = (fn: () => void) => () => {
+    menu.close()
+    fn()
+  }
+  return (
+    <>
+      <span ref={menu.setAnchor} className="ml-auto inline-flex">
+        <Button variant="ghost" pressed={menu.open} onClick={menu.toggle} tooltip="Start a session that checks these files against the code">
+          Clean up
+          <ChevronDown size={12} aria-hidden />
+        </Button>
+      </span>
+      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" label="Clean up">
+        <PopoverMenu label="Clean up">
+          <MenuItem
+            icon={FolderGit2}
+            label="This project"
+            description="memory, CLAUDE.md files, repo skills, agents and commands"
+            onClick={act(() => startProjectCleanup(workspace, report, accountName))}
+          />
+        </PopoverMenu>
+      </Popover>
+    </>
   )
 }
 

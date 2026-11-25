@@ -109,6 +109,7 @@ interface Props {
   thinking?: boolean
   resumeSessionId?: string
   permissionMode?: string
+  addDirs?: readonly string[]
   /** The account a chat not started yet will run on. */
   profileId?: string
   registerFocus?: (fn: () => void) => void
@@ -148,6 +149,7 @@ export const ChatView = memo(function ChatView({
   thinking = true,
   resumeSessionId,
   permissionMode,
+  addDirs,
   profileId,
   registerFocus
 }: Props) {
@@ -621,6 +623,7 @@ export const ChatView = memo(function ChatView({
       thinking,
       resumeSessionId,
       permissionMode: startMode,
+      addDirs,
       allowBypass: allowBypassSetting,
       promptSuggestions: promptSuggestionsSetting
     })

@@ -41,12 +41,17 @@ export type CreatableContextFile = 'repo-claude-md' | 'claude-local-md'
 
 export interface ContextReport {
   workspacePath: string
+  accountFolder: string
+  /** Where this workspace's memory lives in the profile, whether or not it exists yet. */
+  memoryFolder: string
   /** False when the workspace folder is gone; the layers are then empty. */
   folderExists: boolean
   layers: Record<ContextLayerName, ContextItem[]>
   /** The sum of every counted item, imports included. */
   startTotal: number
   missing: CreatableContextFile[]
+  /** GLOSSARY.md, docs/adr and docs/agents, those the workspace has. */
+  docs: string[]
 }
 
 export type ContextFileResult = { ok: true } | { ok: false; error: string }

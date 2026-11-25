@@ -188,6 +188,8 @@ export interface ClaudeStartOptions {
   allowBypass?: boolean
   /** The app's "Suggest next prompt" setting; the account's own `promptSuggestionEnabled: false` still wins. */
   promptSuggestions?: boolean
+  /** Folders outside `cwd` the session may read without asking, one `--add-dir` each. */
+  addDirs?: readonly string[]
 }
 
 /** The model keys of the user `settings.json` that new sessions start with. */

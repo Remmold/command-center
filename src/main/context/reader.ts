@@ -35,6 +35,11 @@ const SKIPPED_FOLDERS = new Set(['node_modules', '.git'])
 /** For a workspace outside git, which is walked instead. */
 const WALK_DEPTH = 8
 const WALK_ENTRIES = 20_000
+const PROJECT_DOCS: readonly (readonly [string, 'file' | 'folder'])[] = [
+  ['GLOSSARY.md', 'file'],
+  [join('docs', 'adr'), 'folder'],
+  [join('docs', 'agents'), 'folder']
+]
 
 interface Reading {
   input: ContextReaderInput
@@ -181,9 +186,13 @@ async function fileNames(dir: string): Promise<string[]> {
   return entries.filter((e) => e.isFile()).map((e) => e.name).sort()
 }
 
+function memoryFolder(input: ContextReaderInput): string {
+  return join(transcriptsDir(input.configDir, input.workspacePath), 'memory')
+}
+
 /** The workspace's memory folder in the profile: MEMORY.md counts at start, the other files are listed. */
 async function memory(r: Reading): Promise<ContextItem[]> {
-  const dir = join(transcriptsDir(r.input.configDir, r.input.workspacePath), 'memory')
+  const dir = memoryFolder(r.input)
   const out: ContextItem[] = []
   for (const name of await fileNames(dir)) {
     const path = join(dir, name)
@@ -496,7 +505,16 @@ const found = (items: (ContextItem | null)[]): ContextItem[] => items.filter((i)
 
 /** Everything Claude is configured to load in a workspace, read from disk; never asks Claude. */
 export async function readContext(input: ContextReaderInput): Promise<ContextReport> {
-  const empty: ContextReport = { workspacePath: input.workspacePath, folderExists: false, layers: { account: [], repo: [], local: [] }, startTotal: 0, missing: [] }
+  const empty: ContextReport = {
+    workspacePath: input.workspacePath,
+    accountFolder: input.configDir,
+    memoryFolder: memoryFolder(input),
+    folderExists: false,
+    layers: { account: [], repo: [], local: [] },
+    startTotal: 0,
+    missing: [],
+    docs: []
+  }
   if (!(await isDir(input.workspacePath))) return empty
   const r: Reading = { input, seen: new Set(), listed: new Set() }
   const root = input.workspacePath
@@ -530,5 +548,7 @@ export async function readContext(input: ContextReaderInput): Promise<ContextRep
     ...((await absent('CLAUDE.md')) ? ['repo-claude-md' as const] : []),
     ...((await absent('CLAUDE.local.md')) ? ['claude-local-md' as const] : [])
   ]
-  return { ...empty, folderExists: true, layers, startTotal: counted([...layers.account, ...layers.repo, ...layers.local]), missing }
+  const present = await Promise.all(PROJECT_DOCS.map(([rel, type]) => (type === 'file' ? isFile : isDir)(join(root, rel))))
+  const docs = PROJECT_DOCS.filter((_, n) => present[n]).map(([rel]) => join(root, rel))
+  return { ...empty, folderExists: true, layers, startTotal: counted([...layers.account, ...layers.repo, ...layers.local]), missing, docs }
 }

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Locator, Page } from '@playwright/test'
-import { expect, test } from './harness'
+import { expect, prompt, test, transcriptsOf } from './harness'
 
 async function typeAtEnd(page: Page, pane: Locator, text: string): Promise<void> {
   const editor = pane.locator('.monaco-editor').first()
@@ -62,4 +62,26 @@ test('Context opens the seeded CLAUDE.md rendered, saves an edit with Ctrl+S bac
   await page.keyboard.press('Escape')
   await expect(pane.getByRole('button', { name: 'Edit' })).toBeVisible()
   expect(readFileSync(settings, 'utf-8')).toBe('{}')
+})
+
+test('Clean up → This project opens Work on a new session with the prompt waiting, and its CLI may read the memory folder', async ({ launched }) => {
+  const { page, log, workspace } = launched
+  const claudeMd = join(workspace, 'CLAUDE.md')
+  writeFileSync(claudeMd, '# Rules\n')
+  const memory = join(transcriptsOf(launched), 'memory')
+  const cleanupStarts = () => log.entries().filter((e) => e.kind === 'argv' && e.cwd === workspace)
+
+  await page.keyboard.press('Control+4')
+  const layers = page.getByTestId('view-context').getByRole('region', { name: 'Context layers' })
+  await layers.getByRole('button', { name: 'Clean up' }).click()
+  await page.getByRole('menu', { name: 'Clean up' }).getByRole('menuitem', { name: /^This project/ }).click()
+
+  await expect(prompt(page)).toBeVisible()
+  const draft = await prompt(page).inputValue()
+  expect(draft).toMatch(/^Context cleanup:/)
+  expect(draft).toContain(`- ${claudeMd}\n`)
+
+  await prompt(page).press('Enter')
+  await expect.poll(() => log.userTexts().some((text) => text.startsWith('Context cleanup:'))).toBe(true)
+  expect(cleanupStarts().map((e) => e.addDirs)).toEqual([[memory]])
 })
