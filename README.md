@@ -24,7 +24,7 @@ A full-window page with five sections (Esc closes it):
 - **Accounts**: the account profiles, with **Log in** and **Rename**, and a field to create a new one.
 - **Apps**: start and stop your local apps.
 - **Board**: the scan roots, and the repos with tickets that aren't added yet.
-- **General**: **Start with Windows**, **Zoom** (starts at 110%, steps of about 20% as in VS Code, kept across restarts and updates), and how the chat input sends.
+- **General**: **Start with Windows**, **Zoom** (starts at 110%, steps of about 20% as in VS Code, kept across restarts and updates), **Restart by itself to update** (off by default: a downloaded update waits for **Restart to update** or the next quit; on, the app restarts to install it once no chat has been busy for 5 minutes), and how the chat input sends.
 
 ## Needs you
 
@@ -129,6 +129,7 @@ Everything the app saves is in `%APPDATA%\command-center\`, never in the repo:
 | `repo-identities.json` | Repo display names and icon choices |
 | `repo-icons\` | Images picked as repo icons |
 | `board-settings.json` | Board scan roots |
+| `update-settings.json` | Whether the app restarts by itself to update |
 | `permission-hook.cjs` | The hook that routes tool approvals to the app |
 
 ## Layout

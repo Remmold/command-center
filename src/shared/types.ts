@@ -392,6 +392,8 @@ export interface UpdateStatus {
   error: string | null
   /** This launch follows a restart to update. */
   afterUpdate: boolean
+  /** Restart by itself to install once nothing has been busy for a while; off waits for a click or the next quit. */
+  autoRestart: boolean
 }
 
 export type RestartReply = { kind: 'none' } | { kind: 'restart' } | { kind: 'confirm'; busy: string[] }
@@ -672,6 +674,7 @@ export interface RendererApi {
     check: () => Promise<void>
     /** Restart to update; `force` answers the busy question. */
     restart: (force: boolean) => Promise<RestartReply>
+    setAutoRestart: (on: boolean) => Promise<void>
     onChanged: (cb: (status: UpdateStatus) => void) => () => void
   }
 }

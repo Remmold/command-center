@@ -8,6 +8,7 @@ interface UpdateState {
   init: () => void
   check: () => Promise<void>
   restart: (force: boolean) => Promise<void>
+  setAutoRestart: (on: boolean) => Promise<void>
   cancel: () => void
 }
 
@@ -27,5 +28,6 @@ export const useUpdateStore = create<UpdateState>()((set) => ({
     const reply = await window.api.update.restart(force)
     set({ confirming: reply.kind === 'confirm' ? reply.busy : null })
   },
+  setAutoRestart: (on) => window.api.update.setAutoRestart(on),
   cancel: () => set({ confirming: null })
 }))

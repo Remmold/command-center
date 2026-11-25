@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { UpdateStatus } from '../../shared/types'
 import { lastCheckLabel } from './updateLabels'
 
-const base: UpdateStatus = { version: '0.1.1', lastCheck: null, checking: false, downloaded: null, error: null, afterUpdate: false }
+const base: UpdateStatus = { version: '0.1.1', lastCheck: null, checking: false, downloaded: null, error: null, afterUpdate: false, autoRestart: false }
 const AT = Date.UTC(2026, 10, 22, 14, 7, 42)
 
 describe('last check label', () => {

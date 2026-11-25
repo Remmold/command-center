@@ -25,6 +25,8 @@ export interface UpdateControllerOptions {
   checkEveryMs: number
   /** This launch follows a restart to update. */
   afterUpdate?: boolean
+  /** Restart by itself once idle; off leaves the install to a click or the next quit. */
+  autoRestart: boolean
   /** Runs right before the app quits to install. */
   beforeRestart?: () => void
 }
@@ -35,6 +37,7 @@ export interface UpdateController {
   check(): Promise<void>
   /** A click on Restart to update; `force` is the answer to the busy question. */
   restart(force: boolean): RestartReply
+  setAutoRestart(on: boolean): void
   status(): UpdateStatus
   onChange(cb: (status: UpdateStatus) => void): () => void
 }
@@ -43,7 +46,7 @@ export function createUpdateController(options: UpdateControllerOptions): Update
   const { updater, clock, idleMs } = options
   let busy: BusyState = {}
   let plan: RestartState = { ...INITIAL_RESTART, idleSince: clock.now() }
-  let status: UpdateStatus = { version: options.version, lastCheck: null, checking: false, downloaded: null, error: null, afterUpdate: options.afterUpdate ?? false }
+  let status: UpdateStatus = { version: options.version, lastCheck: null, checking: false, downloaded: null, error: null, afterUpdate: options.afterUpdate ?? false, autoRestart: options.autoRestart }
   let timer: unknown = null
   let listeners: ((s: UpdateStatus) => void)[] = []
 
@@ -60,6 +63,7 @@ export function createUpdateController(options: UpdateControllerOptions): Update
   const schedule = (): void => {
     if (timer !== null) clock.clearTimeout(timer)
     timer = null
+    if (!status.autoRestart) return
     const at = autoRestartAt(plan, idleMs)
     if (at === null) return
     timer = clock.setTimeout(() => {
@@ -102,6 +106,12 @@ export function createUpdateController(options: UpdateControllerOptions): Update
       const decision = clickRestart(plan, force ? [] : busyPanes(busy))
       if (decision.kind === 'restart') install()
       return decision
+    },
+    setAutoRestart(on) {
+      // Ticking the box must not restart at once over an update that has long been waiting: the idle timer starts now.
+      if (on && plan.idleSince !== null) plan = { ...plan, idleSince: clock.now() }
+      publish({ autoRestart: on })
+      schedule()
     },
     status: () => status,
     onChange(cb) {

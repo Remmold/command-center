@@ -16,7 +16,7 @@ test.describe('zoom and auto-update', () => {
     evaluateMain(app, (_electron, v: string) => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater.deliver(v), version)
   const restartRequests = (app: ElectronApplication): Promise<number> => fakeCount(app, 'restartRequests')
 
-  test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while Alt+2 and Ctrl+Shift+J still open rows, and both and the chat history are kept across a restart; after it, Settings → General checks again on Check now, and an update that arrives mid-turn waits for the chat, then restarts after the idle timer', async ({ launched }) => {
+  test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while Alt+2 and Ctrl+Shift+J still open rows, and both and the chat history are kept across a restart; after it, Settings → General checks again on Check now and turns on Restart by itself, and an update that arrives mid-turn waits for the chat, then restarts after the idle timer', async ({ launched }) => {
     const { app, page, log } = launched
     // The slow script is for the update steps; the zoom steps chat on the basic one until the restart.
     await useScript(app, 'basic')
@@ -135,6 +135,10 @@ test.describe('zoom and auto-update', () => {
         await expect(updates.getByText(/^Last checked /)).toBeVisible()
         await updates.getByRole('button', { name: 'Check now' }).click()
         await expect.poll(checks).toBe(2)
+        const autoRestart = updates.getByRole('checkbox', { name: 'Restart by itself to update' })
+        await expect(autoRestart).not.toBeChecked()
+        await autoRestart.check()
+        await expect(autoRestart).toBeChecked()
         await page.keyboard.press('Escape')
       })
 

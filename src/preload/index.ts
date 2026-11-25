@@ -353,6 +353,7 @@ const api: RendererApi = {
     status: () => ipcRenderer.invoke(IPC.UPDATE_STATUS),
     check: () => ipcRenderer.invoke(IPC.UPDATE_CHECK),
     restart: (force: boolean) => ipcRenderer.invoke(IPC.UPDATE_RESTART, force),
+    setAutoRestart: (on: boolean) => ipcRenderer.invoke(IPC.UPDATE_SET_AUTO_RESTART, on),
     onChanged: (cb) => {
       const handler = (_e: IpcRendererEvent, status: UpdateStatus) => cb(status)
       ipcRenderer.on(IPC.UPDATE_CHANGED, handler)

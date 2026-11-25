@@ -139,6 +139,7 @@ export const IPC = {
   UPDATE_STATUS: 'update:status',
   UPDATE_CHECK: 'update:check',
   UPDATE_RESTART: 'update:restart',
+  UPDATE_SET_AUTO_RESTART: 'update:set-auto-restart',
   UPDATE_CHANGED: 'update:changed'
 } as const
 

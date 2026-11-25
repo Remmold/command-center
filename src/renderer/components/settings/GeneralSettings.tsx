@@ -111,6 +111,7 @@ export function GeneralSettings() {
   const setSuggestions = useGeneralSettingsStore((s) => s.setPromptSuggestions)
   const update = useUpdateStore((s) => s.status)
   const checkNow = useUpdateStore((s) => s.check)
+  const setAutoRestart = useUpdateStore((s) => s.setAutoRestart)
   const zoomLevel = useZoomStore((s) => s.level)
   const zoom = useZoomStore((s) => s.step)
 
@@ -157,6 +158,13 @@ export function GeneralSettings() {
         >
           <DetailRow label="Current version" value={update?.version ?? '…'} />
           {update && <PageNote>{lastCheckLabel(update)}</PageNote>}
+          <Checkbox checked={update?.autoRestart ?? false} disabled={!update} onChange={(on) => void setAutoRestart(on)}>
+            Restart by itself to update
+          </Checkbox>
+          <PageNote>
+            Updates always download in the background. When this is on, the app restarts to install one once no chat has been busy for 5
+            minutes. When off, it waits for Restart to update or the next time you quit.
+          </PageNote>
         </PageGroup>
         <PageGroup title="Sessions">
           <Checkbox checked={allowBypass} onChange={setAllowBypass}>

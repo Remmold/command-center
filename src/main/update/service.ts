@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { existsSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { IPC } from '../../shared/ipc-channels'
 import { claudeManager } from '../claude/manager'
 import { approvalBroker } from '../claude/approvals'
@@ -12,6 +12,7 @@ import { flushWindowPlace } from '../windowPlace/service'
 
 const CHECK_EVERY_MS = 30 * 60_000
 const MARKER = 'update-restart.json'
+const SETTINGS = 'update-settings.json'
 
 declare global {
   var __ccFakeUpdater: FakeUpdater | undefined
@@ -34,6 +35,15 @@ function consumeMarker(): boolean {
   return true
 }
 
+/** Off unless turned on in Settings → General. */
+function savedAutoRestart(): boolean {
+  try {
+    return (JSON.parse(readFileSync(userDataPath(SETTINGS), 'utf-8')) as { autoRestart?: unknown } | null)?.autoRestart === true
+  } catch {
+    return false
+  }
+}
+
 export function startUpdates(): UpdateController {
   const { updater, idleMs } = pickUpdater()
   const controller = createUpdateController({
@@ -42,6 +52,7 @@ export function startUpdates(): UpdateController {
     checkEveryMs: CHECK_EVERY_MS,
     version: app.getVersion(),
     afterUpdate: consumeMarker(),
+    autoRestart: savedAutoRestart(),
     clock: {
       now: () => Date.now(),
       setTimeout: (fn, ms) => setTimeout(fn, ms),
@@ -70,6 +81,10 @@ export function startUpdates(): UpdateController {
   ipcMain.handle(IPC.UPDATE_STATUS, () => controller.status())
   ipcMain.handle(IPC.UPDATE_CHECK, () => controller.check())
   ipcMain.handle(IPC.UPDATE_RESTART, (_e, force: boolean) => controller.restart(force === true))
+  ipcMain.handle(IPC.UPDATE_SET_AUTO_RESTART, (_e, on: boolean) => {
+    writeFileSync(userDataPath(SETTINGS), JSON.stringify({ autoRestart: on === true }))
+    controller.setAutoRestart(on === true)
+  })
 
   controller.start()
   return controller
