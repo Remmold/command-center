@@ -73,14 +73,6 @@ const lastAt = (items: readonly ChatItem[]): number | undefined => {
 
 const shown = (report: string | undefined): string | undefined => (report && !isRelayNotice(report) ? report : undefined)
 
-/** What it reported: the message it handed back, else its last plain text; never the CLI's relay notice. */
-export function agentReport(items: readonly ChatItem[]): string | undefined {
-  const i = lastAssistantIndex(items)
-  if (i < 0) return undefined
-  const last = items[i] as AssistantMessageItem
-  return shown(handbackMessage(last)?.trim() || plainText(last))
-}
-
 /**
  * How an agent's own file says it ended, or undefined while it may still be working. A handback or an interrupt ends
  * it; a last reply of plain text ends it once the session confirms it or the file went quiet; a new prompt after

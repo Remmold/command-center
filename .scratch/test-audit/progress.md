@@ -3,3 +3,4 @@
 - 03 resolved: audit at 0.1.19: 3 dead screenshot hooks removed, 0 assertions removed (2 candidates kept after review); UI 76.2 s -> 74.2/73.0 s; unit 1,099 unchanged; release.md audit due at 0.1.24 — 103d5a8
 - 04 in-progress: audit at 0.1.23 started
 - 04 resolved: audit at 0.1.23: UI suite 15 -> 9 scenarios (6 merges, 0 assertions removed), 97.2 s -> 69.2/74.9 s; unit 1,184 unchanged; release.md audit due at 0.1.28 — 8706293
+- 05 resolved: audit at 0.1.28: UI suite 13 -> 12 scenarios (Context merge, 0 assertions removed), 94.0 s -> 84.8 s; unit 1,439 -> 1,438 (dead agentReport); release.md audit due at 0.1.33

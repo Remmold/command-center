@@ -1,4 +1,4 @@
-Last audit: 0.1.23 (2026-11-25, ticket 04-audit-at-0.1.23)
+Last audit: 0.1.28 (2026-11-25, ticket 05-audit-at-0.1.28)
 
 # Test audit inventory
 
@@ -234,4 +234,54 @@ Nothing removed: 1,184 (+2 skipped) in 125 files before and after. A scripted ch
 | Unit tests | 1,184 (+2 skipped) in 125 files | **unchanged** |
 | Quick tier (`pnpm quick`, wall) | 12.0 s | 10.9 s (unchanged within noise; no unit test changed) |
 | Assertions removed | — | **0** |
+| Named regression guards | 11 | **11, assertions unchanged** |
+
+# 0.1.28
+
+Scheduled audit at 0.1.28, run on `main` (0.1.27 plus the merged context-analysis work). The budget is now 20 scenarios and 200 s (raised at 0.1.24), and main sat at 13 scenarios and 94 s, so there was no time pressure; the pass looked for overlap in the four areas added since 0.1.23 (Context map tour, Dashboard drawer, Processes tab, Test tab).
+
+Baseline: 13 scenarios, one JSON reporter run, **94.0 s**. Times are per scenario, launch and shutdown included.
+
+**R** = guards a bug that reached Andreas; its assertions are unchanged.
+
+## UI scenarios, before → after
+
+| # | Scenario (before) | Before | Proves | Unit overlap | R | Now |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | accounts › VS Code's accounts are adopted in one click… | 6.5 s | banner, one-click adopt, new chats on Work, model/effort per account, repo icon picker, Detect again | vscodeMatch, userSettings, projectIcons, rankIcons | | unchanged |
+| 2 | accounts › Work shows a one-line header per account… | 4.4 s | account sections, waiting badge, Ungrouped fold, search, Alt+1, Ctrl+Shift+J, Board By account, own groups | sessionList, order, boardLayout | | unchanged |
+| 3 | accounts › a VS Code profile's folder is offered… (with the Work chat) | 6.1 s | profile folder adopt, Work badge and pill, usage meter, mismatch warning, Restart | adopt, vscodeProfiles, chatAccount, usageModel | | unchanged |
+| 4 | app › zoom… and auto-update | 11.3 s | zoom keys, View menu, restart, window place; update busy gate | zoom, shortcutMap, busyGate, restartPlan | **R** (window place, off-screen windows, storage flush, update busy gate) | unchanged |
+| 5 | chat › a basic chat… | 9.3 s | views, Manual start, @ menu, attachments, history, slash menu, model/effort, draft over reload | shortcutMap, mentionSearch, attachments, promptHistory, launchGate | | unchanged |
+| 6 | chat › slow turns, then tool approval | 7.5 s | send-mid-turn queue, Stop, Run in background, approvals, settings.json mode | heldPrompts, interrupt, approval, approvals | **R** (send-mid-turn queue) | unchanged |
+| 7 | chat › chat rendering and subagents | 16.5 s | rendering, scroll-follow, Media tab, Agents tab | thinking, todos, scrollFollow, subagents, agentList | **R** (scroll-follow) | unchanged |
+| 8 | context › Context opens the seeded CLAUDE.md… | 3.2 s | Files view, rendered preview, Ctrl+S save, broken JSON refused, find widget, leave guard | context reader, guard | | merged with #9 in one launch: first step, assertions unchanged |
+| 9 | context › Map tour: step 5… drift check… Apply… Open chat | 3.5 s | MEMORY.md over 200 lines in the tour, drift check start and prompt, finding on its block, Apply 1 fix, Open chat | driftCheck, drift skeleton and reader, findings | | merged: second step; it now clicks the workspace in the list once after seeding MEMORY.md (a select reads the layers again, which a fresh launch did by itself); assertions unchanged |
+| 10 | dashboard › a waiting session opens in the Dashboard chat drawer… | 3.3 s | drawer open, reply there, Ctrl+Shift+J swap, Board detour, Open in Work | chatDrawer | | unchanged (its two-waiting-sessions setup matches no other launch) |
+| 11 | processes › the Processes tab… | 8.0 s | background server listed, output, port link, row badge, Stop, process tree ended on close | backgroundProcesses, processTree | | unchanged |
+| 12 | sessions › history, a VS Code session, take-over | 8.6 s | rename, Past sessions, observed cut-off, wheel leave, take-over | sessionTitle, pastSessions, transcriptItems, takeOver | **R** (observed cut-off, wheel leave) | unchanged |
+| 13 | testFlow › the Test tab… | 5.2 s | repo-named markdown, HTML twin offline, reload on rewrite, pop-out follows focus | testFlow reader, watch | | unchanged |
+
+No assertion removed and nothing deleted outright: every scenario still proves app wiring no unit test reaches. The new areas each sit in their own launch with setups no other scenario shares, except the two Context scenarios, which both start from a seeded workspace on the Context view.
+
+## Unit tests
+
+A scripted check (test-imported exports with no production caller, duplicate test names within a file, tests asserting a constant's value):
+- **Dead code:** `agentReport` in `src/shared/agentEnd.ts` lost its last caller when the Agents tab moved to summaries (bd25e2b); the report rules live on in `agentFileEnd`. Removed the function and its test; the "never the CLI's relay notice" assertion moved onto `agentFileEnd` (a quiet file ending on the notice finishes with no report).
+- Nothing is left of the removed Context cleanup builder (`src/shared/cleanup.ts` and its test went with 618e70e; its test became `driftCheck.test.ts`).
+- `transcriptListing` is test-only but runs the same collector as the production reader: kept.
+- Duplicate names are in different `describe` blocks of different functions: kept.
+- Constant checks (`RAN_AHEAD_NOTICE`, `NEW_SESSION_TITLE`, `DESTINATION_LABEL`, `DRAWER_MIN_WIDTH`) pin extension wording or a ticket's stated limit: kept.
+
+1,439 (+2 skipped) in 147 files before, **1,438 (+2 skipped)** after.
+
+## Before / after
+
+| Measure | Before (0.1.28) | After |
+| --- | --- | --- |
+| UI scenarios | 13 | **12** |
+| UI time, JSON total | 94.0 s | **84.8 s** (green, no rerun) |
+| Unit tests | 1,439 (+2 skipped) in 147 files | **1,438 (+2 skipped)** in 147 files |
+| Quick tier (`pnpm quick`, wall) | not re-measured | 15.1 s |
+| Assertions removed | — | **0** (one moved from a dead function onto the live one) |
 | Named regression guards | 11 | **11, assertions unchanged** |

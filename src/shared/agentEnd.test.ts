@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentFileEnd, agentReport, isRelayNotice } from './agentEnd'
+import { agentFileEnd, isRelayNotice } from './agentEnd'
 import { agentOver, summarizeAgent } from './agentSummary'
 import type { AssistantMessageItem, ChatItem, ToolResultItem, UserMessageItem } from './chatItems'
 
@@ -48,18 +48,12 @@ describe('when an agent counts as ended, from its own file', () => {
 })
 
 describe('an agent’s report', () => {
-  it('is what it handed back, else its last plain text', () => {
-    expect(agentReport(handedBack)).toBe(REPORT)
-    expect(agentReport([...working, said('end', 'All done.', 4000)])).toBe('All done.')
-    expect(agentReport(working)).toBeUndefined()
-  })
-
   it('never is the CLI’s "delivered to you as a message" notice', () => {
     const notice = 'This agent\'s report was delivered to you as a message from "a32cb96ebed07d962" (its SubagentHandback call). Read it there; it is not repeated here.'
     expect(isRelayNotice(notice)).toBe(true)
     expect(isRelayNotice(`${notice}\n`)).toBe(true)
     expect(isRelayNotice(REPORT)).toBe(false)
-    expect(agentReport([...working, said('end', notice, 4000)])).toBeUndefined()
+    expect(agentFileEnd([...working, said('end', notice, 4000)], { quiet: true })).toEqual({ status: 'finished', at: 4000 })
   })
 })
 
