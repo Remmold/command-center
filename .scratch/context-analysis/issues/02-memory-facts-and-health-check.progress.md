@@ -1,0 +1,3 @@
+- done: ticket 02 committed (4030e22, review fixes e9accb6); quick + build + context e2e green; real data checked
+- next: ticket 03 (guided tour)
+- open reds: none

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { CleanupProject } from '../../../shared/cleanup'
+import type { DriftCheckProject } from '../../../shared/driftCheck'
 import type { ContextReport } from '../../../shared/context'
 import type { Workspace } from '../../../shared/types'
 import { accountOf, workspacesByAccount } from '../../state/accounts'
@@ -14,12 +14,12 @@ import { NoticeLine } from '../ui/NoticeLine'
 interface Props {
   workspace: Workspace
   accountName: string
-  onStart: (projects: CleanupProject[]) => void
+  onStart: (projects: DriftCheckProject[]) => void
   onClose: () => void
 }
 
-/** Picks which of the workspace's account's workspaces a cross-project cleanup covers; the account files are always in. */
-export function CrossProjectCleanupDialog({ workspace, accountName, onStart, onClose }: Props) {
+/** Picks which of the workspace's account's workspaces a cross-project drift check covers; the account files are always in. */
+export function CrossProjectDriftCheckDialog({ workspace, accountName, onStart, onClose }: Props) {
   const all = useWorkspacesStore((s) => s.workspaces)
   const accounts = useAccounts()
   const totals = useContextStore((s) => s.totals)
@@ -41,7 +41,6 @@ export function CrossProjectCleanupDialog({ workspace, accountName, onStart, onC
   }
 
   const start = async (): Promise<void> => {
-    if (!useContextStore.getState().confirmLeave()) return
     setReading(true)
     setError(null)
     try {
@@ -53,14 +52,14 @@ export function CrossProjectCleanupDialog({ workspace, accountName, onStart, onC
       if (projects.length === 0) throw new Error('every ticked folder is gone')
       onStart(projects)
     } catch (err) {
-      console.error('[context] could not read the reports for a cleanup', err)
+      console.error('[context] could not read the reports for a drift check', err)
       setError('Could not read the context of the ticked workspaces.')
       setReading(false)
     }
   }
 
   return (
-    <Dialog title="Clean up across projects" onClose={onClose}>
+    <Dialog title="Drift check across projects" onClose={onClose}>
       <p className="text-muted">One session in {workspace.name} checks the ticked workspaces and the {accountName} account files.</p>
       <ul className="mt-3 flex flex-col gap-1.5">
         {siblings.map((w) => (

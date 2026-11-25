@@ -47,8 +47,11 @@ export const useChatDrawerStore = create<ChatDrawerState>()(
   )
 )
 
+/** The hosted chats' pane ids, which are also the session ids drift runs name. */
+export const hostedIds = (views: Readonly<Record<string, ProjectView>>): string[] => Object.values(views).flatMap((v) => v.claudeSessions.map((c) => c.id))
+
 export function isHosted(views: Record<string, ProjectView>, paneId: string): boolean {
-  return Object.values(views).some((v) => v.claudeSessions.some((c) => c.id === paneId))
+  return hostedIds(views).includes(paneId)
 }
 
 let initialised = false

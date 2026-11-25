@@ -35,7 +35,29 @@ export interface ContextItem {
   readOnly: string | null
   /** The files it imports. */
   children: ContextItem[]
+  /** A CLAUDE.md, a subfolder CLAUDE.md or an imported file that is there: its length in characters. */
+  chars?: number
+  /** MEMORY.md: what the health check and the map's index lines need. */
+  index?: MemoryIndexFacts
+  /** A memory file: true when a markdown link in MEMORY.md reaches it. */
+  indexed?: boolean
+  /** A memory file or MEMORY.md: the `[[name]]` links in it that match no memory file's base name or frontmatter name. */
+  unmatchedLinks?: string[]
 }
+
+export interface MemoryIndexFacts {
+  lines: number
+  bytes: number
+  /** The byte offset where each line ends, its line break included; the last is `bytes`. */
+  lineEnds: number[]
+  /** The memory files its markdown links to `.md` files reach, as their items' paths. */
+  links: string[]
+  /** Index lines (1-based) whose `.md` link target is not there. */
+  missingTargets: { line: number; target: string }[]
+}
+
+/** The reader's note on a skill with `disable-model-invocation: true`: Claude is never offered it. */
+export const SLASH_COMMAND_ONLY = 'slash command only'
 
 export type CreatableContextFile = 'repo-claude-md' | 'claude-local-md'
 

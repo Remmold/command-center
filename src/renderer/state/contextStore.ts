@@ -1,5 +1,12 @@
 import { create } from 'zustand'
-import type { ContextReport } from '../../shared/context'
+import type { ContextItem, ContextReport } from '../../shared/context'
+import type { DriftChecksView, ShownFinding } from '../../shared/findings'
+import { hostedIds } from './chatDrawer'
+import { useProjectViewsStore } from './projectViewsStore'
+import { startingSessions } from './startRequests'
+
+/** The sessions that can still finish a drift run: hosted chats, and sessions being started. */
+const liveSessions = (): string[] => [...hostedIds(useProjectViewsStore.getState().views), ...startingSessions()]
 
 /** A file open in Context's editor. */
 export interface ContextEditorFile {
@@ -21,6 +28,23 @@ export interface ContextEditorFile {
 
 export type ContextFileTarget = Pick<ContextEditorFile, 'path' | 'label' | 'sharedWithDefault' | 'readOnly' | 'creating'>
 
+export type ContextPane = 'files' | 'map'
+
+/** A finding's key across the shown runs and the health check: ids repeat between runs. */
+export const findingKey = (f: Pick<ShownFinding, 'id' | 'runId'>): string => `${f.runId ?? 'health'}:${f.id}`
+
+/** Only an open problem can be ticked: a note asks for nothing, and an applied or skipped finding is done. */
+export const tickable = (f: Pick<ShownFinding, 'severity' | 'status'>): boolean => f.severity === 'problem' && f.status === 'open'
+
+/** An item's file, to open in the editor. */
+export const fileTarget = (item: ContextItem, path: string): ContextFileTarget => ({
+  path,
+  label: item.label,
+  sharedWithDefault: item.sharedWithDefault,
+  readOnly: item.readOnly,
+  creating: false
+})
+
 interface ContextState {
   selectedId: string | null
   /** The selected workspace's report; null until it is read. */
@@ -28,6 +52,32 @@ interface ContextState {
   /** Start totals by workspace id; null where the folder is gone. */
   totals: Record<string, number | null>
   editor: ContextEditorFile | null
+  /** Files or Map, above the middle and right panes; not saved. */
+  pane: ContextPane
+  /** The context map's selected block id. */
+  mapSelected: string | null
+  /** The map's expanded large groups. */
+  mapExpanded: string[]
+  /** The guided tour's step, from 0. */
+  tourStep: number
+  /** The drift checks the map shows for the selected workspace; null until read. */
+  drift: DriftChecksView | null
+  /** The findings ticked for "Apply N fixes", by `findingKey`. */
+  ticked: string[]
+  toggleTick: (key: string) => void
+  /** Clears the ticks once fixes are sent, and follows the runs they were sent to until another workspace is picked. */
+  sentFixes: (runIds: readonly string[]) => void
+  /** Run ids fixes were sent to; main follows their files live even when done. */
+  fixing: string[]
+  /** Leaving Files asks about unsaved edits first. */
+  setPane: (pane: ContextPane) => void
+  selectBlock: (blockId: string | null) => void
+  toggleGroup: (groupId: string) => void
+  setTourStep: (step: number) => void
+  /** Reads the map's drift checks again; main then follows a shown run that is still running. */
+  showDrift: () => void
+  /** Files, with that file open. */
+  openInFiles: (target: ContextFileTarget) => void
   /** Picks the workspace, then reads everything again; stays put when unsaved edits are kept. */
   select: (workspaceId: string | null) => void
   /** Reads the selected workspace's report, every start total and the open file (if unedited) again. */
@@ -49,6 +99,8 @@ export const isDirty = (file: ContextEditorFile | null): boolean => file !== nul
 const confirmDiscard = (file: ContextEditorFile | null): boolean => !isDirty(file) || window.confirm(`Discard unsaved edits to ${file?.label}?`)
 
 export const useContextStore = create<ContextState>((set, get) => {
+  /** A drift read that resolves after a newer one must not overwrite it. */
+  let driftTurn = 0
   const readOpenFile = (workspaceId: string, path: string): void => {
     window.api.context.readFile(workspaceId, path).then(
       (result) => {
@@ -65,10 +117,51 @@ export const useContextStore = create<ContextState>((set, get) => {
     report: null,
     totals: {},
     editor: null,
+    pane: 'files',
+    mapSelected: null,
+    mapExpanded: [],
+    tourStep: 0,
+    drift: null,
+    ticked: [],
+    toggleTick: (key) => {
+      const { ticked } = get()
+      set({ ticked: ticked.includes(key) ? ticked.filter((k) => k !== key) : [...ticked, key] })
+    },
+    fixing: [],
+    sentFixes: (runIds) => {
+      set({ ticked: [], fixing: [...new Set([...get().fixing, ...runIds])] })
+      get().showDrift()
+    },
+    setPane: (pane) => {
+      if (pane === get().pane) return
+      if (pane === 'map' && !get().confirmLeave()) return
+      set({ pane })
+    },
+    selectBlock: (blockId) => set({ mapSelected: blockId }),
+    toggleGroup: (groupId) => {
+      const { mapExpanded } = get()
+      set({ mapExpanded: mapExpanded.includes(groupId) ? mapExpanded.filter((id) => id !== groupId) : [...mapExpanded, groupId] })
+    },
+    setTourStep: (step) => set({ tourStep: step }),
+    showDrift: () => {
+      const { selectedId } = get()
+      if (!selectedId) return
+      const turn = ++driftTurn
+      window.api.driftChecks.show(selectedId, get().fixing, liveSessions()).then(
+        (drift) => {
+          if (turn === driftTurn && get().selectedId === selectedId) set({ drift })
+        },
+        (err) => console.error('[context] could not read the drift checks', err)
+      )
+    },
+    openInFiles: (target) => {
+      set({ pane: 'files' })
+      get().open(target)
+    },
     select: (workspaceId) => {
       if (workspaceId !== get().selectedId) {
         if (!get().confirmLeave()) return
-        set({ selectedId: workspaceId, report: null, editor: null })
+        set({ selectedId: workspaceId, report: null, editor: null, mapSelected: null, mapExpanded: [], tourStep: 0, drift: null, ticked: [], fixing: [] })
       }
       get().refresh()
     },
@@ -82,6 +175,8 @@ export const useContextStore = create<ContextState>((set, get) => {
           (err) => console.error('[context] could not read the report', err)
         )
         if (editor && !editor.creating && !isDirty(editor)) readOpenFile(selectedId, editor.path)
+        // A saved file can make a drift finding stale.
+        if (get().pane === 'map') get().showDrift()
       }
       window.api.context.startTotals().then(
         (totals) => set({ totals }),

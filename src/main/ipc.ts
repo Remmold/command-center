@@ -24,6 +24,7 @@ import { readProjectFile, writeProjectFile } from './files/io'
 import { openWithSystem, readImage, resolveLink } from './files/links'
 import { resolveMedia, revealInFolder } from './files/media'
 import { registerTestFlowIpc } from './testFlow/service'
+import { registerDriftChecksIpc } from './driftChecks/service'
 import { registerVideoIpc } from './video/service'
 import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
 import { SubagentWatchService } from './claude/subagentWatch'
@@ -93,6 +94,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.CONTEXT_START_TOTALS, () => startTotals())
   ipcMain.handle(IPC.CONTEXT_READ_FILE, (_e, workspaceId: string, path: string) => readListedFile(workspaceId, path))
   ipcMain.handle(IPC.CONTEXT_WRITE_FILE, (_e, workspaceId: string, path: string, content: string) => writeListedFile(workspaceId, path, content))
+  unsubscribers.push(registerDriftChecksIpc())
   unsubscribers.push(() => board.stop())
   unsubscribers.push(registerVideoIpc())
 

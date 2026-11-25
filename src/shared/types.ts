@@ -11,6 +11,7 @@ import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
+import type { DriftChecksView, FindingsRun, SkeletonResult } from './findings'
 import type { BackgroundProcess } from './backgroundProcesses'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
@@ -480,6 +481,21 @@ export interface RendererApi {
     readFile: (workspaceId: string, path: string) => Promise<ContextFileText>
     /** Guarded: only what the latest report listed and didn't mark read-only, or a missing creatable file; a `.json` file must parse. */
     writeFile: (workspaceId: string, path: string, content: string) => Promise<ContextFileResult>
+  }
+  driftChecks: {
+    /**
+     * The latest drift checks covering the workspace (ADR 0005). `live` holds the session ids that can still finish a
+     * run: a run not done whose session is not in it shows as stopped, and is removed while it is a bare skeleton. Until
+     * the next call or `release`, main watches the shown run files still running, and those in `fixing` (run ids fixes
+     * were sent to), and calls `onChanged` when one is rewritten.
+     */
+    show: (workspaceId: string, fixing: string[], live: string[]) => Promise<DriftChecksView>
+    release: () => Promise<void>
+    onChanged: (cb: () => void) => () => void
+    /** Writes a new run's skeleton as `<runId>.json` in the drift-checks folder; never overwrites a file. */
+    begin: (skeleton: FindingsRun) => Promise<SkeletonResult>
+    /** Removes a run file whose session never started, while it is still the bare skeleton. */
+    discard: (file: string) => Promise<void>
   }
   discovery: {
     get: () => Promise<DiscoveryModel>

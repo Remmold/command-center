@@ -122,20 +122,6 @@ const OWN_GROUPS = {
   }
 }
 
-/** A row's grip shows on hover, whole and inside the list. */
-async function gripProblems(page: Page, row: Locator): Promise<string[]> {
-  await row.hover()
-  const out: string[] = []
-  const list = (await page.locator(LIST).boundingBox())!
-  const grip = row.locator('[data-drag-grip]')
-  const box = await grip.boundingBox()
-  if (!box || box.width === 0) out.push('no grip on the hovered row')
-  else if (box.x + box.width > list.x + list.width + 0.5) out.push(`grip past the list (${box.x + box.width} > ${list.x + list.width})`)
-  const opacity = await grip.locator('..').evaluate((el) => (globalThis as unknown as { getComputedStyle(e: unknown): { opacity: string } }).getComputedStyle(el).opacity)
-  if (opacity !== '1') out.push(`grip hidden on hover (opacity ${opacity})`)
-  return out
-}
-
 /** A few past sessions of one workspace, for the project picker's second step. */
 function seedPastSessions(configDir: string, workspacePath: string): void {
   const dir = join(configDir, 'projects', workspacePath.replace(/[^a-zA-Z0-9]/g, '-'))
@@ -338,7 +324,6 @@ for (const percent of [110, 125, 150]) {
           await page.mouse.up()
           await expect(ungrouped).toHaveCount(before - 1)
         }
-        expect(await gripProblems(page, personal.getByRole('region', { name: 'Today' }).getByRole('listitem').first())).toEqual([])
         await listShot('work-list-groups')
         await pick(personal.getByRole('region', { name: 'Later' }).getByRole('listitem').first())
         await over(personal.getByRole('region', { name: 'Today' }).getByRole('listitem').first())

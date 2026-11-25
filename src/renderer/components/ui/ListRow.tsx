@@ -1,5 +1,5 @@
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
-import { DragGrip, DropLine, type Sortable } from './SortableItem'
+import { DropLine, type Sortable } from './SortableItem'
 
 interface Props {
   children: ReactNode
@@ -17,7 +17,7 @@ interface Props {
   edge?: 'waiting'
   /** `roomy`: a 36 px row indented under a group sub-header; it ignores `nested`. */
   size?: 'compact' | 'roomy'
-  /** Makes the whole row draggable, with a grip among its actions. */
+  /** Makes the whole row draggable. */
   sortable?: Sortable
   onKeyDown?: (e: KeyboardEvent) => void
   /** Finds the row again, e.g. to keep focus on it after it moves. */
@@ -51,12 +51,11 @@ export function ListRow({ children, onClick, onDoubleClick, onContextMenu, toolt
       >
         {children}
       </button>
-      {(actions || sortable) && (
+      {actions && (
         <span
           className={`absolute inset-y-0 right-1 flex items-center ${active ? 'bg-list-selected' : 'bg-list-hover'} ${actionsPinned ? '' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'}`}
         >
           {actions}
-          {sortable?.props.draggable && <DragGrip />}
         </span>
       )}
       {sortable && <DropLine side={sortable.over} />}

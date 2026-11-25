@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bot, Brain, ChevronDown, FileText, FolderGit2, FolderTree, Plug, Puzzle, Settings2, Sparkles, SquareSlash, UserRound, type LucideIcon } from 'lucide-react'
-import { buildCleanup, type CleanupKind, type CleanupProject } from '../../../shared/cleanup'
+import { Bot, Brain, FileText, Plug, Puzzle, Settings2, Sparkles, SquareSlash, type LucideIcon } from 'lucide-react'
 import {
   CREATABLE_NAMES,
   KIND_GROUP_TITLES,
@@ -18,9 +17,7 @@ import { DEFAULT_PROFILE_ID, type Workspace } from '../../../shared/types'
 import { workspacesByAccount, sectionTitle, type AccountWorkspaces } from '../../state/accounts'
 import { useAccountColor } from '../../state/useAccountColor'
 import { useAccounts } from '../../state/useAccounts'
-import { useContextStore } from '../../state/contextStore'
-import { useMenu } from '../../hooks/useMenu'
-import { startSession } from '../../state/sessionNavigation'
+import { fileTarget, useContextStore, type ContextPane } from '../../state/contextStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { setViewLeaveGuard } from '../../state/viewStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
@@ -30,16 +27,23 @@ import { Button } from '../ui/Button'
 import { CollapsibleSection } from '../ui/CollapsibleSection'
 import { EmptyState } from '../ui/EmptyState'
 import { ListItem, ListRow, ListRowLabel, ListRowMeta, ListRowNote, ListRowText } from '../ui/ListRow'
-import { MenuItem } from '../ui/MenuItem'
 import { NoticeLine } from '../ui/NoticeLine'
 import { Pane } from '../ui/Pane'
 import { Panel } from '../ui/Panel'
-import { Popover, PopoverMenu } from '../ui/Popover'
 import { ScrollStack } from '../ui/ScrollStack'
 import { ShareBar } from '../ui/ShareBar'
+import { SegmentedControl } from '../ui/SegmentedControl'
 import { SidebarLayout } from '../ui/SidebarLayout'
+import { Toolbar } from '../ui/Toolbar'
 import { ContextEditor } from './ContextEditor'
-import { CrossProjectCleanupDialog } from './CrossProjectCleanupDialog'
+import { ContextMapPane } from './map/ContextMap'
+import { LANE_TITLES as LAYER_TITLES } from '../../state/mapCopy'
+import { LAYER_ORDER } from '../../state/mapLayout'
+
+const PANES: { value: ContextPane; label: string }[] = [
+  { value: 'files', label: 'Files' },
+  { value: 'map', label: 'Map' }
+]
 
 /** The workspace last open in Work, else the one already picked, else the first. */
 function startWorkspace(workspaces: readonly Workspace[], openInWork: string | null, picked: string | null): string | null {
@@ -53,6 +57,7 @@ export function ContextView() {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const selectedId = useContextStore((s) => s.selectedId)
   const report = useContextStore((s) => s.report)
+  const pane = useContextStore((s) => s.pane)
   const loaded = workspaces.length > 0
 
   useEffect(() => {
@@ -76,13 +81,24 @@ export function ContextView() {
   return (
     <SidebarLayout sidebar={<WorkspaceList workspaces={workspaces} selectedId={selectedId} />}>
       {selected ? (
-        <div className="flex h-full min-h-0">
-          <div className="min-h-0 w-[28rem] shrink-0 border-r border-subtle">
-            <Layers key={selected.id} workspace={selected} report={report} defaultName={defaultName} />
-          </div>
-          <div className="min-h-0 min-w-0 flex-1">
-            <ContextEditor defaultName={defaultName} workspacePath={selected.path} />
-          </div>
+        <div className="flex h-full min-h-0 flex-col">
+          <Toolbar compact>
+            <SegmentedControl label="Context pane" options={PANES} value={pane} onChange={(next) => useContextStore.getState().setPane(next)} />
+          </Toolbar>
+          {pane === 'map' ? (
+            <div className="min-h-0 flex-1">
+              <ContextMapPane workspacePath={selected.path} report={report} defaultName={defaultName} />
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1">
+              <div className="min-h-0 w-[28rem] shrink-0 border-r border-subtle">
+                <Layers key={selected.id} workspace={selected} report={report} defaultName={defaultName} />
+              </div>
+              <div className="min-h-0 min-w-0 flex-1">
+                <ContextEditor defaultName={defaultName} workspacePath={selected.path} />
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <EmptyState>{loaded ? 'Pick a workspace.' : 'No workspaces yet.'}</EmptyState>
@@ -154,12 +170,10 @@ const GROUP_ICONS: Record<KindGroupName, LucideIcon> = {
 const FOLD_WHEN_LONG: ReadonlySet<KindGroupName> = new Set(['skills', 'agents', 'commands'])
 const LONG_GROUP = 8
 
-const LAYERS: readonly ContextLayerName[] = ['account', 'repo', 'local']
-const LAYER_TITLES: Record<ContextLayerName, string> = { account: 'Account', repo: 'Repo', local: 'Local' }
 
 function LayerShares({ report, atStart }: { report: ContextReport; atStart: Record<ContextLayerName, ContextItem[]> }) {
   if (report.startTotal === 0) return null
-  const segments = LAYERS.map((layer) => {
+  const segments = LAYER_ORDER.map((layer) => {
     const tokens = countedTokens(atStart[layer]) ?? 0
     return { label: LAYER_TITLES[layer], value: tokens, detail: `${formatTokens(tokens)} tokens` }
   })
@@ -173,7 +187,7 @@ function Layers({ workspace, report, defaultName }: { workspace: Workspace; repo
   const subfolders = report.layers.repo.filter((i) => i.kind === 'subfolder-claude-md')
   return (
     <Pane label="Context layers">
-      <NoticeLine strip action={<CleanupMenu workspace={workspace} report={report} />}>
+      <NoticeLine strip>
         Start total {formatTokens(report.startTotal)} tokens · estimates, as configured
       </NoticeLine>
       <ScrollStack padded>
@@ -190,64 +204,6 @@ function Layers({ workspace, report, defaultName }: { workspace: Workspace; repo
         )}
       </ScrollStack>
     </Pane>
-  )
-}
-
-/** A new session in the workspace, on its account, with the cleanup prompt waiting in its input. Callers ask about unsaved edits first. */
-function startCleanup(workspace: Workspace, report: ContextReport, accountName: string, kind: CleanupKind, projects: CleanupProject[]): void {
-  const { prompt, addDirs } = buildCleanup({
-    kind,
-    sessionPath: workspace.path,
-    account: { name: accountName, folder: report.accountFolder, items: report.layers.account },
-    projects
-  })
-  startSession(workspace, { draft: prompt, addDirs })
-}
-
-function CleanupMenu({ workspace, report }: { workspace: Workspace; report: ContextReport }) {
-  const menu = useMenu()
-  const [picking, setPicking] = useState(false)
-  const accountName = useAccounts().find((a) => a.profileId === workspace.profileId)?.name ?? workspace.profileId
-  const guarded = (kind: CleanupKind, projects: CleanupProject[]) => () => {
-    menu.close()
-    if (useContextStore.getState().confirmLeave()) startCleanup(workspace, report, accountName, kind, projects)
-  }
-  const pickProjects = (): void => {
-    menu.close()
-    setPicking(true)
-  }
-  return (
-    <>
-      <span ref={menu.setAnchor} className="ml-auto inline-flex">
-        <Button variant="ghost" pressed={menu.open} onClick={menu.toggle} tooltip="Start a session that checks these files against the code">
-          Clean up
-          <ChevronDown size={12} aria-hidden />
-        </Button>
-      </span>
-      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="end" label="Clean up">
-        <PopoverMenu label="Clean up">
-          <MenuItem
-            icon={FolderGit2}
-            label="This project"
-            description="memory, CLAUDE.md files, repo skills, agents and commands"
-            onClick={guarded('project', [{ name: workspace.name, report }])}
-          />
-          <MenuItem icon={UserRound} label="Account" description="the account's CLAUDE.md, skills, agents, commands and settings" onClick={guarded('account', [])} />
-          <MenuItem icon={FolderTree} label="Across projects…" description="pick the account's workspaces; the account files come along" onClick={pickProjects} />
-        </PopoverMenu>
-      </Popover>
-      {picking && (
-        <CrossProjectCleanupDialog
-          workspace={workspace}
-          accountName={accountName}
-          onStart={(projects) => {
-            setPicking(false)
-            startCleanup(workspace, report, accountName, 'cross-project', projects)
-          }}
-          onClose={() => setPicking(false)}
-        />
-      )}
-    </>
   )
 }
 
@@ -314,8 +270,7 @@ function ContextRow({ item, defaultName, nested }: { item: ContextItem; defaultN
       )}
     </>
   )
-  const open = (file: string): void =>
-    useContextStore.getState().open({ path: file, label: item.label, sharedWithDefault: item.sharedWithDefault, readOnly: item.readOnly, creating: false })
+  const open = (file: string): void => useContextStore.getState().open(fileTarget(item, file))
   return (
     <>
       {path ? (

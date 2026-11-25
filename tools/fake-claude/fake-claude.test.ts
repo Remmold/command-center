@@ -282,6 +282,39 @@ describe('scripts', () => {
     expect((await fake.next(isResult, seen)).result).toBe('Hello from the fake Claude.')
   })
 
+  it('writes a file at the findings path its prompt names, a JSON value as JSON', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fake-findings-'))
+    dirs.push(dir)
+    const file = join(dir, 'run 1.json')
+    const fake = start([], { turns: [{ match: '', events: [{ type: 'write_file', path: '{findingsPath}', content: { done: true, at: '{cwd}' } }] }] })
+    fake.say(`Drift check.\n\nFindings file: ${file}\nRecord the run there.`)
+    await fake.next(isResult)
+    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({ done: true, at: process.cwd() })
+  })
+
+  it('merges a write over the JSON object already in the file, and writes a string as given', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fake-findings-'))
+    dirs.push(dir)
+    const run = join(dir, 'run.json')
+    const note = join(dir, 'note.txt')
+    writeFileSync(run, JSON.stringify({ runId: 'r1', steps: [], done: false }))
+    const fake = start([], {
+      turns: [
+        {
+          match: '',
+          events: [
+            { type: 'write_file', path: '{findingsPath}', merge: true, content: { steps: [{ id: 's1' }], done: true } },
+            { type: 'write_file', path: note, content: 'plain text' }
+          ]
+        }
+      ]
+    })
+    fake.say(`Findings file: ${run}`)
+    await fake.next(isResult)
+    expect(JSON.parse(readFileSync(run, 'utf-8'))).toEqual({ runId: 'r1', steps: [{ id: 's1' }], done: true })
+    expect(readFileSync(note, 'utf-8')).toBe('plain text')
+  })
+
   it('sends no stream_event lines without --include-partial-messages', async () => {
     const fake = start()
     fake.say('hi')

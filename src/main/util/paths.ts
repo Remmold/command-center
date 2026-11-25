@@ -13,6 +13,11 @@ export function appsFile(): string {
   return userDataPath('apps.json')
 }
 
+/** Where drift checks write their run files, one JSON file per run (ADR 0005). */
+export function driftChecksFolder(): string {
+  return userDataPath('drift-checks')
+}
+
 /** Packaging must ship resources/icons as the extra resource "icons". */
 export function iconPath(file: string): string {
   if (app.isPackaged) return join(process.resourcesPath, 'icons', file)

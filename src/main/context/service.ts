@@ -10,8 +10,10 @@ import { readContext } from './reader'
 const latest = new Map<string, ContextReport>()
 
 /** An unknown profile id runs on Default, as `profiles.get` resolves it. */
+const profileOf = (workspace: Workspace, all: AccountProfile[]): AccountProfile => all.find((p) => p.id === workspace.profileId) ?? all[0]
+
 function reportFor(workspace: Workspace, all: AccountProfile[]): Promise<ContextReport> {
-  const profile = all.find((p) => p.id === workspace.profileId) ?? all[0]
+  const profile = profileOf(workspace, all)
   return readContext({
     workspacePath: workspace.path,
     configDir: profile.configDir,
@@ -28,6 +30,14 @@ export async function contextReport(workspaceId: string): Promise<ContextReport 
   const report = await reportFor(workspace, await profiles.list())
   latest.set(workspaceId, report)
   return report
+}
+
+/** A workspace's folder and the account folder it runs on; null for an unknown id. */
+export async function workspaceScope(workspaceId: string): Promise<{ workspacePath: string; accountFolder: string } | null> {
+  const [list, all] = await Promise.all([workspaces.list(), profiles.list()])
+  const workspace = list.find((w) => w.id === workspaceId)
+  if (!workspace) return null
+  return { workspacePath: workspace.path, accountFolder: profileOf(workspace, all).configDir }
 }
 
 export function readListedFile(workspaceId: string, path: string): Promise<ContextFileText> {

@@ -27,7 +27,7 @@ import { promptContent, terminalSnapshots, type PromptAttachment } from './attac
 import { readTerminal } from '../../state/terminalBuffers'
 import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
-import { takeStartRequest } from '../../state/startRequests'
+import { deliver, takeChatSends, takeSendRequest, takeStartRequest, useChatSendsStore } from '../../state/startRequests'
 import { committedLength, thinkingDurations } from './liveItems'
 import { applyDeltas, frameBatch, landAfterWaitingDeltas, type FrameBatch, type StreamDelta } from './streamDeltas'
 import { useFollowOutput } from './useFollowOutput'
@@ -167,6 +167,7 @@ export const ChatView = memo(function ChatView({
   const mergeAssistant = useChatItemsStore((s) => s.mergeAssistant)
   const pendingApprovals = useApprovalsStore((s) => s.byPane[paneId] ?? EMPTY_REQUESTS)
   const held = useHeldPromptsStore((s) => s.byPane[paneId] ?? EMPTY_HELD)
+  const outsideSends = useChatSendsStore((s) => s.byPane[paneId]?.length ?? 0)
   const historyRef = useRef<string[]>([])
   // The same list while the prompts stay the same, so an item commit does not redraw the prompt box.
   const history = useMemo(() => {
@@ -345,7 +346,9 @@ export const ChatView = memo(function ChatView({
       ])
     })
 
-    if (takeStartRequest(paneId) || (initialItemsCountRef.current === 0 && !resumeSessionId)) {
+    const first = takeSendRequest(paneId)
+    if (first !== undefined) deliver(first, (prompt) => handleSend(prompt))
+    else if (takeStartRequest(paneId) || (initialItemsCountRef.current === 0 && !resumeSessionId)) {
       void ensureStarted()
     }
 
@@ -671,10 +674,11 @@ export const ChatView = memo(function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [switchTo, processRunning, turnActive, held.length])
 
-  const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []) => {
+  /** False when the process failed to start; true once the prompt went to the running process, or a command was handled here. */
+  const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []): Promise<boolean> => {
     if (attachments.length === 0 && remoteControlShown && isRemoteControlCommand(text)) {
       void toggleRemoteControl()
-      return
+      return true
     }
     clearSuggestion('sent')
     const uuid = crypto.randomUUID()
@@ -694,12 +698,13 @@ export const ChatView = memo(function ChatView({
         const store = useHeldPromptsStore.getState()
         store.set(paneId, (store.byPane[paneId] ?? []).filter((p) => p.uuid !== uuid))
       }
-      return
+      return false
     }
     if (!queued) setTurnActive(true)
     const terminals = terminalSnapshots(text, shellTabsOfSession(paneId), readTerminal)
     window.api.claude.send(paneId, promptContent(text, attachments, terminals), uuid)
     requestClaudeTitle(paneId, text, firstPrompt)
+    return true
   }
 
   /** Esc anywhere in the chat stops Claude, as the extension's document-level handler; menus and approvals take it first. */
@@ -754,6 +759,10 @@ export const ChatView = memo(function ChatView({
   const initialDraft = useMemo(() => savedDraft(paneId), [paneId])
   const onDraftChange = useStableCallback((text: string) => saveDraft(paneId, text))
   const onSend = useStableCallback(handleSend)
+  useEffect(() => {
+    if (outsideSends === 0) return
+    for (const send of takeChatSends(paneId)) deliver(send, (prompt) => onSend(prompt))
+  }, [outsideSends, paneId, onSend])
   const onInterrupt = useStableCallback(handleInterrupt)
   const onDismissSuggestion = useStableCallback(() => clearSuggestion('dismissed'))
   const onAction = useStableCallback(runAction)
