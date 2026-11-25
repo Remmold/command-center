@@ -1,1 +1,2 @@
 - 01 resolved: preview-first editor in Context, UI scenario rewritten — 1ed7106
+- 02 resolved: layers grouped by kind with icons, counts and token sums, layer share bar, quieter badges — b41b745

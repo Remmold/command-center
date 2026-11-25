@@ -16,10 +16,10 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 01 (both touch the Context view and its UI scenario; run in order)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unit tests (seam 2) in the shared context tests: order, empty kinds dropped, sums including imports, null when nothing counts.
-- [ ] Each layer renders its groups with icon, count and token sum; imports stay nested; folding works; the more-than-8 rule applies.
-- [ ] Share bar shows under the start total, hidden at 0.
-- [ ] The Context UI scenario still passes (adjust locators only if group headings change accessible names).
-- [ ] Quick tier green.
+- [x] Unit tests (seam 2) in the shared context tests: order, empty kinds dropped, sums including imports, null when nothing counts.
+- [x] Each layer renders its groups with icon, count and token sum; imports stay nested; folding works; the more-than-8 rule applies.
+- [x] Share bar shows under the start total, hidden at 0.
+- [x] The Context UI scenario still passes (adjust locators only if group headings change accessible names).
+- [x] Quick tier green.
