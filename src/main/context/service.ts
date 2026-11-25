@@ -30,6 +30,15 @@ export async function contextReport(workspaceId: string): Promise<ContextReport 
   return report
 }
 
+/** A workspace's folder and the account folder it runs on; null for an unknown id. */
+export async function workspaceScope(workspaceId: string): Promise<{ workspacePath: string; accountFolder: string } | null> {
+  const [list, all] = await Promise.all([workspaces.list(), profiles.list()])
+  const workspace = list.find((w) => w.id === workspaceId)
+  if (!workspace) return null
+  const profile = all.find((p) => p.id === workspace.profileId) ?? all[0]
+  return { workspacePath: workspace.path, accountFolder: profile.configDir }
+}
+
 export function readListedFile(workspaceId: string, path: string): Promise<ContextFileText> {
   return readContextFile(latest.get(workspaceId) ?? null, path)
 }

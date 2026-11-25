@@ -234,4 +234,11 @@ describe('mapLayout', () => {
       ['9 memory files', ['H2', 'H3']]
     ])
   })
+
+  it('attaches a drift finding whose path differs from the file only in case and slashes, keeping its marks', () => {
+    const claudeMd = item('claude-md', 'CLAUDE.md', { path: 'C:\\Users\\a\\.claude\\CLAUDE.md', tokens: 9 })
+    const drift = { id: 'F1', path: 'c:/users/a/.claude/claude.md', verdict: 'stale', severity: 'problem', claim: '', evidence: '', fix: '', status: 'open', stale: true, accountWide: true } as const
+    const [block] = blocksOf(mapLayout(report({ account: [claudeMd] }), [drift]))
+    expect(block.findings).toEqual([drift])
+  })
 })

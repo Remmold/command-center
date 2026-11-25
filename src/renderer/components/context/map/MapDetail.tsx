@@ -1,5 +1,5 @@
 import { formatTokens, type ContextItem, type ContextItemKind, type ContextLayerName } from '../../../../shared/context'
-import type { Finding } from '../../../../shared/findings'
+import type { ShownFinding } from '../../../../shared/findings'
 import { fileTarget, useContextStore } from '../../../state/contextStore'
 import { BAND_TITLES, KIND_EXPLANATIONS, KIND_TITLES, LANE_TITLES, SLASH_ONLY_SKILL, UNINDEXED_MEMORY_FILE } from '../../../state/mapCopy'
 import { blocksOf, type ContextMap, type MapBandName } from '../../../state/mapLayout'
@@ -27,7 +27,7 @@ interface BlockDetail {
   sharedWithDefault: boolean
   readOnly: string | null
   unindexed: boolean
-  findings: Finding[]
+  findings: ShownFinding[]
 }
 
 function detailOf(map: ContextMap, id: string | null): BlockDetail | null {
@@ -101,10 +101,24 @@ export function MapDetail({ map, defaultName }: { map: ContextMap; defaultName: 
         <Panel title="Findings" count={s.findings.length} empty="No findings.">
           <ul className="flex flex-col gap-3 text-xs">
             {s.findings.map((f) => (
-              <li key={f.id} className="flex flex-col gap-1">
+              <li key={`${f.runId ?? 'health'}:${f.id}`} data-stale={f.stale ? '' : undefined} className={`flex flex-col gap-1 ${f.stale ? 'opacity-50' : ''}`}>
                 <span className="text-fg">
                   {f.severity === 'note' && <Badge tone="quiet">note</Badge>} {f.claim}
                 </span>
+                {(f.stale || f.accountWide) && (
+                  <span className="flex flex-wrap gap-1">
+                    {f.stale && (
+                      <Badge tone="quiet-warning" tooltip="The file was modified after the drift check started, so this may no longer hold.">
+                        file changed since
+                      </Badge>
+                    )}
+                    {f.accountWide && (
+                      <Badge tone="quiet" tooltip="An account file loads in every workspace of this account; a fix changes all of them.">
+                        affects every workspace of this account
+                      </Badge>
+                    )}
+                  </span>
+                )}
                 <PropertyList
                   label={`Finding ${f.id}`}
                   entries={[

@@ -1,6 +1,7 @@
-import { useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import { Link2, Lock } from 'lucide-react'
 import { formatTokens, type ContextLayerName, type ContextReport } from '../../../../shared/context'
+import { shownFindings } from '../../../../shared/findings'
 import { healthCheck } from '../../../../shared/healthCheck'
 import { useContextStore } from '../../../state/contextStore'
 import { BAND_NOTES, BAND_TITLES, LANE_TITLES } from '../../../state/mapCopy'
@@ -15,6 +16,7 @@ import { NoticeLine } from '../../ui/NoticeLine'
 import { Pane } from '../../ui/Pane'
 import { SectionLabel } from '../../ui/SectionLabel'
 import { Tile } from '../../ui/Tile'
+import { DriftRuns } from './DriftRuns'
 import { GuidedTour } from './GuidedTour'
 import { MapDetail } from './MapDetail'
 
@@ -28,8 +30,22 @@ function tileSize(size: number): { width: number; height: number } {
 
 export function ContextMapPane({ workspacePath, report, defaultName }: { workspacePath: string; report: ContextReport | null; defaultName: string }) {
   const expanded = useContextStore((s) => s.mapExpanded)
+  const workspaceId = useContextStore((s) => s.selectedId)
+  const drift = useContextStore((s) => s.drift)
+  useEffect(() => {
+    useContextStore.getState().showDrift()
+    const off = window.api.driftChecks.onChanged(() => useContextStore.getState().showDrift())
+    return () => {
+      off()
+      void window.api.driftChecks.release()
+    }
+  }, [workspaceId])
   const health = useMemo(() => (report ? healthCheck(report) : []), [report])
-  const map = useMemo(() => (report ? mapLayout(report, health, new Set(expanded)) : null), [report, health, expanded])
+  const findings = useMemo(
+    () => [...health, ...(report && drift ? drift.runs.flatMap((r) => shownFindings(r.run, r.modified, report.accountFolder, r.accountOnly)) : [])],
+    [report, health, drift]
+  )
+  const map = useMemo(() => (report ? mapLayout(report, findings, new Set(expanded)) : null), [report, findings, expanded])
   const steps = useMemo(() => (map ? tourSteps(map, health) : []), [map, health])
   const tourStep = useContextStore((s) => s.tourStep)
   if (!report || !map) return <EmptyState>Reading…</EmptyState>
@@ -42,6 +58,7 @@ export function ContextMapPane({ workspacePath, report, defaultName }: { workspa
       <div className="min-h-0 min-w-0 flex-1">
         <Pane label="Context map">
           <NoticeLine strip>Start total {formatTokens(map.startTotal)} tokens · estimates, as configured</NoticeLine>
+          <DriftRuns drift={drift} />
           <MapGrid map={map} highlight={steps[stepIndex(tourStep, steps)].highlight} defaultName={defaultName} />
         </Pane>
       </div>

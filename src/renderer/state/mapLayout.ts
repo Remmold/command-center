@@ -1,5 +1,5 @@
 import { SLASH_COMMAND_ONLY, type ContextItem, type ContextItemKind, type ContextLayerName, type ContextReport } from '../../shared/context'
-import type { Finding } from '../../shared/findings'
+import { pathKey, type ShownFinding } from '../../shared/findings'
 
 export type MapBandName = 'start' | 'on-demand' | 'behaviour'
 
@@ -26,7 +26,7 @@ export interface MapBlock {
   readOnly: string | null
   /** Memory files MEMORY.md never links, drawn apart from the linked ones. */
   unindexed: boolean
-  findings: Finding[]
+  findings: ShownFinding[]
 }
 
 export interface MapBand {
@@ -163,8 +163,9 @@ function bySlotAndPlugin(placed: readonly Placed[]): [Slot, string | null, Place
   return out
 }
 
-function singleBlock(layer: ContextLayerName, placed: Placed, groupId: string | null, findings: readonly Finding[]): MapBlock {
+function singleBlock(layer: ContextLayerName, placed: Placed, groupId: string | null, findings: readonly ShownFinding[]): MapBlock {
   const { item } = placed
+  const key = item.path === null ? null : pathKey(item.path)
   return {
     id: placed.id,
     label: item.label,
@@ -180,13 +181,13 @@ function singleBlock(layer: ContextLayerName, placed: Placed, groupId: string | 
     sharedWithDefault: item.sharedWithDefault,
     readOnly: item.readOnly,
     unindexed: isUnlinked(item),
-    findings: findings.filter((f) => f.path === item.path)
+    findings: findings.filter((f) => pathKey(f.path) === key)
   }
 }
 
-function groupBlock(group: MapGroup, findings: readonly Finding[]): MapBlock {
+function groupBlock(group: MapGroup, findings: readonly ShownFinding[]): MapBlock {
   const members = group.items
-  const paths = new Set(members.map((m) => m.path))
+  const paths = new Set(members.flatMap((m) => (m.path === null ? [] : [pathKey(m.path)])))
   return {
     id: group.id,
     label: group.label,
@@ -202,7 +203,7 @@ function groupBlock(group: MapGroup, findings: readonly Finding[]): MapBlock {
     sharedWithDefault: group.sharedWithDefault,
     readOnly: group.readOnly,
     unindexed: group.unindexed,
-    findings: findings.filter((f) => paths.has(f.path))
+    findings: findings.filter((f) => paths.has(pathKey(f.path)))
   }
 }
 
@@ -210,7 +211,7 @@ function groupBlock(group: MapGroup, findings: readonly Finding[]): MapBlock {
  * The context map of one report: a lane per context layer, three bands per lane, a block per item sized by its tokens.
  * A kind with more than LARGE_GROUP items in one lane is one block unless its group id is in `expanded`.
  */
-export function mapLayout(report: ContextReport, findings: readonly Finding[], expanded: ReadonlySet<string> = new Set()): ContextMap {
+export function mapLayout(report: ContextReport, findings: readonly ShownFinding[], expanded: ReadonlySet<string> = new Set()): ContextMap {
   const edges: MapEdge[] = []
   const groups: MapGroup[] = []
   const lanes = LAYER_ORDER.map((layer): MapLane => {

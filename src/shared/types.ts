@@ -11,6 +11,7 @@ import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
+import type { DriftChecksView } from './findings'
 import type { BackgroundProcess } from './backgroundProcesses'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
@@ -480,6 +481,15 @@ export interface RendererApi {
     readFile: (workspaceId: string, path: string) => Promise<ContextFileText>
     /** Guarded: only what the latest report listed and didn't mark read-only, or a missing creatable file; a `.json` file must parse. */
     writeFile: (workspaceId: string, path: string, content: string) => Promise<ContextFileResult>
+  }
+  driftChecks: {
+    /**
+     * The latest drift checks covering the workspace (ADR 0005). Until the next call or `release`, main watches the shown
+     * run files that are not done and calls `onChanged` when one is rewritten.
+     */
+    show: (workspaceId: string) => Promise<DriftChecksView>
+    release: () => Promise<void>
+    onChanged: (cb: () => void) => () => void
   }
   discovery: {
     get: () => Promise<DiscoveryModel>
