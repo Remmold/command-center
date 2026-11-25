@@ -1,0 +1,1 @@
+- 01 resolved: real background Bash recorded; fake CLI runs real background servers, get_task_output, stop_task for shells — 4dc5958

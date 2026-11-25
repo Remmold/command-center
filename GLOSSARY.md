@@ -64,6 +64,14 @@ _Avoid_: Child agent, task (the CLI's word for it in its events)
 The tab beside Chat and Media that lists a session's subagents grouped by the turn that started them, newest turn first (older turns fold), working ones first within a turn, and opens one in its live agent view: its transcript, read-only, following as it grows.
 _Avoid_: Agent panel, transcript dialog
 
+**Background process**:
+A command an agent left running in the background of a hosted session: started there, or moved there mid-run. It is usually a dev server, a watcher or a long build. It is Running until it finishes, fails or is stopped, and it is listed until its session closes. Closing the session ends it.
+_Avoid_: Background shell, task (the CLI's word), server (not all of them are servers)
+
+**Processes tab**:
+The tab beside Chat, Agents and Media that lists a session's background processes, running ones first. Each one shows its status, command, the tail of its output and any local port it serves, with a Stop button.
+_Avoid_: Shells tab (the Shell drawer is your own terminal)
+
 **Ended (no final report)**:
 A subagent no live process reports any more (a resumed, old or VS Code chat) that stopped writing for 10 minutes, with nothing of its own still writing, without handing back a report or being interrupted. It never counts as working. An agent the chat's live process still reports stays working however quiet, as a long build writes nothing until it returns.
 
