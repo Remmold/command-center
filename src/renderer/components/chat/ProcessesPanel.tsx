@@ -13,6 +13,7 @@ import {
   type ProcessOutput
 } from '../../state/backgroundProcessesStore'
 import { useToastStore } from '../../state/toastStore'
+import { useViewStore } from '../../state/viewStore'
 import { Button } from '../ui/Button'
 import { EmptyState } from '../ui/EmptyState'
 import { ListItem, ListRowLines, ListRowMeta } from '../ui/ListRow'
@@ -28,7 +29,10 @@ const NO_SERVERS: LocalServer[] = []
 
 /** Refreshes running processes' output while the tab is on screen, and fetches an ended one's output once. */
 function useOutputRefresh(paneId: string, processes: readonly BackgroundProcess[], outputs: Record<string, ProcessOutput>): void {
-  const onScreen = useHostedChatOnScreen(paneId)
+  const chatOnScreen = useHostedChatOnScreen(paneId)
+  // The chat drawer shows the chat without its tabs, so the tab is on screen only in Work.
+  const inWork = useViewStore((s) => s.view === 'work')
+  const onScreen = chatOnScreen && inWork
   const fetchOutput = useBackgroundProcessesStore((s) => s.fetchOutput)
   const running = processes
     .filter((p) => p.status === 'running')

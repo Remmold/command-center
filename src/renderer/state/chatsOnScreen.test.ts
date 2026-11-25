@@ -9,7 +9,7 @@ const screen = (over: Partial<Screen> = {}): Screen => ({
   windowVisible: true,
   pair: split,
   chatTabShown: true,
-  drawerPaneId: null,
+  inDrawer: false,
   ...over
 })
 
@@ -37,23 +37,22 @@ describe('hostedChatOnScreen', () => {
 
 describe("the Dashboard drawer's chat", () => {
   it('is on screen while the Dashboard shows it, and no other chat is', () => {
-    const dashboard = screen({ view: 'dashboard', drawerPaneId: 'c' })
-    expect(hostedChatOnScreen('c', dashboard)).toBe(true)
-    expect(hostedChatOnScreen('a', dashboard)).toBe(false)
+    expect(hostedChatOnScreen('c', screen({ view: 'dashboard', inDrawer: true }))).toBe(true)
+    expect(hostedChatOnScreen('a', screen({ view: 'dashboard', inDrawer: false }))).toBe(false)
   })
 
   it('is not on screen under Settings, in a hidden window, or in any other view', () => {
     for (const covered of [
-      screen({ view: 'dashboard', drawerPaneId: 'c', settingsOpen: true }),
-      screen({ view: 'dashboard', drawerPaneId: 'c', windowVisible: false }),
-      screen({ view: 'board', drawerPaneId: 'c' }),
-      screen({ view: 'work', drawerPaneId: 'c' })
+      screen({ view: 'dashboard', inDrawer: true, settingsOpen: true }),
+      screen({ view: 'dashboard', inDrawer: true, windowVisible: false }),
+      screen({ view: 'board', inDrawer: true }),
+      screen({ view: 'work', inDrawer: true })
     ]) {
       expect(hostedChatOnScreen('c', covered)).toBe(false)
     }
   })
 
-  it("leaves Work's chats as before when it shows the same session", () => {
-    expect(hostedChatOnScreen('a', screen({ drawerPaneId: 'a' }))).toBe(true)
+  it("leaves Work's chats on screen in Work when the drawer holds the same session", () => {
+    expect(hostedChatOnScreen('a', screen({ inDrawer: true }))).toBe(true)
   })
 })

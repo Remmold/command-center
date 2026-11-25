@@ -22,7 +22,7 @@ export function useHostedChatOnScreen(paneId: string): boolean {
     const own = Object.values(s.views).find((v) => v.claudeSessions.some((c) => c.id === paneId))
     return own !== undefined && chatOnScreen(own)
   })
-  const drawerPaneId = useChatDrawerStore((s) => (s.paneId === paneId ? paneId : null))
+  const inDrawer = useChatDrawerStore((s) => s.paneId === paneId)
   const visible = useSyncExternalStore(subscribeVisibility, windowVisible)
-  return hostedChatOnScreen(paneId, { view, settingsOpen, windowVisible: visible, pair, chatTabShown, drawerPaneId })
+  return hostedChatOnScreen(paneId, { view, settingsOpen, windowVisible: visible, pair, chatTabShown, inDrawer })
 }

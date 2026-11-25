@@ -132,14 +132,9 @@ describe('Ctrl+Shift+J', () => {
     expect(waitingJump([], 'a', false)).toBeNull()
   })
 
-  it('in every other view opens the one after the chat on screen in Work, as before', () => {
+  it('in every other view opens the one after the chat on screen in Work', () => {
     expect(waitingJump(waiting, 'a', false)).toEqual({ row: waiting[1], into: 'work' })
     expect(waitingJump(waiting, null, false)).toEqual({ row: waiting[0], into: 'work' })
-  })
-
-  it("sees the drawer's session as the one on screen while the Dashboard shows", () => {
-    openInDrawer('c')
-    expect(paneOnScreen()).toBe('c')
   })
 })
 

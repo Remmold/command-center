@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { useProjectViewsStore, type ProjectView } from './projectViewsStore'
-import { useViewStore, type AppView } from './viewStore'
+import { useViewStore, type AppView, type SettingsSection } from './viewStore'
 
 export const DRAWER_MIN_WIDTH = 420
 
@@ -65,7 +65,7 @@ export function initChatDrawer(): void {
 }
 
 /** The drawer can show while the Dashboard is the current view and Settings is closed. */
-export function drawerShown(screen: { view: AppView; settings: unknown }): boolean {
+export function drawerShown(screen: { view: AppView; settings: SettingsSection | null }): boolean {
   return screen.view === 'dashboard' && screen.settings === null
 }
 
