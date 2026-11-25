@@ -17,10 +17,10 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unit tests (seam 1) for the project kind: names the right files and leaves the others out (no account files in a project run; no plugin items; GLOSSARY/ADR only when present); `addDirs` holds exactly the outside folders, each once, and never the session's own workspace; the prompt carries the "ask before editing" and "one subagent per project" instructions.
-- [ ] The report carries `accountFolder` and `memoryFolder` (reader tests updated).
-- [ ] Added folders persist with the session and reach every spawn as `--add-dir`.
-- [ ] New UI scenario: Clean up → This project opens Work on a new session whose input holds a prompt naming the workspace's CLAUDE.md, and after sending, the fake CLI's logged argv contains `--add-dir` with the memory folder. That makes 16 of the 20-scenario budget.
-- [ ] Quick tier green.
+- [x] Unit tests (seam 1) for the project kind: names the right files and leaves the others out (no account files in a project run; no plugin items; GLOSSARY/ADR only when present); `addDirs` holds exactly the outside folders, each once, and never the session's own workspace; the prompt carries the "ask before editing" and "one subagent per project" instructions.
+- [x] The report carries `accountFolder` and `memoryFolder` (reader tests updated).
+- [x] Added folders persist with the session and reach every spawn as `--add-dir`.
+- [x] New UI scenario: Clean up → This project opens Work on a new session whose input holds a prompt naming the workspace's CLAUDE.md, and after sending, the fake CLI's logged argv contains `--add-dir` with the memory folder. That makes 16 of the 20-scenario budget.
+- [x] Quick tier green.
