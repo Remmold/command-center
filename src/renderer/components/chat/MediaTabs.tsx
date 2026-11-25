@@ -7,8 +7,9 @@ import { useObservedStore } from '../../state/observedStore'
 import { useAgentTails } from '../../state/subagentTailsStore'
 import { useTestFlowsFolder } from '../../state/testFlowStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
-import { findTestFlow, repoNameFor, type TestFlowPick } from '../../../shared/testFlow'
+import { findTestFlows, repoNameFor, type TestFlowPick, type TestFlowView } from '../../../shared/testFlow'
 import { TestFlowPanel } from '../testFlow/TestFlowPanel'
+import { useTestFlowView, viewKeyOf } from '../testFlow/useTestFlowView'
 import { TabStrip } from '../ui/TabStrip'
 import { collectMedia, type MediaAttachment, type MediaEntry } from './chatMedia'
 import { MediaGrid } from './MediaGrid'
@@ -66,7 +67,8 @@ function useChatAgents(items: readonly ChatItem[], host: AgentHost | undefined, 
 }
 
 interface SessionTestFlow {
-  pick: TestFlowPick | null
+  picks: TestFlowPick[]
+  view: TestFlowView | null
   folder: string
   repoName: string
 }
@@ -74,8 +76,18 @@ interface SessionTestFlow {
 function useSessionTestFlow(items: readonly ChatItem[], cwd: string | undefined): SessionTestFlow {
   const folder = useTestFlowsFolder() ?? ''
   const repoName = useWorkspacesStore((s) => repoNameFor(s.workspaces, cwd))
-  const pick = useMemo(() => findTestFlow({ items, folder, repoName }), [items, folder, repoName])
-  return { pick, folder, repoName }
+  const picks = useMemo(() => findTestFlows({ items, folder, repoName }), [items, folder, repoName])
+  const paths = useMemo(() => picks.map((p) => p.path), [picks])
+  const view = useTestFlowView(paths)
+  return { picks, view, folder, repoName }
+}
+
+/** True once what the Test tab shows changed while another tab was open, until the Test tab opens again. */
+function useTestFlowDot(view: TestFlowView | null, testOpen: boolean): boolean {
+  const key = viewKeyOf(view)
+  const [seen, setSeen] = useState<string | null>(null)
+  if (key !== null && key !== seen && (seen === null || testOpen)) setSeen(key)
+  return !testOpen && seen !== null && key !== null && key !== seen
 }
 
 interface TabsProps extends SessionMedia {
@@ -99,6 +111,7 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
   const agentsWorking = useMemo(() => agentTabCount(agents), [agents])
   const tab = shownTab(chosen, media.length, agentCount)
   const testFlow = useSessionTestFlow(items, cwd)
+  const testFlowChanged = useTestFlowDot(testFlow.view, tab === 'test')
   const regionRef = useRef<HTMLDivElement | null>(null)
   const jumpTo = useRef<string | null>(null)
 
@@ -133,9 +146,9 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
       { value: 'chat' as const, label: 'Chat', title: `The transcript (${MEDIA_TAB_SHORTCUT})` },
       ...(agentCount > 0 ? [{ value: 'agents' as const, label: 'Agents', count: agentsWorking, title: AGENTS_TITLE }] : []),
       ...(media.length > 0 ? [{ value: 'media' as const, label: 'Media', count: media.length, title: `This session's images and videos (${MEDIA_TAB_SHORTCUT})` }] : []),
-      { value: 'test' as const, label: 'Test', title: "This session's test flow" }
+      { value: 'test' as const, label: 'Test', dot: testFlowChanged ? 'changed' : undefined, title: "This session's test flow" }
     ],
-    [agentCount, agentsWorking, media.length]
+    [agentCount, agentsWorking, media.length, testFlowChanged]
   )
   const hidden = tab !== 'chat'
   return (

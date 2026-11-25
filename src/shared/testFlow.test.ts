@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AssistantMessageItem } from './chatItems'
-import { findTestFlow, repoNameFor } from './testFlow'
+import { findTestFlows, repoNameFor } from './testFlow'
 
 const FOLDER = 'C:\\projects\\test-flows'
 
@@ -18,13 +18,14 @@ function call(id: string, name: string, input: unknown, parentToolUseId?: string
 describe('finding a session test flow', () => {
   it('takes the file a Write call put in the folder', () => {
     const items = [call('a', 'Write', { file_path: 'C:\\projects\\test-flows\\continuum-1220-ai-person-card.md', content: '# run' })]
-    expect(findTestFlow({ items, folder: FOLDER, repoName: 'continuum' })).toEqual({
+    expect(findTestFlows({ items, folder: FOLDER, repoName: 'continuum' })[0]).toEqual({
       path: 'C:\\projects\\test-flows\\continuum-1220-ai-person-card.md',
       source: 'session'
     })
   })
 
-  const found = (items: AssistantMessageItem[], repoName = 'command-center') => findTestFlow({ items, folder: FOLDER, repoName })
+  const picks = (items: AssistantMessageItem[], repoName = 'command-center') => findTestFlows({ items, folder: FOLDER, repoName })
+  const found = (items: AssistantMessageItem[], repoName = 'command-center') => picks(items, repoName)[0]
 
   it('takes the file an Edit call changed', () => {
     expect(found([call('a', 'Edit', { file_path: 'C:\\projects\\test-flows\\darkfall64.md', old_string: 'a', new_string: 'b' })])?.path).toBe(
@@ -41,13 +42,29 @@ describe('finding a session test flow', () => {
     expect(found([pwsh])?.path).toBe('C:\\projects\\test-flows\\explainer.html')
   })
 
-  it('the latest write wins, a subagent write included', () => {
+  it('lists every write newest-first, each file once, a subagent write included, then the repo-named file', () => {
     const items = [
       call('a', 'Write', { file_path: 'C:\\projects\\test-flows\\continuum-1012.md' }),
       call('b', 'Write', { file_path: 'C:\\projects\\test-flows\\continuum-1220.md' }, 'agent-call'),
-      call('c', 'Read', { file_path: 'C:\\projects\\test-flows\\continuum-1012.md' })
+      call('c', 'Read', { file_path: 'C:\\projects\\test-flows\\continuum-0900.md' }),
+      call('d', 'Edit', { file_path: 'c:/projects/test-flows/Continuum-1012.MD' })
     ]
-    expect(found(items)).toEqual({ path: 'C:\\projects\\test-flows\\continuum-1220.md', source: 'session' })
+    expect(picks(items, 'continuum')).toEqual([
+      { path: 'C:\\projects\\test-flows\\Continuum-1012.MD', source: 'session' },
+      { path: 'C:\\projects\\test-flows\\continuum-1220.md', source: 'session' },
+      { path: 'C:\\projects\\test-flows\\continuum.md', source: 'repo' }
+    ])
+  })
+
+  it('keeps a written repo-named file where its write falls, and lists it once', () => {
+    const items = [
+      call('a', 'Write', { file_path: 'C:\\projects\\test-flows\\command-center.md' }),
+      call('b', 'Bash', { command: 'test -f C:/projects/test-flows/command-center-test-flow.md && echo yes' })
+    ]
+    expect(picks(items)).toEqual([
+      { path: 'C:\\projects\\test-flows\\command-center-test-flow.md', source: 'session' },
+      { path: 'C:\\projects\\test-flows\\command-center.md', source: 'session' }
+    ])
   })
 
   it('ignores command lists, other file types, and files outside the folder or in a subfolder', () => {
@@ -66,18 +83,18 @@ describe('finding a session test flow', () => {
 
   it('compares the folder ignoring case and slashes', () => {
     expect(found([call('a', 'Write', { file_path: 'c:/Projects//Test-Flows/Run.MD' })])?.path).toBe('C:\\projects\\test-flows\\Run.MD')
-    expect(findTestFlow({ items: [call('a', 'Write', { file_path: 'C:\\projects\\test-flows\\run.md' })], folder: 'c:/projects/test-flows/', repoName: 'x' })).toEqual({
+    expect(findTestFlows({ items: [call('a', 'Write', { file_path: 'C:\\projects\\test-flows\\run.md' })], folder: 'c:/projects/test-flows/', repoName: 'x' })[0]).toEqual({
       path: 'c:/projects/test-flows/run.md',
       source: 'session'
     })
   })
 
   it('falls back to the file named after the repo when the session wrote none', () => {
-    expect(found([call('a', 'Read', { file_path: 'C:\\projects\\test-flows\\darkfall64.md' })])).toEqual({
-      path: 'C:\\projects\\test-flows\\command-center.md',
-      source: 'repo'
-    })
-    expect(found([], '')).toBeNull()
+    expect(picks([call('a', 'Read', { file_path: 'C:\\projects\\test-flows\\darkfall64.md' })])).toEqual([
+      { path: 'C:\\projects\\test-flows\\command-center.md', source: 'repo' }
+    ])
+    expect(picks([], '')).toEqual([])
+    expect(findTestFlows({ items: [], folder: ' ', repoName: 'x' })).toEqual([])
   })
 })
 

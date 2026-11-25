@@ -61,7 +61,7 @@ An agent Claude starts with the Agent tool inside a session, in the foreground o
 _Avoid_: Child agent, task (the CLI's word for it in its events)
 
 **Test flow**:
-A document of manual test steps Claude writes for Andreas, kept in the test-flows folder as a markdown file with a rendered HTML twin he tests from. A session's test flow is the one it last wrote there (standing command lists excepted), else the one named after its repo.
+A document of manual test steps Claude writes for Andreas, kept in the test-flows folder as a markdown file with a rendered HTML twin he tests from. A session's test flow is the one it last wrote there that exists (standing command lists excepted), else the one named after its repo.
 _Avoid_: Test plan, test doc, checklist
 
 **Test tab**:

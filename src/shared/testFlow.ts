@@ -66,11 +66,21 @@ function writtenName(block: { name?: unknown; input?: unknown }, folderKey: stri
   return null
 }
 
-/** The session's test flow before twin resolution: the test flow it last wrote in the folder, else the one named after its repo. */
-export function findTestFlow({ items, folder, repoName }: TestFlowInput): TestFlowPick | null {
-  if (!folder.trim()) return null
+/**
+ * The session's test-flow candidates before twin resolution: each file it wrote in the folder once, newest write first,
+ * then the one named after its repo. The first that exists is the session's test flow.
+ */
+export function findTestFlows({ items, folder, repoName }: TestFlowInput): TestFlowPick[] {
+  if (!folder.trim()) return []
   const folderKey = comparable(folder)
   const pattern = folderPattern(folder)
+  const picks: TestFlowPick[] = []
+  const seen = new Set<string>()
+  const add = (name: string, source: TestFlowPick['source']): void => {
+    if (seen.has(name.toLowerCase())) return
+    seen.add(name.toLowerCase())
+    picks.push({ path: joinFolder(folder, name), source })
+  }
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i]
     if (item.kind !== 'assistant') continue
@@ -78,10 +88,11 @@ export function findTestFlow({ items, folder, repoName }: TestFlowInput): TestFl
       const block = item.content[b]
       if (block.type !== 'tool_use') continue
       const name = writtenName(block as { name?: unknown; input?: unknown }, folderKey, pattern)
-      if (name) return { path: joinFolder(folder, name), source: 'session' }
+      if (name) add(name, 'session')
     }
   }
-  return repoName ? { path: joinFolder(folder, `${repoName}.md`), source: 'repo' } : null
+  if (repoName) add(`${repoName}.md`, 'repo')
+  return picks
 }
 
 /** Serves the HTML files directly in the test-flows folder, read-only. */

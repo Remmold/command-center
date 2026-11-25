@@ -504,8 +504,14 @@ export interface RendererApi {
     onModelChanged: (cb: (status: SpeechModelStatus) => void) => () => void
   }
   testFlow: {
-    /** What the Test tab shows for a path the finder picked; refuses anything outside the test-flows folder. */
-    read: (path: string) => Promise<TestFlowView>
+    /**
+     * What `watcher` shows for the finder's candidates: the first that exists; anything outside the test-flows folder is
+     * refused. Main watches the shown file and the newer candidates until the next call or `release`.
+     */
+    show: (watcher: string, paths: readonly string[]) => Promise<TestFlowView>
+    release: (watcher: string) => Promise<void>
+    /** Called with the watcher whose shown or awaited file changed on disk. */
+    onChanged: (cb: (watcher: string) => void) => () => void
     folder: () => Promise<string>
     /** Resolves to the folder in force; a path that is not absolute is not saved. */
     setFolder: (folder: string) => Promise<string>

@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
+import { PAGE_SCROLL_MESSAGE } from '../../shared/pageScroll'
 import { TEST_FLOW_SCHEME, type TestFlowView } from '../../shared/testFlow'
 
 const NOT_FOUND: TestFlowView = { found: false }
@@ -16,6 +17,19 @@ const PAGE_POLICY = [
   "base-uri 'none'",
   "form-action 'none'"
 ].join('; ')
+
+/**
+ * Appended to each page: reports its scroll place to the app and takes one back, so a reload keeps the place. Only
+ * messages from the embedding app are taken; the page's origin is opaque, so `*` is the only target that reaches it.
+ */
+const SCROLL_SCRIPT = `<script>(function () {
+  var T = '${PAGE_SCROLL_MESSAGE}';
+  addEventListener('scroll', function () { parent.postMessage({ type: T, y: scrollY }, '*'); }, { passive: true });
+  addEventListener('message', function (e) {
+    if (e.source !== parent || !e.data || e.data.type !== T || typeof e.data.y !== 'number') return;
+    scrollTo(0, e.data.y);
+  });
+})();</script>`
 
 const sameDir = (a: string, b: string): boolean => resolve(a).toLowerCase() === resolve(b).toLowerCase()
 
@@ -34,18 +48,52 @@ async function fileInFolder(folder: string, path: string): Promise<{ path: strin
 
 const pageUrl = (name: string, mtimeMs: number): string => `${TEST_FLOW_SCHEME}://flow/${encodeURIComponent(name)}?v=${Math.floor(mtimeMs)}`
 
-/** What the Test tab shows for a path the finder picked: an `.md` as its `.html` twin when there is one. */
-export async function readTestFlow(folder: string, path: string): Promise<TestFlowView> {
-  const ext = extname(path).toLowerCase()
-  if (ext !== '.md' && ext !== '.html') return NOT_FOUND
-  const twinPath = ext === '.md' ? path.slice(0, -ext.length) + '.html' : path
+/** A file whose change could change what the Test tab shows, with its state when it was read. */
+export interface WatchedFile {
+  path: string
+  stamp: string
+}
+
+export interface TestFlowRead {
+  view: TestFlowView
+  /** The candidates before the one shown, which may yet appear, and the shown one with its twin. */
+  watch: WatchedFile[]
+}
+
+/** The file's size and change time, or `missing`; equal stamps mean nothing to reload. */
+export async function stampOf(path: string): Promise<string> {
+  try {
+    const stat = await fs.stat(path)
+    return stat.isFile() ? `${stat.mtimeMs}:${stat.size}` : 'missing'
+  } catch {
+    return 'missing'
+  }
+}
+
+/** One candidate: an `.md` as its `.html` twin when there is one. */
+async function readOne(folder: string, path: string, twinPath: string): Promise<TestFlowView> {
   const page = await fileInFolder(folder, twinPath)
   if (page) return { kind: 'html', name: basename(twinPath), url: pageUrl(basename(twinPath), page.mtimeMs) }
-  if (ext !== '.md') return NOT_FOUND
+  if (twinPath === path) return NOT_FOUND
   const doc = await fileInFolder(folder, path)
   if (!doc || doc.size > MAX_MARKDOWN_BYTES) return NOT_FOUND
   const text = await fs.readFile(doc.path, 'utf8').catch(() => null)
   return text === null ? NOT_FOUND : { kind: 'md', name: basename(path), text }
+}
+
+/** What the Test tab shows for the finder's candidates: the first that exists; paths outside the folder are refused. */
+export async function readTestFlow(folder: string, paths: readonly string[]): Promise<TestFlowRead> {
+  const watch: WatchedFile[] = []
+  for (const path of paths) {
+    const ext = extname(path).toLowerCase()
+    if ((ext !== '.md' && ext !== '.html') || !isAbsolute(path) || !isAbsolute(folder) || !sameDir(dirname(resolve(path)), folder)) continue
+    const twinPath = ext === '.md' ? path.slice(0, -ext.length) + '.html' : path
+    // Stamped before reading, so a write during the read still counts as a change.
+    for (const file of twinPath === path ? [path] : [twinPath, path]) watch.push({ path: file, stamp: await stampOf(file) })
+    const view = await readOne(folder, path, twinPath)
+    if (view.kind) return { view, watch }
+  }
+  return { view: NOT_FOUND, watch }
 }
 
 /** The scheme's answer: an HTML file directly in the folder by its name, under a policy that keeps it off the network. */
@@ -62,7 +110,7 @@ export async function serveTestFlow(folder: string, requestUrl: string): Promise
   if (!page) return new Response(null, { status: 404 })
   const body = await fs.readFile(page.path).catch(() => null)
   if (!body) return new Response(null, { status: 404 })
-  return new Response(body, {
+  return new Response(Buffer.concat([body, Buffer.from(SCROLL_SCRIPT)]), {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',

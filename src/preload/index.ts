@@ -155,7 +155,13 @@ const api: RendererApi = {
     }
   },
   testFlow: {
-    read: (path) => ipcRenderer.invoke(IPC.TEST_FLOW_READ, path),
+    show: (watcher, paths) => ipcRenderer.invoke(IPC.TEST_FLOW_SHOW, watcher, paths),
+    release: (watcher) => ipcRenderer.invoke(IPC.TEST_FLOW_RELEASE, watcher),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, watcher: string) => cb(watcher)
+      ipcRenderer.on(IPC.TEST_FLOW_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.TEST_FLOW_CHANGED, handler)
+    },
     folder: () => ipcRenderer.invoke(IPC.TEST_FLOW_FOLDER_GET),
     setFolder: (folder) => ipcRenderer.invoke(IPC.TEST_FLOW_FOLDER_SET, folder)
   },

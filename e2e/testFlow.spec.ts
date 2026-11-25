@@ -14,6 +14,7 @@ const PAGE = `<!doctype html>
 <img src="https://example.com/pixel.png" alt="">
 <a href="https://example.com/away">away</a>
 <div class="cmd" onclick="cp(this)" data-cmd="pnpm dev"><code>pnpm dev</code><span class="hint">click to copy</span></div>
+<div style="height:3000px"></div>
 <script>
 fetch('https://example.com/beacon').catch(function(){});
 function cp(el) {
@@ -34,7 +35,7 @@ function fallback(cmd) {
 test.describe('test flows', () => {
   test.use({ script: 'testFlow' })
 
-  test('the Test tab shows the repo-named markdown, then the HTML twin of the file the reply wrote, whose click-to-copy works offline', async ({ launched }) => {
+  test('the Test tab shows the repo-named markdown, then the HTML twin of the file the reply wrote, whose click-to-copy works offline and which reloads on rewrite', async ({ launched }) => {
     const { page, app, workspace } = launched
     const folder = join(workspace, 'flows')
     mkdirSync(folder)
@@ -70,6 +71,28 @@ test.describe('test flows', () => {
 
       await frame.getByRole('link', { name: 'away' }).click()
       await expect(frame.getByRole('heading', { name: 'TEST RUN e2e' })).toBeVisible()
+    })
+
+    const frame = panel.frameLocator('iframe[title="run.html"]')
+    const strip = pane.locator('[data-tab-strip]')
+    const scrolled = () => frame.locator('html').evaluate((el) => el.scrollTop)
+
+    await test.step('a rewrite of the file reloads the tab at the same scroll place', async () => {
+      await frame.locator('html').evaluate((el) => (el.scrollTop = 800))
+      writeFileSync(join(folder, 'run.html'), PAGE.replace('TEST RUN e2e', 'TEST RUN rewritten'))
+      await expect(frame.getByRole('heading', { name: 'TEST RUN rewritten' })).toBeAttached()
+      await expect.poll(scrolled).toBe(800)
+    })
+
+    await test.step('a rewrite while the Chat tab is open puts a dot on the Test tab until it opens', async () => {
+      await strip.getByRole('tab', { name: 'Chat', exact: true }).click()
+      writeFileSync(join(folder, 'run.html'), PAGE.replace('TEST RUN e2e', 'TEST RUN again'))
+      const dot = strip.getByRole('img', { name: 'changed' })
+      await expect(dot).toBeVisible()
+      await strip.getByRole('tab', { name: /^Test/ }).click()
+      await expect(dot).toHaveCount(0)
+      await expect(frame.getByRole('heading', { name: 'TEST RUN again' })).toBeAttached()
+      await expect.poll(scrolled).toBe(800)
     })
   })
 })
