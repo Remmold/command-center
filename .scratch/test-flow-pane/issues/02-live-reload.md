@@ -7,6 +7,8 @@ Rules (from the spec, word for word):
 - The scroll place is kept across reloads per file.
 - When the file changes while another tab is active, the tab gets a dot until it is opened.
 - A session that starts writing a new test-flow file switches the tab to it (the finder's latest write wins).
+- Spec amendment (after ticket 01's real-data check, word for word): the finder returns every pick newest-first (each file once), with the repo-named file last, and the reader shows the first that exists. A shell command that only names a file that isn't there (a probe, a typo) then never blanks the tab.
+- A pick that appears on disk later (Claude creates the file it named) is shown once it exists: the watch covers the candidates that don't exist yet, as well as the shown file.
 
 **Blocked by:** 01
 
