@@ -9,9 +9,9 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 03 (the tooltip's port)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A badge with the running count on the session row, hidden at zero. Its tooltip lines read `command`, or `command :port`.
-- [ ] The session status is unaffected: the existing status reducer tests are untouched and green.
-- [ ] The e2e scenario is extended: the badge shows 1 while the process runs and is gone after Stop.
-- [ ] Quick tier green.
+- [x] A badge with the running count on the session row, hidden at zero. Its tooltip lines read `command`, or `command :port`.
+- [x] The session status is unaffected: the existing status reducer tests are untouched and green.
+- [x] The e2e scenario is extended: the badge shows 1 while the process runs and is gone after Stop.
+- [x] Quick tier green.

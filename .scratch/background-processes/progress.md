@@ -1,3 +1,4 @@
 - 01 resolved: real background Bash recorded; fake CLI runs real background servers, get_task_output, stop_task for shells — 4dc5958
 - 02 resolved: Processes tab (count, rows, Stop with error), shared reducer, main tracker — 7ce3eec
 - 03 resolved: output tail refreshed while the tab is on screen, final fetch kept, local port open link after connect check, local-only open — 1fd6492
+- 04 resolved: running-count badge on the session row, tooltip command or command :port, e2e badge 1 then gone after Stop — bbdb070
