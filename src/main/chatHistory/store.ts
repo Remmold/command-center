@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { applyHistoryChange, isChatItemList, isHistoryChange, type HistoryChange } from '../../shared/chatHistory'
 import type { ChatItem } from '../../shared/chatItems'
+import type { LegacyImport } from '../../shared/types'
 
 export interface ChatHistoryStore {
   /** Every saved session's items by pane id; compacts each file it reads. A file that cannot be read loads as empty. */
@@ -11,9 +12,10 @@ export interface ChatHistoryStore {
   delete: (paneId: string) => Promise<void>
   /**
    * Saves each session of the legacy localStorage entry (zustand persist JSON) that has no file yet; a session with a
-   * file keeps it. Rejects when the entry cannot be read (saving nothing) or a write fails (rerunning it is safe).
+   * file keeps it. Resolves `'unreadable'`, saving nothing, when the entry is not chat history; rejects when a write
+   * fails (rerunning it is safe).
    */
-  importLegacy: (entry: string) => Promise<void>
+  importLegacy: (entry: string) => Promise<LegacyImport>
 }
 
 const EXT = '.jsonl'
@@ -143,13 +145,20 @@ export function createChatHistoryStore(dir: string): ChatHistoryStore {
     delete: (paneId) => serial(() => fs.rm(join(dir, fileName(paneId)), { force: true })),
     importLegacy: (entry) =>
       serial(async () => {
-        const sessions = parseLegacy(entry)
+        let sessions: Record<string, ChatItem[]>
+        try {
+          sessions = parseLegacy(entry)
+        } catch (err) {
+          console.error('the legacy chat history is not chat history; nothing imported', err)
+          return 'unreadable'
+        }
         await fs.mkdir(dir, { recursive: true })
         for (const [paneId, items] of Object.entries(sessions)) {
           const file = join(dir, fileName(paneId))
           if (await exists(file)) continue
           await compact(file, items)
         }
+        return 'imported'
       })
   }
 }

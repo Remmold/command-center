@@ -102,10 +102,20 @@ describe('chat history store', () => {
     expect(await restart().load()).toEqual({ 'pane-1': [user('u1', 'newer')], 'pane-2': [], 'pane-3': [user('o3', 'old'), reply('m3', 'a')] })
   })
 
-  it('a legacy entry it cannot read fails the import and saves nothing', async () => {
-    await expect(store.importLegacy('{"state":{"items":{"pane-1":[{"kind":"user"')).rejects.toThrow()
-    await expect(store.importLegacy('{"state":{"items":{"pane-1":"not a list"}},"version":1}')).rejects.toThrow()
-    await expect(store.importLegacy('{"version":1}')).rejects.toThrow()
+  it('a legacy entry that is not chat history is reported unreadable and saves nothing', async () => {
+    expect(await store.importLegacy('{"state":{"items":{"pane-1":[{"kind":"user"')).toBe('unreadable')
+    expect(await store.importLegacy('{"state":{"items":{"pane-1":"not a list"}},"version":1}')).toBe('unreadable')
+    expect(await store.importLegacy('{"version":1}')).toBe('unreadable')
     expect(await restart().load()).toEqual({})
+  })
+
+  it('a legacy import whose write fails rejects', async () => {
+    const blocked = createChatHistoryStore(join(root, 'not-a-dir'))
+    await fs.writeFile(join(root, 'not-a-dir'), 'x')
+    await expect(blocked.importLegacy(legacy({ 'pane-1': [user('o1', 'old')] }))).rejects.toThrow()
+  })
+
+  it('a readable legacy entry is reported imported', async () => {
+    expect(await store.importLegacy(legacy({ 'pane-1': [user('o1', 'old')] }))).toBe('imported')
   })
 })

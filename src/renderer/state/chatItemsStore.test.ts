@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HistoryChange } from '../../shared/chatHistory'
 import type { AssistantMessageItem, ChatItem } from '../components/chat/types'
+import type { LegacyImport } from '../../shared/types'
 
 const storageWrites: string[] = []
 vi.stubGlobal('localStorage', {
@@ -77,38 +78,44 @@ describe('moving the legacy localStorage history over', () => {
     getItem: (key: string) => entries[key] ?? null,
     removeItem: (key: string) => void delete entries[key]
   })
-  const deferred = () => {
-    let resolve!: () => void
+  const deferred = <T>() => {
+    let resolve!: (value: T) => void
     let reject!: (err: Error) => void
-    const promise = new Promise<void>((res, rej) => ((resolve = res), (reject = rej)))
+    const promise = new Promise<T>((res, rej) => ((resolve = res), (reject = rej)))
     return { promise, resolve, reject }
   }
 
   it('imports the legacy entry and removes it only after the import resolves', async () => {
     const entries: Record<string, string> = { [KEY]: ENTRY, other: 'kept' }
     const imported: string[] = []
-    const done = deferred()
+    const done = deferred<LegacyImport>()
     const migration = migrateLegacyChatItems(storage(entries), (entry) => (imported.push(entry), done.promise))
     await Promise.resolve()
     expect(imported).toEqual([ENTRY])
     expect(entries[KEY]).toBe(ENTRY)
-    done.resolve()
+    done.resolve('imported')
     await migration
     expect(entries).toEqual({ other: 'kept' })
   })
 
   it('a failed import keeps the entry for the next start', async () => {
     const entries: Record<string, string> = { [KEY]: ENTRY }
-    const failed = deferred()
+    const failed = deferred<LegacyImport>()
     const migration = migrateLegacyChatItems(storage(entries), () => failed.promise)
     failed.reject(new Error('disk full'))
     await expect(migration).resolves.toBeUndefined()
     expect(entries).toEqual({ [KEY]: ENTRY })
   })
 
+  it('an entry main reports unreadable as chat history is removed, not retried', async () => {
+    const entries: Record<string, string> = { [KEY]: '{"version":1}', other: 'kept' }
+    await migrateLegacyChatItems(storage(entries), async () => 'unreadable')
+    expect(entries).toEqual({ other: 'kept' })
+  })
+
   it('without a legacy entry there is nothing to import', async () => {
     const imported: string[] = []
-    await migrateLegacyChatItems(storage({}), async (entry) => void imported.push(entry))
+    await migrateLegacyChatItems(storage({}), async (entry) => (imported.push(entry), 'imported' as const))
     expect(imported).toEqual([])
   })
 })

@@ -84,8 +84,9 @@ function windowBridge(api: RendererApi['chatHistory']): HistoryBridge {
 const LEGACY_KEY = 'command-center.chat-items'
 
 /**
- * Moves the legacy localStorage history into main's files, once: the entry is removed after the import resolves, and a
- * failed import keeps it for the next start. Never rejects. The entry is handed over as read, unparsed.
+ * Moves the legacy localStorage history into main's files, once: the entry is removed after the import resolves, also
+ * when main finds it is not chat history (it never will be), and a failed import keeps it for the next start. Never
+ * rejects. The entry is handed over as read, unparsed.
  */
 export async function migrateLegacyChatItems(
   storage: Pick<Storage, 'getItem' | 'removeItem'>,

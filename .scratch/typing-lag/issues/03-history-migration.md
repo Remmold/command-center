@@ -11,3 +11,7 @@
 - [x] Tests, seam 1: legacy import fills only sessions without a file.
 - [x] Tests, seam 2: migration imports the legacy entry and removes it only after the import resolves; a failed import keeps it.
 - [x] Check once on a realistic size (~20 MB entry, as ticket 01 seeds) that the first start opens with the history shown and the entry is gone afterwards.
+
+## Comments
+
+- 2026-11-25: an entry that cannot be parsed as chat history is now deleted instead of retried every start (~150 ms each); a failed write still keeps it for the next start. Spec's "Migration, once" updated.

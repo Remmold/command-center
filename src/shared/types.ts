@@ -386,6 +386,9 @@ export interface UpdateStatus {
 
 export type RestartReply = { kind: 'none' } | { kind: 'restart' } | { kind: 'confirm'; busy: string[] }
 
+/** How a legacy chat history import ended: saved, or not chat history at all (nothing saved). */
+export type LegacyImport = 'imported' | 'unreadable'
+
 export interface RendererApi {
   workspaces: {
     list: () => Promise<Workspace[]>
@@ -408,8 +411,8 @@ export interface RendererApi {
     loadSync: () => Record<string, ChatItem[]>
     /** Fire and forget; main writes one session's changes in the order sent. */
     apply: (paneId: string, changes: HistoryChange[]) => void
-    /** Saves the legacy localStorage entry's sessions that have no file yet; rejects when it cannot. */
-    importLegacy: (entry: string) => Promise<void>
+    /** Saves the legacy localStorage entry's sessions that have no file yet; rejects when a write fails. */
+    importLegacy: (entry: string) => Promise<LegacyImport>
   }
   repoIdentities: {
     list: () => Promise<RepoIdentityViews>
