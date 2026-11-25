@@ -84,7 +84,7 @@ When a hosted session closes, or the app quits, the app ends the CLI's whole pro
   4. Stop turns the row to Stopped and the badge goes away.
   5. A second background server is left running and the session is closed. Its port no longer answers, which proves the tree kill.
 
-  That takes the suite to 17 of its 20 scenarios.
+  That takes the suite to 16 of its 20 scenarios. (Corrected from "17": the earlier count was a hand grep.) The time budget was raised from 90 s to 100 s on 2026-11-25.
 - The tree kill on its own: a unit or integration test on the session kill path, with a real child process tree, asserting that the grandchild is gone.
 
 ## Out of Scope

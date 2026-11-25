@@ -12,7 +12,7 @@ Rules (from the spec, word for word):
 
 - [x] A test on the session kill path, using a real child process tree, asserts that the grandchild is gone.
 - [x] App quit waits for the tree kills.
-- [ ] The e2e scenario is extended: a second background server is left running, then the session is closed, and its port no longer answers. The suite ends at 17 of 20 scenarios, within 90 s.
+- [ ] The e2e scenario is extended: a second background server is left running, then the session is closed, and its port no longer answers. The suite ends at 16 of 20 scenarios, within 100 s (budget raised from 90 s by Andreas on 2026-11-25; the scenario count was corrected from 17).
 - [x] Quick tier green.
 
 ## Comments
