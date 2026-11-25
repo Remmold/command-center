@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] Streamed deltas for a session are gathered and applied at most once per animation frame.
 - [x] The prompt box is memoised with stable callbacks so streaming and item commits do not re-render it.
