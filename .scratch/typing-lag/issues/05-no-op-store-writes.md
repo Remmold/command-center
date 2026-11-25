@@ -6,6 +6,6 @@
 
 **Status:** resolved
 
-- [ ] The Claude session id is only set when it differs from the stored one (checked before calling the store), so a streamed event with an unchanged id writes nothing.
-- [ ] Any other store found writing on an unchanged state on the per-event path gets the same guard.
-- [ ] Tests, seam 3 (Vitest): noting an unchanged Claude session id writes nothing to storage; a changed one still saves.
+- [x] The Claude session id is only set when it differs from the stored one (checked before calling the store), so a streamed event with an unchanged id writes nothing.
+- [x] Any other store found writing on an unchanged state on the per-event path gets the same guard.
+- [x] Tests, seam 3 (Vitest): noting an unchanged Claude session id writes nothing to storage; a changed one still saves.
