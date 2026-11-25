@@ -726,7 +726,7 @@ test.describe('chat rendering', () => {
 
     await test.step('the Media tab replaces the transcript with the chat’s png, webm and missing file', async () => {
       await newChatOn('media')
-      await expect(shown.getByRole('tablist')).toHaveCount(0)
+      await expect(shown.getByRole('tab', { name: /^Media/ })).toHaveCount(0)
       await send(page, 'show the media')
       await expect(shown.getByText('That is the reference shot.')).toBeVisible()
 

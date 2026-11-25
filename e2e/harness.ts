@@ -19,13 +19,14 @@ export const SCRIPTS = {
   subagent: join(__dirname, 'scripts', 'subagent.json'),
   remoteControl: join(__dirname, 'scripts', 'remote-control.json'),
   look: join(__dirname, 'scripts', 'look.json'),
-  media: join(__dirname, 'scripts', 'media.json')
+  media: join(__dirname, 'scripts', 'media.json'),
+  processes: join(__dirname, 'scripts', 'processes.json')
 } as const
 
 export type ScriptName = keyof typeof SCRIPTS
 
 export interface FakeLogEntry {
-  kind: 'argv' | 'received' | 'sent'
+  kind: 'argv' | 'received' | 'sent' | 'spawned'
   line?: Record<string, unknown>
   [key: string]: unknown
 }
@@ -76,6 +77,11 @@ export class FakeLog {
       if (!Array.isArray(content)) return []
       return [content.flatMap((b) => (isRecord(b) && typeof b.text === 'string' ? [b.text] : [])).join('')]
     })
+  }
+
+  /** Pids of the background servers the fake started; they outlive it. */
+  spawnedPids(): number[] {
+    return this.entries().flatMap((e) => (e.kind === 'spawned' && typeof e.pid === 'number' ? [e.pid] : []))
   }
 
   toolPrompts(): number {

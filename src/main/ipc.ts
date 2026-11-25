@@ -32,6 +32,7 @@ import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
+import { backgroundProcessTracker } from './sessions/backgroundProcesses'
 import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
@@ -470,6 +471,14 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     claudeManager.onEvent((paneId, event) => agentSweep.event(paneId, event)),
     claudeManager.onExit((paneId) => agentSweep.exited(paneId)),
     agentSweep.onEnded((paneId, taskId) => sessionStatusTracker.apply(paneId, { kind: 'agent-ended', taskId })),
+    claudeManager.onSpawn((paneId) => backgroundProcessTracker.spawned(paneId)),
+    claudeManager.onEvent((paneId, event) => backgroundProcessTracker.event(paneId, event)),
+    claudeManager.onExit((paneId) => backgroundProcessTracker.exited(paneId)),
+    backgroundProcessTracker.onChange((entry) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.BACKGROUND_PROCESSES_CHANGED, entry)
+      }
+    }),
     () => agentSweep.stop(),
     sessionStatusTracker.onChange((entry) => {
       for (const win of BrowserWindow.getAllWindows()) {
@@ -479,6 +488,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
   agentSweep.start()
   ipcMain.handle(IPC.SESSION_STATUS_LIST, () => sessionStatusTracker.list())
+  ipcMain.handle(IPC.BACKGROUND_PROCESSES_LIST, () => backgroundProcessTracker.list())
   ipcMain.on(IPC.SESSION_SCREEN_FOCUS, (_e, focus: ScreenFocus) => setScreenFocus(focus))
 
   ipcMain.handle(IPC.APPROVAL_LIST, () => approvalBroker.list())

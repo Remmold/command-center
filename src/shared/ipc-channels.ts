@@ -68,6 +68,8 @@ export const IPC = {
   SESSION_STATUS_LIST: 'sessionStatus:list',
   SESSION_STATUS_CHANGED: 'sessionStatus:changed',
   SESSION_SCREEN_FOCUS: 'sessionStatus:screenFocus',
+  BACKGROUND_PROCESSES_LIST: 'backgroundProcesses:list',
+  BACKGROUND_PROCESSES_CHANGED: 'backgroundProcesses:changed',
   OBSERVED_LIST: 'observed:list',
   OBSERVED_CHANGED: 'observed:changed',
   OBSERVED_SET_HOSTED: 'observed:setHosted',

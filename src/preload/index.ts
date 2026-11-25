@@ -7,6 +7,7 @@ import type {
   AccountProfile,
   AppExitEvent,
   AppView,
+  BackgroundProcessesEntry,
   AppOutputEvent,
   AddWorkspaceResult,
   BoardModel,
@@ -272,6 +273,14 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.SESSION_STATUS_CHANGED, handler)
     },
     reportScreenFocus: (focus: ScreenFocus) => ipcRenderer.send(IPC.SESSION_SCREEN_FOCUS, focus)
+  },
+  backgroundProcesses: {
+    list: (): Promise<BackgroundProcessesEntry[]> => ipcRenderer.invoke(IPC.BACKGROUND_PROCESSES_LIST),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, entry: BackgroundProcessesEntry) => cb(entry)
+      ipcRenderer.on(IPC.BACKGROUND_PROCESSES_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.BACKGROUND_PROCESSES_CHANGED, handler)
+    }
   },
   startWithWindows: {
     get: () => ipcRenderer.invoke(IPC.START_WITH_WINDOWS_GET),
