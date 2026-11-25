@@ -45,7 +45,8 @@ function healthAddDirs(ticked: readonly ShownFinding[], workspace: Workspace, re
 
 /**
  * Sends the ticked findings to the latest shown run's session as one message, as if typed there; with that session
- * gone, or no run at all, a new session on the workspace is started and sent it. Resolves with what went wrong, or null.
+ * gone, or no run at all, a new session on the workspace is started and sent it. Resolves once the message reached a
+ * running process, with null, or with what went wrong.
  */
 export async function applyFixes({ workspace, report, drift, ticked }: ApplyFixes): Promise<string | null> {
   if (ticked.length === 0) return null
@@ -54,11 +55,13 @@ export async function applyFixes({ workspace, report, drift, ticked }: ApplyFixe
   // The account run shows only when it is newer than the covering run, so the last one is the latest.
   const latest = runs.at(-1) ?? null
   if (latest && isHosted(useProjectViewsStore.getState().views, latest.run.sessionId)) {
-    sendToChat(latest.run.sessionId, prompt)
-    return null
+    return (await sendToChat(latest.run.sessionId, prompt)) ? null : "The run's chat could not send the fixes; its error shows in that chat in Work."
   }
   // Each run with a ticked finding brings its folders, so the new session can edit and mark them all.
   const sources = runs.filter((r) => r === latest || ticked.some((f) => f.runId === r.run.runId))
   const addDirs = latest ? [...new Set((await Promise.all(sources.map((r) => runAddDirs(r, workspace, report)))).flat())] : healthAddDirs(ticked, workspace, report)
-  return startSession(workspace, { addDirs, send: { prompt } }) ? null : 'Could not start a session for the fixes.'
+  let reached: (ok: boolean) => void = () => {}
+  const delivered = new Promise<boolean>((resolve) => (reached = resolve))
+  if (!startSession(workspace, { addDirs, send: { prompt, delivered: reached } })) return 'Could not start a session for the fixes.'
+  return (await delivered) ? null : "The fix session's process did not start; its error shows in that chat in Work."
 }

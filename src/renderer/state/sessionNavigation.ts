@@ -182,6 +182,8 @@ export interface SendStart {
   effort?: string
   /** The new session's id, for a caller that must name the session before it starts. */
   id?: string
+  /** Told whether the prompt reached the chat's running process. */
+  delivered?: (reached: boolean) => void
 }
 
 /** Opens a new chat in the workspace, on its account profile; with `send`, starts it in Work without showing it. */
@@ -201,7 +203,7 @@ export function startSession(workspace: Workspace, { draft, addDirs, send }: Sta
   // The input box reads its draft once, as the chat mounts.
   if (draft !== undefined) saveDraft(created.id, draft)
   if (send) {
-    requestSendOnMount(created.id, send.prompt)
+    void requestSendOnMount(created.id, send.prompt).then(send.delivered)
     return true
   }
   return openSession(created.id)

@@ -346,8 +346,8 @@ export const ChatView = memo(function ChatView({
       ])
     })
 
-    const firstPrompt = takeSendRequest(paneId)
-    if (firstPrompt !== undefined) void handleSend(firstPrompt)
+    const first = takeSendRequest(paneId)
+    if (first !== undefined) void handleSend(first.prompt).then(first.delivered, () => first.delivered(false))
     else if (takeStartRequest(paneId) || (initialItemsCountRef.current === 0 && !resumeSessionId)) {
       void ensureStarted()
     }
@@ -674,10 +674,11 @@ export const ChatView = memo(function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [switchTo, processRunning, turnActive, held.length])
 
-  const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []) => {
+  /** True once the prompt reached the running process; false when the process failed to start. */
+  const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []): Promise<boolean> => {
     if (attachments.length === 0 && remoteControlShown && isRemoteControlCommand(text)) {
       void toggleRemoteControl()
-      return
+      return true
     }
     clearSuggestion('sent')
     const uuid = crypto.randomUUID()
@@ -697,12 +698,13 @@ export const ChatView = memo(function ChatView({
         const store = useHeldPromptsStore.getState()
         store.set(paneId, (store.byPane[paneId] ?? []).filter((p) => p.uuid !== uuid))
       }
-      return
+      return false
     }
     if (!queued) setTurnActive(true)
     const terminals = terminalSnapshots(text, shellTabsOfSession(paneId), readTerminal)
     window.api.claude.send(paneId, promptContent(text, attachments, terminals), uuid)
     requestClaudeTitle(paneId, text, firstPrompt)
+    return true
   }
 
   /** Esc anywhere in the chat stops Claude, as the extension's document-level handler; menus and approvals take it first. */
@@ -759,7 +761,7 @@ export const ChatView = memo(function ChatView({
   const onSend = useStableCallback(handleSend)
   useEffect(() => {
     if (outsideSends === 0) return
-    for (const prompt of takeChatSends(paneId)) void onSend(prompt)
+    for (const send of takeChatSends(paneId)) void onSend(send.prompt).then(send.delivered, () => send.delivered(false))
   }, [outsideSends, paneId, onSend])
   const onInterrupt = useStableCallback(handleInterrupt)
   const onDismissSuggestion = useStableCallback(() => clearSuggestion('dismissed'))

@@ -15,9 +15,14 @@ const reports = new Map<string, ContextReport>()
 const report = vi.fn(async (id: string) => reports.get(id) ?? null)
 vi.stubGlobal('window', { api: { context: { report } } })
 
-const startSession = vi.fn((..._args: unknown[]) => true)
-const sendToChat = vi.fn()
-vi.mock('./sessionNavigation', () => ({ startSession: (...args: unknown[]) => startSession(...args) }))
+/** Whether a new session's process starts and gets the prompt. */
+let processStarts = true
+const startSession = vi.fn((_workspace: Workspace, options: { send?: { delivered?: (reached: boolean) => void } }) => {
+  options.send?.delivered?.(processStarts)
+  return true
+})
+const sendToChat = vi.fn(async (..._args: unknown[]) => true)
+vi.mock('./sessionNavigation', () => ({ startSession: (...args: Parameters<typeof startSession>) => startSession(...args) }))
 vi.mock('./startRequests', () => ({ sendToChat: (...args: unknown[]) => sendToChat(...args) }))
 
 const { applyFixes } = await import('./applyFixes')
@@ -83,6 +88,7 @@ function started(): { addDirs: string[]; prompt: string } {
 beforeEach(() => {
   startSession.mockClear()
   sendToChat.mockClear()
+  processStarts = true
   report.mockClear()
   reports.clear()
   reports.set(LIB.id, LIB_REPORT)
@@ -131,5 +137,23 @@ describe('applyFixes', () => {
     startSession.mockReturnValueOnce(false)
     const run = runView('r1', 'project', [APP.path])
     await expect(applyFixes({ workspace: APP, report: APP_REPORT, drift: { runs: [run] }, ticked: [ticked('F1', 'r1')] })).resolves.toBe('Could not start a session for the fixes.')
+  })
+
+  it("reports an error when the run's chat cannot send the message to a running process", async () => {
+    sendToChat.mockResolvedValueOnce(false)
+    const run = runView('r1', 'project', [APP.path])
+    hosting([run.run.sessionId])
+    await expect(applyFixes({ workspace: APP, report: APP_REPORT, drift: { runs: [run] }, ticked: [ticked('F1', 'r1')] })).resolves.toBe(
+      "The run's chat could not send the fixes; its error shows in that chat in Work."
+    )
+    expect(startSession).not.toHaveBeenCalled()
+  })
+
+  it("reports an error when the new session's process fails to start", async () => {
+    processStarts = false
+    const run = runView('r1', 'project', [APP.path])
+    await expect(applyFixes({ workspace: APP, report: APP_REPORT, drift: { runs: [run] }, ticked: [ticked('F1', 'r1')] })).resolves.toBe(
+      "The fix session's process did not start; its error shows in that chat in Work."
+    )
   })
 })

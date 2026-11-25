@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] If sending to the run's chat, or starting a new fix session, fails, Context shows a short error next to Apply and the ticked findings stay ticked.
-- [ ] The ticks are cleared only once the request has reached a chat whose process is running.
-- [ ] A unit test at the apply-fixes seam (`applyFixes.test.ts` is prior art) covers: chat send fails → error returned and ticks kept; new session fails to start → the same.
-- [ ] Quick tier green.
+- [x] If sending to the run's chat, or starting a new fix session, fails, Context shows a short error next to Apply and the ticked findings stay ticked.
+- [x] The ticks are cleared only once the request has reached a chat whose process is running.
+- [x] A unit test at the apply-fixes seam (`applyFixes.test.ts` is prior art) covers: chat send fails → error returned and ticks kept; new session fails to start → the same.
+- [x] Quick tier green.
