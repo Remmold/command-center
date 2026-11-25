@@ -14,7 +14,7 @@ export interface TourStep {
   kinds: ContextItemKind[]
   /** The ids of the blocks it lights up on the map. */
   highlight: ReadonlySet<string>
-  /** Step 5 only: the health check's findings, findings first, then notes. */
+  /** The health check's findings on the health step, problems before notes; empty on the others. */
   findings: Finding[]
 }
 
@@ -22,8 +22,8 @@ interface StepRule {
   id: TourStepId
   title: string
   kinds: ContextItemKind[]
-  lights: (block: MapBlock) => boolean
-  text: (map: ContextMap, items: readonly ContextItem[]) => string[]
+  lights: (block: MapBlock, health: ReadonlySet<string>) => boolean
+  text: (map: ContextMap, items: readonly ContextItem[], health: readonly Finding[]) => string[]
 }
 
 const count = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`
@@ -46,7 +46,8 @@ function memoryText(_map: ContextMap, items: readonly ContextItem[]): string[] {
   const linked = files.filter((f) => f.indexed !== false).length
   const unlinked = files.length - linked
   const size = [index.index ? count(index.index.lines, 'line') : null, index.tokens === null ? null : `${formatTokens(index.tokens)} tokens at every start`]
-  const out = [`MEMORY.md is ${size[0] ?? 'there'}${size[1] ? ` (${size[1]})` : ''} and links ${linked} of ${count(files.length, 'memory file')}.`]
+  const links = files.length === 0 ? 'links no memory files yet' : `links ${linked} of ${count(files.length, 'memory file')}`
+  const out = [`MEMORY.md is ${size[0] ?? 'there'}${size[1] ? ` (${size[1]})` : ''} and ${links}.`]
   if (unlinked > 0) out.push(`${count(unlinked, 'memory file')} ${unlinked === 1 ? 'is' : 'are'} not linked from MEMORY.md, so Claude never finds ${unlinked === 1 ? 'it' : 'them'}.`)
   return out
 }
@@ -78,17 +79,12 @@ function behaviourText(_map: ContextMap, items: readonly ContextItem[]): string[
   return [`This workspace has ${list(counts)}.`, 'None of them adds tokens to a start: they decide what Claude may do and which tools it can reach.']
 }
 
-/** Every finding on the map once, findings before notes. */
-function findingsOf(map: ContextMap): Finding[] {
-  const byId = new Map(blocksOf(map).flatMap((b) => b.findings.map((f) => [f.id, f] as const)))
-  const all = [...byId.values()]
-  return [...all.filter((f) => f.severity === 'problem'), ...all.filter((f) => f.severity === 'note')]
-}
+const problemsFirst = (findings: readonly Finding[]): Finding[] => [...findings.filter((f) => f.severity === 'problem'), ...findings.filter((f) => f.severity === 'note')]
 
-function healthText(map: ContextMap): string[] {
-  const all = findingsOf(map)
-  const notes = all.filter((f) => f.severity === 'note').length
-  const found = all.length === 0 ? 'nothing to fix' : list([count(all.length - notes, 'finding'), ...(notes > 0 ? [count(notes, 'note')] : [])])
+function healthText(health: readonly Finding[]): string[] {
+  const notes = health.filter((f) => f.severity === 'note').length
+  const problems = health.length - notes
+  const found = health.length === 0 ? 'nothing to fix' : list([...(problems > 0 ? [count(problems, 'finding')] : []), ...(notes > 0 ? [count(notes, 'note')] : [])])
   const out = [`The health check found ${found}, free and instant, every time the map is drawn.`]
   if (notes > 0) out.push('Notes are [[links]] that match no memory file. The memory rules allow them as markers for later, so they are not findings to fix.')
   return out
@@ -103,7 +99,7 @@ const DRIFT_TEXT = [
 const DRIFT_KINDS: ReadonlySet<ContextItemKind> = new Set(['claude-md', 'import', 'subfolder-claude-md', 'memory-index', 'memory-file', 'skill', 'agent', 'command'])
 
 const STEPS: readonly StepRule[] = [
-  { id: 'start', title: 'What every chat starts with', kinds: [], lights: (b) => b.band === 'start', text: startText },
+  { id: 'start', title: 'What every chat starts with', kinds: ['claude-md', 'import'], lights: (b) => b.band === 'start', text: startText },
   { id: 'memory', title: 'Memory', kinds: ['memory-index', 'memory-file'], lights: (b) => b.kind === 'memory-index' || b.kind === 'memory-file', text: memoryText },
   {
     id: 'skills',
@@ -113,7 +109,7 @@ const STEPS: readonly StepRule[] = [
     text: skillsText
   },
   { id: 'behaviour', title: 'Settings, hooks & MCP', kinds: ['settings', 'hook', 'mcp-server', 'plugin'], lights: (b) => b.band === 'behaviour', text: behaviourText },
-  { id: 'health', title: 'Health check', kinds: [], lights: (b) => b.findings.length > 0, text: healthText },
+  { id: 'health', title: 'Health check', kinds: [], lights: (b, health) => b.findings.some((f) => health.has(f.id)), text: (_map, _items, health) => healthText(health) },
   {
     id: 'drift',
     title: 'Drift check',
@@ -123,19 +119,23 @@ const STEPS: readonly StepRule[] = [
   }
 ]
 
-/** The guided tour's six steps for one workspace's map. */
-export function tourSteps(map: ContextMap): TourStep[] {
+/** The guided tour's steps for one workspace's map and its health check. */
+export function tourSteps(map: ContextMap, health: readonly Finding[]): TourStep[] {
   const blocks = blocksOf(map)
   const items = blocks.flatMap((b) => b.items)
+  const healthIds = new Set(health.map((f) => f.id))
   return STEPS.map((s) => ({
     id: s.id,
     title: s.title,
-    text: s.text(map, items),
+    text: s.text(map, items, health),
     kinds: s.kinds,
-    highlight: new Set(blocks.filter(s.lights).map((b) => b.id)),
-    findings: s.id === 'health' ? findingsOf(map) : []
+    highlight: new Set(blocks.filter((b) => s.lights(b, healthIds)).map((b) => b.id)),
+    findings: s.id === 'health' ? problemsFirst(health) : []
   }))
 }
+
+/** The store's tour step as an index into the steps. */
+export const stepIndex = (tourStep: number, steps: readonly unknown[]): number => Math.max(0, Math.min(tourStep, steps.length - 1))
 
 /** Where clicking a finding goes: its block, after expanding the collapsed group it is in; null when no block shows it. */
 export function findingTarget(

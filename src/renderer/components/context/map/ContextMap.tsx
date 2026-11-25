@@ -4,7 +4,7 @@ import { formatTokens, type ContextLayerName, type ContextReport } from '../../.
 import { healthCheck } from '../../../../shared/healthCheck'
 import { useContextStore } from '../../../state/contextStore'
 import { BAND_NOTES, BAND_TITLES, LANE_TITLES } from '../../../state/mapCopy'
-import { tourSteps } from '../../../state/mapTour'
+import { stepIndex, tourSteps } from '../../../state/mapTour'
 import { BAND_ORDER, BLOCK_SIZE_FLOOR, mapLayout, type ContextMap as ContextMapModel, type MapBand, type MapBandName, type MapBlock } from '../../../state/mapLayout'
 import { Button } from '../../ui/Button'
 import { Connectors } from '../../ui/Connectors'
@@ -30,7 +30,7 @@ export function ContextMapPane({ workspacePath, report, defaultName }: { workspa
   const expanded = useContextStore((s) => s.mapExpanded)
   const health = useMemo(() => (report ? healthCheck(report) : []), [report])
   const map = useMemo(() => (report ? mapLayout(report, health, new Set(expanded)) : null), [report, health, expanded])
-  const steps = useMemo(() => (map ? tourSteps(map) : []), [map])
+  const steps = useMemo(() => (map ? tourSteps(map, health) : []), [map, health])
   const tourStep = useContextStore((s) => s.tourStep)
   if (!report || !map) return <EmptyState>Reading…</EmptyState>
   if (!report.folderExists) return <EmptyState>The folder {workspacePath} is gone, so there is nothing to map.</EmptyState>
@@ -42,7 +42,7 @@ export function ContextMapPane({ workspacePath, report, defaultName }: { workspa
       <div className="min-h-0 min-w-0 flex-1">
         <Pane label="Context map">
           <NoticeLine strip>Start total {formatTokens(map.startTotal)} tokens · estimates, as configured</NoticeLine>
-          <MapGrid map={map} highlight={steps[Math.min(tourStep, steps.length - 1)].highlight} defaultName={defaultName} />
+          <MapGrid map={map} highlight={steps[stepIndex(tourStep, steps)].highlight} defaultName={defaultName} />
         </Pane>
       </div>
       <div className="min-h-0 w-80 shrink-0 border-l border-subtle">

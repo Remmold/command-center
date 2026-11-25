@@ -2,7 +2,7 @@ import type { ContextReport } from '../../../../shared/context'
 import type { Finding } from '../../../../shared/findings'
 import { useContextStore } from '../../../state/contextStore'
 import { KIND_EXPLANATIONS, KIND_TITLES } from '../../../state/mapCopy'
-import { findingTarget, type TourStep } from '../../../state/mapTour'
+import { findingTarget, stepIndex, type TourStep } from '../../../state/mapTour'
 import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
 import { ListRow } from '../../ui/ListRow'
@@ -19,9 +19,9 @@ interface Props {
   health: readonly Finding[]
 }
 
-/** The guided tour beside the context map: six steps, Back and Next, the current one's text and what it lights up. */
+/** The guided tour beside the context map; its current step lights up blocks on the map. */
 export function GuidedTour({ steps, report, health }: Props) {
-  const current = useContextStore((s) => Math.min(s.tourStep, steps.length - 1))
+  const current = stepIndex(useContextStore((s) => s.tourStep), steps)
   const go = (step: number): void => useContextStore.getState().setTourStep(step)
   const step = steps[current]
   return (

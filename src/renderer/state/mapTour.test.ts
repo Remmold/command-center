@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ContextItem, ContextItemKind, ContextLayerName, ContextReport } from '../../shared/context'
 import { healthCheck } from '../../shared/healthCheck'
 import { blocksOf, mapLayout, type ContextMap } from './mapLayout'
-import { findingTarget, tourSteps, type TourStep } from './mapTour'
+import { findingTarget, stepIndex, tourSteps, type TourStep } from './mapTour'
 
 function item(kind: ContextItemKind, label: string, extra: Partial<ContextItem> = {}): ContextItem {
   return {
@@ -69,8 +69,8 @@ function workspace(): ContextReport {
 }
 
 function steps(r: ContextReport = workspace()): TourStep[] {
-  const map = mapLayout(r, healthCheck(r))
-  return tourSteps(map)
+  const health = healthCheck(r)
+  return tourSteps(mapLayout(r, health), health)
 }
 
 const labels = (map: ContextMap, s: TourStep): string[] => blocksOf(map).filter((b) => s.highlight.has(b.id)).map((b) => b.label)
@@ -95,7 +95,7 @@ describe('tourSteps', () => {
 
   it('step 1 highlights the Every start band', () => {
     const map = mapLayout(workspace(), [])
-    const start = tourSteps(map)[0]
+    const start = tourSteps(map, [])[0]
     expect([...start.highlight].sort()).toEqual(
       blocksOf(map)
         .filter((b) => b.band === 'start')
@@ -112,7 +112,7 @@ describe('tourSteps', () => {
       '3 memory files are not linked from MEMORY.md, so Claude never finds them.'
     ])
     const map = mapLayout(workspace(), [])
-    expect(labels(map, tourSteps(map)[1]).sort()).toEqual(['MEMORY.md', 'm1.md', 'm2.md', 'm3.md', 'm4.md', 'm5.md'])
+    expect(labels(map, tourSteps(map, [])[1]).sort()).toEqual(['MEMORY.md', 'm1.md', 'm2.md', 'm3.md', 'm4.md', 'm5.md'])
   })
 
   it('step 2 says when there is no memory yet', () => {
@@ -126,13 +126,13 @@ describe('tourSteps', () => {
       '1 skill is offered only as a slash command, so nothing of it loads until you type it.'
     ])
     const map = mapLayout(workspace(), [])
-    expect(labels(map, tourSteps(map)[2]).sort()).toEqual(['grill', 'implement', 'release', 'reviewer', 'ship', 'tdd'])
+    expect(labels(map, tourSteps(map, [])[2]).sort()).toEqual(['grill', 'implement', 'release', 'reviewer', 'ship', 'tdd'])
   })
 
   it('step 4 counts settings files, hooks, MCP servers and plugins, which cost no tokens', () => {
     expect(step('behaviour').text[0]).toBe('This workspace has 1 settings file, 1 hook, 3 MCP servers and no plugins.')
     const map = mapLayout(workspace(), [])
-    expect(labels(map, tourSteps(map)[3]).sort()).toEqual(['PreToolUse', 'db', 'local-db', 'settings.json', 'slack'])
+    expect(labels(map, tourSteps(map, [])[3]).sort()).toEqual(['PreToolUse', 'db', 'local-db', 'settings.json', 'slack'])
   })
 
   it('explains each kind its step is about', () => {
@@ -152,8 +152,9 @@ describe('tourSteps', () => {
 
   it('step 5 lights the blocks with findings', () => {
     const r = workspace()
-    const map = mapLayout(r, healthCheck(r))
-    expect(labels(map, tourSteps(map)[4]).sort()).toEqual(['MEMORY.md', 'm3.md', 'm4.md', 'm5.md'])
+    const health = healthCheck(r)
+    const map = mapLayout(r, health)
+    expect(labels(map, tourSteps(map, health)[4]).sort()).toEqual(['MEMORY.md', 'm3.md', 'm4.md', 'm5.md'])
   })
 
   it('step 5 says when the health check found nothing', () => {
@@ -164,15 +165,46 @@ describe('tourSteps', () => {
 
   it('step 6 explains what a drift check does and lights the files it reads', () => {
     const map = mapLayout(workspace(), [])
-    const drift = tourSteps(map)[5]
+    const drift = tourSteps(map, [])[5]
     expect(drift.text.join(' ')).toMatch(/costs tokens/)
     expect(labels(map, drift)).toContain('repo CLAUDE.md')
     expect(labels(map, drift)).toContain('MEMORY.md')
     expect(labels(map, drift)).not.toContain('db')
   })
 
+  it('step 5 counts only notes when there are no findings', () => {
+    const r = report({
+      repo: [item('memory-index', 'MEMORY.md', { tokens: 5, unmatchedLinks: ['a', 'b'], index: { lines: 1, bytes: 9, lineEnds: [9], links: [], missingTargets: [] } })]
+    })
+    expect(step('health', r).text[0]).toBe('The health check found 2 notes, free and instant, every time the map is drawn.')
+  })
+
+  it('step 5 lists health findings only, not other findings on the blocks', () => {
+    const r = workspace()
+    const health = healthCheck(r)
+    const drift = { ...health[0], id: 'F1', claim: 'drifted' }
+    const s = tourSteps(mapLayout(r, [...health, drift]), health)[4]
+    expect(s.findings.map((f) => f.id)).not.toContain('F1')
+    expect(s.findings).toHaveLength(health.length)
+  })
+
+  it('step 2 says when MEMORY.md links no memory files yet', () => {
+    const r = report({ repo: [item('memory-index', 'MEMORY.md', { tokens: 5, index: { lines: 3, bytes: 9, lineEnds: [3, 6, 9], links: [], missingTargets: [] } })] })
+    expect(step('memory', r).text).toEqual(['MEMORY.md is 3 lines (~5 tokens at every start) and links no memory files yet.'])
+  })
+
+  it('step 1 explains CLAUDE.md files and their imports', () => {
+    expect(step('start').kinds).toEqual(['claude-md', 'import'])
+  })
+
   it('only step 5 lists findings', () => {
     expect(steps().filter((s) => s.findings.length > 0).map((s) => s.id)).toEqual(['health'])
+  })
+})
+
+describe('stepIndex', () => {
+  it('keeps the step within the steps', () => {
+    expect([-1, 0, 5, 9].map((n) => stepIndex(n, steps()))).toEqual([0, 0, 5, 5])
   })
 })
 
