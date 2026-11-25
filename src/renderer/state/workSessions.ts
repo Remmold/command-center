@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { nextWaiting } from '../../shared/needsYou'
 import type { CliModel, ModelDefaults, SessionInit, SessionStatusEntry, Workspace } from '../../shared/types'
 import { currentChoice, sessionTag } from './modelPicker'
 import { defaultsOf, useModelStore, type AppliedModel } from './modelStore'
@@ -11,7 +10,7 @@ import { useProjectViewsStore, type ClaudeChatSession, type ProjectView } from '
 import { useRepoIdentitiesStore } from './repoIdentitiesStore'
 import { halfShowing, type ChatPair, type ChatRef, type HalfIndex } from './chatPair'
 import { useChatPairStore } from './chatPairStore'
-import { openObserved, openSession, paneOnScreen, resolveChat, type OpenOptions, type OpenTarget } from './sessionNavigation'
+import { openInDrawer, openObserved, openSession, paneOnScreen, resolveChat, type OpenOptions, type OpenTarget } from './sessionNavigation'
 import {
   accountChats,
   accountSections,
@@ -19,6 +18,7 @@ import {
   seedSource,
   sessionList,
   shownRows,
+  waitingJump,
   waitingRows,
   type AccountSection,
   type HostedSessionInput,
@@ -36,6 +36,8 @@ import type { ChatProcess } from './chatAccount'
 import { currentAccounts, useAccounts } from './useAccounts'
 import { useSessionStatusStore } from './sessionStatusStore'
 import { useWorkspacesStore } from './workspacesStore'
+import { drawerShown } from './chatDrawer'
+import { useViewStore } from './viewStore'
 
 interface WorkSearchState {
   search: string
@@ -321,11 +323,7 @@ export function openRowAt(index: number): void {
 /** The waiting session after the one on screen, in the order the list shows them; a search never hides one. */
 export function jumpToNextWaiting(): void {
   const { sections } = currentSections(false)
-  const rows = waitingRows(sections)
-  const next = nextWaiting(
-    rows.map((r) => ({ paneId: r.paneId, cwd: '', status: r.status, since: r.statusSince })),
-    paneOnScreen()
-  )
-  const row = next && rows.find((r) => r.paneId === next.paneId)
-  if (row) openRow(row)
+  const jump = waitingJump(waitingRows(sections), paneOnScreen(), drawerShown(useViewStore.getState()))
+  if (jump?.into === 'drawer') openInDrawer(jump.row.paneId)
+  else if (jump) openRow(jump.row)
 }

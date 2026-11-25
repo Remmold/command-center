@@ -1,4 +1,4 @@
-import { isWaiting, STATUS_LABEL } from '../../shared/needsYou'
+import { isWaiting, nextWaiting, STATUS_LABEL } from '../../shared/needsYou'
 import { accountOf, accountRank, type Account } from './accounts'
 import { repoDisplayName, type RepoIdentityViews } from '../../shared/repoIdentity'
 import { UNGROUPED, type SidebarLayout } from '../../shared/sidebarGroups'
@@ -296,4 +296,20 @@ export function shownRows(sections: readonly AccountSection[], fold: ListFold): 
 /** Waiting hosted sessions in the order the list shows them, folded sections and groups included. */
 export function waitingRows(sections: readonly AccountSection[]): HostedRow[] {
   return sections.flatMap((s) => s.rows.filter(isNeedsYouRow))
+}
+
+type WaitingRow = Pick<HostedRow, 'paneId' | 'status' | 'statusSince'>
+
+/** The waiting row after the one on screen, and whether it opens in the Dashboard's chat drawer or in Work. */
+export function waitingJump<R extends WaitingRow>(
+  rows: readonly R[],
+  onScreen: string | null,
+  inDrawer: boolean
+): { row: R; into: 'drawer' | 'work' } | null {
+  const next = nextWaiting(
+    rows.map((r) => ({ paneId: r.paneId, cwd: '', status: r.status, since: r.statusSince })),
+    onScreen
+  )
+  const row = next && rows.find((r) => r.paneId === next.paneId)
+  return row ? { row, into: inDrawer ? 'drawer' : 'work' } : null
 }

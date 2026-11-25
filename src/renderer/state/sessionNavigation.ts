@@ -10,7 +10,7 @@ import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
 import { useRecentProjectsStore } from './recentProjectsStore'
 import { saveDraft } from './restoreStore'
-import { isHosted, useChatDrawerStore } from './chatDrawer'
+import { drawerShown, isHosted, useChatDrawerStore } from './chatDrawer'
 
 export const NEXT_WAITING_SHORTCUT = 'Ctrl+Shift+J'
 
@@ -45,9 +45,13 @@ export function focusedTarget(): OpenTarget {
   return resolveChat(pair.halves[pair.focused], useProjectViewsStore.getState().views)
 }
 
-/** The hosted chat in the focused half, while Work shows it. */
+/** The hosted chat in the focused half while Work shows it, or the chat drawer's while the Dashboard shows. */
 export function paneOnScreen(): string | null {
   const screen = useViewStore.getState()
+  if (drawerShown(screen)) {
+    const paneId = useChatDrawerStore.getState().paneId
+    return paneId && isHosted(useProjectViewsStore.getState().views, paneId) ? paneId : null
+  }
   if (screen.view !== 'work' || screen.settings !== null) return null
   const target = focusedTarget()
   if (target?.kind !== 'hosted') return null
@@ -133,6 +137,11 @@ export function openInDrawer(paneId: string): boolean {
   useChatDrawerStore.getState().show(paneId)
   useFocusRequestStore.getState().requestFocus(paneId)
   return true
+}
+
+/** A notification's session: in the chat drawer while the Dashboard shows it, else in Work. */
+export function openNotifiedSession(paneId: string): boolean {
+  return drawerShown(useViewStore.getState()) ? openInDrawer(paneId) : openSession(paneId)
 }
 
 export function openObserved(workspaceId: string, sessionId: string, { beside = false }: Pick<OpenOptions, 'beside'> = {}): void {

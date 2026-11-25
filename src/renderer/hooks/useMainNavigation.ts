@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { parseView } from '../../shared/views'
 import { useViewStore } from '../state/viewStore'
-import { openSession } from '../state/sessionNavigation'
+import { openNotifiedSession } from '../state/sessionNavigation'
 import { useApprovalInboxStore } from '../state/approvalInboxStore'
 
 export function useMainNavigation(): void {
@@ -9,7 +9,7 @@ export function useMainNavigation(): void {
     const unsubs = [
       window.api.navigation.onShowView((view) => useViewStore.getState().setView(parseView(view))),
       window.api.navigation.onOpenSession((paneId) => {
-        if (!openSession(paneId)) useViewStore.getState().setView('work')
+        if (!openNotifiedSession(paneId)) useViewStore.getState().setView('work')
       }),
       window.api.navigation.onOpenApprovals((paneId) => useApprovalInboxStore.getState().show(paneId))
     ]
