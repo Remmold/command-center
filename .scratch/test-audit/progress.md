@@ -2,3 +2,4 @@
 - 02 resolved: audit at 0.1.14: UI suite 18 -> 14 scenarios, 88.7 s -> 71.4/70.3 s; unit 1,023 -> 1,022; release.md audit-due line — 6414aca
 - 03 resolved: audit at 0.1.19: 3 dead screenshot hooks removed, 0 assertions removed (2 candidates kept after review); UI 76.2 s -> 74.2/73.0 s; unit 1,099 unchanged; release.md audit due at 0.1.24 — 103d5a8
 - 04 in-progress: audit at 0.1.23 started
+- 04 resolved: audit at 0.1.23: UI suite 15 -> 9 scenarios (6 merges, 0 assertions removed), 97.2 s -> 69.2/74.9 s; unit 1,184 unchanged; release.md audit due at 0.1.28 — 8706293

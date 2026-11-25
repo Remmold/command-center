@@ -6,7 +6,7 @@ Target: main's UI suite at **≤ 75 s** by the JSON report's total on a quiet ma
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] **Inventory:** add a "0.1.23" section to `.scratch/test-audit/inventory.md`: every scenario with today's runtime from a JSON reporter run, what it proves, its unit-test overlap, and whether it guards a bug that reached Andreas (those stay).
 - [x] **Trim:** merge scenarios that can share one app launch; delete what unit tests or other scenarios already cover. Every removed assertion lives on somewhere; list where. Drop of coverage nothing else has goes to Andreas as a question.
