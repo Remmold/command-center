@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { MAX_SUITE_SECONDS, suiteSeconds } from '../e2e/budget.ts'
+import { MAX_SUITE_SECONDS, suiteSeconds, testTimes, timeReport } from '../e2e/budget.ts'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const out = join(root, 'node_modules', '.cache', 'e2e-gate')
@@ -36,6 +36,7 @@ if (first.stats.unexpected > 0) {
   }
 }
 const seconds = suiteSeconds(first, rerun)
+for (const line of timeReport(testTimes(first, rerun), seconds, MAX_SUITE_SECONDS)) console.log(line)
 if (seconds > MAX_SUITE_SECONDS) {
   console.error(`e2e-gate: the UI suite took ${seconds} s, over the ${MAX_SUITE_SECONDS} s budget. See "Keep the suites lean" in .scratch/overnight/agent-brief.md.`)
   process.exit(1)

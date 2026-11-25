@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, app } from 'electron'
+import { ipcMain, dialog, BrowserWindow, app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
@@ -16,6 +16,7 @@ import * as apps from './apps/store'
 import { appManager } from './apps/manager'
 import { ptyManager } from './pty/manager'
 import { claudeManager } from './claude/manager'
+import { holdQuit } from './quitHold'
 import { listProjectFiles } from './files/lister'
 import { findMentions } from './files/mentions'
 import { saveAsDialog } from './files/save'
@@ -35,6 +36,9 @@ import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
+import { backgroundProcessTracker } from './sessions/backgroundProcesses'
+import { portOpen } from './util/portOpen'
+import { isLocalUrl } from '../shared/localPorts'
 import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
@@ -59,6 +63,9 @@ import { onZoomChanged, stepZoom, zoomLevel } from './zoom/service'
 import { isZoomStep } from '../shared/zoom'
 
 let unsubscribers: Array<() => void> = []
+
+/** A stuck taskkill must never keep the app from quitting. */
+const QUIT_KILL_LIMIT_MS = 3000
 
 interface IpcDeps {
   repoIdentities: RepoIdentityService
@@ -493,6 +500,14 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     claudeManager.onEvent((paneId, event) => agentSweep.event(paneId, event)),
     claudeManager.onExit((paneId) => agentSweep.exited(paneId)),
     agentSweep.onEnded((paneId, taskId) => sessionStatusTracker.apply(paneId, { kind: 'agent-ended', taskId })),
+    claudeManager.onSpawn((paneId) => backgroundProcessTracker.spawned(paneId)),
+    claudeManager.onEvent((paneId, event) => backgroundProcessTracker.event(paneId, event)),
+    claudeManager.onExit((paneId) => backgroundProcessTracker.exited(paneId)),
+    backgroundProcessTracker.onChange((entry) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.BACKGROUND_PROCESSES_CHANGED, entry)
+      }
+    }),
     () => agentSweep.stop(),
     sessionStatusTracker.onChange((entry) => {
       for (const win of BrowserWindow.getAllWindows()) {
@@ -502,6 +517,17 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
   agentSweep.start()
   ipcMain.handle(IPC.SESSION_STATUS_LIST, () => sessionStatusTracker.list())
+  ipcMain.handle(IPC.BACKGROUND_PROCESSES_LIST, () => backgroundProcessTracker.list())
+  ipcMain.handle(IPC.BACKGROUND_PROCESSES_PORT_OPEN, (_e, port: number) => Number.isInteger(port) && port >= 1 && port <= 65535 && portOpen(port))
+  ipcMain.handle(IPC.BACKGROUND_PROCESSES_OPEN_IN_BROWSER, async (_e, url: string): Promise<string | null> => {
+    if (typeof url !== 'string' || !isLocalUrl(url)) return 'Not a local address'
+    try {
+      await shell.openExternal(url)
+      return null
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err)
+    }
+  })
   ipcMain.on(IPC.SESSION_SCREEN_FOCUS, (_e, focus: ScreenFocus) => setScreenFocus(focus))
 
   ipcMain.handle(IPC.APPROVAL_LIST, () => approvalBroker.list())
@@ -509,11 +535,16 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     approvalBroker.respond(requestId, reply)
   })
 
-  app.on('before-quit', () => {
-    ptyManager.killAll()
-    claudeManager.stopAll()
-    claudeManager.setIncomingHandlerFactory(null)
-    for (const u of unsubscribers) u()
-    unsubscribers = []
-  })
+  holdQuit(
+    app,
+    () => {
+      ptyManager.killAll()
+      const killed = claudeManager.stopAll()
+      claudeManager.setIncomingHandlerFactory(null)
+      for (const u of unsubscribers) u()
+      unsubscribers = []
+      return killed
+    },
+    QUIT_KILL_LIMIT_MS
+  )
 }

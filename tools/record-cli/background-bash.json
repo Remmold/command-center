@@ -1,0 +1,11 @@
+{
+  "prompt": "Use the Bash tool with run_in_background set to true to run exactly this command, then reply with one word \"started\" and nothing else. Do not check on it.\n\nnode -e \"require('http').createServer((q,s)=>s.end('ok')).listen(47123,()=>console.log('Listening on http://localhost:47123'))\"",
+  "model": "haiku",
+  "afterResult": [
+    { "atMs": 2500, "subtype": "get_task_output", "fields": { "task_id": "{task_id}" } },
+    { "atMs": 4000, "subtype": "stop_task", "fields": { "task_id": "{task_id}" } },
+    { "atMs": 6500, "subtype": "get_task_output", "fields": { "task_id": "{task_id}" } }
+  ],
+  "endAfterMs": 9000,
+  "killAfterMs": 60000
+}

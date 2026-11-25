@@ -21,7 +21,7 @@ pnpm dev
 
 - `pnpm quick` — typecheck and unit tests. Must pass for every commit.
 - `pnpm e2e` — the UI suite against the built app. It runs on a **fake Claude CLI** (`tools/fake-claude/`), so it costs no tokens and needs no login; test windows open off-screen.
-- The UI suite has a budget (at most 20 scenarios, about 90 s). Prefer unit tests on pure logic; extend an existing UI scenario rather than adding one.
+- The UI suite has a budget (at most 20 scenarios, about 200 s). Prefer unit tests on pure logic; extend an existing UI scenario rather than adding one.
 
 ## Pull requests
 

@@ -33,6 +33,7 @@ class ClaudeManager {
   private sendListeners: SendCallback[] = []
   private initListeners: InitCallback[] = []
   private incomingFactory: IncomingHandlerFactory | null = null
+  private pendingKills = new Set<Promise<void>>()
 
   start(options: StartOptions): { ok: boolean; error?: string } {
     const { paneId, cwd, profileId = DEFAULT_PROFILE_ID } = options
@@ -124,12 +125,16 @@ class ClaudeManager {
   stop(paneId: string): void {
     const s = this.sessions.get(paneId)
     if (!s) return
-    s.kill()
+    const killed = s.kill()
+    this.pendingKills.add(killed)
+    void killed.finally(() => this.pendingKills.delete(killed))
     this.sessions.delete(paneId)
   }
 
-  stopAll(): void {
+  /** Resolves once every session's process, including ones stopped earlier, is gone. */
+  stopAll(): Promise<void> {
     for (const id of Array.from(this.sessions.keys())) this.stop(id)
+    return Promise.all(this.pendingKills).then(() => undefined)
   }
 
   onEvent(cb: EventCallback): () => void {

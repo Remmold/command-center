@@ -14,6 +14,9 @@ import { TabStrip } from '../ui/TabStrip'
 import { collectMedia, type MediaAttachment, type MediaEntry } from './chatMedia'
 import { MediaGrid } from './MediaGrid'
 import { AgentsPanel } from './AgentsPanel'
+import { ProcessesPanel } from './ProcessesPanel'
+import { usePaneProcesses } from '../../state/backgroundProcessesStore'
+import { runningCount } from '../../../shared/backgroundProcesses'
 import { AGENT_RECHECK_MS, agentTabCount, collectAgents, flatAgents, type AgentEntry } from './agentList'
 import { AGENT_TOOLS } from './subagents'
 import type { AgentHost } from './toolContext'
@@ -94,26 +97,31 @@ interface TabsProps extends SessionMedia {
   chatKey: ChatMediaKey
   cwd: string | undefined
   agentHost: AgentHost
+  /** A hosted chat's pane, which gets the Processes tab; none for a followed VS Code session. */
+  processesPane?: string
+  /** Running background processes, shown on the Processes tab. */
+  processesRunning?: number
   children: ReactNode
 }
 
 const AGENTS_TITLE = "This session's subagents and what they are doing"
+const PROCESSES_TITLE = 'Commands the agents left running in the background'
 
 function popOut(): void {
   window.api.testFlow.popOut().catch((err) => console.error('could not open the test-flow window', err))
 }
 
 /**
- * The Chat, Agents, Media and Test tabs over a transcript. The transcript stays mounted and laid out under the other
+ * The Chat, Agents, Media, Processes and Test tabs over a transcript. The transcript stays mounted and laid out under the other
  * tabs, only invisible, so its scroll position and scroll-follow carry on.
  */
-function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }: TabsProps) {
+function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, processesPane, processesRunning = 0, children }: TabsProps) {
   const chosen = useChatMediaStore((s) => s.tab[chatKey])
   const setTab = useChatMediaStore((s) => s.setTab)
   const agents = useChatAgents(items, agentHost, cwd)
   const agentCount = useMemo(() => flatAgents(agents).length, [agents])
   const agentsWorking = useMemo(() => agentTabCount(agents), [agents])
-  const tab = shownTab(chosen, media.length, agentCount)
+  const tab = shownTab(chosen, media.length, agentCount, processesPane !== undefined)
   const testFlow = useSessionTestFlow(items, cwd)
   const testFlowChanged = useTestFlowDot(testFlow.view, tab === 'test')
   const regionRef = useRef<HTMLDivElement | null>(null)
@@ -150,14 +158,17 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
       { value: 'chat' as const, label: 'Chat', title: `The transcript (${MEDIA_TAB_SHORTCUT})` },
       ...(agentCount > 0 ? [{ value: 'agents' as const, label: 'Agents', count: agentsWorking, title: AGENTS_TITLE }] : []),
       ...(media.length > 0 ? [{ value: 'media' as const, label: 'Media', count: media.length, title: `This session's images and videos (${MEDIA_TAB_SHORTCUT})` }] : []),
+      ...(processesPane !== undefined
+        ? [{ value: 'processes' as const, label: 'Processes', count: processesRunning > 0 ? processesRunning : undefined, title: PROCESSES_TITLE }]
+        : []),
       { value: 'test' as const, label: 'Test', dot: testFlowChanged ? 'changed' : undefined, title: "This session's test flow" }
     ],
-    [agentCount, agentsWorking, media.length, testFlowChanged]
+    [agentCount, agentsWorking, media.length, processesPane, processesRunning, testFlowChanged]
   )
   const hidden = tab !== 'chat'
   return (
     <>
-      <TabStrip<ChatTab> label="Chat, agents, media or test" value={tab} onChange={(t) => setTab(chatKey, t)} tabs={tabs} />
+      <TabStrip<ChatTab> label="Chat, agents, media, processes or test" value={tab} onChange={(t) => setTab(chatKey, t)} tabs={tabs} />
       <div ref={regionRef} className="relative flex min-h-0 flex-1 flex-col">
         <div ref={transcriptRef} className={'flex min-h-0 flex-1 flex-col' + (hidden ? ' invisible' : '')} aria-hidden={hidden || undefined}>
           {children}
@@ -165,16 +176,19 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
         {tab === 'media' && <MediaGrid ref={gridRef} media={media} cwd={cwd} revision={revision} onJump={jump} />}
         {tab === 'test' && <TestFlowPanel {...testFlow} onPopOut={popOut} />}
         {tab === 'agents' && <AgentsPanel chatKey={chatKey} agents={agents} items={items} host={agentHost} cwd={cwd} />}
+        {tab === 'processes' && processesPane !== undefined && <ProcessesPanel paneId={processesPane} />}
       </div>
     </>
   )
 }
 
-/** A hosted chat's transcript under its Chat, Agents, Media and Test tabs. */
+/** A hosted chat's transcript under its Chat, Agents, Media, Processes and Test tabs. */
 export function HostedMediaTabs({ paneId, cwd, agents, children }: { paneId: string; cwd: string; agents: AgentHost; children: ReactNode }) {
   const session = useHostedMedia(paneId, cwd)
+  const processes = usePaneProcesses(paneId)
+  const running = useMemo(() => runningCount(processes), [processes])
   return (
-    <ChatTabs chatKey={paneId} {...session} cwd={cwd} agentHost={agents}>
+    <ChatTabs chatKey={paneId} {...session} cwd={cwd} agentHost={agents} processesPane={paneId} processesRunning={running}>
       {children}
     </ChatTabs>
   )

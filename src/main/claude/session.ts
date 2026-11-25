@@ -22,12 +22,29 @@ export interface ClaudeSessionOptions extends ClaudeStartOptions {
 /** Set by the extension for its CLI: with tasks off the CLI keeps TodoWrite, which the chat draws as a checklist. */
 const EXTENSION_ENV: Readonly<Record<string, string>> = { CLAUDE_CODE_ENABLE_TASKS: '0' }
 
+/** A stuck taskkill must not keep the CLI from its stdin close and kill. */
+const KILL_TREE_LIMIT_MS = 2000
+
+function killTree(pid: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, KILL_TREE_LIMIT_MS)
+    const done = (): void => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const taskkill = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
+    taskkill.on('exit', done)
+    taskkill.on('error', done)
+  })
+}
+
 export class ClaudeSession {
   readonly paneId: string
   readonly cwd: string
   private child: ChildProcess
   private buf = ''
   private alive = true
+  private killing: Promise<void> | null = null
   private readonly control: ControlChannel
   private init: SessionInit | null = null
   /** User messages wait for the handshake, so the CLI never sees a prompt before `initialize`. */
@@ -171,19 +188,27 @@ export class ClaudeSession {
     })
   }
 
-  kill(): void {
-    if (!this.alive) return
+  /** Resolves once the process (on Windows its whole tree) is gone; a second call gets the first call's promise. */
+  kill(): Promise<void> {
+    if (this.killing) return this.killing
+    if (!this.alive) return Promise.resolve()
     this.alive = false
-    try {
-      this.child.stdin?.end()
-    } catch {
-      // ignore
-    }
-    try {
-      this.child.kill()
-    } catch {
-      // ignore
-    }
+    const pid = this.child.pid
+    // Before stdin closes: a CLI that exits first orphans its children, out of reach of /T.
+    const tree = process.platform === 'win32' && pid !== undefined ? killTree(pid) : Promise.resolve()
+    this.killing = tree.then(() => {
+      try {
+        this.child.stdin?.end()
+      } catch {
+        // ignore
+      }
+      try {
+        this.child.kill()
+      } catch {
+        // ignore
+      }
+    })
+    return this.killing
   }
 
   isAlive(): boolean {

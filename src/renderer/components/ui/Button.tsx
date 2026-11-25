@@ -1,12 +1,13 @@
 import { forwardRef, type ReactNode } from 'react'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link'
 
 const VARIANTS: Record<Variant, string> = {
   primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
   secondary: 'bg-input text-fg hover:bg-strong',
   ghost: 'text-muted hover:bg-list-hover hover:text-fg',
-  danger: 'bg-input text-error hover:bg-strong'
+  danger: 'bg-input text-error hover:bg-strong',
+  link: 'text-link hover:underline'
 }
 
 interface Props {

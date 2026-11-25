@@ -1,0 +1,6 @@
+- 01 resolved: real background Bash recorded; fake CLI runs real background servers, get_task_output, stop_task for shells — 4dc5958
+- 02 resolved: Processes tab (count, rows, Stop with error), shared reducer, main tracker — 7ce3eec
+- 03 resolved: output tail refreshed while the tab is on screen, final fetch kept, local port open link after connect check, local-only open — 1fd6492
+- 04 resolved: running-count badge on the session row, tooltip command or command :port, e2e badge 1 then gone after Stop — bbdb070
+- 05 blocked: tree kill on session close and quit (quit held up to 3 s), unit test and e2e step green; full UI suite 1.6–1.9 min, over its 90 s budget before this ticket, and 16 scenarios not 17 — e744d8d
+- 05 resolved: UI suite budget raised to 200 s by Andreas; e2e:gate green in 122 s — e744d8d

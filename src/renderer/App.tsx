@@ -12,6 +12,7 @@ import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
 import { ContextView } from './components/context/ContextView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
+import { useBackgroundProcessesStore } from './state/backgroundProcessesStore'
 import { useSessionInitStore } from './state/sessionInitStore'
 import { useRemoteControlStore } from './state/remoteControlStore'
 import { useModelStore } from './state/modelStore'
@@ -68,6 +69,7 @@ export function App() {
     initSessionStatus()
     initSessionInit()
     initModels()
+    useBackgroundProcessesStore.getState().init()
     useRemoteControlStore.getState().init()
     useUpdateStore.getState().init()
     useZoomStore.getState().init()

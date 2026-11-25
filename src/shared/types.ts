@@ -11,6 +11,7 @@ import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
+import type { BackgroundProcess } from './backgroundProcesses'
 export type { AppView }
 export const DEFAULT_PROFILE_ID = 'default'
 
@@ -72,6 +73,12 @@ export interface SessionStatusEntry {
   status: SessionStatus
   /** Epoch ms when the current status began. */
   since: number
+}
+
+/** A hosted session's background processes, running ones first; empty once its CLI process is gone. */
+export interface BackgroundProcessesEntry {
+  paneId: string
+  processes: BackgroundProcess[]
 }
 
 export interface StartWithWindowsState {
@@ -625,6 +632,14 @@ export interface RendererApi {
     list: () => Promise<SessionStatusEntry[]>
     onChanged: (cb: (entry: SessionStatusEntry) => void) => () => void
     reportScreenFocus: (focus: ScreenFocus) => void
+  }
+  backgroundProcesses: {
+    list: () => Promise<BackgroundProcessesEntry[]>
+    onChanged: (cb: (entry: BackgroundProcessesEntry) => void) => () => void
+    /** Whether something answers on `127.0.0.1:<port>`. */
+    portOpen: (port: number) => Promise<boolean>
+    /** Opens a local address in the default browser; anything else is refused. The error, or null. */
+    openInBrowser: (url: string) => Promise<string | null>
   }
   startWithWindows: {
     get: () => Promise<StartWithWindowsState>

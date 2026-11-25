@@ -137,14 +137,27 @@ interface ListItemProps {
   nested?: boolean
   /** Padded like a compact ListRow, so it lines up among clickable rows. */
   alignWithRows?: boolean
+  /** Shown under the row, e.g. its output. */
+  detail?: ReactNode
 }
 
 /** A non-clickable row: text plus trailing actions. */
-export function ListItem({ children, tooltip, nested = false, alignWithRows = false }: ListItemProps) {
+export function ListItem({ children, tooltip, nested = false, alignWithRows = false, detail }: ListItemProps) {
   const box = alignWithRows ? compactBox(nested) : `py-0.5 ${nested ? 'pl-6' : ''}`
+  const row = `flex w-full min-w-0 items-center gap-2 text-xs text-fg ${box}`
+  if (!detail) {
+    return (
+      <li title={tooltip} className={row}>
+        {children}
+      </li>
+    )
+  }
   return (
-    <li title={tooltip} className={`flex w-full min-w-0 items-center gap-2 text-xs text-fg ${box}`}>
-      {children}
+    <li className="flex flex-col gap-1 pb-2">
+      <div title={tooltip} className={row}>
+        {children}
+      </div>
+      <div className={nested ? 'pl-6' : ''}>{detail}</div>
     </li>
   )
 }
