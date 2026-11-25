@@ -1,0 +1,3 @@
+- done: ticket 01 committed (2a14918, 99ef669), review fixes in; quick + context e2e green
+- next: ticket 02
+- open reds: none

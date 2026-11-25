@@ -13,7 +13,7 @@ In this ticket `findings` is always empty and index-link edges are absent (ticke
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The Files | Map switch shows; Files is unchanged; switching away from Files with unsaved edits asks through the existing leave guard.
 - [ ] `mapLayout` unit tests (seam 5): the right band per kind, block size from tokens with a floor, groups of more than 8 collapsed (8 stays expanded), and import edges.
