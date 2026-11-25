@@ -1,1 +1,2 @@
 - 01 resolved: real background Bash recorded; fake CLI runs real background servers, get_task_output, stop_task for shells — 4dc5958
+- 02 resolved: Processes tab (count, rows, Stop with error), shared reducer, main tracker — 7ce3eec

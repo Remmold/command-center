@@ -15,10 +15,10 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Seam 1 unit tests for the shared reducer: backgrounded at start, backgrounded mid-run, foreground-only ignored, agents ignored, each end status, first end wins, command text from the Bash input. Also feed it the recording from 01. Prior art: the status reducer, run-in-background and subagents tests.
-- [ ] The main process tracks the list per hosted session, pushes it to the renderer, and drops it on session close.
-- [ ] The Processes tab has the running count, rows (status, command, duration) with running ones first, the empty state, and Stop, with its error shown on failure.
-- [ ] New e2e scenario on the fake CLI: an agent starts a background server. The tab count shows 1 and the row shows Running and the command. Stop turns the row to Stopped and the count goes away. The suite stays within 20 scenarios and 90 s.
-- [ ] Quick tier green.
+- [x] Seam 1 unit tests for the shared reducer: backgrounded at start, backgrounded mid-run, foreground-only ignored, agents ignored, each end status, first end wins, command text from the Bash input. Also feed it the recording from 01. Prior art: the status reducer, run-in-background and subagents tests.
+- [x] The main process tracks the list per hosted session, pushes it to the renderer, and drops it on session close.
+- [x] The Processes tab has the running count, rows (status, command, duration) with running ones first, the empty state, and Stop, with its error shown on failure.
+- [x] New e2e scenario on the fake CLI: an agent starts a background server. The tab count shows 1 and the row shows Running and the command. Stop turns the row to Stopped and the count goes away. The suite stays within 20 scenarios and 90 s.
+- [x] Quick tier green.
