@@ -441,7 +441,7 @@ export const ChatView = memo(function ChatView({
       if (sys.subtype === 'status') {
         // The extension's rule: a hooks-only status line leaves the status as it was.
         if (!('userPromptSubmitHooksRunning' in sys)) setCompacting(sys.status === 'compacting')
-        if (isPermissionMode(sys.permissionMode)) useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
+        if (isPermissionMode(sys.permissionMode) && sys.permissionMode !== storedPermissionMode(paneId)) useProjectViewsStore.getState().setSessionPermissionMode(paneId, sys.permissionMode)
         return
       }
       if (TASK_EVENTS.has(sys.subtype)) {
