@@ -17,7 +17,8 @@
     "release": "node scripts/release.mjs",
     "prepare": "git config core.hooksPath .githooks",
     "e2e": "electron-vite build && playwright test -c e2e/playwright.config.ts",
-    "e2e:gate": "node scripts/e2e-gate.mjs"
+    "e2e:gate": "node scripts/e2e-gate.mjs",
+    "e2e:count": "node scripts/e2e-count.mjs"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",
