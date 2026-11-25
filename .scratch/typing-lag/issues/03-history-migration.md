@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] On start, when the legacy `command-center.chat-items` localStorage entry exists, its sessions are imported into the new files (import wins only for sessions with no file yet), and the entry is removed after the import succeeds. A failed import leaves the entry in place for the next start.
 - [x] Migrated chats show their history from the first frame of that first start.

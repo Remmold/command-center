@@ -1,3 +1,3 @@
-Done: migration implemented, reviewed, quick + build green; measured 22.8 MB entry first start 1046 ms vs ~900 ms files-only, entry gone.
-Next: commit, then mark ticket resolved.
+Done: ticket 03 committed (bb54038) and resolved; quick + build green, 22.8 MB migration measured once.
+Next: none (ticket 04 streaming redraw).
 Open reds: none.
