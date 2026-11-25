@@ -276,6 +276,8 @@ const api: RendererApi = {
   },
   backgroundProcesses: {
     list: (): Promise<BackgroundProcessesEntry[]> => ipcRenderer.invoke(IPC.BACKGROUND_PROCESSES_LIST),
+    portOpen: (port: number): Promise<boolean> => ipcRenderer.invoke(IPC.BACKGROUND_PROCESSES_PORT_OPEN, port),
+    openInBrowser: (url: string): Promise<string | null> => ipcRenderer.invoke(IPC.BACKGROUND_PROCESSES_OPEN_IN_BROWSER, url),
     onChanged: (cb) => {
       const handler = (_e: IpcRendererEvent, entry: BackgroundProcessesEntry) => cb(entry)
       ipcRenderer.on(IPC.BACKGROUND_PROCESSES_CHANGED, handler)

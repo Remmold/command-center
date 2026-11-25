@@ -1,27 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { createConnection } from 'node:net'
+import { portOpen } from '../util/portOpen'
 import type { AppActionResult, AppStatus, ManagedApp } from '../../shared/types'
 
 type OutputCallback = (id: string, data: string) => void
 type ExitCallback = (id: string, exitCode: number | null) => void
-
-function portOpen(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const sock = createConnection({ host: '127.0.0.1', port })
-    const done = (v: boolean): void => {
-      try {
-        sock.destroy()
-      } catch {
-        /* ignore */
-      }
-      resolve(v)
-    }
-    sock.setTimeout(700)
-    sock.once('connect', () => done(true))
-    sock.once('timeout', () => done(false))
-    sock.once('error', () => done(false))
-  })
-}
 
 class AppManager {
   // Tracks the launcher process per app. Note many launchers exit after spawning

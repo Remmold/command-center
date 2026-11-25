@@ -600,6 +600,10 @@ export interface RendererApi {
   backgroundProcesses: {
     list: () => Promise<BackgroundProcessesEntry[]>
     onChanged: (cb: (entry: BackgroundProcessesEntry) => void) => () => void
+    /** Whether something answers on `127.0.0.1:<port>`. */
+    portOpen: (port: number) => Promise<boolean>
+    /** Opens a local address in the default browser; anything else is refused. The error, or null. */
+    openInBrowser: (url: string) => Promise<string | null>
   }
   startWithWindows: {
     get: () => Promise<StartWithWindowsState>

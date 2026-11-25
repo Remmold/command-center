@@ -70,6 +70,8 @@ export const IPC = {
   SESSION_SCREEN_FOCUS: 'sessionStatus:screenFocus',
   BACKGROUND_PROCESSES_LIST: 'backgroundProcesses:list',
   BACKGROUND_PROCESSES_CHANGED: 'backgroundProcesses:changed',
+  BACKGROUND_PROCESSES_PORT_OPEN: 'backgroundProcesses:portOpen',
+  BACKGROUND_PROCESSES_OPEN_IN_BROWSER: 'backgroundProcesses:openInBrowser',
   OBSERVED_LIST: 'observed:list',
   OBSERVED_CHANGED: 'observed:changed',
   OBSERVED_SET_HOSTED: 'observed:setHosted',

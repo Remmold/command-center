@@ -129,11 +129,30 @@ export function ListRowMeta({ children }: { children: ReactNode }) {
   return <span className="shrink-0 text-[10px] tabular-nums text-muted">{children}</span>
 }
 
+interface ListItemProps {
+  children: ReactNode
+  tooltip?: string
+  nested?: boolean
+  /** Shown under the row, e.g. its output. */
+  detail?: ReactNode
+}
+
 /** A non-clickable row: text plus trailing actions. */
-export function ListItem({ children, tooltip, nested = false }: { children: ReactNode; tooltip?: string; nested?: boolean }) {
+export function ListItem({ children, tooltip, nested = false, detail }: ListItemProps) {
+  const row = `flex w-full min-w-0 items-center gap-2 py-0.5 text-xs text-fg ${nested ? 'pl-6' : ''}`
+  if (!detail) {
+    return (
+      <li title={tooltip} className={row}>
+        {children}
+      </li>
+    )
+  }
   return (
-    <li title={tooltip} className={`flex w-full min-w-0 items-center gap-2 py-0.5 text-xs text-fg ${nested ? 'pl-6' : ''}`}>
-      {children}
+    <li className="flex flex-col gap-1 pb-2">
+      <div title={tooltip} className={row}>
+        {children}
+      </div>
+      <div className={nested ? 'pl-6' : ''}>{detail}</div>
     </li>
   )
 }

@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, app } from 'electron'
+import { ipcMain, dialog, BrowserWindow, app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
@@ -33,6 +33,8 @@ import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveM
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
 import { backgroundProcessTracker } from './sessions/backgroundProcesses'
+import { portOpen } from './util/portOpen'
+import { isLocalUrl } from '../shared/localPorts'
 import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
@@ -489,6 +491,16 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   agentSweep.start()
   ipcMain.handle(IPC.SESSION_STATUS_LIST, () => sessionStatusTracker.list())
   ipcMain.handle(IPC.BACKGROUND_PROCESSES_LIST, () => backgroundProcessTracker.list())
+  ipcMain.handle(IPC.BACKGROUND_PROCESSES_PORT_OPEN, (_e, port: number) => Number.isInteger(port) && port >= 1 && port <= 65535 && portOpen(port))
+  ipcMain.handle(IPC.BACKGROUND_PROCESSES_OPEN_IN_BROWSER, async (_e, url: string): Promise<string | null> => {
+    if (typeof url !== 'string' || !isLocalUrl(url)) return 'Not a local address'
+    try {
+      await shell.openExternal(url)
+      return null
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err)
+    }
+  })
   ipcMain.on(IPC.SESSION_SCREEN_FOCUS, (_e, focus: ScreenFocus) => setScreenFocus(focus))
 
   ipcMain.handle(IPC.APPROVAL_LIST, () => approvalBroker.list())

@@ -10,7 +10,7 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Seam 2 unit tests for port detection: output text in, local ports out. Non-local hosts are ignored, duplicates are merged, and `0.0.0.0` / `[::1]` map to localhost.
 - [ ] The output tail (last 200 lines) refreshes about once a second, only while the tab is visible. The final fetch is kept on the ended row.
