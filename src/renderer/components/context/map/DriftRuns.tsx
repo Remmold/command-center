@@ -12,17 +12,21 @@ const SCOPE_TITLES: Record<FindingsRun['scope'], string> = { project: 'This proj
 
 const STEP_STATES: Record<FindingsRun['steps'][number]['status'], CheckState> = { pending: 'unchecked', running: 'mixed', done: 'checked' }
 
-
 function DriftRun({ shown, now }: { shown: DriftRunView; now: number }) {
   const { run } = shown
   const at = Date.parse(run.startedAt)
-  const chatOpen = useProjectViewsStore((s) => isHosted(s.views, run.sessionId))
+  const chatOpen = useProjectViewsStore((s) => isHosted(s.views, run.sessionId)) && !shown.stopped
   return (
     <section aria-label={`Drift check ${run.runId}`} className="flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted">
         <SectionLabel as="h3">Drift check · {SCOPE_TITLES[run.scope]}</SectionLabel>
         {Number.isNaN(at) ? <span>checked at an unknown time</span> : <span title={new Date(at).toLocaleString()}>checked {timeAgo(at, now)}</span>}
-        {!run.done && <Badge tone="quiet">running</Badge>}
+        {!run.done && !shown.stopped && <Badge tone="quiet">running</Badge>}
+        {shown.stopped && (
+          <Badge tone="quiet" tooltip="Its session is gone from Work before the run finished.">
+            stopped
+          </Badge>
+        )}
         {shown.writing && <Badge tone="quiet">run is writing…</Badge>}
         {shown.files === 'account' && (
           <Badge tone="quiet" tooltip="This run covers other projects; only its findings on account files show here.">

@@ -1,6 +1,22 @@
 import { create } from 'zustand'
 import type { ContextItem, ContextReport } from '../../shared/context'
 import type { DriftChecksView, ShownFinding } from '../../shared/findings'
+import { useProjectViewsStore, type ProjectView } from './projectViewsStore'
+
+/** The hosted chats' pane ids, which are the session ids drift runs name. */
+export const hostedIds = (views: Readonly<Record<string, ProjectView>>): string[] => Object.values(views).flatMap((v) => v.claudeSessions.map((c) => c.id))
+
+/** Sessions of drift checks being started: their run file is written before their chat is hosted. */
+const starting = new Set<string>()
+
+/** Counts the session as able to finish its run until the returned release is called. */
+export function holdStarting(sessionId: string): () => void {
+  starting.add(sessionId)
+  return () => starting.delete(sessionId)
+}
+
+/** The sessions that can still finish a drift run: hosted chats, and drift checks being started. */
+const liveSessions = (): string[] => [...hostedIds(useProjectViewsStore.getState().views), ...starting]
 
 /** A file open in Context's editor. */
 export interface ContextEditorFile {
@@ -68,7 +84,7 @@ interface ContextState {
   selectBlock: (blockId: string | null) => void
   toggleGroup: (groupId: string) => void
   setTourStep: (step: number) => void
-  /** Reads the map's drift checks again; main then follows a shown run that is not done. */
+  /** Reads the map's drift checks again; main then follows a shown run that is still running. */
   showDrift: () => void
   /** Files, with that file open. */
   openInFiles: (target: ContextFileTarget) => void
@@ -141,7 +157,7 @@ export const useContextStore = create<ContextState>((set, get) => {
       const { selectedId } = get()
       if (!selectedId) return
       const turn = ++driftTurn
-      window.api.driftChecks.show(selectedId, get().fixing).then(
+      window.api.driftChecks.show(selectedId, get().fixing, liveSessions()).then(
         (drift) => {
           if (turn === driftTurn && get().selectedId === selectedId) set({ drift })
         },

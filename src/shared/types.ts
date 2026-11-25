@@ -484,11 +484,12 @@ export interface RendererApi {
   }
   driftChecks: {
     /**
-     * The latest drift checks covering the workspace (ADR 0005). Until the next call or `release`, main watches the shown
-     * run files that are not done, and those in `fixing` (run ids fixes were sent to), and calls `onChanged` when one is
-     * rewritten.
+     * The latest drift checks covering the workspace (ADR 0005). `live` holds the session ids that can still finish a
+     * run: a run not done whose session is not in it shows as stopped, and is removed while it is a bare skeleton. Until
+     * the next call or `release`, main watches the shown run files still running, and those in `fixing` (run ids fixes
+     * were sent to), and calls `onChanged` when one is rewritten.
      */
-    show: (workspaceId: string, fixing?: string[]) => Promise<DriftChecksView>
+    show: (workspaceId: string, fixing: string[], live: string[]) => Promise<DriftChecksView>
     release: () => Promise<void>
     onChanged: (cb: () => void) => () => void
     /** Writes a new run's skeleton as `<runId>.json` in the drift-checks folder; never overwrites a file. */

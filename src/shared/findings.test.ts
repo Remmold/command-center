@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { latestRuns, pathKey, readFindingsRun, shownFindings, type Finding, type FindingsRun } from './findings'
+import { isBareSkeleton, latestRuns, pathKey, readFindingsRun, runState, shownFindings, type Finding, type FindingsRun } from './findings'
 
 const RUN: FindingsRun = {
   version: 1,
@@ -149,5 +149,30 @@ describe('shownFindings', () => {
 
   it('tags each finding with its run', () => {
     expect(shownFindings(withFindings, {}, ACC_A, 'all').every((f) => f.runId === RUN.runId)).toBe(true)
+  })
+})
+
+describe('runState', () => {
+  it('is running while the run is not done and its session is live in the app', () => {
+    expect(runState(RUN, ['s1'])).toBe('running')
+  })
+
+  it('is stopped once the session of a run that is not done is gone, findings kept', () => {
+    expect(runState(RUN, ['other'])).toBe('stopped')
+    expect(RUN.findings).toHaveLength(1)
+  })
+
+  it('is done once the run reads done, whether its session is live or not', () => {
+    expect(runState({ ...RUN, done: true }, [])).toBe('done')
+    expect(runState({ ...RUN, done: true }, ['s1'])).toBe('done')
+  })
+})
+
+describe('isBareSkeleton', () => {
+  it('is a run with no steps or findings that is not done', () => {
+    expect(isBareSkeleton({ ...RUN, steps: [], findings: [] })).toBe(true)
+    expect(isBareSkeleton({ ...RUN, findings: [] })).toBe(false)
+    expect(isBareSkeleton({ ...RUN, steps: [] })).toBe(false)
+    expect(isBareSkeleton({ ...RUN, steps: [], findings: [], done: true })).toBe(false)
   })
 })

@@ -4,7 +4,8 @@ import { formatTokens, type ContextLayerName, type ContextReport } from '../../.
 import { shownFindings, type DriftChecksView, type ShownFinding } from '../../../../shared/findings'
 import { healthCheck } from '../../../../shared/healthCheck'
 import { applyFixes } from '../../../state/applyFixes'
-import { findingKey, tickable, useContextStore } from '../../../state/contextStore'
+import { findingKey, hostedIds, tickable, useContextStore } from '../../../state/contextStore'
+import { useProjectViewsStore } from '../../../state/projectViewsStore'
 import { useWorkspacesStore } from '../../../state/workspacesStore'
 import { BAND_NOTES, BAND_TITLES, LANE_TITLES } from '../../../state/mapCopy'
 import { stepIndex, tourSteps } from '../../../state/mapTour'
@@ -37,8 +38,17 @@ export function ContextMapPane({ workspacePath, report, defaultName }: { workspa
   useEffect(() => {
     useContextStore.getState().showDrift()
     const off = window.api.driftChecks.onChanged(() => useContextStore.getState().showDrift())
+    // A chat closed in Work stops its run, so the runs are read again when the hosted chats change.
+    let hosted = hostedIds(useProjectViewsStore.getState().views).join(' ')
+    const offViews = useProjectViewsStore.subscribe((s) => {
+      const next = hostedIds(s.views).join(' ')
+      if (next === hosted) return
+      hosted = next
+      useContextStore.getState().showDrift()
+    })
     return () => {
       off()
+      offViews()
       void window.api.driftChecks.release()
     }
   }, [workspaceId])

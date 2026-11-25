@@ -80,4 +80,47 @@ describe('DriftChecksReader', () => {
     const mtime = (await fs.stat(file)).mtimeMs
     expect(Object.values(shown.modified)).toEqual([mtime, null])
   })
+  describe('with the live sessions given', () => {
+    const finding = { id: 'F1', path: join(WS, 'CLAUDE.md'), verdict: 'stale', severity: 'problem', claim: '', evidence: '', fix: '', status: 'open' } as const
+    const exists = (name: string) => fs.stat(join(folder, name)).then(() => true, () => false)
+
+    it('shows a run whose session is live as running and watches it', async () => {
+      await write('r.json', JSON.stringify(run('r')))
+      const read = await reader.read(folder, WS, ACC, [], ['s-r'])
+      expect(read.view.runs.map((r) => [r.run.runId, r.stopped])).toEqual([['r', false]])
+      expect(read.watch.map((w) => w.path)).toEqual([join(folder, 'r.json')])
+    })
+
+    it('shows a run whose session is gone as stopped, findings and date kept, and stops watching it', async () => {
+      await write('r.json', JSON.stringify(run('r', { steps: [{ id: 'a', title: 'A', status: 'running' }], findings: [finding] })))
+      const read = await reader.read(folder, WS, ACC, [], [])
+      expect(read.view.runs.map((r) => [r.run.runId, r.stopped, r.run.findings.length, r.run.startedAt])).toEqual([['r', true, 1, '2026-11-20T10:00:00.000Z']])
+      expect(read.watch).toEqual([])
+      expect(await exists('r.json')).toBe(true)
+    })
+
+    it('still watches a stopped run that fixes were sent to', async () => {
+      await write('r.json', JSON.stringify(run('r', { findings: [finding] })))
+      expect((await reader.read(folder, WS, ACC, ['r'], [])).watch.map((w) => w.path)).toEqual([join(folder, 'r.json')])
+    })
+
+    it('removes a bare skeleton whose session is gone and shows the run before it', async () => {
+      await write('old.json', JSON.stringify(run('old', { startedAt: '2026-11-01T10:00:00.000Z', done: true })))
+      await write('new.json', JSON.stringify(run('new')))
+      const read = await reader.read(folder, WS, ACC, [], [])
+      expect(read.view.runs.map((r) => r.run.runId)).toEqual(['old'])
+      expect(await exists('new.json')).toBe(false)
+    })
+
+    it('keeps a bare skeleton whose session is live', async () => {
+      await write('new.json', JSON.stringify(run('new')))
+      expect((await reader.read(folder, WS, ACC, [], ['s-new'])).view.runs.map((r) => r.stopped)).toEqual([false])
+      expect(await exists('new.json')).toBe(true)
+    })
+  })
+
+  it('judges nothing stopped and removes nothing when the live sessions are not given', async () => {
+    await write('new.json', JSON.stringify(run('new')))
+    expect((await reader.read(folder, WS, ACC)).view.runs.map((r) => r.stopped)).toEqual([false])
+  })
 })

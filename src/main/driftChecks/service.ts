@@ -9,6 +9,8 @@ import { discardSkeleton, writeSkeleton } from './skeleton'
 
 const NOTHING: DriftChecksView = { runs: [] }
 
+const strings = (list: unknown[]): string[] => list.filter((v): v is string => typeof v === 'string')
+
 /** The map's drift checks; while a window's map shows a run that is not done, main watches that file and tells the window. */
 export function registerDriftChecksIpc(): () => void {
   const reader = new DriftChecksReader()
@@ -30,12 +32,14 @@ export function registerDriftChecksIpc(): () => void {
     return key
   }
 
-  ipcMain.handle(IPC.DRIFT_CHECKS_SHOW, async (event, workspaceId: unknown, fixing: unknown): Promise<DriftChecksView> => {
+  ipcMain.handle(IPC.DRIFT_CHECKS_SHOW, async (event, workspaceId: unknown, fixing: unknown, live: unknown): Promise<DriftChecksView> => {
     const key = keyOf(event.sender)
     const turn = ++lastTurn
     turns.set(key, turn)
     const scope = typeof workspaceId === 'string' ? await workspaceScope(workspaceId) : null
-    const read = scope ? await reader.read(driftChecksFolder(), scope.workspacePath, scope.accountFolder, Array.isArray(fixing) ? fixing.filter((id): id is string => typeof id === 'string') : []) : { view: NOTHING, watch: [] }
+    const read = scope
+      ? await reader.read(driftChecksFolder(), scope.workspacePath, scope.accountFolder, Array.isArray(fixing) ? strings(fixing) : [], Array.isArray(live) ? strings(live) : null)
+      : { view: NOTHING, watch: [] }
     if (turns.get(key) === turn && !event.sender.isDestroyed()) watches.set(key, read.watch)
     return read.view
   })

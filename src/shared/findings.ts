@@ -121,6 +121,18 @@ export function latestRuns<T extends { run: FindingsRun }>(entries: readonly T[]
   return { covering, account: newer ? account : null }
 }
 
+/** A run file as the app wrote it, before its session wrote anything: the only state in which the app may remove it (ADR 0005). */
+export const isBareSkeleton = (run: Pick<FindingsRun, 'steps' | 'findings' | 'done'>): boolean => run.steps.length === 0 && run.findings.length === 0 && !run.done
+
+/**
+ * Whether a run can still finish: one not done whose session (a hosted pane id) is no longer in the app is stopped,
+ * as nothing will write its file again.
+ */
+export function runState(run: Pick<FindingsRun, 'sessionId' | 'done'>, live: readonly string[]): 'done' | 'running' | 'stopped' {
+  if (run.done) return 'done'
+  return live.includes(run.sessionId) ? 'running' : 'stopped'
+}
+
 /** A finding as the map shows it; a health finding has none of the extras. */
 export interface ShownFinding extends Finding {
   /** The drift run it came from. */
@@ -153,6 +165,8 @@ export interface DriftRunView {
   writing: boolean
   /** Why the file's latest content was refused; `run` is then the last good parse. */
   note: string | null
+  /** Not done, and its session is gone from the app, so nothing will finish it. */
+  stopped: boolean
   /** 'account' for a run shown for its account-file findings only; the covering run then shows the rest of its own. */
   files: ShownFiles
   /** Each finding file's modified time in ms by `pathKey`; null when it is gone. */
