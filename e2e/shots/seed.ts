@@ -211,6 +211,59 @@ export async function resize(app: ElectronApplication, width: number, height: nu
 }
 
 
+// Browser globals of the functions that run inside the page; this project compiles against Node's types.
+declare const localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void }
+
+const LONG_MESSAGES = 300
+export const CODE = Array.from({ length: 30 }, (_, i) => `  const value${i} = await store.read('key-${i}') ?? fallback(${i}) // line ${i}`).join('\n')
+
+/** A 300-message chat: user steps and assistant replies with a 30-line code block each. */
+export function longTranscript(tag: string): unknown[] {
+  const items: unknown[] = []
+  for (let i = 0; i < LONG_MESSAGES / 2; i++) {
+    const at = Date.now() - (LONG_MESSAGES - i) * 60_000
+    items.push({ kind: 'user', id: `${tag}-u${i}`, text: `step ${i}: refactor the reader for case ${i}`, at })
+    const text = [
+      `Here is step **${i}**. The reader now keeps \`offset\` in the store and returns early on an empty file.`,
+      '',
+      `- checked case ${i}`,
+      `- kept the old path for \`legacy\` input`,
+      '',
+      '```ts',
+      `export async function read${i}(store: Store): Promise<number> {`,
+      CODE,
+      '  return value0',
+      '}',
+      '```',
+      '',
+      'Tests pass.'
+    ].join('\n')
+    const message = { id: `${tag}-m${i}`, role: 'assistant', content: [{ type: 'text', text }] }
+    items.push({ kind: 'assistant', id: `${tag}-a${i}`, content: message.content, raw: { type: 'assistant', message }, at })
+  }
+  return items
+}
+
+/**
+ * Saves each transcript as the history of its project's first chat, plus `extraChats` copies of the first one under
+ * sessions no chat shows (old sessions' history). Reload the page afterwards so the app reads it. Returns the saved size in MB.
+ */
+export async function saveChats(page: Page, byProject: Record<string, unknown[]>, extraChats = 0): Promise<number> {
+  return page.evaluate(
+    ({ long, extra }) => {
+      const views = JSON.parse(localStorage.getItem('command-center.project-views')!).state.views as Record<string, { claudeSessions: { id: string }[] }>
+      const saved = JSON.parse(localStorage.getItem('command-center.chat-items') ?? '{"state":{"items":{}},"version":1}')
+      for (const [projectId, items] of Object.entries(long)) saved.state.items[views[projectId].claudeSessions[0].id] = items
+      const first = Object.values(long)[0]
+      for (let x = 0; x < extra; x++) saved.state.items[`seed-old-${x}`] = first
+      const text = JSON.stringify(saved)
+      localStorage.setItem('command-center.chat-items', text)
+      return text.length / 1024 / 1024
+    },
+    { long: byProject, extra: extraChats }
+  )
+}
+
 const DAY = 24 * HOUR
 const CODE_LINE = (i: number): string => `  const entry${i} = await store.read(\`key-${i}\`) ?? fallback(${i}) // keeps the old path for legacy input, line ${i}`
 

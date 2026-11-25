@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron, expect, test, type Locator, type Page } from '@playwright/test'
 import { shutdown } from '../harness'
-import { env, resize, seed, seedFinishedAgents, startIn } from './seed'
+import { env, longTranscript, resize, saveChats, seed, seedFinishedAgents, startIn } from './seed'
 
 /**
  * Click-to-next-frame timings on the seeded repos, with two chats of 300 messages each open.
@@ -17,36 +17,7 @@ const REPO = resolve(__dirname, '..', '..')
 const MAIN = join(REPO, 'out', 'main', 'index.js')
 const ELECTRON = require('electron') as unknown as string
 const TRIES = Number(process.env.PERF_TRIES ?? 10)
-const LONG_MESSAGES = 300
 const OPEN_APPROVALS = 'open approvals with 5 waiting (Ctrl+Shift+A)'
-
-const CODE = Array.from({ length: 30 }, (_, i) => `  const value${i} = await store.read('key-${i}') ?? fallback(${i}) // line ${i}`).join('\n')
-
-function longTranscript(tag: string): unknown[] {
-  const items: unknown[] = []
-  for (let i = 0; i < LONG_MESSAGES / 2; i++) {
-    const at = Date.now() - (LONG_MESSAGES - i) * 60_000
-    items.push({ kind: 'user', id: `${tag}-u${i}`, text: `step ${i}: refactor the reader for case ${i}`, at })
-    const text = [
-      `Here is step **${i}**. The reader now keeps \`offset\` in the store and returns early on an empty file.`,
-      '',
-      `- checked case ${i}`,
-      `- kept the old path for \`legacy\` input`,
-      '',
-      '```ts',
-      `export async function read${i}(store: Store): Promise<number> {`,
-      CODE,
-      '  return value0',
-      '}',
-      '```',
-      '',
-      'Tests pass.'
-    ].join('\n')
-    const message = { id: `${tag}-m${i}`, role: 'assistant', content: [{ type: 'text', text }] }
-    items.push({ kind: 'assistant', id: `${tag}-a${i}`, content: message.content, raw: { type: 'assistant', message }, at })
-  }
-  return items
-}
 
 // Browser globals of the functions that run inside the page; this project compiles against Node's types.
 interface Probe {
@@ -55,7 +26,6 @@ interface Probe {
   __perfResult?: () => Promise<{ frame: number; settled: number }>
 }
 declare const window: Probe
-declare const localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void }
 declare function requestAnimationFrame(callback: () => void): number
 
 /** Arms a capture listener for the next `type` event; the result is the time from that event to the next frame, and to quiet frames. */
@@ -209,13 +179,7 @@ test('click latency on seeded data', async () => {
     await startIn(page, 'ledger-web', 'run the onboarding tests', 'Ran the onboarding suite')
     await startIn(page, 'notes-cli', null, null)
 
-    const transcripts = { 'pixel-forge': longTranscript('pf'), 'ledger-web': longTranscript('lw') }
-    await page.evaluate((long) => {
-      const views = JSON.parse(localStorage.getItem('command-center.project-views')!).state.views as Record<string, { claudeSessions: { id: string }[] }>
-      const saved = JSON.parse(localStorage.getItem('command-center.chat-items') ?? '{"state":{"items":{}},"version":1}')
-      for (const [projectId, items] of Object.entries(long)) saved.state.items[views[projectId].claudeSessions[0].id] = items
-      localStorage.setItem('command-center.chat-items', JSON.stringify(saved))
-    }, transcripts)
+    await saveChats(page, { 'pixel-forge': longTranscript('pf'), 'ledger-web': longTranscript('lw') })
     await page.reload()
     page = app.windows()[0]
     await page.waitForLoadState('domcontentloaded')
