@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -108,10 +109,29 @@ function start(args: string[] = [], script?: unknown, extraEnv: (dir: string) =>
   return fake
 }
 
+/** Background servers the fake started, by pid; they outlive the fake as on Windows, so each test ends them itself. */
+function spawnedPids(fake: Fake): number[] {
+  try {
+    return fake.log().flatMap((e) => (e.kind === 'spawned' ? [e.pid as number] : []))
+  } catch {
+    return []
+  }
+}
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 afterEach(async () => {
   for (const f of fakes) {
     f.kill()
     await f.exited
+    for (const pid of spawnedPids(f)) if (alive(pid)) process.kill(pid)
   }
   for (const d of dirs) rmSync(d, { recursive: true, force: true })
   fakes = []
@@ -583,6 +603,114 @@ describe('foreground shell commands', () => {
     expect(await fake.next((l) => l.subtype === 'task_updated')).toMatchObject({ patch: { status: 'completed' } })
     const result = await fake.next((l) => l.type === 'user' && l.message.content[0]?.type === 'tool_result')
     expect(result.message.content[0].content).toBe('built')
+  })
+})
+
+describe('background shell commands', () => {
+  const RECORDED = readFileSync(join(FIXTURES, 'turn-background-bash.jsonl'), 'utf-8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l).line as Line)
+  const BACKGROUND = {
+    type: 'tool_use',
+    name: 'Bash',
+    input: { command: 'pnpm dev', description: 'Start the dev server', run_in_background: true },
+    approval: false
+  }
+  const urlIn = (output: string): string => output.match(/http:\/\/localhost:\d+/)![0]
+  const outputOf = async (fake: Fake, taskId: string): Promise<Line> => (await fake.control('get_task_output', { task_id: taskId })).response
+  const untilOutput = async (fake: Fake, taskId: string, pattern: RegExp): Promise<string> => {
+    for (let i = 0; i < 100; i++) {
+      const { output } = await outputOf(fake, taskId)
+      if (pattern.test(output)) return output
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    throw new Error(`no ${pattern} in the task output`)
+  }
+
+  it('starts a backgrounded local_bash task with the recorded lines and result, and a real server that prints its URL', async () => {
+    const fake = start([], { turns: [{ match: '', events: [BACKGROUND, { type: 'text', text: 'started' }] }] })
+    fake.say('serve')
+    const changed = await fake.next((l) => l.subtype === 'background_tasks_changed')
+    const started = await fake.next((l) => l.subtype === 'task_started')
+    const call = fake.lines.find((l) => l.type === 'assistant' && l.message.content[0]?.name === 'Bash')!
+    const recordedStart = RECORDED.find((l) => l.subtype === 'task_started')!
+    expect(Object.keys(started).sort()).toEqual(Object.keys(recordedStart).sort())
+    expect(started).toMatchObject({ tool_use_id: call.message.content[0].id, description: 'Start the dev server', is_backgrounded: true, task_type: 'local_bash' })
+    expect(changed.tasks).toEqual([{ task_id: started.task_id, run_id: started.run_id, task_type: 'local_bash', description: 'Start the dev server' }])
+    const result = await fake.next((l) => l.type === 'user' && l.message.content[0]?.tool_use_id === started.tool_use_id)
+    expect(result.message.content[0].content).toMatch(
+      new RegExp(`^Command running in background with ID: ${started.task_id}\\. Output is being written to: .+${started.task_id}\\.output\\. You will be notified when it completes\\. To check interim output, use Read on that file path\\.$`)
+    )
+    expect(result.tool_use_result).toMatchObject({ stdout: '', stderr: '', interrupted: false, backgroundTaskId: started.task_id })
+    expect((await fake.next(isResult)).result).toBe('started')
+
+    const output = await untilOutput(fake, started.task_id, /Listening on http:\/\/localhost:\d+/)
+    expect(await (await fetch(urlIn(output))).text()).toBe('ok')
+  })
+
+  it('stop_task kills the server and sends the recorded end lines in order; its output keeps "[killed]"', async () => {
+    const fake = start([], { turns: [{ match: '', events: [BACKGROUND] }] })
+    fake.say('serve')
+    const started = await fake.next((l) => l.subtype === 'task_started')
+    const url = urlIn(await untilOutput(fake, started.task_id, /Listening on/))
+    const from = fake.lines.length
+    const stop = await fake.control('stop_task', { task_id: started.task_id })
+    expect(stop).toMatchObject({ subtype: 'success', response: {} })
+    const stopAt = RECORDED.findIndex((l) => l.request?.subtype === 'stop_task')
+    const recordedStop = RECORDED.slice(stopAt + 1, RECORDED.findIndex((l, i) => i > stopAt && l.type === 'control_response') + 1)
+    expect(fake.lines.slice(from).map((l) => l.subtype ?? l.type)).toEqual(recordedStop.map((l) => l.subtype ?? l.type))
+    const [updated, notification, changed] = fake.lines.slice(from)
+    const keys = (l: Line): string[] => Object.keys(l).sort()
+    expect([updated, notification, changed].map(keys)).toEqual(recordedStop.slice(0, 3).map(keys))
+    expect(updated).toMatchObject({ task_id: started.task_id, patch: { status: 'killed', end_time: expect.any(Number) } })
+    expect(notification).toMatchObject({ task_id: started.task_id, tool_use_id: started.tool_use_id, status: 'stopped', summary: 'Start the dev server' })
+    expect(notification.output_file).toMatch(new RegExp(`${started.task_id}\\.output$`))
+    expect(changed.tasks).toEqual([])
+    expect((await outputOf(fake, started.task_id)).output).toMatch(/Listening on http:\/\/localhost:\d+\n\n\[killed\]\n$/)
+    await expect(fetch(url)).rejects.toThrow()
+    expect(spawnedPids(fake).some(alive)).toBe(false)
+    expect((await fake.control('stop_task', { task_id: started.task_id })).subtype).toBe('error')
+    expect((await fake.control('get_task_output', { task_id: 'bnope' })).subtype).toBe('error')
+  })
+
+  it.each([
+    [0, 'completed'],
+    [1, 'failed']
+  ])('a scripted exit with code %i ends the task %s, after the turn’s result', async (exitCode, status) => {
+    const fake = start([], { turns: [{ match: '', events: [{ ...BACKGROUND, server: { exitAfterMs: 200, exitCode } }, { type: 'text', text: 'started' }] }] })
+    fake.say('serve')
+    const started = await fake.next((l) => l.subtype === 'task_started')
+    await fake.next(isResult)
+    expect(await fake.next((l) => l.subtype === 'task_updated')).toMatchObject({ task_id: started.task_id, patch: { status, end_time: expect.any(Number) } })
+    const notification = await fake.next((l) => l.subtype === 'task_notification')
+    expect(notification).toMatchObject({ task_id: started.task_id, tool_use_id: started.tool_use_id, status })
+    expect((await fake.next((l) => l.subtype === 'background_tasks_changed', fake.lines.indexOf(notification))).tasks).toEqual([])
+    expect((await outputOf(fake, started.task_id)).output).toMatch(/^Listening on http:\/\/localhost:\d+\n$/)
+    expect(spawnedPids(fake).some(alive)).toBe(false)
+  })
+
+  it('leaves the server running when the fake itself is killed, so only a tree kill ends it', async () => {
+    const fake = start([], { turns: [{ match: '', events: [BACKGROUND] }] })
+    fake.say('serve')
+    const started = await fake.next((l) => l.subtype === 'task_started')
+    const url = urlIn(await untilOutput(fake, started.task_id, /Listening on/))
+    fake.kill()
+    await fake.exited
+    expect(await (await fetch(url)).text()).toBe('ok')
+  })
+
+  it('serves on the port the script gives', async () => {
+    const port = await new Promise<number>((resolve) => {
+      const probe = createServer().listen(0, '127.0.0.1', () => {
+        const { port } = probe.address() as AddressInfo
+        probe.close(() => resolve(port))
+      })
+    })
+    const fake = start([], { turns: [{ match: '', events: [{ ...BACKGROUND, server: { port } }] }] })
+    fake.say('serve')
+    const started = await fake.next((l) => l.subtype === 'task_started')
+    expect(await untilOutput(fake, started.task_id, /Listening/)).toBe(`Listening on http://localhost:${port}\n`)
   })
 })
 

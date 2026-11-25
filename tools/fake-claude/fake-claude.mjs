@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { spawn } from 'node:child_process'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
 import { basename, dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -39,6 +41,9 @@ const recorded = {
   control: readLines(join(FIXTURES, 'control-replies.jsonl'))
     .filter((entry) => entry.direction === 'cli')
     .map((entry) => entry.line),
+  backgroundBash: readLines(join(FIXTURES, 'turn-background-bash.jsonl'))
+    .filter((entry) => entry.direction === 'cli')
+    .map((entry) => entry.line),
   remoteControl: readLines(join(FIXTURES, 'remote-control-replies.jsonl'))
     .filter((entry) => entry.direction === 'cli')
     .map((entry) => entry.line)
@@ -55,6 +60,12 @@ const isStream = (type, extra = () => true) => (l) => l.type === 'stream_event' 
 function thinkingLine(match) {
   const hit = recorded.thinking.find(match)
   if (!hit) throw new Error('fake-claude: thinking fixture line missing')
+  return clone(hit)
+}
+
+function backgroundLine(match) {
+  const hit = recorded.backgroundBash.find(match)
+  if (!hit) throw new Error('fake-claude: background fixture line missing')
   return clone(hit)
 }
 
@@ -86,7 +97,13 @@ const template = {
   replay: clone(recorded.queued.find((l) => l.type === 'user' && l.isReplay)),
   bridgeReady: clone(recorded.remoteControl.find((l) => l.subtype === 'bridge_state' && l.state === 'ready')),
   remoteControlReply: clone(recorded.remoteControl.find((l) => l.response?.response?.session_url).response.response),
-  interruptReply: clone(recorded.control.find((l) => l.response?.response && 'still_queued' in l.response.response).response.response)
+  interruptReply: clone(recorded.control.find((l) => l.response?.response && 'still_queued' in l.response.response).response.response),
+  bgTasksChanged: backgroundLine((l) => l.subtype === 'background_tasks_changed' && l.tasks.length > 0),
+  bgStarted: backgroundLine((l) => l.subtype === 'task_started'),
+  bgResult: backgroundLine((l) => l.type === 'user' && l.tool_use_result?.backgroundTaskId),
+  bgUpdated: backgroundLine((l) => l.subtype === 'task_updated'),
+  bgNotification: backgroundLine((l) => l.subtype === 'task_notification'),
+  bgOutput: backgroundLine((l) => l.response?.response && 'total_bytes' in l.response.response).response.response
 }
 
 const INTERRUPTED = '[Request interrupted by user]'
@@ -188,6 +205,8 @@ class Fake {
     this.running = null
     /** Background agents still working, by task id; they outlive the turn that started them. */
     this.background = new Map()
+    /** Backgrounded Bash calls by task id, running or ended; `get_task_output` reads either. */
+    this.backgroundShells = new Map()
     this.pendingApprovals = new Map()
     this.counter = 0
     this.title = null
@@ -358,8 +377,20 @@ class Fake {
         ok({ backgrounded: true })
         return this.running.backgroundShell()
       }
+      case 'get_task_output': {
+        if (typeof request.task_id !== 'string') return fail('get_task_output: task_id must be a string')
+        const shell = this.backgroundShells.get(request.task_id)
+        if (!shell) return fail(`No task found with ID: ${request.task_id}`)
+        return ok({ ...clone(template.bgOutput), output: shell.output, total_bytes: Buffer.byteLength(shell.output), truncated: false })
+      }
       case 'stop_task': {
         if (typeof request.task_id !== 'string') return fail('stop_task: task_id must be a string')
+        const shell = this.backgroundShells.get(request.task_id)
+        if (shell?.status === 'running') {
+          shell.child.kill()
+          this.endShell(shell, 'killed')
+          return ok({})
+        }
         const background = this.background.get(request.task_id)
         if (background) {
           ok()
@@ -376,6 +407,49 @@ class Fake {
           response: { subtype: 'error', request_id: requestId, error: recorded.unsupported.replace(/: .*$/, `: ${request.subtype}`) }
         })
     }
+  }
+
+  /**
+   * A backgrounded Bash call, as recorded: `background_tasks_changed` and `task_started` (`is_backgrounded: true`), with a real child
+   * (`background-server.mjs`) whose output `get_task_output` returns. Its exit sends the end events; the child outlives the fake.
+   */
+  startShell(toolUseId, input, server) {
+    const taskId = `b${randomBytes(6).readUIntBE(0, 6).toString(36).padStart(8, '0').slice(-8)}`
+    const runId = `${randomBytes(6).readUIntBE(0, 6).toString(36).padStart(9, '0').slice(-9)}-${randomBytes(4).toString('hex')}`
+    const description = input.description ?? input.command ?? 'Bash'
+    const outputFile = join(tmpdir(), 'claude', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'), this.sessionId, 'tasks', `${taskId}.output`)
+    const args = [join(HERE, 'background-server.mjs'), String(server.port ?? 0), String(server.exitAfterMs ?? ''), String(server.exitCode ?? 0)]
+    // Detached: libuv's job object would otherwise end the child with the fake, which the real CLI's children outlive.
+    const child = spawn(process.execPath, args, { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: true })
+    const shell = { taskId, runId, toolUseId, description, outputFile, child, output: '', status: 'running' }
+    child.stdout.setEncoding('utf-8').on('data', (text) => (shell.output += text))
+    child.stderr.setEncoding('utf-8').on('data', (text) => (shell.output += text))
+    child.on('exit', (code) => this.endShell(shell, code === 0 ? 'completed' : 'failed'))
+    this.backgroundShells.set(taskId, shell)
+    this.log({ kind: 'spawned', pid: child.pid, taskId })
+    this.tasksChanged()
+    this.send(this.stamp({ ...clone(template.bgStarted), task_id: taskId, run_id: runId, tool_use_id: toolUseId, description }))
+    return { taskId, outputFile }
+  }
+
+  /** The recorded end: `task_updated` (`killed`, `completed` or `failed`), `task_notification` (`stopped` for a kill), `background_tasks_changed`. */
+  endShell(shell, status) {
+    if (shell.status !== 'running') return
+    shell.status = status
+    if (status === 'killed') shell.output += '\n[killed]\n'
+    const ids = { task_id: shell.taskId, run_id: shell.runId }
+    this.send(this.stamp({ ...clone(template.bgUpdated), ...ids, patch: { status, end_time: Date.now() } }))
+    const notification = { ...clone(template.bgNotification), ...ids, tool_use_id: shell.toolUseId, output_file: shell.outputFile, summary: shell.description }
+    notification.status = status === 'killed' ? 'stopped' : status
+    this.send(this.stamp(notification))
+    this.tasksChanged()
+  }
+
+  tasksChanged() {
+    const tasks = [...this.backgroundShells.values()]
+      .filter((s) => s.status === 'running')
+      .map((s) => ({ task_id: s.taskId, run_id: s.runId, task_type: 'local_bash', description: s.description }))
+    this.send(this.stamp({ ...clone(template.bgTasksChanged), tasks }))
   }
 
   /** As the recorded probe: on sends `bridge_state` ready and the session links (the same ones while on); off always succeeds. */
@@ -794,6 +868,18 @@ class Turn {
     }
     if (decision.behavior === 'allow') {
       fake.remember(decision.updatedPermissions)
+      if (event.name === 'Bash' && input.run_in_background === true) {
+        const { taskId, outputFile } = fake.startShell(toolUseId, input, event.server ?? {})
+        const line = clone(template.bgResult)
+        const block = line.message.content[0]
+        block.tool_use_id = toolUseId
+        block.content = `Command running in background with ID: ${taskId}. Output is being written to: ${outputFile}. You will be notified when it completes. To check interim output, use Read on that file path.`
+        line.tool_use_result.backgroundTaskId = taskId
+        line.tool_result_meta[0].id = toolUseId
+        this.emit(line)
+        this.foldQueued()
+        return false
+      }
       if (typeof event.runMs === 'number') {
         if (!(await this.runShell(event, toolUseId, input))) return false
         this.foldQueued()
