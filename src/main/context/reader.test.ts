@@ -192,6 +192,28 @@ describe('context reader: subfolder CLAUDE.md files', () => {
     expect(report.startTotal).toBe(1)
   })
 
+  it('gives every CLAUDE.md, CLAUDE.local.md, subfolder CLAUDE.md and found import its length in characters', async () => {
+    await put(join(account, 'CLAUDE.md'), `@rules.md @gone.md ${chars(10)}`)
+    await put(join(account, 'rules.md'), chars(41))
+    await put(join(repo, 'CLAUDE.md'), chars(40_001))
+    await put(join(repo, 'CLAUDE.local.md'), 'å')
+    await put(join(repo, 'src', 'CLAUDE.md'), chars(7))
+
+    const { layers } = await readContext(input())
+    const sized = (items: ContextItem[]): unknown[] => items.flatMap((i) => [[i.label, i.chars], ...sized(i.children)])
+
+    expect(sized(layers.account)).toEqual([
+      ['CLAUDE.md', 29],
+      ['@rules.md', 41],
+      ['@gone.md', undefined]
+    ])
+    expect(sized(layers.repo)).toEqual([
+      ['CLAUDE.md', 40_001],
+      ['src/CLAUDE.md', 7]
+    ])
+    expect(sized(layers.local)).toEqual([['CLAUDE.local.md', 1]])
+  })
+
   it('leaves out a folder the repo gitignores', async () => {
     // Under the pre-commit hook an inherited GIT_DIR makes this init rewrite the shared repo config as bare.
     execFileSync('git', ['init', '-q'], { cwd: repo, env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))) })
@@ -267,6 +289,71 @@ describe('context reader: memory', () => {
     ])
     expect(report.layers.account[0].path).toBe(join(memoryDir(account), 'MEMORY.md'))
     expect(report.startTotal).toBe(50)
+  })
+
+  it("knows MEMORY.md's lines, bytes, the memory files it links and the lines whose target is missing", async () => {
+    const dir = memoryDir(account)
+    await put(
+      join(dir, 'MEMORY.md'),
+      ['# Memory', '- [Role](user_role.md) — who', '- [Quirk](./env_quirk.md#top) and [site](https://x.dev/a.md)', '- [Gone](gone.md) — deleted', '- [Deep](sub/deep.md)', ''].join('\n')
+    )
+    await put(join(dir, 'user_role.md'), 'role')
+    await put(join(dir, 'env_quirk.md'), 'quirk')
+    await put(join(dir, 'stray.md'), 'never linked')
+    await put(join(dir, 'sub', 'deep.md'), 'below')
+
+    const [index, ...files] = (await readContext(input())).layers.account
+    const text = await fs.readFile(join(dir, 'MEMORY.md'))
+
+    expect(index.index).toMatchObject({ lines: 5, bytes: text.length, missingTargets: [{ line: 4, target: 'gone.md' }] })
+    expect(index.index?.lineEnds).toHaveLength(5)
+    expect(index.index?.lineEnds.at(-1)).toBe(text.length)
+    expect(index.index?.lineEnds[0]).toBe('# Memory\n'.length)
+    expect(index.index?.links).toEqual([join(dir, 'user_role.md'), join(dir, 'env_quirk.md'), join(dir, 'sub', 'deep.md')])
+    expect(files.map((f) => [f.label, f.indexed])).toEqual([
+      ['env_quirk.md', true],
+      ['stray.md', false],
+      ['user_role.md', true]
+    ])
+  })
+
+  it.runIf(process.platform === 'win32')('matches a link to a memory file whatever its case, as Windows finds it', async () => {
+    await put(join(memoryDir(account), 'MEMORY.md'), '- [Q](Env_Quirk.md)')
+    await put(join(memoryDir(account), 'env_quirk.md'), 'quirk')
+
+    const [index, file] = (await readContext(input())).layers.account
+
+    expect(index.index).toMatchObject({ links: [join(memoryDir(account), 'env_quirk.md')], missingTargets: [] })
+    expect(file.indexed).toBe(true)
+  })
+
+  it('counts a multi-byte character as its UTF-8 bytes and a line without a final break as a line', async () => {
+    await put(join(memoryDir(account), 'MEMORY.md'), 'å\r\nb')
+
+    const [index] = (await readContext(input())).layers.account
+
+    expect(index.index).toMatchObject({ lines: 2, bytes: 5, lineEnds: [4, 5], links: [], missingTargets: [] })
+  })
+
+  it('marks every memory file unindexed when there is no MEMORY.md', async () => {
+    await put(join(memoryDir(account), 'a.md'), 'a')
+
+    expect((await readContext(input())).layers.account.map((i) => [i.kind, i.indexed])).toEqual([['memory-file', false]])
+  })
+
+  it('collects the [[links]] in memory that match no file by base name or frontmatter name', async () => {
+    const dir = memoryDir(account)
+    await put(join(dir, 'MEMORY.md'), '- [A](a.md) see [[a]] and [[later-idea]]\n')
+    await put(join(dir, 'a.md'), 'links [[b-by-name]], [[a.md]], [[a|alias]], [[missing#part]] and `[[in code]]`')
+    await put(join(dir, 'b.md'), '---\nname: b-by-name\n---\nbody')
+
+    const items = (await readContext(input())).layers.account
+
+    expect(items.map((i) => [i.label, i.unmatchedLinks])).toEqual([
+      ['MEMORY.md', ['later-idea']],
+      ['a.md', ['missing']],
+      ['b.md', []]
+    ])
   })
 
   it('names the account folder and the memory folder, even before the memory folder exists', async () => {

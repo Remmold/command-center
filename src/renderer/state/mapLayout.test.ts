@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { ContextItem, ContextItemKind, ContextLayerName, ContextReport } from '../../shared/context'
-import { BLOCK_SIZE_FLOOR, mapLayout, type ContextMap, type MapBandName } from './mapLayout'
+import { SLASH_COMMAND_ONLY, type ContextItem, type ContextItemKind, type ContextLayerName, type ContextReport } from '../../shared/context'
+import type { Finding } from '../../shared/findings'
+import { BLOCK_SIZE_FLOOR, blocksOf, mapLayout, type ContextMap, type MapBandName } from './mapLayout'
 
 function item(kind: ContextItemKind, label: string, extra: Partial<ContextItem> = {}): ContextItem {
   return {
@@ -179,5 +180,58 @@ describe('mapLayout', () => {
 
     const big = mapLayout(report({ account: [...many('skill', 9), plugin] }), [])
     expect(band(big, 'account', 'start')).toEqual(['9 skills', 'skill-1', 'skill-2', 'skill-3', 'skill-4', 'skill-5'])
+  })
+
+  it('puts a skill offered only as a slash command On demand, since nothing of it loads at start', () => {
+    const map = mapLayout(report({ account: [item('skill', 'grill', { tokens: 20 }), item('skill', 'release', { note: SLASH_COMMAND_ONLY }), item('command', 'ship')] }), [])
+    expect(band(map, 'account', 'start')).toEqual(['grill'])
+    expect(band(map, 'account', 'on-demand')).toEqual(['ship', 'release'])
+  })
+
+  it('draws a line from MEMORY.md to each memory file it links, and to a collapsed group of them once', () => {
+    const files = (n: number): ContextItem[] => many('memory-file', n).map((m) => ({ ...m, indexed: true }))
+    const index = (links: ContextItem[]): ContextItem => item('memory-index', 'MEMORY.md', { tokens: 40, index: { lines: 2, bytes: 9, lineEnds: [4, 9], links: links.map((l) => l.path as string), missingTargets: [] } })
+    const few = files(2)
+    const small = mapLayout(report({ account: [index(few), ...few, item('memory-file', 'stray.md', { indexed: false })] }), [])
+    const label = (map: ContextMap, id: string): string | undefined => blocksOf(map).find((b) => b.id === id)?.label
+    expect(small.edges.map((e) => [label(small, e.from), label(small, e.to), e.kind])).toEqual([
+      ['MEMORY.md', 'memory-file-1', 'index'],
+      ['MEMORY.md', 'memory-file-2', 'index']
+    ])
+
+    const lots = files(9)
+    const big = mapLayout(report({ account: [index(lots), ...lots] }), [])
+    expect(big.edges.map((e) => [label(big, e.from), label(big, e.to), e.kind])).toEqual([['MEMORY.md', '9 memory files', 'index']])
+  })
+
+  it('draws memory files MEMORY.md never links apart from the linked ones, each set grouped on its own', () => {
+    const linked = many('memory-file', 9).map((m) => ({ ...m, indexed: true }))
+    const unlinked = ['x.md', 'y.md'].map((n) => item('memory-file', n, { indexed: false }))
+    const map = mapLayout(report({ account: [unlinked[0], ...linked, unlinked[1]] }), [])
+    const blocks = map.lanes[0].bands[1].blocks
+    expect(blocks.map((b) => [b.label, b.unindexed])).toEqual([
+      ['9 memory files', false],
+      ['x.md', true],
+      ['y.md', true]
+    ])
+
+    const lots = many('memory-file', 9).map((m) => ({ ...m, label: `u-${m.label}`, path: `/x/u-${m.label}`, indexed: false }))
+    const grouped = mapLayout(report({ account: [...linked, ...lots] }), [])
+    expect(band(grouped, 'account', 'on-demand')).toEqual(['9 memory files', '9 unindexed memory files'])
+    expect(grouped.lanes[0].bands[1].blocks.map((b) => b.unindexed)).toEqual([false, true])
+  })
+
+  it('attaches each finding to the block of the file it concerns, a collapsed group taking its members findings', () => {
+    const finding = (id: string, path: string): Finding => ({ id, path, verdict: 'structural', severity: 'problem', claim: id, evidence: '', fix: '', status: 'open' })
+    const memory = many('memory-file', 9).map((m) => ({ ...m, indexed: true }))
+    const map = mapLayout(
+      report({ account: [item('claude-md', 'CLAUDE.md', { tokens: 9 }), item('memory-index', 'MEMORY.md', { tokens: 4 }), ...memory] }),
+      [finding('H1', '/x/MEMORY.md'), finding('H2', '/x/memory-file-3'), finding('H3', '/x/memory-file-7'), finding('H4', '/elsewhere.md')]
+    )
+    expect(blocksOf(map).map((b) => [b.label, b.findings.map((f) => f.id)])).toEqual([
+      ['CLAUDE.md', []],
+      ['MEMORY.md', ['H1']],
+      ['9 memory files', ['H2', 'H3']]
+    ])
   })
 })

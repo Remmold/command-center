@@ -13,7 +13,9 @@ import {
   type ContextLayerName,
   type ContextReport,
   type ContextSource,
-  type CreatableContextFile
+  type CreatableContextFile,
+  type MemoryIndexFacts,
+  SLASH_COMMAND_ONLY
 } from '../../shared/context'
 
 export interface ContextReaderInput {
@@ -105,15 +107,22 @@ async function item(r: Reading, kind: ContextItemKind, label: string, path: stri
   }
 }
 
+/** Each line without its code spans; null for a line in a code block or a fence line. */
+function proseLines(text: string): (string | null)[] {
+  let fence: string | null = null
+  return text.split(/\r?\n/).map((line) => {
+    const marker = /^\s*(```|~~~)/.exec(line)?.[1]
+    if (marker && (fence === null || fence === marker)) {
+      fence = fence === null ? marker : null
+      return null
+    }
+    return fence === null ? line.replace(/`[^`]*`/g, '') : null
+  })
+}
+
 /** `@path` references outside code blocks and code spans, each preceded by a space or a line start. */
 export function importReferences(text: string): string[] {
-  const prose: string[] = []
-  let fence: string | null = null
-  for (const line of text.split(/\r?\n/)) {
-    const marker = /^\s*(```|~~~)/.exec(line)?.[1]
-    if (marker && (fence === null || fence === marker)) fence = fence === null ? marker : null
-    else if (fence === null) prose.push(line.replace(/`[^`]*`/g, ''))
-  }
+  const prose = proseLines(text).filter((line): line is string => line !== null)
   return [...prose.join('\n').matchAll(/(?:^|\s)@(\S+)/g)].map((m) => m[1].replace(/[.,;:!?)\]]+$/, '')).filter(Boolean)
 }
 
@@ -141,7 +150,7 @@ async function claudeMd(r: Reading, path: string, label: string, source: Context
   const text = await readText(path)
   if (text === null) return null
   r.seen.add(fileKey(path))
-  return { ...(await item(r, kind, label, path, source, estimateTokens(text))), children: await imports(r, path, text, source, depth) }
+  return { ...(await item(r, kind, label, path, source, estimateTokens(text))), chars: text.length, children: await imports(r, path, text, source, depth) }
 }
 
 /** The workspace folder's parent up to the drive root (or `stopAt`), outermost first. */
@@ -169,16 +178,16 @@ async function walkForClaudeMd(root: string): Promise<string[]> {
   return out
 }
 
-/** CLAUDE.md files below the workspace folder (not its own), skipping node_modules, .git and what .gitignore hides. */
-async function subfolderClaudeMds(root: string): Promise<string[]> {
+/** CLAUDE.md files below the workspace folder (not its own) with their lengths, skipping node_modules, .git and what .gitignore hides. */
+async function subfolderClaudeMds(root: string): Promise<{ rel: string; chars: number }[]> {
   const listed = await listUnignoredFiles(root, ':(glob)**/CLAUDE.md')
   const candidates = listed ?? (await walkForClaudeMd(root))
   const below = candidates.filter((rel) => {
     const parts = rel.split('/')
     return parts.length > 1 && parts[parts.length - 1] === 'CLAUDE.md' && !parts.some((p) => SKIPPED_FOLDERS.has(p))
   })
-  const present = await Promise.all(below.map(async (rel) => ((await readText(join(root, rel))) !== null ? rel : null)))
-  return present.filter((rel): rel is string => rel !== null).sort()
+  const present = await Promise.all(below.map(async (rel) => ({ rel, text: await readText(join(root, rel)) })))
+  return present.flatMap(({ rel, text }) => (text === null ? [] : [{ rel, chars: text.length }])).sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))
 }
 
 async function fileNames(dir: string): Promise<string[]> {
@@ -190,14 +199,71 @@ function memoryFolder(input: ContextReaderInput): string {
   return join(transcriptsDir(input.configDir, input.workspacePath), 'memory')
 }
 
-/** The workspace's memory folder in the profile: MEMORY.md counts at start, the other files are listed. */
+/** The byte offset where each line ends, its break included; a final break starts no line. */
+function lineEnds(text: string): number[] {
+  const parts = text.split('\n')
+  if (parts.at(-1) === '') parts.pop()
+  let end = 0
+  return parts.map((part, n) => (end += Buffer.byteLength(part) + (n < parts.length - 1 || text.endsWith('\n') ? 1 : 0)))
+}
+
+/** A markdown link's target as a file path: no anchor, no angle brackets, percent-decoded; null for a URL or a non-`.md` target. */
+function markdownTarget(raw: string): string | null {
+  if (/^[a-z][a-z0-9+.-]+:/i.test(raw)) return null
+  const bare = raw.replace(/^<|>$/g, '').replace(/[#?].*$/, '')
+  let target: string
+  try {
+    target = decodeURIComponent(bare)
+  } catch {
+    target = bare
+  }
+  return target.toLowerCase().endsWith('.md') ? target : null
+}
+
+/** MEMORY.md's facts; a link to a listed file takes that file's path, so it matches whatever its case on Windows. */
+async function indexFacts(dir: string, text: string, listed: ReadonlyMap<string, string>): Promise<MemoryIndexFacts> {
+  const ends = lineEnds(text)
+  const links: string[] = []
+  const missingTargets: MemoryIndexFacts['missingTargets'] = []
+  for (const [n, line] of proseLines(text).entries()) {
+    for (const m of (line ?? '').matchAll(/\]\(\s*(<[^>]*>|[^)\s]+)[^)]*\)/g)) {
+      const target = markdownTarget(m[1])
+      if (target === null) continue
+      const path = resolve(dir, target)
+      const known = listed.get(fileKey(path)) ?? ((await isFile(path)) ? path : null)
+      if (known === null) missingTargets.push({ line: n + 1, target })
+      else if (!links.some((l) => fileKey(l) === fileKey(known))) links.push(known)
+    }
+  }
+  return { lines: ends.length, bytes: ends.at(-1) ?? 0, lineEnds: ends, links, missingTargets }
+}
+
+/** The `[[name]]` links outside code, without an `|alias`, a `#part` or a `.md` ending; each once. */
+function wikiLinks(text: string): string[] {
+  const names = proseLines(text).flatMap((line) => [...(line ?? '').matchAll(/\[\[([^\]|#]+)[^\]]*\]\]/g)].map((m) => m[1].trim().replace(/\.md$/i, '')))
+  return [...new Set(names.filter(Boolean))]
+}
+
+/**
+ * The workspace's memory folder in the profile: MEMORY.md counts at start, the other files are listed. MEMORY.md carries its
+ * facts, each other file whether MEMORY.md links it, and each `.md` file its `[[links]]` that match no memory file.
+ */
 async function memory(r: Reading): Promise<ContextItem[]> {
   const dir = memoryFolder(r.input)
+  const names = await fileNames(dir)
+  const texts = new Map(await Promise.all(names.map(async (name) => [name, name.endsWith('.md') ? await readText(join(dir, name)) : null] as const)))
+  const listed = new Map(names.map((name) => [fileKey(join(dir, name)), join(dir, name)]))
+  const indexText = texts.get('MEMORY.md') ?? null
+  const index = indexText === null ? null : await indexFacts(dir, indexText, listed)
+  const linked = new Set(index?.links.map(fileKey))
+  const known = new Set(names.flatMap((name) => [basename(name, '.md'), frontmatter(texts.get(name) ?? '').name ?? ''].filter(Boolean).map((n) => n.toLowerCase())))
+  const unmatched = (name: string): string[] => wikiLinks(texts.get(name) ?? '').filter((link) => !known.has(link.toLowerCase()))
   const out: ContextItem[] = []
-  for (const name of await fileNames(dir)) {
+  for (const name of names) {
     const path = join(dir, name)
-    if (name === 'MEMORY.md') out.unshift(await item(r, 'memory-index', name, path, 'account', estimateTokens((await readText(path)) ?? '')))
-    else out.push(await item(r, 'memory-file', name, path, 'account', null))
+    const unmatchedLinks = unmatched(name)
+    if (name === 'MEMORY.md' && index) out.unshift({ ...(await item(r, 'memory-index', name, path, 'account', estimateTokens(indexText ?? ''))), index, unmatchedLinks })
+    else out.push({ ...(await item(r, 'memory-file', name, path, 'account', null)), indexed: linked.has(fileKey(path)), unmatchedLinks })
   }
   return out
 }
@@ -230,7 +296,7 @@ async function described(r: Reading, kind: 'skill' | 'agent', path: string, fall
   if (text === null) return null
   const meta = frontmatter(text)
   const name = meta.name || fallbackName
-  if (kind === 'skill' && meta['disable-model-invocation']?.toLowerCase() === 'true') return { ...(await item(r, kind, name, path, source, null)), note: 'slash command only' }
+  if (kind === 'skill' && meta['disable-model-invocation']?.toLowerCase() === 'true') return { ...(await item(r, kind, name, path, source, null)), note: SLASH_COMMAND_ONLY }
   return item(r, kind, name, path, source, estimateTokens(name + (meta.description ?? '')))
 }
 
@@ -523,7 +589,9 @@ export async function readContext(input: ContextReaderInput): Promise<ContextRep
   for (const dir of parentFolders(root, input.parentsStopAt)) parents.push(await claudeMd(r, join(dir, 'CLAUDE.md'), join(dir, 'CLAUDE.md'), 'repo'))
   const repoMd = await claudeMd(r, join(root, 'CLAUDE.md'), 'CLAUDE.md', 'repo')
   const localMd = await claudeMd(r, join(root, 'CLAUDE.local.md'), 'CLAUDE.local.md', 'repo')
-  const subfolders = await Promise.all((await subfolderClaudeMds(root)).map((rel) => item(r, 'subfolder-claude-md', rel, join(root, rel), 'repo', null)))
+  const subfolders = await Promise.all(
+    (await subfolderClaudeMds(root)).map(async ({ rel, chars }) => ({ ...(await item(r, 'subfolder-claude-md', rel, join(root, rel), 'repo', null)), chars }))
+  )
   const accountKit = await toolkit(r, input.configDir, 'account')
   const repoKit = await toolkit(r, join(root, '.claude'), 'repo')
   const settingsFiles: Record<ContextLayerName, string> = {

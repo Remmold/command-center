@@ -26,7 +26,10 @@ export const KIND_TITLES: Record<ContextItemKind, string> = {
   hook: 'Hook'
 }
 
-export const SLASH_ONLY_SKILL = 'A skill offered only as a slash command: nothing of it loads at start, and its body loads when you type it.'
+export const SLASH_ONLY_SKILL =
+  'A skill offered only as a slash command. Claude is never told about it, so nothing of it loads at start and it sits On demand: its body loads when you type it.'
+
+export const UNINDEXED_MEMORY_FILE = 'A memory file MEMORY.md never links. Claude finds memory through the index, so it never opens this one.'
 
 /** What each kind is and how Claude loads it, in plain words. */
 export const KIND_EXPLANATIONS: Record<ContextItemKind, string> = {

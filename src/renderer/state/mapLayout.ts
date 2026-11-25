@@ -1,4 +1,4 @@
-import type { ContextItem, ContextItemKind, ContextLayerName, ContextReport } from '../../shared/context'
+import { SLASH_COMMAND_ONLY, type ContextItem, type ContextItemKind, type ContextLayerName, type ContextReport } from '../../shared/context'
 import type { Finding } from '../../shared/findings'
 
 export type MapBandName = 'start' | 'on-demand' | 'behaviour'
@@ -24,6 +24,8 @@ export interface MapBlock {
   sharedWithDefault: boolean
   /** Why it can't be written, when every item it stands for is read-only. */
   readOnly: string | null
+  /** Memory files MEMORY.md never links, drawn apart from the linked ones. */
+  unindexed: boolean
   findings: Finding[]
 }
 
@@ -39,11 +41,11 @@ export interface MapLane {
   bands: MapBand[]
 }
 
-/** A line from a CLAUDE.md (or an imported file) to a file it imports. */
+/** A line from a CLAUDE.md (or an imported file) to a file it imports, or from MEMORY.md to a memory file it links. */
 export interface MapEdge {
   from: string
   to: string
-  kind: 'import'
+  kind: 'import' | 'index'
 }
 
 /** A kind with more than LARGE_GROUP items in one lane, collapsed into one block or expanded. */
@@ -96,7 +98,10 @@ const BAND_OF: Record<ContextItemKind, MapBandName> = {
   plugin: 'behaviour'
 }
 
-const KIND_ORDER: readonly ContextItemKind[] = [
+/** Where a kind's items go in a band; unindexed memory files and slash-only skills are each a set of their own. */
+type Slot = ContextItemKind | 'memory-file:unindexed' | 'skill:slash'
+
+const SLOT_ORDER: readonly Slot[] = [
   'claude-md',
   'import',
   'memory-index',
@@ -104,12 +109,26 @@ const KIND_ORDER: readonly ContextItemKind[] = [
   'agent',
   'subfolder-claude-md',
   'memory-file',
+  'memory-file:unindexed',
   'command',
+  'skill:slash',
   'settings',
   'hook',
   'mcp-server',
   'plugin'
 ]
+
+function slotOf(item: ContextItem): Slot {
+  if (item.kind === 'memory-file' && item.indexed === false) return 'memory-file:unindexed'
+  if (item.kind === 'skill' && item.note === SLASH_COMMAND_ONLY) return 'skill:slash'
+  return item.kind
+}
+
+/** A slash-only skill loads nothing at start, so it is On demand like a command. */
+const bandOf = (slot: Slot): MapBandName => (slot === 'skill:slash' ? 'on-demand' : BAND_OF[slot === 'memory-file:unindexed' ? 'memory-file' : slot])
+
+const groupNoun = (slot: Slot, kind: ContextItemKind): string =>
+  slot === 'memory-file:unindexed' ? `unindexed ${PLURALS[kind]}` : slot === 'skill:slash' ? `slash-only ${PLURALS[kind]}` : PLURALS[kind]
 
 const PLURALS: Record<ContextItemKind, string> = {
   'claude-md': 'CLAUDE.md files',
@@ -155,17 +174,17 @@ function flatten(layer: ContextLayerName, items: readonly ContextItem[]): Placed
   return out
 }
 
-/** The placed items by kind in KIND_ORDER, a plugin's items apart from the layer's own (Files lists them under the plugin). */
-function byKindAndPlugin(placed: readonly Placed[]): [ContextItemKind, string | null, Placed[]][] {
-  const out: [ContextItemKind, string | null, Placed[]][] = []
-  for (const kind of KIND_ORDER) {
+/** The placed items by slot in SLOT_ORDER, a plugin's items apart from the layer's own (Files lists them under the plugin). */
+function bySlotAndPlugin(placed: readonly Placed[]): [Slot, string | null, Placed[]][] {
+  const out: [Slot, string | null, Placed[]][] = []
+  for (const slot of SLOT_ORDER) {
     const plugins = new Map<string | null, Placed[]>()
     for (const p of placed) {
-      if (p.item.kind !== kind) continue
+      if (slotOf(p.item) !== slot) continue
       const plugin = p.item.source.startsWith('plugin:') ? p.item.source.slice('plugin:'.length) : null
       plugins.set(plugin, [...(plugins.get(plugin) ?? []), p])
     }
-    for (const [plugin, members] of plugins) out.push([kind, plugin, members])
+    for (const [plugin, members] of plugins) out.push([slot, plugin, members])
   }
   return out
 }
@@ -177,7 +196,7 @@ function singleBlock(layer: ContextLayerName, placed: Placed, groupId: string | 
     label: item.label,
     kind: item.kind,
     layer,
-    band: BAND_OF[item.kind],
+    band: bandOf(slotOf(item)),
     item,
     items: [item],
     tokens: item.tokens,
@@ -186,6 +205,7 @@ function singleBlock(layer: ContextLayerName, placed: Placed, groupId: string | 
     collapsed: false,
     sharedWithDefault: item.sharedWithDefault,
     readOnly: item.readOnly,
+    unindexed: slotOf(item) === 'memory-file:unindexed',
     findings: findings.filter((f) => f.path === item.path)
   }
 }
@@ -207,6 +227,7 @@ function groupBlock(group: MapGroup, findings: readonly Finding[]): MapBlock {
     collapsed: true,
     sharedWithDefault: group.sharedWithDefault,
     readOnly: group.readOnly,
+    unindexed: members.every((m) => slotOf(m) === 'memory-file:unindexed'),
     findings: findings.filter((f) => paths.has(f.path))
   }
 }
@@ -222,16 +243,17 @@ export function mapLayout(report: ContextReport, findings: readonly Finding[], e
     const placed = flatten(layer, report.layers[layer])
     const blockOf = new Map<string, string>()
     const blocks: MapBlock[] = []
-    for (const [kind, plugin, members] of byKindAndPlugin(placed)) {
-      const groupId = members.length > LARGE_GROUP ? `${layer}:group:${kind}${plugin ? `:${plugin}` : ''}` : null
+    for (const [slot, plugin, members] of bySlotAndPlugin(placed)) {
+      const groupId = members.length > LARGE_GROUP ? `${layer}:group:${slot}${plugin ? `:${plugin}` : ''}` : null
       if (groupId) {
         const items = members.map((m) => m.item)
+        const kind = items[0].kind
         groups.push({
           id: groupId,
-          label: `${items.length} ${PLURALS[kind]}${plugin ? ` from ${plugin}` : ''}`,
+          label: `${items.length} ${groupNoun(slot, kind)}${plugin ? ` from ${plugin}` : ''}`,
           kind,
           layer,
-          band: BAND_OF[kind],
+          band: bandOf(slot),
           items,
           tokens: sumTokens(items),
           expanded: expanded.has(groupId),
@@ -249,11 +271,14 @@ export function mapLayout(report: ContextReport, findings: readonly Finding[], e
         }
       }
     }
+    const edge = (from: string | undefined, to: string | undefined, kind: MapEdge['kind']): void => {
+      if (from && to && from !== to && !edges.some((e) => e.from === from && e.to === to)) edges.push({ from, to, kind })
+    }
+    for (const p of placed) if (p.parentId !== null && p.item.kind === 'import') edge(blockOf.get(p.parentId), blockOf.get(p.id), 'import')
+    const memoryFiles = new Map(placed.filter((p) => p.item.kind === 'memory-file').map((p) => [p.item.path, p.id]))
     for (const p of placed) {
-      if (p.parentId === null || p.item.kind !== 'import') continue
-      const from = blockOf.get(p.parentId)
-      const to = blockOf.get(p.id)
-      if (from && to && from !== to && !edges.some((e) => e.from === from && e.to === to)) edges.push({ from, to, kind: 'import' })
+      if (p.item.kind !== 'memory-index') continue
+      for (const link of p.item.index?.links ?? []) edge(blockOf.get(p.id), blockOf.get(memoryFiles.get(link) ?? ''), 'index')
     }
     return {
       layer,

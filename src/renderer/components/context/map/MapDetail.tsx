@@ -1,7 +1,7 @@
 import { formatTokens, type ContextItem, type ContextItemKind, type ContextLayerName } from '../../../../shared/context'
 import type { Finding } from '../../../../shared/findings'
 import { fileTarget, useContextStore } from '../../../state/contextStore'
-import { BAND_TITLES, KIND_EXPLANATIONS, KIND_TITLES, LANE_TITLES, SLASH_ONLY_SKILL } from '../../../state/mapCopy'
+import { BAND_TITLES, KIND_EXPLANATIONS, KIND_TITLES, LANE_TITLES, SLASH_ONLY_SKILL, UNINDEXED_MEMORY_FILE } from '../../../state/mapCopy'
 import { blocksOf, type ContextMap, type MapBandName } from '../../../state/mapLayout'
 import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
@@ -12,9 +12,6 @@ import { PropertyList } from '../../ui/PropertyList'
 import { ScrollStack } from '../../ui/ScrollStack'
 import { SectionLabel } from '../../ui/SectionLabel'
 import { Toolbar } from '../../ui/Toolbar'
-
-/** The reader's note on a skill Claude is never offered. */
-const SLASH_ONLY = 'slash command only'
 
 /** What the detail panel shows: one block, or a large group whether collapsed or expanded. */
 interface BlockDetail {
@@ -29,6 +26,7 @@ interface BlockDetail {
   expanded: boolean
   sharedWithDefault: boolean
   readOnly: string | null
+  unindexed: boolean
   findings: Finding[]
 }
 
@@ -39,7 +37,13 @@ function detailOf(map: ContextMap, id: string | null): BlockDetail | null {
   const group = map.groups.find((g) => g.id === id)
   if (!group) return null
   const members = blocksOf(map).filter((b) => b.groupId === group.id)
-  return { ...group, item: null, groupId: group.id, findings: members.flatMap((b) => b.findings) }
+  return { ...group, item: null, groupId: group.id, unindexed: members.every((b) => b.unindexed), findings: members.flatMap((b) => b.findings) }
+}
+
+function explanation(s: BlockDetail): string {
+  if (s.kind === 'skill' && s.band === 'on-demand') return SLASH_ONLY_SKILL
+  if (s.unindexed) return UNINDEXED_MEMORY_FILE
+  return KIND_EXPLANATIONS[s.kind]
 }
 
 function detailRows(s: BlockDetail): [string, string][] {
@@ -82,7 +86,7 @@ export function MapDetail({ map, defaultName }: { map: ContextMap; defaultName: 
       <ScrollStack padded>
         <section aria-label="What it is" className="flex flex-col gap-1">
           <SectionLabel as="h3">{KIND_TITLES[s.kind]}</SectionLabel>
-          <p className="text-xs text-fg">{s.kind === 'skill' && s.item?.note === SLASH_ONLY ? SLASH_ONLY_SKILL : KIND_EXPLANATIONS[s.kind]}</p>
+          <p className="text-xs text-fg">{explanation(s)}</p>
         </section>
         <div className="flex flex-wrap gap-1">
           {s.sharedWithDefault && <Badge tone="quiet">shared with {defaultName}</Badge>}
@@ -95,9 +99,20 @@ export function MapDetail({ map, defaultName }: { map: ContextMap; defaultName: 
         </div>
         <PropertyList label="Numbers" entries={detailRows(s)} />
         <Panel title="Findings" count={s.findings.length} empty="No findings.">
-          <ul className="flex flex-col gap-1 text-xs">
+          <ul className="flex flex-col gap-3 text-xs">
             {s.findings.map((f) => (
-              <li key={f.id}>{f.claim}</li>
+              <li key={f.id} className="flex flex-col gap-1">
+                <span className="text-fg">
+                  {f.severity === 'note' && <Badge tone="quiet">note</Badge>} {f.claim}
+                </span>
+                <PropertyList
+                  label={`Finding ${f.id}`}
+                  entries={[
+                    ['Evidence', f.evidence],
+                    ['Fix', f.fix]
+                  ]}
+                />
+              </li>
             ))}
           </ul>
         </Panel>
