@@ -110,3 +110,51 @@ export function splitFrontmatter(text: string): { meta: Record<string, string>; 
   if (Object.keys(meta).length === 0) return { meta, body: text }
   return { meta, body: lines.slice(end + 1).join('\n') }
 }
+
+export type KindGroupName = 'claude-md' | 'memory' | 'skills' | 'agents' | 'commands' | 'mcp-servers' | 'plugins' | 'settings'
+
+export interface KindGroup {
+  group: KindGroupName
+  items: ContextItem[]
+  count: number
+  /** Counted tokens of its items, imports included; null when nothing in it counts. */
+  tokens: number | null
+}
+
+const KIND_GROUPS: readonly (readonly [KindGroupName, readonly ContextItemKind[]])[] = [
+  ['claude-md', ['claude-md', 'subfolder-claude-md']],
+  ['memory', ['memory-index', 'memory-file']],
+  ['skills', ['skill']],
+  ['agents', ['agent']],
+  ['commands', ['command']],
+  ['mcp-servers', ['mcp-server']],
+  ['plugins', ['plugin']],
+  ['settings', ['settings', 'hook']]
+]
+
+export const KIND_GROUP_TITLES: Record<KindGroupName, string> = {
+  'claude-md': 'CLAUDE.md',
+  memory: 'Memory',
+  skills: 'Skills',
+  agents: 'Agents',
+  commands: 'Commands',
+  'mcp-servers': 'MCP servers',
+  plugins: 'Plugins',
+  settings: 'Settings & hooks'
+}
+
+/** The tokens the items add at start, imports included; null when none of them counts. */
+export function countedTokens(items: readonly ContextItem[]): number | null {
+  return items.reduce<number | null>((sum, i) => {
+    const own = [i.tokens, countedTokens(i.children)].filter((n): n is number => n !== null)
+    return own.length === 0 ? sum : (sum ?? 0) + own.reduce((a, b) => a + b, 0)
+  }, null)
+}
+
+/** One layer's items in the fixed kind order, empty kinds left out. */
+export function groupByKind(items: readonly ContextItem[]): KindGroup[] {
+  return KIND_GROUPS.flatMap(([group, kinds]) => {
+    const members = items.filter((i) => kinds.includes(i.kind))
+    return members.length === 0 ? [] : [{ group, items: members, count: members.length, tokens: countedTokens(members) }]
+  })
+}

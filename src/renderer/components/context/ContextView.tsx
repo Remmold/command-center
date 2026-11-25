@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CREATABLE_NAMES, formatTokens, type ContextItem, type ContextItemKind, type ContextReport, type CreatableContextFile } from '../../../shared/context'
+import { Bot, Brain, FileText, Plug, Puzzle, Settings2, Sparkles, SquareSlash, type LucideIcon } from 'lucide-react'
+import {
+  CREATABLE_NAMES,
+  KIND_GROUP_TITLES,
+  countedTokens,
+  formatTokens,
+  groupByKind,
+  type ContextItem,
+  type ContextLayerName,
+  type ContextReport,
+  type CreatableContextFile,
+  type KindGroup,
+  type KindGroupName
+} from '../../../shared/context'
 import { DEFAULT_PROFILE_ID, type Workspace } from '../../../shared/types'
 import { workspacesByAccount, sectionTitle, type AccountWorkspaces } from '../../state/accounts'
 import { useAccountColor } from '../../state/useAccountColor'
@@ -18,6 +31,7 @@ import { NoticeLine } from '../ui/NoticeLine'
 import { Pane } from '../ui/Pane'
 import { Panel } from '../ui/Panel'
 import { ScrollStack } from '../ui/ScrollStack'
+import { ShareBar } from '../ui/ShareBar'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { ContextEditor } from './ContextEditor'
 
@@ -58,7 +72,7 @@ export function ContextView() {
       {selected ? (
         <div className="flex h-full min-h-0">
           <div className="min-h-0 w-[28rem] shrink-0 border-r border-subtle">
-            <Layers workspace={selected} report={report} defaultName={defaultName} />
+            <Layers key={selected.id} workspace={selected} report={report} defaultName={defaultName} />
           </div>
           <div className="min-h-0 min-w-0 flex-1">
             <ContextEditor defaultName={defaultName} workspacePath={selected.path} />
@@ -120,23 +134,54 @@ function CreateLine({ workspacePath, file }: { workspacePath: string; file: Crea
   )
 }
 
+const GROUP_ICONS: Record<KindGroupName, LucideIcon> = {
+  'claude-md': FileText,
+  memory: Brain,
+  skills: Sparkles,
+  agents: Bot,
+  commands: SquareSlash,
+  'mcp-servers': Plug,
+  plugins: Puzzle,
+  settings: Settings2
+}
+
+const FOLD_WHEN_LONG: ReadonlySet<KindGroupName> = new Set(['skills', 'agents', 'commands'])
+const LONG_GROUP = 8
+
+const LAYERS: readonly ContextLayerName[] = ['account', 'repo', 'local']
+const LAYER_TITLES: Record<ContextLayerName, string> = { account: 'Account', repo: 'Repo', local: 'Local' }
+
+function LayerShares({ report, atStart }: { report: ContextReport; atStart: Record<ContextLayerName, ContextItem[]> }) {
+  if (report.startTotal === 0) return null
+  const segments = LAYERS.map((layer) => {
+    const tokens = countedTokens(atStart[layer]) ?? 0
+    return { label: LAYER_TITLES[layer], value: tokens, detail: `${formatTokens(tokens)} tokens` }
+  })
+  return <ShareBar label="Start total by layer" segments={segments} />
+}
+
 function Layers({ workspace, report, defaultName }: { workspace: Workspace; report: ContextReport | null; defaultName: string }) {
   if (!report) return <EmptyState>Reading…</EmptyState>
   if (!report.folderExists) return <EmptyState>The folder {workspace.path} is gone, so nothing loads here.</EmptyState>
-  const atStart = report.layers.repo.filter((i) => i.kind !== 'subfolder-claude-md')
+  const atStart = { ...report.layers, repo: report.layers.repo.filter((i) => i.kind !== 'subfolder-claude-md') }
   const subfolders = report.layers.repo.filter((i) => i.kind === 'subfolder-claude-md')
   return (
     <Pane label="Context layers">
       <NoticeLine strip>
         Start total {formatTokens(report.startTotal)} tokens · estimates, as configured
       </NoticeLine>
-      <ScrollStack>
-        <LayerPanel title="Account" items={report.layers.account} defaultName={defaultName} />
-        <LayerPanel title="Repo" items={atStart} defaultName={defaultName} />
+      <ScrollStack padded>
+        <LayerShares report={report} atStart={atStart} />
+        <LayerPanel title={LAYER_TITLES.account} items={atStart.account} defaultName={defaultName} />
+        <LayerPanel title={LAYER_TITLES.repo} items={atStart.repo} defaultName={defaultName} />
         {report.missing.includes('repo-claude-md') && <CreateLine workspacePath={report.workspacePath} file="repo-claude-md" />}
-        <LayerPanel title="Local" items={report.layers.local} defaultName={defaultName} />
+        <LayerPanel title={LAYER_TITLES.local} items={atStart.local} defaultName={defaultName} />
         {report.missing.includes('claude-local-md') && <CreateLine workspacePath={report.workspacePath} file="claude-local-md" />}
-        {subfolders.length > 0 && <LayerPanel title="Loads when Claude works there" items={subfolders} defaultName={defaultName} />}
+        {subfolders.length > 0 && (
+          <Panel title="Loads when Claude works there" count={subfolders.length} empty="Nothing here.">
+            <ItemList items={subfolders} defaultName={defaultName} />
+          </Panel>
+        )}
       </ScrollStack>
     </Pane>
   )
@@ -145,50 +190,64 @@ function Layers({ workspace, report, defaultName }: { workspace: Workspace; repo
 function LayerPanel({ title, items, defaultName }: { title: string; items: ContextItem[]; defaultName: string }) {
   return (
     <Panel title={title} count={items.length} empty="Nothing here.">
-      <ItemList items={items} defaultName={defaultName} />
+      {groupByKind(items).map((group) => (
+        <KindGroupSection key={group.group} group={group} defaultName={defaultName} />
+      ))}
     </Panel>
   )
 }
 
-function ItemList({ items, defaultName }: { items: ContextItem[]; defaultName: string }) {
+function KindGroupSection({ group, defaultName }: { group: KindGroup; defaultName: string }) {
+  const [open, setOpen] = useState(() => !(FOLD_WHEN_LONG.has(group.group) && group.count > LONG_GROUP))
+  const Icon = GROUP_ICONS[group.group]
+  return (
+    <CollapsibleSection
+      level="group"
+      title={KIND_GROUP_TITLES[group.group]}
+      open={open}
+      onToggle={() => setOpen(!open)}
+      marker={<Icon size={14} aria-hidden className="shrink-0" />}
+      badge={
+        <ListRowMeta>
+          {group.count}
+          {group.tokens !== null && ` · ${formatTokens(group.tokens)}`}
+        </ListRowMeta>
+      }
+    >
+      <ItemList items={group.items} defaultName={defaultName} nested />
+    </CollapsibleSection>
+  )
+}
+
+function ItemList({ items, defaultName, nested = false }: { items: ContextItem[]; defaultName: string; nested?: boolean }) {
   return (
     <ul>
       {items.map((item, n) => (
-        <ContextRow key={`${n}:${item.kind}:${item.path ?? item.label}`} item={item} defaultName={defaultName} />
+        <ContextRow key={`${n}:${item.kind}:${item.path ?? item.label}`} item={item} defaultName={defaultName} nested={nested} />
       ))}
     </ul>
   )
 }
 
-/** The word shown before an item whose label alone doesn't say what it is. */
-const KIND_WORDS: Partial<Record<ContextItemKind, string>> = {
-  'memory-index': 'memory',
-  'memory-file': 'memory',
-  skill: 'skill',
-  agent: 'agent',
-  command: 'command',
-  plugin: 'plugin',
-  'mcp-server': 'MCP',
-  settings: 'settings',
-  hook: 'hook'
-}
-
-function ContextRow({ item, defaultName }: { item: ContextItem; defaultName: string }) {
-  const kindWord = KIND_WORDS[item.kind]
+function ContextRow({ item, defaultName, nested }: { item: ContextItem; defaultName: string; nested: boolean }) {
   const openPath = useContextStore((s) => s.editor?.path ?? null)
   const path = item.missing ? null : item.path
   const body = (
     <>
-        {kindWord && <ListRowLabel tone="secondary">{kindWord}</ListRowLabel>}
-        <ListRowLabel tooltip={item.path ?? undefined}>{item.label}</ListRowLabel>
-        {item.note && <ListRowNote>{item.note}</ListRowNote>}
-        {item.source.startsWith('plugin:') && <ListRowMeta>{item.source}</ListRowMeta>}
-        {item.source === 'project-entry' && <ListRowMeta>workspace entry</ListRowMeta>}
-        {item.tokens !== null && <ListRowMeta>{formatTokens(item.tokens)}</ListRowMeta>}
-        {item.kind === 'mcp-server' && <Badge>tools not counted</Badge>}
-        {item.missing && <Badge tone="warning">not found</Badge>}
-        {item.sharedWithDefault && <Badge>shared with {defaultName}</Badge>}
-        {item.readOnly && <Badge tooltip={item.readOnly}>{item.readOnly}</Badge>}
+      {item.kind === 'hook' && <ListRowLabel tone="secondary">hook</ListRowLabel>}
+      <ListRowLabel tooltip={item.path ?? undefined}>{item.label}</ListRowLabel>
+      {item.note && <ListRowNote>{item.note}</ListRowNote>}
+      {item.source.startsWith('plugin:') && <ListRowMeta>{item.source}</ListRowMeta>}
+      {item.source === 'project-entry' && <ListRowMeta>workspace entry</ListRowMeta>}
+      {item.tokens !== null && <ListRowMeta>{formatTokens(item.tokens)}</ListRowMeta>}
+      {item.kind === 'mcp-server' && <Badge tone="quiet">tools not counted</Badge>}
+      {item.missing && <Badge tone="quiet-warning">not found</Badge>}
+      {item.sharedWithDefault && <Badge tone="quiet">shared with {defaultName}</Badge>}
+      {item.readOnly && (
+        <Badge tone="quiet" tooltip={item.readOnly}>
+          read-only
+        </Badge>
+      )}
     </>
   )
   const open = (file: string): void =>
@@ -196,15 +255,17 @@ function ContextRow({ item, defaultName }: { item: ContextItem; defaultName: str
   return (
     <>
       {path ? (
-        <ListRow active={openPath === path} tooltip={path} onClick={() => open(path)}>
+        <ListRow nested={nested} active={openPath === path} tooltip={path} onClick={() => open(path)}>
           {body}
         </ListRow>
       ) : (
-        <ListItem>{body}</ListItem>
+        <ListItem nested={nested} alignWithRows>
+          {body}
+        </ListItem>
       )}
       {item.children.length > 0 && (
         <li className="pl-4">
-          <ItemList items={item.children} defaultName={defaultName} />
+          <ItemList items={item.children} defaultName={defaultName} nested={nested} />
         </li>
       )}
     </>
