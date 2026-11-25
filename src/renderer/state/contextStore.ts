@@ -21,6 +21,8 @@ export interface ContextEditorFile {
 
 export type ContextFileTarget = Pick<ContextEditorFile, 'path' | 'label' | 'sharedWithDefault' | 'readOnly' | 'creating'>
 
+export type ContextPane = 'files' | 'map'
+
 interface ContextState {
   selectedId: string | null
   /** The selected workspace's report; null until it is read. */
@@ -28,6 +30,21 @@ interface ContextState {
   /** Start totals by workspace id; null where the folder is gone. */
   totals: Record<string, number | null>
   editor: ContextEditorFile | null
+  /** Files or Map, above the middle and right panes; not saved. */
+  pane: ContextPane
+  /** The context map's selected block id. */
+  mapSelected: string | null
+  /** The map's expanded large groups. */
+  mapExpanded: string[]
+  /** The guided tour's step, from 0. */
+  tourStep: number
+  /** Leaving Files asks about unsaved edits first. */
+  setPane: (pane: ContextPane) => void
+  selectBlock: (blockId: string | null) => void
+  toggleGroup: (groupId: string) => void
+  setTourStep: (step: number) => void
+  /** Files, with that file open. */
+  openInFiles: (target: ContextFileTarget) => void
   /** Picks the workspace, then reads everything again; stays put when unsaved edits are kept. */
   select: (workspaceId: string | null) => void
   /** Reads the selected workspace's report, every start total and the open file (if unedited) again. */
@@ -65,10 +82,29 @@ export const useContextStore = create<ContextState>((set, get) => {
     report: null,
     totals: {},
     editor: null,
+    pane: 'files',
+    mapSelected: null,
+    mapExpanded: [],
+    tourStep: 0,
+    setPane: (pane) => {
+      if (pane === get().pane) return
+      if (pane === 'map' && !get().confirmLeave()) return
+      set({ pane })
+    },
+    selectBlock: (blockId) => set({ mapSelected: blockId }),
+    toggleGroup: (groupId) => {
+      const { mapExpanded } = get()
+      set({ mapExpanded: mapExpanded.includes(groupId) ? mapExpanded.filter((id) => id !== groupId) : [...mapExpanded, groupId] })
+    },
+    setTourStep: (step) => set({ tourStep: step }),
+    openInFiles: (target) => {
+      set({ pane: 'files' })
+      get().open(target)
+    },
     select: (workspaceId) => {
       if (workspaceId !== get().selectedId) {
         if (!get().confirmLeave()) return
-        set({ selectedId: workspaceId, report: null, editor: null })
+        set({ selectedId: workspaceId, report: null, editor: null, mapSelected: null, mapExpanded: [], tourStep: 0 })
       }
       get().refresh()
     },

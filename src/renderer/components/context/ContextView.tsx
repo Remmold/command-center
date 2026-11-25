@@ -18,7 +18,7 @@ import { DEFAULT_PROFILE_ID, type Workspace } from '../../../shared/types'
 import { workspacesByAccount, sectionTitle, type AccountWorkspaces } from '../../state/accounts'
 import { useAccountColor } from '../../state/useAccountColor'
 import { useAccounts } from '../../state/useAccounts'
-import { useContextStore } from '../../state/contextStore'
+import { useContextStore, type ContextPane } from '../../state/contextStore'
 import { useMenu } from '../../hooks/useMenu'
 import { startSession } from '../../state/sessionNavigation'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
@@ -37,9 +37,17 @@ import { Panel } from '../ui/Panel'
 import { Popover, PopoverMenu } from '../ui/Popover'
 import { ScrollStack } from '../ui/ScrollStack'
 import { ShareBar } from '../ui/ShareBar'
+import { SegmentedControl } from '../ui/SegmentedControl'
 import { SidebarLayout } from '../ui/SidebarLayout'
+import { Toolbar } from '../ui/Toolbar'
 import { ContextEditor } from './ContextEditor'
 import { CrossProjectCleanupDialog } from './CrossProjectCleanupDialog'
+import { ContextMapPane } from './map/ContextMap'
+
+const PANES: { value: ContextPane; label: string }[] = [
+  { value: 'files', label: 'Files' },
+  { value: 'map', label: 'Map' }
+]
 
 /** The workspace last open in Work, else the one already picked, else the first. */
 function startWorkspace(workspaces: readonly Workspace[], openInWork: string | null, picked: string | null): string | null {
@@ -53,6 +61,7 @@ export function ContextView() {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const selectedId = useContextStore((s) => s.selectedId)
   const report = useContextStore((s) => s.report)
+  const pane = useContextStore((s) => s.pane)
   const loaded = workspaces.length > 0
 
   useEffect(() => {
@@ -76,13 +85,24 @@ export function ContextView() {
   return (
     <SidebarLayout sidebar={<WorkspaceList workspaces={workspaces} selectedId={selectedId} />}>
       {selected ? (
-        <div className="flex h-full min-h-0">
-          <div className="min-h-0 w-[28rem] shrink-0 border-r border-subtle">
-            <Layers key={selected.id} workspace={selected} report={report} defaultName={defaultName} />
-          </div>
-          <div className="min-h-0 min-w-0 flex-1">
-            <ContextEditor defaultName={defaultName} workspacePath={selected.path} />
-          </div>
+        <div className="flex h-full min-h-0 flex-col">
+          <Toolbar compact>
+            <SegmentedControl label="Context pane" options={PANES} value={pane} onChange={(next) => useContextStore.getState().setPane(next)} />
+          </Toolbar>
+          {pane === 'map' ? (
+            <div className="min-h-0 flex-1">
+              <ContextMapPane workspacePath={selected.path} report={report} defaultName={defaultName} />
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1">
+              <div className="min-h-0 w-[28rem] shrink-0 border-r border-subtle">
+                <Layers key={selected.id} workspace={selected} report={report} defaultName={defaultName} />
+              </div>
+              <div className="min-h-0 min-w-0 flex-1">
+                <ContextEditor defaultName={defaultName} workspacePath={selected.path} />
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <EmptyState>{loaded ? 'Pick a workspace.' : 'No workspaces yet.'}</EmptyState>
