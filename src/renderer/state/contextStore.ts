@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ContextReport } from '../../shared/context'
+import type { ContextItem, ContextReport } from '../../shared/context'
 
 /** A file open in Context's editor. */
 export interface ContextEditorFile {
@@ -22,6 +22,15 @@ export interface ContextEditorFile {
 export type ContextFileTarget = Pick<ContextEditorFile, 'path' | 'label' | 'sharedWithDefault' | 'readOnly' | 'creating'>
 
 export type ContextPane = 'files' | 'map'
+
+/** An item's file, to open in the editor. */
+export const fileTarget = (item: ContextItem, path: string): ContextFileTarget => ({
+  path,
+  label: item.label,
+  sharedWithDefault: item.sharedWithDefault,
+  readOnly: item.readOnly,
+  creating: false
+})
 
 interface ContextState {
   selectedId: string | null

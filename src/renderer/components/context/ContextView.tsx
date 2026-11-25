@@ -18,7 +18,7 @@ import { DEFAULT_PROFILE_ID, type Workspace } from '../../../shared/types'
 import { workspacesByAccount, sectionTitle, type AccountWorkspaces } from '../../state/accounts'
 import { useAccountColor } from '../../state/useAccountColor'
 import { useAccounts } from '../../state/useAccounts'
-import { useContextStore, type ContextPane } from '../../state/contextStore'
+import { fileTarget, useContextStore, type ContextPane } from '../../state/contextStore'
 import { useMenu } from '../../hooks/useMenu'
 import { startSession } from '../../state/sessionNavigation'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
@@ -43,6 +43,8 @@ import { Toolbar } from '../ui/Toolbar'
 import { ContextEditor } from './ContextEditor'
 import { CrossProjectCleanupDialog } from './CrossProjectCleanupDialog'
 import { ContextMapPane } from './map/ContextMap'
+import { LANE_TITLES as LAYER_TITLES } from '../../state/mapCopy'
+import { LAYER_ORDER } from '../../state/mapLayout'
 
 const PANES: { value: ContextPane; label: string }[] = [
   { value: 'files', label: 'Files' },
@@ -174,12 +176,10 @@ const GROUP_ICONS: Record<KindGroupName, LucideIcon> = {
 const FOLD_WHEN_LONG: ReadonlySet<KindGroupName> = new Set(['skills', 'agents', 'commands'])
 const LONG_GROUP = 8
 
-const LAYERS: readonly ContextLayerName[] = ['account', 'repo', 'local']
-const LAYER_TITLES: Record<ContextLayerName, string> = { account: 'Account', repo: 'Repo', local: 'Local' }
 
 function LayerShares({ report, atStart }: { report: ContextReport; atStart: Record<ContextLayerName, ContextItem[]> }) {
   if (report.startTotal === 0) return null
-  const segments = LAYERS.map((layer) => {
+  const segments = LAYER_ORDER.map((layer) => {
     const tokens = countedTokens(atStart[layer]) ?? 0
     return { label: LAYER_TITLES[layer], value: tokens, detail: `${formatTokens(tokens)} tokens` }
   })
@@ -334,8 +334,7 @@ function ContextRow({ item, defaultName, nested }: { item: ContextItem; defaultN
       )}
     </>
   )
-  const open = (file: string): void =>
-    useContextStore.getState().open({ path: file, label: item.label, sharedWithDefault: item.sharedWithDefault, readOnly: item.readOnly, creating: false })
+  const open = (file: string): void => useContextStore.getState().open(fileTarget(item, file))
   return (
     <>
       {path ? (

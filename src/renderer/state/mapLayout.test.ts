@@ -154,6 +154,7 @@ describe('mapLayout', () => {
     const map = mapLayout(report(layers, 259), [])
     const starts = map.lanes.map((l) => l.bands[0].tokens)
     expect(starts).toEqual([182, 70, 7])
+    expect(map.startTotal).toBe(259)
     expect(map.lanes.every((l) => l.bands[2].tokens === null)).toBe(true)
   })
 
@@ -168,5 +169,15 @@ describe('mapLayout', () => {
       ['CLAUDE.md', true, 'adopted'],
       ['10 memory files', false, null]
     ])
+  })
+
+  it("groups a plugin's items apart from the layer's own, as Files lists them", () => {
+    const plugin = item('plugin', 'kit', { source: 'plugin:kit', children: many('skill', 5).map((s) => ({ ...s, source: 'plugin:kit' as const })) })
+    const map = mapLayout(report({ account: [...many('skill', 5), plugin] }), [])
+    expect(band(map, 'account', 'start')).toHaveLength(10)
+    expect(map.groups).toEqual([])
+
+    const big = mapLayout(report({ account: [...many('skill', 9), plugin] }), [])
+    expect(band(big, 'account', 'start')).toEqual(['9 skills', 'skill-1', 'skill-2', 'skill-3', 'skill-4', 'skill-5'])
   })
 })

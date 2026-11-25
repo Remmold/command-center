@@ -7,6 +7,7 @@ import { BAND_ORDER, BLOCK_SIZE_FLOOR, mapLayout, type ContextMap as ContextMapM
 import { Button } from '../../ui/Button'
 import { Connectors } from '../../ui/Connectors'
 import { EmptyState } from '../../ui/EmptyState'
+import { NoticeLine } from '../../ui/NoticeLine'
 import { Pane } from '../../ui/Pane'
 import { SectionLabel } from '../../ui/SectionLabel'
 import { Tile } from '../../ui/Tile'
@@ -27,6 +28,7 @@ export function ContextMapPane({ workspacePath, report, defaultName }: { workspa
     <div className="flex h-full min-h-0">
       <div className="min-h-0 min-w-0 flex-1">
         <Pane label="Context map">
+          <NoticeLine strip>Start total {formatTokens(map.startTotal)} tokens · estimates, as configured</NoticeLine>
           <MapGrid map={map} defaultName={defaultName} />
         </Pane>
       </div>

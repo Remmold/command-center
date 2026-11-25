@@ -26,6 +26,8 @@ export const KIND_TITLES: Record<ContextItemKind, string> = {
   hook: 'Hook'
 }
 
+export const SLASH_ONLY_SKILL = 'A skill offered only as a slash command: nothing of it loads at start, and its body loads when you type it.'
+
 /** What each kind is and how Claude loads it, in plain words. */
 export const KIND_EXPLANATIONS: Record<ContextItemKind, string> = {
   'claude-md': 'Standing instructions. Claude reads the whole file at the start of every chat.',

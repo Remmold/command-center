@@ -57,12 +57,22 @@ export interface MapGroup {
   items: ContextItem[]
   tokens: number | null
   expanded: boolean
+  /** True when every item in it is shared with Personal. */
+  sharedWithDefault: boolean
+  /** Why it can't be written, when every item in it is read-only. */
+  readOnly: string | null
 }
 
 export interface ContextMap {
   lanes: MapLane[]
   edges: MapEdge[]
   groups: MapGroup[]
+  /** The Every start bands summed: the start total Files shows. */
+  startTotal: number
+}
+
+export function blocksOf(map: ContextMap): MapBlock[] {
+  return map.lanes.flatMap((l) => l.bands.flatMap((b) => b.blocks))
 }
 
 export const LAYER_ORDER: readonly ContextLayerName[] = ['account', 'repo', 'local']
@@ -145,6 +155,21 @@ function flatten(layer: ContextLayerName, items: readonly ContextItem[]): Placed
   return out
 }
 
+/** The placed items by kind in KIND_ORDER, a plugin's items apart from the layer's own (Files lists them under the plugin). */
+function byKindAndPlugin(placed: readonly Placed[]): [ContextItemKind, string | null, Placed[]][] {
+  const out: [ContextItemKind, string | null, Placed[]][] = []
+  for (const kind of KIND_ORDER) {
+    const plugins = new Map<string | null, Placed[]>()
+    for (const p of placed) {
+      if (p.item.kind !== kind) continue
+      const plugin = p.item.source.startsWith('plugin:') ? p.item.source.slice('plugin:'.length) : null
+      plugins.set(plugin, [...(plugins.get(plugin) ?? []), p])
+    }
+    for (const [plugin, members] of plugins) out.push([kind, plugin, members])
+  }
+  return out
+}
+
 function singleBlock(layer: ContextLayerName, placed: Placed, groupId: string | null, findings: readonly Finding[]): MapBlock {
   const { item } = placed
   return {
@@ -168,7 +193,6 @@ function singleBlock(layer: ContextLayerName, placed: Placed, groupId: string | 
 function groupBlock(group: MapGroup, findings: readonly Finding[]): MapBlock {
   const members = group.items
   const paths = new Set(members.map((m) => m.path))
-  const readOnly = members.every((m) => m.readOnly !== null) ? members[0].readOnly : null
   return {
     id: group.id,
     label: group.label,
@@ -181,8 +205,8 @@ function groupBlock(group: MapGroup, findings: readonly Finding[]): MapBlock {
     size: sizeOf(group.tokens),
     groupId: group.id,
     collapsed: true,
-    sharedWithDefault: members.every((m) => m.sharedWithDefault),
-    readOnly,
+    sharedWithDefault: group.sharedWithDefault,
+    readOnly: group.readOnly,
     findings: findings.filter((f) => paths.has(f.path))
   }
 }
@@ -198,13 +222,22 @@ export function mapLayout(report: ContextReport, findings: readonly Finding[], e
     const placed = flatten(layer, report.layers[layer])
     const blockOf = new Map<string, string>()
     const blocks: MapBlock[] = []
-    for (const kind of KIND_ORDER) {
-      const members = placed.filter((p) => p.item.kind === kind)
-      if (members.length === 0) continue
-      const groupId = members.length > LARGE_GROUP ? `${layer}:group:${kind}` : null
+    for (const [kind, plugin, members] of byKindAndPlugin(placed)) {
+      const groupId = members.length > LARGE_GROUP ? `${layer}:group:${kind}${plugin ? `:${plugin}` : ''}` : null
       if (groupId) {
         const items = members.map((m) => m.item)
-        groups.push({ id: groupId, label: `${items.length} ${PLURALS[kind]}`, kind, layer, band: BAND_OF[kind], items, tokens: sumTokens(items), expanded: expanded.has(groupId) })
+        groups.push({
+          id: groupId,
+          label: `${items.length} ${PLURALS[kind]}${plugin ? ` from ${plugin}` : ''}`,
+          kind,
+          layer,
+          band: BAND_OF[kind],
+          items,
+          tokens: sumTokens(items),
+          expanded: expanded.has(groupId),
+          sharedWithDefault: items.every((i) => i.sharedWithDefault),
+          readOnly: items.every((i) => i.readOnly !== null) ? items[0].readOnly : null
+        })
       }
       if (groupId && !expanded.has(groupId)) {
         blocks.push(groupBlock(groups[groups.length - 1], findings))
@@ -230,5 +263,6 @@ export function mapLayout(report: ContextReport, findings: readonly Finding[], e
       })
     }
   })
-  return { lanes, edges, groups }
+  const startTotal = lanes.reduce((sum, lane) => sum + (lane.bands[0].tokens ?? 0), 0)
+  return { lanes, edges, groups, startTotal }
 }
