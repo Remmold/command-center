@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] Starting point: the research spec `.scratch/typing-lag/research/typing.shots.ts` (with its config), moved into the harness beside `perf.shots.ts`, sharing its seed where it can.
 - [x] Seeded with ~20 MB of chat history (about 30 extra 300-message transcripts); 120 keystrokes, focusing the textarea rather than clicking it.
