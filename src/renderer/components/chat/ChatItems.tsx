@@ -6,7 +6,8 @@ import { ToolContext, type AgentHost, type BackgroundHost } from './toolContext'
 import { runningCalls } from './runningCalls'
 import { groupSubagents, parentOf } from './subagents'
 import { latestTodoCallId } from './todos'
-import { withStreaming } from './liveItems'
+import { keepShape, withStreaming } from './liveItems'
+import { lastAssistantIndex } from '../../../shared/chatHistory'
 import { dayBreaks, dayLabel } from './messageTime'
 import { pairCompactions } from './compaction'
 import { rowKind, timelineJoins, type RowKind } from './timelineRows'
@@ -41,6 +42,15 @@ function useRunningCalls(items: ChatItem[], busy: boolean): ReadonlySet<string> 
   }, [items, busy])
 }
 
+/** The streaming message's shape, kept as the same object while deltas only grow its text. */
+function useStreamShape(streaming: AssistantMessageItem | null): AssistantMessageItem | null {
+  const last = useRef<AssistantMessageItem | null>(null)
+  return useMemo(() => {
+    last.current = keepShape(last.current, streaming)
+    return last.current
+  }, [streaming])
+}
+
 /** The time a message shows a stamp for, as the extension's `m4`: a typed prompt or a settled reply with text. */
 function stampTime(item: ChatItem, streamingId: string | undefined): number | undefined {
   if (item.at === undefined || parentOf(item) !== undefined) return undefined
@@ -51,7 +61,15 @@ function stampTime(item: ChatItem, streamingId: string | undefined): number | un
 
 /** Chat items with each tool result folded into the row of the call it answers, subagent items under their Agent call, and a date line where the day changes. */
 export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents, busy = false, background }: Props) {
-  const view = useMemo(() => withStreaming(items, streaming), [items, streaming])
+  // The passes below see only the streaming message's shape, so a delta reruns none of them; its row alone gets the real text.
+  const shape = useStreamShape(streaming)
+  const view = useMemo(() => withStreaming(items, shape), [items, shape])
+  const liveItem = useMemo((): AssistantMessageItem | null => {
+    if (!streaming || !view.live) return null
+    const { from } = view.live
+    const shown = view.items[lastAssistantIndex(view.items, streaming.id)] as AssistantMessageItem
+    return { ...shown, content: [...shown.content.slice(0, from), ...streaming.content.slice(from)] }
+  }, [streaming, view])
   const pairs = useMemo(() => pairToolResults(view.items), [view.items])
   const groups = useMemo(() => groupSubagents(view.items), [view.items])
   const compactions = useMemo(() => pairCompactions(groups.main), [groups])
@@ -83,7 +101,7 @@ export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents
                 {day !== undefined && <LabeledDivider>{dayLabel(day, now)}</LabeledDivider>}
                 <div className="lazy-render" data-item-id={item.id}>
                   <Message
-                    item={item}
+                    item={live && liveItem ? liveItem : item}
                     stampAt={stamps[i]}
                     streamingFrom={live ? view.live?.from : undefined}
                     thinkingTokens={live ? thinkingTokens : undefined}

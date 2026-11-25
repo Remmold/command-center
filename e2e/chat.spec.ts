@@ -344,7 +344,7 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
 test.describe('slow turns', () => {
   test.use({ script: 'slow' })
 
-  test('a prompt sent mid-turn queues and starts after Esc; Run in background; the working line; Stop interrupts; then chats picked up from settings.json and with a full context', async ({ launched }) => {
+  test('a prompt sent mid-turn queues and starts after Esc; Run in background; the working line; Stop interrupts; then tool approval (1, 3 with feedback, 2 for the session, the inbox and question cards), and chats picked up from settings.json and with a full context', async ({ launched }) => {
     const { page, log, workspace } = launched
     const pane = page.locator('[data-chat-pane]')
     const longJob = pane.getByText('Starting a long job.')
@@ -423,46 +423,15 @@ test.describe('slow turns', () => {
       await expect.poll(() => log.initializedIn(workspace, from)).toBe(true)
     }
 
-    await test.step("a new chat starts in settings.json's default mode and turns Remote Control on when the CLI says remoteControlAtStartup", async () => {
-      const pane = page.locator('[data-chat-pane]:visible')
-      writeFileSync(join(launched.configDir, 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'plan' } }))
-      await useScript(launched.app, 'remoteControl')
-      const enabledBefore = log.controlRequests('remote_control').length
-      await newChat()
-      await expect(pane.getByRole('button', { name: 'Plan', exact: true })).toBeVisible()
-      expect(cliPermissionMode(log, workspace)).toBe('plan')
-      await expect(pane.getByRole('link', { name: 'Remote Control' })).toHaveAttribute('href', FAKE_SESSION)
-      expect(log.controlRequests('remote_control').slice(enabledBefore).map((r) => r.enabled)).toEqual([true])
-    })
-
-    await test.step('a full context: the context pie shows from the start, refreshes after a turn and sends /compact when clicked', async () => {
-      await useScript(launched.app, 'context')
-      const usageBefore = log.controlRequests('get_context_usage').length
-      const textsBefore = log.userTexts().length
-      await newChat()
-      const pie = page.getByRole('button', { name: '72% context used — click to compact' })
-      await expect(pie).toBeVisible()
-      await send(page, 'hello')
-      await expect(page.getByText('This chat is getting long.')).toBeVisible()
-      await expect.poll(() => log.controlRequests('get_context_usage').length - usageBefore).toBe(2)
-      await expect(pie).toHaveAttribute('title', '28% of context remaining until auto-compact.\nClick to compact now.')
-      await pie.click()
-      await expect.poll(() => log.userTexts().slice(textsBefore)).toEqual(['hello', '/compact'])
-    })
-  })
-})
-
-test.describe('tool approval', () => {
-  test.use({ script: 'approval' })
-
-  test('1 approves, 3 with feedback denies, 2 allows for the session; the approval inbox and question cards answer through the same replies', async ({ launched }) => {
-    const { page, log } = launched
     const approval = page.getByRole('group', { name: 'Approve Write' })
-    await startSession(launched)
-    await expect(modeButton(page, 'Manual')).toBeVisible()
-    expect(cliPermissionMode(log, launched.workspace)).toBe('default')
+    await test.step('tool approval: a new chat on the approval script starts Manual', async () => {
+      await useScript(launched.app, 'approval')
+      await newChat()
+      await expect(page.locator('[data-chat-pane]:visible').getByRole('button', { name: 'Manual', exact: true })).toBeVisible()
+      expect(cliPermissionMode(log, workspace)).toBe('default')
+    })
 
-    await test.step('1 approves and the tool runs', async () => {
+    await test.step('tool approval: 1 approves and the tool runs', async () => {
       await send(page, 'create hello.txt')
       await expect(approval).toBeVisible()
       await page.keyboard.press('1')
@@ -471,7 +440,7 @@ test.describe('tool approval', () => {
       await expect.poll(() => log.approvalReplies()).toEqual([expect.objectContaining({ behavior: 'allow' })])
     })
 
-    await test.step('3 with feedback denies and logs the feedback', async () => {
+    await test.step('tool approval: 3 with feedback denies and logs the feedback', async () => {
       await expect(prompt(page)).toBeEditable()
       await send(page, 'create hello.txt')
       await expect(approval).toBeVisible()
@@ -484,7 +453,7 @@ test.describe('tool approval', () => {
       ])
     })
 
-    await test.step('"allow for this session" skips the second prompt', async () => {
+    await test.step('tool approval: "allow for this session" skips the second prompt', async () => {
       await expect(prompt(page)).toBeEditable()
       await send(page, 'create hello.txt')
       await expect(approval).toBeVisible()
@@ -568,6 +537,33 @@ test.describe('tool approval', () => {
       expect(log.approvalReplies()[5]).toEqual(answered({ [FORMATS]: 'PDF', [LAYOUT]: 'Table' }))
       await expect(page.locator('[data-chat-pane]').getByText('Answered · 2 questions').last()).toBeVisible()
     })
+
+    await test.step("a new chat starts in settings.json's default mode and turns Remote Control on when the CLI says remoteControlAtStartup", async () => {
+      const pane = page.locator('[data-chat-pane]:visible')
+      writeFileSync(join(launched.configDir, 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'plan' } }))
+      await useScript(launched.app, 'remoteControl')
+      const enabledBefore = log.controlRequests('remote_control').length
+      await newChat()
+      await expect(pane.getByRole('button', { name: 'Plan', exact: true })).toBeVisible()
+      expect(cliPermissionMode(log, workspace)).toBe('plan')
+      await expect(pane.getByRole('link', { name: 'Remote Control' })).toHaveAttribute('href', FAKE_SESSION)
+      expect(log.controlRequests('remote_control').slice(enabledBefore).map((r) => r.enabled)).toEqual([true])
+    })
+
+    await test.step('a full context: the context pie shows from the start, refreshes after a turn and sends /compact when clicked', async () => {
+      await useScript(launched.app, 'context')
+      const usageBefore = log.controlRequests('get_context_usage').length
+      const textsBefore = log.userTexts().length
+      await newChat()
+      const pie = page.getByRole('button', { name: '72% context used — click to compact' })
+      await expect(pie).toBeVisible()
+      await send(page, 'hello')
+      await expect(page.getByText('This chat is getting long.')).toBeVisible()
+      await expect.poll(() => log.controlRequests('get_context_usage').length - usageBefore).toBe(2)
+      await expect(pie).toHaveAttribute('title', '28% of context remaining until auto-compact.\nClick to compact now.')
+      await pie.click()
+      await expect.poll(() => log.userTexts().slice(textsBefore)).toEqual(['hello', '/compact'])
+    })
   })
 })
 
@@ -602,7 +598,7 @@ async function recordWebm(page: Page): Promise<Buffer> {
 test.describe('chat rendering', () => {
   test.use({ script: 'render' })
 
-  test('thinking, todos, copy buttons and timestamps render as in the extension; scrolling up holds the view while output arrives; MCP calls, compaction and an image path read as in the extension; the Media tab', async ({ launched }) => {
+  test('thinking, todos, copy buttons and timestamps render as in the extension; scrolling up holds the view while output arrives; MCP calls, compaction and an image path read as in the extension; the Media tab; Agent calls stay compact rows, the Agents tab lists and follows them live, the still-working bar, Stop agent sends stop_task', async ({ launched }) => {
     const { app, page, log, workspace } = launched
     const pane = page.locator('[data-chat-pane]')
     mkdirSync(join(workspace, 'refs'), { recursive: true })
@@ -656,7 +652,7 @@ test.describe('chat rendering', () => {
     })
 
     /** Starts a chat on `script` in its own pane; later steps read only the visible pane. */
-    const newChatOn = async (script: 'look' | 'media'): Promise<void> => {
+    const newChatOn = async (script: 'look' | 'media' | 'subagent'): Promise<void> => {
       await useScript(app, script)
       const from = log.entries().length
       await page.keyboard.press('Control+t')
@@ -816,6 +812,113 @@ test.describe('chat rendering', () => {
       await expect(transcript).toBeVisible()
       await expect.poll(gap).toBeLessThan(2)
     })
+
+    {
+      const pane = page.locator('[data-chat-pane]:visible')
+      const calls = pane.locator('[data-agent-call]')
+      const strip = pane.locator('[data-tab-strip]')
+      const agentsTab = strip.getByRole('tab', { name: /^Agents( \d+ working)?$/ })
+      const chatTab = strip.getByRole('tab', { name: 'Chat', exact: true })
+      const list = pane.getByRole('list', { name: 'Agents' })
+      const view = pane.locator('[data-agent-view]')
+      const transcript = pane.locator('[data-transcript]')
+      await newChatOn('subagent')
+
+      await test.step('subagents: two background agents: compact rows, a bar after the turn, the Agents tab, a live view, and the transcript does not grow', async () => {
+        await send(page, 'background agents please')
+        await expect(pane.getByText('Main agent: both agents work in the background.')).toBeVisible()
+        await expect(pane.locator('[data-working-line]')).toHaveCount(0)
+        const bar = pane.locator('[data-agents-still-working]')
+        await expect(bar).toContainText(/\d agents? still working/)
+        await expect(page.getByRole('navigation', { name: 'Sessions' }).getByRole('img', { name: 'Running' })).toHaveCount(1)
+        await expect(calls).toHaveCount(2)
+        const rowsBefore = await transcript.locator('[data-timeline-row]').count()
+        const logsRow = calls.nth(1)
+        await expect(logsRow.getByRole('button', { name: /^Agent Watch the logs/ })).toContainText('Working')
+        await expect(logsRow.locator('[data-agent-now]')).toHaveText('now: Watching the logs.')
+        await expect(transcript.getByText('Watching the logs.')).toHaveCount(0)
+
+        await expect(agentsTab).toHaveAccessibleName(/^Agents [12] working$/)
+        await agentsTab.click()
+        const logs = list.getByRole('button', { name: /Watch the logs/ })
+        await expect(logs).toContainText('now: Bash pnpm test --run')
+        // Once the routes agent is done the order holds: the working one on top.
+        await expect(calls.nth(0)).toHaveAttribute('data-agent-status', 'finished')
+        await expect(list.getByRole('button').first()).toContainText('Watch the logs')
+        await list.getByRole('button', { name: /Scan the routes/ }).focus()
+        await page.keyboard.press('ArrowUp')
+        await expect(logs).toBeFocused()
+        await logs.click()
+        await expect(view.getByText('Watching the logs.')).toBeVisible()
+        await expect(view.getByText('Logs are quiet.')).toHaveCount(0)
+        await expect(view.getByText('Logs are quiet.')).toBeVisible()
+        await page.keyboard.press('Escape')
+        await expect(view).toHaveCount(0)
+        await expect(list).toBeVisible()
+
+        await chatTab.click()
+        await expect(bar).toHaveCount(0, { timeout: 15_000 })
+        await expect(pane.locator('[data-agents-done]')).toBeVisible()
+        await expect(page.getByRole('navigation', { name: 'Sessions' }).getByRole('img', { name: 'Running' })).toHaveCount(0)
+        // Its own last words, not the CLI's notification summary.
+        await expect(calls.nth(0).locator('[data-agent-now]')).toHaveText('Routes look fine.')
+        expect(await transcript.locator('[data-timeline-row]').count()).toBe(rowsBefore)
+      })
+
+      await test.step('subagents: a finished foreground agent: its row opens its live view with its own messages, the task folds out, Back returns', async () => {
+        await send(page, 'explore the repo')
+        await expect(pane.getByText('Main agent: the explorer finished.')).toBeVisible()
+        const call = calls.nth(2)
+        await expect(call).toHaveAttribute('data-agent-status', 'finished')
+        await expect(transcript.getByText('Subagent says the config lives in settings.ts.')).toHaveCount(0)
+        await call.getByRole('button', { name: 'task' }).click()
+        await expect(call.getByText('Find where the config is read.')).toBeVisible()
+        await call.getByRole('button', { name: /^Agent Find the config/ }).click()
+        await expect(view.getByText('Subagent says the config lives in settings.ts.')).toBeVisible()
+        await expect(view.locator('[data-timeline-row]', { hasText: /^Read/ }).getByRole('link', { name: 'settings.ts' })).toBeVisible()
+        await view.getByRole('button', { name: 'Back' }).click()
+        // Only the newest turn is open; the background agents' turn folds under its header.
+        await expect(list.getByRole('listitem')).toHaveCount(1)
+        await expect(pane.getByRole('button', { name: /^started at .* · 2 agents$/ })).toHaveAttribute('aria-expanded', 'false')
+        await expect(agentsTab).toHaveAccessibleName('Agents')
+        await chatTab.click()
+      })
+
+      await test.step('subagents: Stop agent in the live view sends stop_task with the agent’s task id and the call ends Stopped', async () => {
+        await send(page, 'slow agent please')
+        await expect(calls).toHaveCount(4)
+        const call = calls.nth(3)
+        await expect(call).toHaveAttribute('data-agent-status', 'working')
+
+        // As after a resume: agents of an earlier process, known only from their files, finished or gone quiet days ago.
+        const session = readdirSync(transcriptsOf(launched)).find((name) => !name.endsWith('.jsonl'))
+        seedOldAgents(join(transcriptsOf(launched), session ?? 'missing', 'subagents'))
+        await agentsTab.click()
+        const old = pane.getByRole('button', { name: /^started at .* · 3 agents$/ })
+        await expect(old).toHaveAttribute('aria-expanded', 'false')
+        await old.click()
+        const ticket13 = pane.getByRole('button', { name: /Implement ticket 13 Finished/ })
+        await expect(ticket13).toContainText('Finished · 1m 1s · 2 tools')
+        await expect(ticket13.locator('[data-agent-now]')).toHaveText('Ticket 13 is done as 87130bd. Tests: green.')
+        await expect(pane.getByRole('button', { name: /Implement ticket 06/ })).toContainText('Ended (no final report) · 1s · 1 tool')
+        await expect(pane.getByRole('button', { name: /^running Wait around/ })).toContainText('Working')
+        await expect(agentsTab).toHaveAccessibleName('Agents 1 working')
+        await ticket13.click()
+        await expect(view.locator('[data-agent-report]')).toContainText('Ticket 13 is done as 87130bd.')
+        await page.keyboard.press('Escape')
+        await chatTab.click()
+
+        await call.getByRole('button', { name: /^Agent Wait around/ }).click()
+        await expect(view.getByText('Subagent is still looking.')).toBeVisible()
+        await view.getByRole('button', { name: 'Stop agent' }).click()
+        await expect.poll(() => log.controlRequests('stop_task').map((r) => r.task_id)).toEqual([expect.stringMatching(/^a[0-9a-f]{16}$/)])
+        await expect(view.getByRole('button', { name: 'Stop agent' })).toHaveCount(0)
+        await chatTab.click()
+        await expect(call).toHaveAttribute('data-agent-status', 'stopped')
+        await expect(pane.getByText('Main agent: carried on after the stop.')).toBeVisible()
+        await expect(pane.getByText('Subagent never says this.')).toHaveCount(0)
+      })
+    }
   })
 })
 
@@ -839,115 +942,3 @@ function seedOldAgents(subagents: string): void {
   agent('a0ld000000000002', 'Spec review of ticket 13', 'Spec: every box ticked.')
   agent('a0ld000000000003', 'Implement ticket 06', null)
 }
-
-test.describe('subagents', () => {
-  test.use({ script: 'subagent' })
-
-  test('Agent calls stay compact rows; the Agents tab lists and follows them live; the still-working bar; Stop agent sends stop_task', async ({ launched }) => {
-    const { page, log } = launched
-    const pane = page.locator('[data-chat-pane]')
-    const calls = pane.locator('[data-agent-call]')
-    const strip = pane.locator('[data-tab-strip]')
-    const agentsTab = strip.getByRole('tab', { name: /^Agents( \d+ working)?$/ })
-    const chatTab = strip.getByRole('tab', { name: 'Chat', exact: true })
-    const list = pane.getByRole('list', { name: 'Agents' })
-    const view = pane.locator('[data-agent-view]')
-    const transcript = pane.locator('[data-transcript]')
-    await startSession(launched)
-
-    await test.step('two background agents: compact rows, a bar after the turn, the Agents tab, a live view, and the transcript does not grow', async () => {
-      await send(page, 'background agents please')
-      await expect(pane.getByText('Main agent: both agents work in the background.')).toBeVisible()
-      await expect(pane.locator('[data-working-line]')).toHaveCount(0)
-      const bar = pane.locator('[data-agents-still-working]')
-      await expect(bar).toContainText(/\d agents? still working/)
-      await expect(page.getByRole('navigation', { name: 'Sessions' }).getByRole('img', { name: 'Running' })).toHaveCount(1)
-      await expect(calls).toHaveCount(2)
-      const rowsBefore = await transcript.locator('[data-timeline-row]').count()
-      const logsRow = calls.nth(1)
-      await expect(logsRow.getByRole('button', { name: /^Agent Watch the logs/ })).toContainText('Working')
-      await expect(logsRow.locator('[data-agent-now]')).toHaveText('now: Watching the logs.')
-      await expect(transcript.getByText('Watching the logs.')).toHaveCount(0)
-
-      await expect(agentsTab).toHaveAccessibleName(/^Agents [12] working$/)
-      await agentsTab.click()
-      const logs = list.getByRole('button', { name: /Watch the logs/ })
-      await expect(logs).toContainText('now: Bash pnpm test --run')
-      // Once the routes agent is done the order holds: the working one on top.
-      await expect(calls.nth(0)).toHaveAttribute('data-agent-status', 'finished')
-      await expect(list.getByRole('button').first()).toContainText('Watch the logs')
-      await list.getByRole('button', { name: /Scan the routes/ }).focus()
-      await page.keyboard.press('ArrowUp')
-      await expect(logs).toBeFocused()
-      await logs.click()
-      await expect(view.getByText('Watching the logs.')).toBeVisible()
-      await expect(view.getByText('Logs are quiet.')).toHaveCount(0)
-      await expect(view.getByText('Logs are quiet.')).toBeVisible()
-      await page.keyboard.press('Escape')
-      await expect(view).toHaveCount(0)
-      await expect(list).toBeVisible()
-
-      await chatTab.click()
-      await expect(bar).toHaveCount(0, { timeout: 15_000 })
-      await expect(pane.locator('[data-agents-done]')).toBeVisible()
-      await expect(page.getByRole('navigation', { name: 'Sessions' }).getByRole('img', { name: 'Running' })).toHaveCount(0)
-      // Its own last words, not the CLI's notification summary.
-      await expect(calls.nth(0).locator('[data-agent-now]')).toHaveText('Routes look fine.')
-      expect(await transcript.locator('[data-timeline-row]').count()).toBe(rowsBefore)
-    })
-
-    await test.step('a finished foreground agent: its row opens its live view with its own messages, the task folds out, Back returns', async () => {
-      await send(page, 'explore the repo')
-      await expect(pane.getByText('Main agent: the explorer finished.')).toBeVisible()
-      const call = calls.nth(2)
-      await expect(call).toHaveAttribute('data-agent-status', 'finished')
-      await expect(transcript.getByText('Subagent says the config lives in settings.ts.')).toHaveCount(0)
-      await call.getByRole('button', { name: 'task' }).click()
-      await expect(call.getByText('Find where the config is read.')).toBeVisible()
-      await call.getByRole('button', { name: /^Agent Find the config/ }).click()
-      await expect(view.getByText('Subagent says the config lives in settings.ts.')).toBeVisible()
-      await expect(view.locator('[data-timeline-row]', { hasText: /^Read/ }).getByRole('link', { name: 'settings.ts' })).toBeVisible()
-      await view.getByRole('button', { name: 'Back' }).click()
-      // Only the newest turn is open; the background agents' turn folds under its header.
-      await expect(list.getByRole('listitem')).toHaveCount(1)
-      await expect(pane.getByRole('button', { name: /^started at .* · 2 agents$/ })).toHaveAttribute('aria-expanded', 'false')
-      await expect(agentsTab).toHaveAccessibleName('Agents')
-      await chatTab.click()
-    })
-
-    await test.step('Stop agent in the live view sends stop_task with the agent’s task id and the call ends Stopped', async () => {
-      await send(page, 'slow agent please')
-      await expect(calls).toHaveCount(4)
-      const call = calls.nth(3)
-      await expect(call).toHaveAttribute('data-agent-status', 'working')
-
-      // As after a resume: agents of an earlier process, known only from their files, finished or gone quiet days ago.
-      const session = readdirSync(transcriptsOf(launched)).find((name) => !name.endsWith('.jsonl'))
-      seedOldAgents(join(transcriptsOf(launched), session ?? 'missing', 'subagents'))
-      await agentsTab.click()
-      const old = pane.getByRole('button', { name: /^started at .* · 3 agents$/ })
-      await expect(old).toHaveAttribute('aria-expanded', 'false')
-      await old.click()
-      const ticket13 = pane.getByRole('button', { name: /Implement ticket 13 Finished/ })
-      await expect(ticket13).toContainText('Finished · 1m 1s · 2 tools')
-      await expect(ticket13.locator('[data-agent-now]')).toHaveText('Ticket 13 is done as 87130bd. Tests: green.')
-      await expect(pane.getByRole('button', { name: /Implement ticket 06/ })).toContainText('Ended (no final report) · 1s · 1 tool')
-      await expect(pane.getByRole('button', { name: /^running Wait around/ })).toContainText('Working')
-      await expect(agentsTab).toHaveAccessibleName('Agents 1 working')
-      await ticket13.click()
-      await expect(view.locator('[data-agent-report]')).toContainText('Ticket 13 is done as 87130bd.')
-      await page.keyboard.press('Escape')
-      await chatTab.click()
-
-      await call.getByRole('button', { name: /^Agent Wait around/ }).click()
-      await expect(view.getByText('Subagent is still looking.')).toBeVisible()
-      await view.getByRole('button', { name: 'Stop agent' }).click()
-      await expect.poll(() => log.controlRequests('stop_task').map((r) => r.task_id)).toEqual([expect.stringMatching(/^a[0-9a-f]{16}$/)])
-      await expect(view.getByRole('button', { name: 'Stop agent' })).toHaveCount(0)
-      await chatTab.click()
-      await expect(call).toHaveAttribute('data-agent-status', 'stopped')
-      await expect(pane.getByText('Main agent: carried on after the stop.')).toBeVisible()
-      await expect(pane.getByText('Subagent never says this.')).toHaveCount(0)
-    })
-  })
-})

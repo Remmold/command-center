@@ -8,6 +8,7 @@ import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
 import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
+import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
 import type { BackgroundProcess } from './backgroundProcesses'
 export type { AppView }
@@ -392,6 +393,9 @@ export interface UpdateStatus {
 
 export type RestartReply = { kind: 'none' } | { kind: 'restart' } | { kind: 'confirm'; busy: string[] }
 
+/** How a legacy chat history import ended: saved, or not chat history at all (nothing saved). */
+export type LegacyImport = 'imported' | 'unreadable'
+
 export interface RendererApi {
   workspaces: {
     list: () => Promise<Workspace[]>
@@ -407,6 +411,15 @@ export interface RendererApi {
     /** null before the first save: the list then seeds one from its repo groups. */
     load: () => Promise<SidebarLayout | null>
     save: (layout: SidebarLayout) => Promise<void>
+  }
+  /** Hosted sessions' chat history, one file per session saved by main. */
+  chatHistory: {
+    /** Blocks the window until read, so the first frame has every chat's history. */
+    loadSync: () => Record<string, ChatItem[]>
+    /** Fire and forget; main writes one session's changes in the order sent. */
+    apply: (paneId: string, changes: HistoryChange[]) => void
+    /** Saves the legacy localStorage entry's sessions that have no file yet; rejects when a write fails. */
+    importLegacy: (entry: string) => Promise<LegacyImport>
   }
   repoIdentities: {
     list: () => Promise<RepoIdentityViews>

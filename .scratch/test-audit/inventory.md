@@ -1,4 +1,4 @@
-Last audit: 0.1.14 (2026-11-24, ticket 02-audit-after-0.1.14, measured on the 0.1.16 code)
+Last audit: 0.1.23 (2026-11-25, ticket 04-audit-at-0.1.23)
 
 # Test audit inventory
 
@@ -190,3 +190,48 @@ Checked and kept: every export a unit test imports still has a production caller
 | Quick tier (`pnpm quick`, wall) | not re-measured (9.3 s at the 0.1.14 audit) | 8.8 s |
 | Perf guard and zoom shots | green | green (4 passed, 1.8 min) |
 | Named regression guards (send-mid-turn queue; update busy gate incl. background tasks and the live-process quiet rule; scroll-follow; wheel leave; observed cut-off; processTree; window place; storage flush before quit; off-screen silent test windows; zoom overflow; popover clamp) | 11 | **11, assertions unchanged** |
+
+# 0.1.23
+
+Asked for by Andreas at 0.1.23 (one release before the scheduled 0.1.24), run on `main` at 0.1.23. Why now: three unmerged branches each add a UI scenario (`feature/context-cleanup`: a second one in `context.spec.ts`, about 2.7 s; `feature/test-flow-pane`: `testFlow.spec.ts`, about 4.4 s; `feature/background-processes`: `processes.spec.ts`). With 15 on main that is 18 and over 90 s, so the target was main at **≤ 75 s** by the JSON total.
+
+Baseline: 15 scenarios, JSON reporter run on the 0.1.23 code, **97.2 s** (CPU 23% at the start; a second run read 115.0 s with the machine at 100% from other agents, so the first is the baseline). Times are per scenario, launch and shutdown included; a launch plus its shutdown costs about 2 s, which is what each merge saves.
+
+**R** = guards a bug that reached Andreas; its assertions are unchanged.
+
+## UI scenarios, before → after
+
+| # | Scenario (before) | Before | Proves | Unit overlap | R | Now |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | accounts › a VS Code profile's folder is offered… | 2.6 s | profile folder found, Add adopts it logged in, never written, Remove keeps the folder | adopt, vscodeProfiles, profiles | | merged: first step of #4 (assertions unchanged; profiles are read from disk on each call, so #4's own `profiles.json` still takes over) |
+| 2 | accounts › VS Code's accounts are adopted in one click… | 6.5 s | banner, one-click adopt, new chats on Work, model/effort per account before the process is up, repo icon picker, Detect again | vscodeMatch, userSettings (model defaults), projectIcons, rankIcons | | unchanged |
+| 3 | accounts › Work shows a one-line header per account… | 4.7 s | account sections, waiting badge, Ungrouped fold, search, Alt+1, Ctrl+Shift+J, Board By account, Settings; own groups with drag sort, kept after reload | sessionList, order, boardLayout | | unchanged |
+| 4 | accounts › a Work chat shows the Work badge and pill… | 6.8 s | pending badge, Work badge and pill, usage meter, mismatch warning, Restart on either account | chatAccount, accountColors, usageModel | | second step after #1; the start hold is 1 s instead of 2.5 s (the check is only that "pending" shows before the process is up; #2 uses 1 s for the same kind of check) |
+| 5 | app › zoom… Ctrl+B… kept across a restart | 6.8 s | zoom keys, shell, Settings, View menu, restart; off-screen test windows never saving their place | zoom, shortcutMap | **R** (window place, off-screen windows, storage flush before quit) | merged with #6 in one launch: the zoom steps first (the launch's script is `slow`, so the zoom steps switch to `basic` with `useScript`), unchanged |
+| 6 | app › auto-update | 7.4 s | Check now; update busy gate with a running chat; the 2.5 s "no restart yet" wait; restart after the idle timer | busyGate, restartPlan, controller, updateLabels | **R** (update busy gate) | merged: the last two steps of #5, on the relaunched app (a fresh updater, so "checked once at launch" still holds); assertions unchanged |
+| 7 | chat › a basic chat… | 9.7 s | views, usage strip, Manual start, @ menu, attachments, history, suggested prompt, slash menu, model/effort, Shift+Tab, Remote Control, draft over reload, picks while starting | shortcutMap, mentionSearch, attachments, promptHistory, promptSuggestion, slashMenuModel, launchGate | | unchanged (the 2.5 s start hold kept: two picks happen before the process is up) |
+| 8 | chat › slow turns | 6.0 s | send-mid-turn queue, Stop, Run in background, working line, settings.json mode + remoteControlAtStartup, full context | heldPrompts, interrupt, runInBackground, workingSpinner, userSettings, contextUsage | **R** (send-mid-turn queue) | unchanged, plus #9's steps before the settings.json step |
+| 9 | chat › tool approval | 5.0 s | 1 / 3 / 2 keys, the approval inbox, question cards | approval, approvals | | merged: #8's steps 5–10, in a new chat on `approval` (`useScript`); the opening "starts Manual" and "launch mode default" checks read the visible pane; reply and prompt counts were already absolute and nothing before them sends approvals |
+| 10 | chat › chat rendering | 13.5 s | thinking, todos, copy, timestamps; scroll-follow; look: MCP names, folded OUT, Bash description, compaction, image path; Media tab, preview, Jump to message, Chat tab scroll | thinking, todos, messageTime, scrollFollow, mcpTool, compaction, chatMedia | **R** (scroll-follow) | unchanged, plus #11's steps at the end; the tablist line untouched |
+| 11 | chat › subagents | 7.2 s | compact Agent rows, Agents tab, live view, still-working bar, old agents from files, report view, stop_task | subagents, agentList, agentSummary, agentEnd | | merged: last three steps of #10, in a new chat on `subagent`; its pane locator reads the visible pane; assertions unchanged |
+| 12 | context › Context lists the seeded CLAUDE.md… | 3.6 s | Context view, Ctrl+S save, broken JSON refused | context reader, guard | | not touched (a branch edits this file) |
+| 13 | sessions › session history | 3.7 s | title, rename, Past sessions picker, resume | sessionTitle, pastSessions | | merged: first step of #14 (the scenario chats on `basic` for it, then `render`) |
+| 14 | sessions › a VS Code session in Work | 6.1 s | observed cut-off behind a tall hosted chat, wheel past the end stays put, badge, follow on append | transcriptItems, tail, observedRefresh | **R** (observed cut-off, wheel leave) | second step; assertions unchanged |
+| 15 | sessions › taking over a VS Code chat | 6.9 s | take-over waits for the turn; 2.5 s "not resumed yet" wait | takeOver, turn | | merged: last step of #14 (same `FAST_OBSERVED` env); assertions unchanged |
+
+No assertion was removed, so nothing needed a new home beyond the merged scenario it now sits in. Nothing was deleted outright: every scenario still proves app wiring no unit test reaches. `processTree` stays as `e2e/processTree.test.ts` and the unchanged `shutdown` in `e2e/harness.ts`. Kept, not cut: the 2.5 s negative waits (update, take-over), the basic chat's 2.5 s start hold, and the script timings behind scroll-follow and the subagent steps. Not touched, for the three branches: `context.spec.ts`, `budget.ts`, `budget.test.ts`, `harness.ts`, and the media step's tablist line in `chat.spec.ts`.
+
+## Unit tests
+
+Nothing removed: 1,184 (+2 skipped) in 125 files before and after. A scripted check found no test-imported export without a production caller (no tests of deleted code), no duplicate test names within a file, and the tests added since 0.1.19 (context view, worktrees, agent summaries, prompt suggestions) pin rules, not copied constants.
+
+## Before / after
+
+| Measure | Before (0.1.23) | After |
+| --- | --- | --- |
+| UI scenarios | 15 | **9** (12 with the three branches merged) |
+| UI time, JSON total | 97.2 s (CPU 23%) | **69.2 s, 74.9 s** (proof runs back to back, green, no rerun; CPU 25% at the start, 100% by the end of the second from other agents); 69.1 s and 75.8 s on earlier runs of the same code |
+| Unit tests | 1,184 (+2 skipped) in 125 files | **unchanged** |
+| Quick tier (`pnpm quick`, wall) | 12.0 s | 10.9 s (unchanged within noise; no unit test changed) |
+| Assertions removed | — | **0** |
+| Named regression guards | 11 | **11, assertions unchanged** |

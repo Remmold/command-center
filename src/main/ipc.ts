@@ -5,6 +5,8 @@ import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
 import { createSidebarGroupsStore } from './sidebarGroups/store'
+import { createChatHistoryStore } from './chatHistory/store'
+import { isHistoryChange } from '../shared/chatHistory'
 import { liveConfigDir } from './observed/turn'
 import * as vscodeMatch from './profiles/vscodeMatch'
 import { transcriptsDirForCwd, transcriptsDirForWorkspace } from './profiles/transcripts'
@@ -192,6 +194,25 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   const sidebarGroups = createSidebarGroupsStore(app.getPath('userData'))
   ipcMain.handle(IPC.SIDEBAR_GROUPS_LOAD, () => sidebarGroups.load())
   ipcMain.handle(IPC.SIDEBAR_GROUPS_SAVE, (_e, layout: unknown) => sidebarGroups.save(layout))
+
+  const chatHistory = createChatHistoryStore(join(app.getPath('userData'), 'chat-history'))
+  ipcMain.on(IPC.CHAT_HISTORY_LOAD, (e) => {
+    chatHistory.load().then(
+      (items) => (e.returnValue = items),
+      (err) => {
+        console.error('could not read the chat history', err)
+        e.returnValue = {}
+      }
+    )
+  })
+  ipcMain.handle(IPC.CHAT_HISTORY_IMPORT_LEGACY, (_e, entry: unknown) => {
+    if (typeof entry !== 'string') throw new Error('the legacy chat history is not text')
+    return chatHistory.importLegacy(entry)
+  })
+  ipcMain.on(IPC.CHAT_HISTORY_APPLY, (_e, paneId: unknown, changes: unknown) => {
+    if (typeof paneId !== 'string' || paneId === '' || !Array.isArray(changes)) return
+    chatHistory.apply(paneId, changes.filter(isHistoryChange)).catch((err) => console.error(`could not save the chat history of ${paneId}`, err))
+  })
 
   ipcMain.handle(IPC.REPO_IDENTITIES_LIST, () => repoIdentities.list())
   ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, (_e, key: string, name: string) =>
