@@ -12,13 +12,13 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 03, 04
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Prompt builder tests (seam 4), replacing the cleanup builder's tests: the same coverage assertions, plus the findings path and schema in the prompt, and the findings folder in `addDirs`.
-- [ ] `send` starts the session and sends the prompt without leaving Context; without `send`, start-session behaves as before.
-- [ ] Step 6 shows the three kinds, the cost note and the model and effort pickers; Start works; Open chat jumps to Work.
-- [ ] The Clean up menu is gone; no "cleanup" naming is left in the UI.
-- [ ] The fake CLI's `write_file` event is documented in its README and covered by its own tests.
-- [ ] The rewritten Context UI scenario passes; the scenario count is still 13 of 20 (by `e2e/budget.ts`'s counter).
-- [ ] This changes how a chat starts, so run the whole UI suite once before committing.
-- [ ] Quick tier green.
+- [x] Prompt builder tests (seam 4), replacing the cleanup builder's tests: the same coverage assertions, plus the findings path and schema in the prompt, and the findings folder in `addDirs`.
+- [x] `send` starts the session and sends the prompt without leaving Context; without `send`, start-session behaves as before.
+- [x] Step 6 shows the three kinds, the cost note and the model and effort pickers; Start works; Open chat jumps to Work.
+- [x] The Clean up menu is gone; no "cleanup" naming is left in the UI.
+- [x] The fake CLI's `write_file` event is documented in its README and covered by its own tests.
+- [x] The rewritten Context UI scenario passes; the scenario count is still 13 of 20 (by `e2e/budget.ts`'s counter).
+- [x] This changes how a chat starts, so run the whole UI suite once before committing.
+- [x] Quick tier green.
