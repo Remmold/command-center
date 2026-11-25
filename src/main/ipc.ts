@@ -14,6 +14,7 @@ import * as apps from './apps/store'
 import { appManager } from './apps/manager'
 import { ptyManager } from './pty/manager'
 import { claudeManager } from './claude/manager'
+import { holdQuit } from './quitHold'
 import { listProjectFiles } from './files/lister'
 import { findMentions } from './files/mentions'
 import { saveAsDialog } from './files/save'
@@ -59,6 +60,9 @@ import { onZoomChanged, stepZoom, zoomLevel } from './zoom/service'
 import { isZoomStep } from '../shared/zoom'
 
 let unsubscribers: Array<() => void> = []
+
+/** A stuck taskkill must never keep the app from quitting. */
+const QUIT_KILL_LIMIT_MS = 3000
 
 interface IpcDeps {
   repoIdentities: RepoIdentityService
@@ -508,11 +512,16 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     approvalBroker.respond(requestId, reply)
   })
 
-  app.on('before-quit', () => {
-    ptyManager.killAll()
-    claudeManager.stopAll()
-    claudeManager.setIncomingHandlerFactory(null)
-    for (const u of unsubscribers) u()
-    unsubscribers = []
-  })
+  holdQuit(
+    app,
+    () => {
+      ptyManager.killAll()
+      const killed = claudeManager.stopAll()
+      claudeManager.setIncomingHandlerFactory(null)
+      for (const u of unsubscribers) u()
+      unsubscribers = []
+      return killed
+    },
+    QUIT_KILL_LIMIT_MS
+  )
 }

@@ -2,6 +2,7 @@
   "turns": [
     {
       "match": "^start the server",
+      "repeat": true,
       "events": [
         { "type": "text", "text": "Starting the dev server." },
         {
