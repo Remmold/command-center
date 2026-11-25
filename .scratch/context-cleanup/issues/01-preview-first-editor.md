@@ -14,13 +14,13 @@ Rules (from the spec, word for word):
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A `.md` item opens rendered; frontmatter shows as a header card, not raw text.
-- [ ] A non-`.md` item opens in read-only Monaco.
-- [ ] Edit → Save button and Ctrl+S save, then show the preview; Cancel and Esc return to preview, confirming first when dirty; Esc with Monaco's find box open closes the find box only.
-- [ ] A failed save (broken JSON) stays in edit mode with the error.
-- [ ] Read-only items show no Edit button.
-- [ ] Create CLAUDE.md / CLAUDE.local.md opens in edit mode.
-- [ ] The existing Context UI scenario is rewritten for preview-first: the CLAUDE.md opens rendered, Edit, type, Ctrl+S writes the file and the view is back in preview; broken JSON is refused and stays in edit mode. Still one scenario (15 of 20).
-- [ ] Quick tier green.
+- [x] A `.md` item opens rendered; frontmatter shows as a header card, not raw text.
+- [x] A non-`.md` item opens in read-only Monaco.
+- [x] Edit → Save button and Ctrl+S save, then show the preview; Cancel and Esc return to preview, confirming first when dirty; Esc with Monaco's find box open closes the find box only.
+- [x] A failed save (broken JSON) stays in edit mode with the error.
+- [x] Read-only items show no Edit button.
+- [x] Create CLAUDE.md / CLAUDE.local.md opens in edit mode.
+- [x] The existing Context UI scenario is rewritten for preview-first: the CLAUDE.md opens rendered, Edit, type, Ctrl+S writes the file and the view is back in preview; broken JSON is refused and stays in edit mode. Still one scenario (15 of 20).
+- [x] Quick tier green.
