@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bot, Brain, ChevronDown, FileText, FolderGit2, Plug, Puzzle, Settings2, Sparkles, SquareSlash, type LucideIcon } from 'lucide-react'
-import { buildCleanup } from '../../../shared/cleanup'
+import { Bot, Brain, ChevronDown, FileText, FolderGit2, FolderTree, Plug, Puzzle, Settings2, Sparkles, SquareSlash, UserRound, type LucideIcon } from 'lucide-react'
+import { buildCleanup, type CleanupKind, type CleanupProject } from '../../../shared/cleanup'
 import {
   CREATABLE_NAMES,
   KIND_GROUP_TITLES,
@@ -39,6 +39,7 @@ import { ScrollStack } from '../ui/ScrollStack'
 import { ShareBar } from '../ui/ShareBar'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { ContextEditor } from './ContextEditor'
+import { CrossProjectCleanupDialog } from './CrossProjectCleanupDialog'
 
 /** The workspace last open in Work, else the one already picked, else the first. */
 function startWorkspace(workspaces: readonly Workspace[], openInWork: string | null, picked: string | null): string | null {
@@ -192,24 +193,28 @@ function Layers({ workspace, report, defaultName }: { workspace: Workspace; repo
   )
 }
 
-/** A new session in the workspace, on its account, with the cleanup prompt waiting in its input; unsaved edits asked about first. */
-function startProjectCleanup(workspace: Workspace, report: ContextReport, accountName: string): void {
-  if (!useContextStore.getState().confirmLeave()) return
+/** A new session in the workspace, on its account, with the cleanup prompt waiting in its input. Callers ask about unsaved edits first. */
+function startCleanup(workspace: Workspace, report: ContextReport, accountName: string, kind: CleanupKind, projects: CleanupProject[]): void {
   const { prompt, addDirs } = buildCleanup({
-    kind: 'project',
+    kind,
     sessionPath: workspace.path,
     account: { name: accountName, folder: report.accountFolder, items: report.layers.account },
-    projects: [{ name: workspace.name, report }]
+    projects
   })
   startSession(workspace, { draft: prompt, addDirs })
 }
 
 function CleanupMenu({ workspace, report }: { workspace: Workspace; report: ContextReport }) {
   const menu = useMenu()
+  const [picking, setPicking] = useState(false)
   const accountName = useAccounts().find((a) => a.profileId === workspace.profileId)?.name ?? workspace.profileId
-  const act = (fn: () => void) => () => {
+  const guarded = (kind: CleanupKind, projects: CleanupProject[]) => () => {
     menu.close()
-    fn()
+    if (useContextStore.getState().confirmLeave()) startCleanup(workspace, report, accountName, kind, projects)
+  }
+  const pickProjects = (): void => {
+    menu.close()
+    setPicking(true)
   }
   return (
     <>
@@ -225,10 +230,23 @@ function CleanupMenu({ workspace, report }: { workspace: Workspace; report: Cont
             icon={FolderGit2}
             label="This project"
             description="memory, CLAUDE.md files, repo skills, agents and commands"
-            onClick={act(() => startProjectCleanup(workspace, report, accountName))}
+            onClick={guarded('project', [{ name: workspace.name, report }])}
           />
+          <MenuItem icon={UserRound} label="Account" description="the account's CLAUDE.md, skills, agents, commands and settings" onClick={guarded('account', [])} />
+          <MenuItem icon={FolderTree} label="Across projects…" description="pick the account's workspaces; the account files come along" onClick={pickProjects} />
         </PopoverMenu>
       </Popover>
+      {picking && (
+        <CrossProjectCleanupDialog
+          workspace={workspace}
+          accountName={accountName}
+          onStart={(projects) => {
+            setPicking(false)
+            startCleanup(workspace, report, accountName, 'cross-project', projects)
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
     </>
   )
 }

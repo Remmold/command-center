@@ -134,3 +134,101 @@ describe('cleanup prompt: this project', () => {
     expect(at('findings table')).toBeLessThan(at('clickable questions'))
   })
 })
+
+function accountRun(report: ContextReport = appReport()): CleanupInput {
+  return { ...projectRun(report), kind: 'account', projects: [] }
+}
+
+describe('cleanup prompt: account', () => {
+  it("names the account's CLAUDE.md and its imports, skills, agents, commands and settings, and no project files", () => {
+    const { prompt } = buildCleanup(accountRun())
+
+    for (const path of [`${ACCOUNT}\\CLAUDE.md`, `${ACCOUNT}\\rules.md`, `${ACCOUNT}\\skills\\flow\\SKILL.md`, `${ACCOUNT}\\settings.json`]) {
+      expect(prompt).toContain(path)
+    }
+    for (const path of [`${APP}\\CLAUDE.md`, `${APP}\\.claude\\skills\\ship\\SKILL.md`, MEMORY, `${APP}\\GLOSSARY.md`]) {
+      expect(prompt).not.toContain(path)
+    }
+  })
+
+  it('leaves out plugin items, servers and memory in the account layer', () => {
+    const report = appReport()
+    const account = [
+      ...report.layers.account,
+      item('agent', `${ACCOUNT}\\plugins\\cache\\kit\\agents\\helper.md`, 'plugin:kit'),
+      item('plugin', `${ACCOUNT}\\plugins\\cache\\kit\\.claude-plugin\\plugin.json`, 'account'),
+      item('mcp-server', `${ACCOUNT}.json`, 'account')
+    ]
+    const { prompt } = buildCleanup({ ...accountRun(report), account: { name: 'Work', folder: ACCOUNT, items: account } })
+
+    expect(prompt).not.toContain('plugins\\cache\\kit')
+    expect(prompt).not.toContain(`${ACCOUNT}.json`)
+    expect(prompt).not.toContain(MEMORY)
+  })
+
+  it('pre-allows the account folder only', () => {
+    expect(buildCleanup(accountRun()).addDirs).toEqual([ACCOUNT])
+  })
+
+  it('sends one subagent for the account files and says an account-file fix reaches every workspace of the account', () => {
+    const { prompt } = buildCleanup(accountRun())
+
+    expect(prompt).toContain('one subagent for the account files')
+    expect(prompt).toMatch(/shared by every workspace of the account/)
+    expect(prompt).toMatch(/Edit nothing before I answer/)
+    expect(prompt.indexOf('one subagent')).toBeLessThan(prompt.indexOf('shared by every workspace'))
+  })
+})
+
+const WEB = 'D:\\code\\web'
+const WEB_MEMORY = `${ACCOUNT}\\projects\\D--code-web\\memory`
+
+function webReport(): ContextReport {
+  return appReport({
+    workspacePath: WEB,
+    memoryFolder: WEB_MEMORY,
+    layers: {
+      account: appReport().layers.account,
+      repo: [item('claude-md', `${WEB}\\CLAUDE.md`, 'repo'), item('skill', `${WEB}\\.claude\\skills\\deploy\\SKILL.md`, 'repo')],
+      local: []
+    },
+    docs: [`${WEB}\\docs\\agents`]
+  })
+}
+
+function crossRun(): CleanupInput {
+  return { ...projectRun(), kind: 'cross-project', projects: [{ name: 'app', report: appReport() }, { name: 'web', report: webReport() }] }
+}
+
+describe('cleanup prompt: across projects', () => {
+  it("names every covered workspace's files and memory folder, plus the account files", () => {
+    const { prompt } = buildCleanup(crossRun())
+
+    for (const path of [
+      `${APP}\\CLAUDE.md`,
+      MEMORY,
+      `${WEB}\\CLAUDE.md`,
+      `${WEB}\\.claude\\skills\\deploy\\SKILL.md`,
+      `${WEB}\\docs\\agents`,
+      WEB_MEMORY,
+      `${ACCOUNT}\\CLAUDE.md`,
+      `${ACCOUNT}\\settings.json`
+    ]) {
+      expect(prompt).toContain(path)
+    }
+  })
+
+  it("pre-allows the other workspaces, every memory folder and the account folder, each once, never the session's own workspace", () => {
+    const run = crossRun()
+    const { addDirs } = buildCleanup({ ...run, projects: [...run.projects, run.projects[1]] })
+
+    expect(addDirs).toEqual([MEMORY, WEB, WEB_MEMORY, ACCOUNT])
+  })
+
+  it('asks for one subagent per project plus one for the account files', () => {
+    const { prompt } = buildCleanup(crossRun())
+
+    expect(prompt).toContain('one subagent per project listed above, plus one for the account files')
+    expect(prompt).toMatch(/shared by every workspace of the account/)
+  })
+})
