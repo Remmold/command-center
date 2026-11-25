@@ -12,6 +12,17 @@ export function takeStartRequest(paneId: string): boolean {
   return requested.delete(paneId)
 }
 
+/** Sessions being started whose chat is not hosted yet, e.g. a drift check's while its run file is written. */
+const starting = new Set<string>()
+
+/** Counts the session as starting until the returned release is called. */
+export function holdStarting(sessionId: string): () => void {
+  starting.add(sessionId)
+  return () => starting.delete(sessionId)
+}
+
+export const startingSessions = (): string[] => [...starting]
+
 /** A promise and the function that settles it. */
 export interface Settleable {
   settled: Promise<boolean>

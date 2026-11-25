@@ -58,7 +58,7 @@ const LIB_REPORT = reportOf(LIB.path, 'C--projects-lib')
 
 function runView(runId: string, scope: FindingsRun['scope'], workspaces: string[], sessionId = `pane-${runId}`): DriftRunView {
   const run: FindingsRun = { version: 1, check: 'drift', scope, runId, sessionId, startedAt: '2026-11-25T10:00:00Z', accountFolder: ACCOUNT, workspaces, steps: [], findings: [], done: true }
-  return { file: `${RUNS}\\${runId}.json`, run, writing: false, note: null, stopped: false, files: 'all', modified: {} }
+  return { file: `${RUNS}\\${runId}.json`, run, writing: false, note: null, state: 'done', files: 'all', modified: {} }
 }
 
 const ticked = (id: string, runId: string, path = `${APP.path}\\CLAUDE.md`): ShownFinding => ({

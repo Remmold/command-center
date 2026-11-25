@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { isBareSkeleton, latestRuns, pathKey, readFindingsRun, runState, type DriftChecksView, type DriftRunView, type FindingsRead, type FindingsRun, type ShownFiles } from '../../shared/findings'
+import { isBareSkeleton, latestRuns, pathKey, readFindingsRun, runState, type DriftChecksView, type DriftRunView, type FindingsRead, type FindingsRun, type RunState, type ShownFiles } from '../../shared/findings'
 import { stampOf, type WatchedFile } from '../testFlow/reader'
 import { discardSkeleton } from './skeleton'
 
@@ -42,9 +42,9 @@ export class DriftChecksReader {
     fixing: readonly string[] = [],
     live: readonly string[] | null = null
   ): Promise<{ view: DriftChecksView; watch: WatchedFile[] }> {
-    const stopped = (run: FindingsRun): boolean => live !== null && runState(run, live) === 'stopped'
+    const stateOf = (run: FindingsRun): RunState => (live === null ? (run.done ? 'done' : 'running') : runState(run, live))
     const all = await this.entries(folder)
-    const orphans = all.filter((e) => stopped(e.run) && isBareSkeleton(e.run))
+    const orphans = all.filter((e) => stateOf(e.run) === 'stopped' && isBareSkeleton(e.run))
     await Promise.all(orphans.map((e) => discardSkeleton(folder, e.file)))
     const entries = (await Promise.all(all.map(async (e) => (orphans.includes(e) && (await stampOf(e.file)) === 'missing' ? null : e)))).filter((e): e is Entry => e !== null)
     const { covering, account } = latestRuns(entries, workspacePath, accountFolder)
@@ -60,13 +60,13 @@ export class DriftChecksReader {
           run: entry.run,
           writing: entry.writing,
           note: entry.note,
-          stopped: stopped(entry.run),
+          state: stateOf(entry.run),
           files,
           modified: Object.fromEntries(paths.map((p, i) => [pathKey(p), times[i]]))
         }
       })
     )
-    const watch = shown.filter(({ entry }) => (!entry.run.done && !stopped(entry.run)) || fixing.includes(entry.run.runId)).map(({ entry }) => ({ path: entry.file, stamp: entry.stamp }))
+    const watch = shown.filter(({ entry }) => stateOf(entry.run) === 'running' || fixing.includes(entry.run.runId)).map(({ entry }) => ({ path: entry.file, stamp: entry.stamp }))
     return { view: { runs }, watch }
   }
 

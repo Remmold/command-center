@@ -1,10 +1,10 @@
 import type { ContextReport } from '../../shared/context'
 import { buildDriftCheck, driftRunSkeleton, type DriftCheckKind, type DriftCheckProject } from '../../shared/driftCheck'
 import type { Workspace } from '../../shared/types'
-import { holdStarting, useContextStore } from './contextStore'
+import { useContextStore } from './contextStore'
 import type { Picked } from './lastPick'
 import { startSession } from './sessionNavigation'
-import { settleable } from './startRequests'
+import { holdStarting, settleable } from './startRequests'
 
 export interface DriftCheckStart {
   workspace: Workspace

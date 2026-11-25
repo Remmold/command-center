@@ -1,3 +1,3 @@
 **Status:** resolved
-Round 1: the renderer passes its hosted session ids to the map read; a run not done whose session is gone shows stopped (Open chat hidden, watch ends), a bare one is removed under the skeleton guard; a drift check whose prompt never reaches a process removes its skeleton.
+Round 2 (review): run state (done, running, stopped) on the run view, hosted ids beside isHosted, starting sessions in startRequests, ADR 0005 and glossary name the stopped run and its skeleton removal.
 quick 1439 passed, build, e2e context.spec 2/2 green.

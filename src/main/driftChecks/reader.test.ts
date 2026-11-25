@@ -87,14 +87,14 @@ describe('DriftChecksReader', () => {
     it('shows a run whose session is live as running and watches it', async () => {
       await write('r.json', JSON.stringify(run('r')))
       const read = await reader.read(folder, WS, ACC, [], ['s-r'])
-      expect(read.view.runs.map((r) => [r.run.runId, r.stopped])).toEqual([['r', false]])
+      expect(read.view.runs.map((r) => [r.run.runId, r.state])).toEqual([['r', 'running']])
       expect(read.watch.map((w) => w.path)).toEqual([join(folder, 'r.json')])
     })
 
     it('shows a run whose session is gone as stopped, findings and date kept, and stops watching it', async () => {
       await write('r.json', JSON.stringify(run('r', { steps: [{ id: 'a', title: 'A', status: 'running' }], findings: [finding] })))
       const read = await reader.read(folder, WS, ACC, [], [])
-      expect(read.view.runs.map((r) => [r.run.runId, r.stopped, r.run.findings.length, r.run.startedAt])).toEqual([['r', true, 1, '2026-11-20T10:00:00.000Z']])
+      expect(read.view.runs.map((r) => [r.run.runId, r.state, r.run.findings.length, r.run.startedAt])).toEqual([['r', 'stopped', 1, '2026-11-20T10:00:00.000Z']])
       expect(read.watch).toEqual([])
       expect(await exists('r.json')).toBe(true)
     })
@@ -114,13 +114,13 @@ describe('DriftChecksReader', () => {
 
     it('keeps a bare skeleton whose session is live', async () => {
       await write('new.json', JSON.stringify(run('new')))
-      expect((await reader.read(folder, WS, ACC, [], ['s-new'])).view.runs.map((r) => r.stopped)).toEqual([false])
+      expect((await reader.read(folder, WS, ACC, [], ['s-new'])).view.runs.map((r) => r.state)).toEqual(['running'])
       expect(await exists('new.json')).toBe(true)
     })
   })
 
   it('judges nothing stopped and removes nothing when the live sessions are not given', async () => {
     await write('new.json', JSON.stringify(run('new')))
-    expect((await reader.read(folder, WS, ACC)).view.runs.map((r) => r.stopped)).toEqual([false])
+    expect((await reader.read(folder, WS, ACC)).view.runs.map((r) => r.state)).toEqual(['running'])
   })
 })

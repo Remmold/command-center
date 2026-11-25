@@ -9,7 +9,7 @@ import { discardSkeleton, writeSkeleton } from './skeleton'
 
 const NOTHING: DriftChecksView = { runs: [] }
 
-const strings = (list: unknown[]): string[] => list.filter((v): v is string => typeof v === 'string')
+const onlyStrings = (list: unknown[]): string[] => list.filter((v): v is string => typeof v === 'string')
 
 /** The map's drift checks; while a window's map shows a run that is not done, main watches that file and tells the window. */
 export function registerDriftChecksIpc(): () => void {
@@ -38,7 +38,7 @@ export function registerDriftChecksIpc(): () => void {
     turns.set(key, turn)
     const scope = typeof workspaceId === 'string' ? await workspaceScope(workspaceId) : null
     const read = scope
-      ? await reader.read(driftChecksFolder(), scope.workspacePath, scope.accountFolder, Array.isArray(fixing) ? strings(fixing) : [], Array.isArray(live) ? strings(live) : null)
+      ? await reader.read(driftChecksFolder(), scope.workspacePath, scope.accountFolder, Array.isArray(fixing) ? onlyStrings(fixing) : [], Array.isArray(live) ? onlyStrings(live) : null)
       : { view: NOTHING, watch: [] }
     if (turns.get(key) === turn && !event.sender.isDestroyed()) watches.set(key, read.watch)
     return read.view

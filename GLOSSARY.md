@@ -130,7 +130,7 @@ The checks the app runs on context files itself, at no token cost: MEMORY.md lon
 _Avoid_: Lint, audit, validation
 
 **Drift check**:
-A hosted session, started from the Context view, in which subagents check context files against the current code and record what has drifted as findings; Andreas ticks which fixes it applies. It comes in three kinds: **project** (one workspace's memory and repo files), **account** (the account's own files) and **cross-project** (chosen workspaces of one account plus that account's files).
+A hosted session, started from the Context view, in which subagents check context files against the current code and record what has drifted as findings; Andreas ticks which fixes it applies. It comes in three kinds: **project** (one workspace's memory and repo files), **account** (the account's own files) and **cross-project** (chosen workspaces of one account plus that account's files). A run not done is **running** while its chat is in Work, and **stopped** once that chat is gone; a stopped run's findings can still be applied.
 _Avoid_: Context cleanup (its old name), memory audit (that is the interactive skill), context refresh
 
 **Finding**:

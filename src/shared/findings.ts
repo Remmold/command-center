@@ -128,7 +128,9 @@ export const isBareSkeleton = (run: Pick<FindingsRun, 'steps' | 'findings' | 'do
  * Whether a run can still finish: one not done whose session (a hosted pane id) is no longer in the app is stopped,
  * as nothing will write its file again.
  */
-export function runState(run: Pick<FindingsRun, 'sessionId' | 'done'>, live: readonly string[]): 'done' | 'running' | 'stopped' {
+export type RunState = 'done' | 'running' | 'stopped'
+
+export function runState(run: Pick<FindingsRun, 'sessionId' | 'done'>, live: readonly string[]): RunState {
   if (run.done) return 'done'
   return live.includes(run.sessionId) ? 'running' : 'stopped'
 }
@@ -165,8 +167,8 @@ export interface DriftRunView {
   writing: boolean
   /** Why the file's latest content was refused; `run` is then the last good parse. */
   note: string | null
-  /** Not done, and its session is gone from the app, so nothing will finish it. */
-  stopped: boolean
+  /** 'stopped' when the run is not done and its session is gone from the app, so nothing will finish it. */
+  state: RunState
   /** 'account' for a run shown for its account-file findings only; the covering run then shows the rest of its own. */
   files: ShownFiles
   /** Each finding file's modified time in ms by `pathKey`; null when it is gone. */
