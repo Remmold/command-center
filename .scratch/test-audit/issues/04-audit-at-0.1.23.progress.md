@@ -1,0 +1,3 @@
+- done: 15 -> 9 scenarios (6 merges, 0 assertions removed), UI JSON 97.2 s -> 69.2 s / 74.9 s green twice; unit 1,184 unchanged; inventory, release.md updated
+- next step: commit, then set the ticket resolved
+- open reds: none
