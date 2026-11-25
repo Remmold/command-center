@@ -12,9 +12,9 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unit test (seam 2, rest) against a temp folder: a change to the file → one change event; the watch is released when no one shows the file.
-- [ ] The tab reloads on change and stays at the same scroll place; the dot shows on another tab and clears when the Test tab opens.
-- [ ] The ticket 01 UI scenario is extended: a rewrite of the file reloads the tab (still one scenario).
-- [ ] Quick tier green.
+- [x] Unit test (seam 2, rest) against a temp folder: a change to the file → one change event; the watch is released when no one shows the file.
+- [x] The tab reloads on change and stays at the same scroll place; the dot shows on another tab and clears when the Test tab opens.
+- [x] The ticket 01 UI scenario is extended: a rewrite of the file reloads the tab (still one scenario).
+- [x] Quick tier green.
