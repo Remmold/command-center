@@ -53,6 +53,11 @@ const api: RendererApi = {
     load: () => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_LOAD),
     save: (layout) => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_SAVE, layout)
   },
+  chatHistory: {
+    loadSync: () => ipcRenderer.sendSync(IPC.CHAT_HISTORY_LOAD),
+    apply: (paneId, changes) => ipcRenderer.send(IPC.CHAT_HISTORY_APPLY, paneId, changes),
+    importLegacy: (entry) => ipcRenderer.invoke(IPC.CHAT_HISTORY_IMPORT_LEGACY, entry)
+  },
   repoIdentities: {
     list: () => ipcRenderer.invoke(IPC.REPO_IDENTITIES_LIST),
     setDisplayName: (repoGroupKey, name) => ipcRenderer.invoke(IPC.REPO_IDENTITIES_SET_NAME, repoGroupKey, name),
