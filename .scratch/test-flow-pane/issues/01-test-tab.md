@@ -19,10 +19,14 @@ Rules (from the spec, word for word):
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Unit tests (seam 1) for the finder: Write, Edit and a Bash render command each caught; the latest write wins; subagent items count; `-commands` files and files outside the folder or in a subfolder ignored; case and slashes don't matter; repo fallback when nothing was written. Prior art: the Media tab's collector tests.
-- [ ] Unit tests (seam 2, part) for the reader against a temp folder: `.md` with twin → html, `.md` alone → md text, missing → not found, a path outside the folder → refused.
-- [ ] Click-to-copy in the shown HTML copies to the clipboard; no http(s) request leaves the frame.
-- [ ] New UI scenario on the fake CLI with a temp test-flows folder: a chat whose reply writes a test-flow file shows it in the Test tab (the test may write the file itself; the fake CLI's Write doesn't touch disk). That makes 16 of the 20-scenario budget on this branch.
-- [ ] Quick tier green.
+- [x] Unit tests (seam 1) for the finder: Write, Edit and a Bash render command each caught; the latest write wins; subagent items count; `-commands` files and files outside the folder or in a subfolder ignored; case and slashes don't matter; repo fallback when nothing was written. Prior art: the Media tab's collector tests.
+- [x] Unit tests (seam 2, part) for the reader against a temp folder: `.md` with twin → html, `.md` alone → md text, missing → not found, a path outside the folder → refused.
+- [x] Click-to-copy in the shown HTML copies to the clipboard; no http(s) request leaves the frame.
+- [x] New UI scenario on the fake CLI with a temp test-flows folder: a chat whose reply writes a test-flow file shows it in the Test tab (the test may write the file itself; the fake CLI's Write doesn't touch disk). That makes 16 of the 20-scenario budget on this branch.
+- [x] Quick tier green.
+
+## Comments
+
+- 01 (implementing agent): a VS Code session's subagents write to their own files, which the finder does not read yet; their writes count only in hosted chats, whose subagent items arrive inline. A Bash or PowerShell command that merely names a file in the folder (a cat, a grep) also counts as a write, as the rule says, even when that file does not exist.

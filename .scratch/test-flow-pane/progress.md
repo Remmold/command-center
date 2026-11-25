@@ -1,0 +1,1 @@
+- 01 resolved: Test tab shows the session's test flow (finder, reader, cc-test-flow scheme, folder setting) — accb013
