@@ -28,9 +28,9 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Contract tests (seam 3): the parser (valid, half-written, unknown version); latest-run selection (project, account and cross-project runs across two workspaces of one account and one of another); staleness by modified time.
-- [ ] Drift findings show on their blocks next to health findings, with the run date and the step list; stale ones are dimmed and marked.
-- [ ] A run file being rewritten while the map is open updates the map without a refresh; once it reads `done: true`, the watch stops.
-- [ ] Quick tier green.
+- [x] Contract tests (seam 3): the parser (valid, half-written, unknown version); latest-run selection (project, account and cross-project runs across two workspaces of one account and one of another); staleness by modified time.
+- [x] Drift findings show on their blocks next to health findings, with the run date and the step list; stale ones are dimmed and marked.
+- [x] A run file being rewritten while the map is open updates the map without a refresh; once it reads `done: true`, the watch stops.
+- [x] Quick tier green.
