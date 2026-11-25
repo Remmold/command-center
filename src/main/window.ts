@@ -9,6 +9,7 @@ import { zoomFactor } from '../shared/zoom'
 import { OFFSCREEN_POSITION, windowOffscreen } from './testWindow'
 import { savedPlacement, trackWindowPlace } from './windowPlace/service'
 import type { Placement } from './windowPlace/place'
+import { allowedFrameNavigation } from './testFlow/scheme'
 
 let mainWindow: BrowserWindow | null = null
 const offscreen = windowOffscreen(process.env)
@@ -47,6 +48,10 @@ export function createMainWindow(options: { show?: boolean } = {}): BrowserWindo
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  win.webContents.on('will-frame-navigate', (event) => {
+    if (!allowedFrameNavigation(event.url, event.isMainFrame)) event.preventDefault()
   })
 
   win.webContents.on('did-finish-load', () => applyZoom(win))

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, session } from 'electron'
+import { app, BrowserWindow, dialog, protocol, session } from 'electron'
 import { registerIpc } from './ipc'
 import { removeLegacyHook } from './permission/legacyHook'
 import { sessionStatusTracker } from './sessions/tracker'
@@ -14,7 +14,8 @@ import { startUpdates } from './update/service'
 import type { StartWithWindowsState } from '../shared/types'
 import { iconPath } from './util/paths'
 import { routeMenuZoom } from './zoom/menu'
-import { handleMediaScheme, registerMediaScheme } from './files/media'
+import { handleMediaScheme, MEDIA_SCHEME_PRIVILEGES } from './files/media'
+import { handleTestFlowScheme, TEST_FLOW_SCHEME_PRIVILEGES } from './testFlow/scheme'
 import {
   allowWindowClose,
   createMainWindow,
@@ -26,7 +27,8 @@ import {
   showView
 } from './window'
 
-registerMediaScheme()
+// Electron keeps only the last call's list, so every scheme goes in this one.
+protocol.registerSchemesAsPrivileged([MEDIA_SCHEME_PRIVILEGES, TEST_FLOW_SCHEME_PRIVILEGES])
 
 /** Keep equal to the electron-builder appId, or packaged notifications lose their attribution. */
 const APP_USER_MODEL_ID = 'com.commandcenter.app'
@@ -98,6 +100,7 @@ if (!app.requestSingleInstanceLock()) {
     const startWithWindows = createStartWithWindowsControl()
     registerIpc({ repoIdentities, startWithWindows })
     handleMediaScheme()
+    handleTestFlowScheme()
     startUpdates()
     routeMenuZoom()
     const win = createMainWindow({ show: !startsHidden(process.argv) })

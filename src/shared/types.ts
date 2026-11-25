@@ -6,6 +6,7 @@ import type { AppView } from './views'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
+import type { TestFlowView } from './testFlow'
 import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
@@ -501,6 +502,13 @@ export interface RendererApi {
     cancelModelDownload: () => Promise<void>
     removeModel: () => Promise<SpeechModelStatus>
     onModelChanged: (cb: (status: SpeechModelStatus) => void) => () => void
+  }
+  testFlow: {
+    /** What the Test tab shows for a path the finder picked; refuses anything outside the test-flows folder. */
+    read: (path: string) => Promise<TestFlowView>
+    folder: () => Promise<string>
+    /** Resolves to the folder in force; a path that is not absolute is not saved. */
+    setFolder: (folder: string) => Promise<string>
   }
   files: {
     /** Where a file link in a chat points, or null when nothing is there. */

@@ -1,0 +1,25 @@
+{
+  "turns": [
+    {
+      "match": "test flow",
+      "events": [
+        { "type": "text", "text": "Writing the test flow." },
+        {
+          "type": "tool_use",
+          "name": "Write",
+          "approval": false,
+          "input": { "file_path": "{cwd}{sep}flows{sep}run.md", "content": "# Run" },
+          "result": "File created successfully at: {cwd}{sep}flows{sep}run.md"
+        },
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "approval": false,
+          "input": { "command": "python render_test_flow.py \"{cwd}{sep}flows{sep}run.md\"" },
+          "result": "wrote run.html"
+        },
+        { "type": "text", "text": "The test flow is ready." }
+      ]
+    }
+  ]
+}

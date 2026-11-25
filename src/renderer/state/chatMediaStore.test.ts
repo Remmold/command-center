@@ -40,6 +40,12 @@ describe('chat media tabs', () => {
     expect(useChatMediaStore.getState().openAgent['pane-4']).toBeUndefined()
   })
 
+  it('the Test tab shows once chosen, whether or not the chat has media or agents', () => {
+    useChatMediaStore.getState().setTab('pane-5', 'test')
+    expect(shownTab(tabOf('pane-5'), 0, 0)).toBe('test')
+    expect(shownTab(tabOf('pane-5'), 2, 1)).toBe('test')
+  })
+
   it('drops the old Media column width from storage and leaves other keys', () => {
     const saved = new Map([
       ['command-center.media-panel', '{"state":{"width":320},"version":1}'],

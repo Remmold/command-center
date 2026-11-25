@@ -11,11 +11,7 @@ const named = new Set<string>()
 
 const keyOf = (path: string): string => normalize(path).toLowerCase()
 
-export function registerMediaScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }
-  ])
-}
+export const MEDIA_SCHEME_PRIVILEGES = { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }
 
 /** Looks up each path a chat named, as a file link resolves, and lets the scheme serve the ones that are images or videos. */
 export async function resolveMedia(cwd: string, paths: readonly string[]): Promise<MediaFile[]> {

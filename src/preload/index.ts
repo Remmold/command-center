@@ -154,6 +154,11 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.VIDEO_MODEL_CHANGED, handler)
     }
   },
+  testFlow: {
+    read: (path) => ipcRenderer.invoke(IPC.TEST_FLOW_READ, path),
+    folder: () => ipcRenderer.invoke(IPC.TEST_FLOW_FOLDER_GET),
+    setFolder: (folder) => ipcRenderer.invoke(IPC.TEST_FLOW_FOLDER_SET, folder)
+  },
   files: {
     resolveLink: (cwd, path) => ipcRenderer.invoke(IPC.FILES_RESOLVE_LINK, cwd, path),
     readImage: (path) => ipcRenderer.invoke(IPC.FILES_READ_IMAGE, path),

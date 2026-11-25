@@ -19,7 +19,8 @@ export const SCRIPTS = {
   subagent: join(__dirname, 'scripts', 'subagent.json'),
   remoteControl: join(__dirname, 'scripts', 'remote-control.json'),
   look: join(__dirname, 'scripts', 'look.json'),
-  media: join(__dirname, 'scripts', 'media.json')
+  media: join(__dirname, 'scripts', 'media.json'),
+  testFlow: join(__dirname, 'scripts', 'test-flow.json')
 } as const
 
 export type ScriptName = keyof typeof SCRIPTS
