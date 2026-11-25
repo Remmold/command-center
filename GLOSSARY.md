@@ -60,6 +60,14 @@ _Avoid_: Active sessions, running sessions
 An agent Claude starts with the Agent tool inside a session, in the foreground or the background. Its messages live in its own file beside the session's transcript.
 _Avoid_: Child agent, task (the CLI's word for it in its events)
 
+**Test flow**:
+A document of manual test steps Claude writes for Andreas, kept in the test-flows folder as a markdown file with a rendered HTML twin he tests from. A session's test flow is the one it last wrote there that exists (standing command lists excepted), else the one named after its repo.
+_Avoid_: Test plan, test doc, checklist
+
+**Test tab**:
+The tab beside Chat, Agents and Media that shows the session's test flow as its HTML twin, reloading when the file changes. It can pop out into its own window, which follows whichever session is focused in Work.
+_Avoid_: Test pane, test viewer
+
 **Agents tab**:
 The tab beside Chat and Media that lists a session's subagents grouped by the turn that started them, newest turn first (older turns fold), working ones first within a turn, and opens one in its live agent view: its transcript, read-only, following as it grows.
 _Avoid_: Agent panel, transcript dialog

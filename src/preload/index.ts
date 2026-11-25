@@ -37,6 +37,7 @@ import type {
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from '../shared/approval'
 import type { RepoIdentityViews } from '../shared/repoIdentity'
 import type { SpeechModelStatus, VideoProgressEvent } from '../shared/video'
+import type { TestFlowFocus } from '../shared/testFlow'
 
 const api: RendererApi = {
   workspaces: {
@@ -157,6 +158,25 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, status: SpeechModelStatus) => cb(status)
       ipcRenderer.on(IPC.VIDEO_MODEL_CHANGED, handler)
       return () => ipcRenderer.off(IPC.VIDEO_MODEL_CHANGED, handler)
+    }
+  },
+  testFlow: {
+    show: (watcher, paths) => ipcRenderer.invoke(IPC.TEST_FLOW_SHOW, watcher, paths),
+    release: (watcher) => ipcRenderer.invoke(IPC.TEST_FLOW_RELEASE, watcher),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, watcher: string) => cb(watcher)
+      ipcRenderer.on(IPC.TEST_FLOW_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.TEST_FLOW_CHANGED, handler)
+    },
+    folder: () => ipcRenderer.invoke(IPC.TEST_FLOW_FOLDER_GET),
+    setFolder: (folder) => ipcRenderer.invoke(IPC.TEST_FLOW_FOLDER_SET, folder),
+    popOut: () => ipcRenderer.invoke(IPC.TEST_FLOW_POP_OUT),
+    publish: (focus) => ipcRenderer.send(IPC.TEST_FLOW_PUBLISH, focus),
+    focus: () => ipcRenderer.invoke(IPC.TEST_FLOW_FOCUS_GET),
+    onFocus: (cb) => {
+      const handler = (_e: IpcRendererEvent, focus: TestFlowFocus) => cb(focus)
+      ipcRenderer.on(IPC.TEST_FLOW_FOCUS, handler)
+      return () => ipcRenderer.off(IPC.TEST_FLOW_FOCUS, handler)
     }
   },
   files: {

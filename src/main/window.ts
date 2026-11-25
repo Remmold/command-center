@@ -9,12 +9,15 @@ import { zoomFactor } from '../shared/zoom'
 import { OFFSCREEN_POSITION, windowOffscreen } from './testWindow'
 import { savedPlacement, trackWindowPlace } from './windowPlace/service'
 import type { Placement } from './windowPlace/place'
+import { allowedFrameNavigation } from './testFlow/scheme'
+
+type WindowState = Pick<Placement, 'maximized' | 'fullScreen'>
 
 let mainWindow: BrowserWindow | null = null
 const offscreen = windowOffscreen(process.env)
 let quitting = false
 /** Maximise or full screen waits for the first show, since applying it shows a hidden window. */
-let pendingState: Pick<Placement, 'maximized' | 'fullScreen'> | null = null
+let pendingState: WindowState | null = null
 
 /** After this, closing the window really closes it instead of hiding to the tray. */
 export function allowWindowClose(): void {
@@ -23,6 +26,52 @@ export function allowWindowClose(): void {
 
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+}
+
+export const WINDOW_BACKGROUND = '#18181b'
+
+export function appWebPreferences(): Electron.WebPreferences {
+  return {
+    preload: join(__dirname, '../preload/index.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: false,
+    zoomFactor: zoomFactor(zoomLevel())
+  }
+}
+
+/** New windows open in the browser instead, and a frame may only navigate within the test-flow scheme. */
+export function guardAppWindow(win: BrowserWindow): void {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-frame-navigate', (event) => {
+    if (!allowedFrameNavigation(event.url, event.isMainFrame)) event.preventDefault()
+  })
+  win.webContents.on('did-finish-load', () => applyZoom(win))
+}
+
+export function loadRenderer(win: BrowserWindow, query?: Record<string, string>): void {
+  if (process.env.ELECTRON_RENDERER_URL) {
+    const url = new URL(process.env.ELECTRON_RENDERER_URL)
+    for (const [k, v] of Object.entries(query ?? {})) url.searchParams.set(k, v)
+    void win.loadURL(url.toString())
+  } else {
+    void win.loadFile(join(__dirname, '../renderer/index.html'), query ? { query } : undefined)
+  }
+}
+
+/** Shows a window in its saved state; maximise or full screen applied before the first show would show it early. */
+export function revealPlaced(win: BrowserWindow, state: WindowState | null): void {
+  if (state?.fullScreen) {
+    win.show()
+    win.setFullScreen(true)
+  } else if (state?.maximized) {
+    win.maximize()
+  } else {
+    win.show()
+  }
 }
 
 export function createMainWindow(options: { show?: boolean } = {}): BrowserWindow {
@@ -34,22 +83,10 @@ export function createMainWindow(options: { show?: boolean } = {}): BrowserWindo
     width: 1400,
     height: 900,
     ...(place?.bounds ?? {}),
-    backgroundColor: '#18181b',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-      zoomFactor: zoomFactor(zoomLevel())
-    }
+    backgroundColor: WINDOW_BACKGROUND,
+    webPreferences: appWebPreferences()
   })
-
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
-  win.webContents.on('did-finish-load', () => applyZoom(win))
+  guardAppWindow(win)
 
   win.on('close', (event) => {
     if (quitting) return
@@ -60,11 +97,7 @@ export function createMainWindow(options: { show?: boolean } = {}): BrowserWindo
     if (mainWindow === win) mainWindow = null
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  loadRenderer(win)
   mainWindow = win
   if (offscreen) {
     if (options.show ?? true) win.showInactive()
@@ -81,14 +114,7 @@ export function createMainWindow(options: { show?: boolean } = {}): BrowserWindo
 function reveal(win: BrowserWindow): void {
   const state = pendingState
   pendingState = null
-  if (state?.fullScreen) {
-    win.show()
-    win.setFullScreen(true)
-  } else if (state?.maximized) {
-    win.maximize()
-  } else {
-    win.show()
-  }
+  revealPlaced(win, state)
 }
 
 export function showMainWindow(): BrowserWindow {

@@ -3,6 +3,8 @@ interface Tab<T extends string> {
   label: string
   /** Shown after the label, e.g. "Media 3" or "Agents 2 working". */
   count?: number | string
+  /** Marks something new on a tab not being looked at; the label says it in words for screen readers. */
+  dot?: string
   title?: string
 }
 
@@ -34,6 +36,7 @@ export function TabStrip<T extends string>({ tabs, value, onChange, label }: Pro
           >
             {t.label}
             {t.count !== undefined && <span className="tabular-nums">{t.count}</span>}
+            {t.dot && <span role="img" aria-label={t.dot} className="h-1.5 w-1.5 rounded-full bg-accent" />}
           </button>
         )
       })}

@@ -9,9 +9,12 @@ import { lastCheckLabel } from '../../state/updateLabels'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DetailRow } from '../ui/DetailRow'
+import { FolderField } from '../ui/FolderField'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
 import { useSpeechModelStore } from '../../state/speechModelStore'
 import { SPEECH_MODEL, type SpeechModelStatus } from '../../../shared/video'
+import { useTestFlowStore, useTestFlowsFolder } from '../../state/testFlowStore'
+import { DEFAULT_TEST_FLOWS_FOLDER } from '../../../shared/testFlow'
 
 const megabytes = (bytes: number): string => `${Math.round(bytes / 1_000_000)} MB`
 
@@ -60,6 +63,20 @@ function VideoGroup() {
         runs on this computer with the {SPEECH_MODEL.label} model.
       </PageNote>
       <DetailRow label="Speech model" value={modelLabel(model)} />
+    </PageGroup>
+  )
+}
+
+function TestFlowsGroup() {
+  const folder = useTestFlowsFolder()
+  const setFolder = useTestFlowStore((s) => s.setFolder)
+  return (
+    <PageGroup title="Test flows">
+      <FolderField label="Test-flows folder" value={folder ?? ''} onCommit={(f) => void setFolder(f)} />
+      <PageNote>
+        The folder Claude writes test flows to. A session&apos;s Test tab shows the one it last wrote there, else the one named after its repo. Use a
+        full path, e.g. {DEFAULT_TEST_FLOWS_FOLDER}.
+      </PageNote>
     </PageGroup>
   )
 }
@@ -158,6 +175,7 @@ export function GeneralSettings() {
             from now on.
           </PageNote>
         </PageGroup>
+        <TestFlowsGroup />
         <VideoGroup />
       </PageBody>
     </Page>

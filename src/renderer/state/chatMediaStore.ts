@@ -4,14 +4,15 @@ import type { MediaAttachment } from '../components/chat/chatMedia'
 /** A hosted session by its pane id, a followed VS Code session by `observed:<session id>`. */
 export type ChatMediaKey = string
 
-export type ChatTab = 'chat' | 'agents' | 'media'
+export type ChatTab = 'chat' | 'agents' | 'media' | 'test'
 
 export function mediaKeyOf(chat: { kind: 'hosted'; paneId: string } | { kind: 'observed'; sessionId: string }): ChatMediaKey {
   return chat.kind === 'hosted' ? chat.paneId : `observed:${chat.sessionId}`
 }
 
-/** The tab a chat shows: Media and Agents only while they have something to show. */
+/** The tab a chat shows: Media and Agents only while they have something to show; Test always. */
 export function shownTab(chosen: ChatTab | undefined, mediaCount: number, agentCount = 0): ChatTab {
+  if (chosen === 'test') return 'test'
   if (chosen === 'media' && mediaCount > 0) return 'media'
   if (chosen === 'agents' && agentCount > 0) return 'agents'
   return 'chat'

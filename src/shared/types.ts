@@ -6,6 +6,7 @@ import type { AppView } from './views'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
+import type { TestFlowFocus, TestFlowView } from './testFlow'
 import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
 import type { HistoryChange } from './chatHistory'
@@ -516,6 +517,26 @@ export interface RendererApi {
     cancelModelDownload: () => Promise<void>
     removeModel: () => Promise<SpeechModelStatus>
     onModelChanged: (cb: (status: SpeechModelStatus) => void) => () => void
+  }
+  testFlow: {
+    /**
+     * What `watcher` shows for the finder's candidates: the first that exists; anything outside the test-flows folder is
+     * refused. Main watches the shown file and the newer candidates until the next call or `release`.
+     */
+    show: (watcher: string, paths: readonly string[]) => Promise<TestFlowView>
+    release: (watcher: string) => Promise<void>
+    /** Called with the watcher whose shown or awaited file changed on disk. */
+    onChanged: (cb: (watcher: string) => void) => () => void
+    folder: () => Promise<string>
+    /** Resolves to the folder in force; a path that is not absolute is not saved. */
+    setFolder: (folder: string) => Promise<string>
+    /** Opens the pop-out test-flow window, or brings it to the front. */
+    popOut: () => Promise<void>
+    /** The main window tells main which session's test flow the pop-out follows; other windows are ignored. */
+    publish: (focus: TestFlowFocus) => void
+    /** The last published focus, null before the first. */
+    focus: () => Promise<TestFlowFocus | null>
+    onFocus: (cb: (focus: TestFlowFocus) => void) => () => void
   }
   files: {
     /** Where a file link in a chat points, or null when nothing is there. */

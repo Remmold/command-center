@@ -22,6 +22,7 @@ import { saveAsDialog } from './files/save'
 import { readProjectFile, writeProjectFile } from './files/io'
 import { openWithSystem, readImage, resolveLink } from './files/links'
 import { resolveMedia, revealInFolder } from './files/media'
+import { registerTestFlowIpc } from './testFlow/service'
 import { registerVideoIpc } from './video/service'
 import { appendCustomTitle, cleanSessionTitle, listLocalSessions } from './claude/local-sessions'
 import { SubagentWatchService } from './claude/subagentWatch'
@@ -432,6 +433,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.FILES_OPEN_WITH_SYSTEM, (_e, path: string) => openWithSystem(path))
   ipcMain.handle(IPC.MEDIA_RESOLVE, (_e, cwd: string, paths: string[]) => resolveMedia(cwd, paths))
   ipcMain.handle(IPC.MEDIA_REVEAL, (_e, path: string) => revealInFolder(path))
+  unsubscribers.push(registerTestFlowIpc())
 
   ipcMain.handle(IPC.GIT_STATUS, (_e, cwd: string) => getStatus(cwd))
   ipcMain.handle(

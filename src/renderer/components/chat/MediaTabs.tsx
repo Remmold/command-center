@@ -5,6 +5,11 @@ import { useChatItemsStore } from '../../state/chatItemsStore'
 import { mediaKeyOf, shownTab, useChatMediaStore, type ChatMediaKey, type ChatTab } from '../../state/chatMediaStore'
 import { useObservedStore } from '../../state/observedStore'
 import { useAgentTails } from '../../state/subagentTailsStore'
+import { useTestFlowsFolder } from '../../state/testFlowStore'
+import { useWorkspacesStore } from '../../state/workspacesStore'
+import { findTestFlows, repoNameFor, type TestFlowPick, type TestFlowView } from '../../../shared/testFlow'
+import { TestFlowPanel } from '../testFlow/TestFlowPanel'
+import { useTestFlowView, viewKeyOf } from '../testFlow/useTestFlowView'
 import { TabStrip } from '../ui/TabStrip'
 import { collectMedia, type MediaAttachment, type MediaEntry } from './chatMedia'
 import { MediaGrid } from './MediaGrid'
@@ -61,6 +66,30 @@ function useChatAgents(items: readonly ChatItem[], host: AgentHost | undefined, 
   return agents
 }
 
+interface SessionTestFlow {
+  picks: TestFlowPick[]
+  view: TestFlowView | null
+  folder: string
+  repoName: string
+}
+
+function useSessionTestFlow(items: readonly ChatItem[], cwd: string | undefined): SessionTestFlow {
+  const folder = useTestFlowsFolder() ?? ''
+  const repoName = useWorkspacesStore((s) => repoNameFor(s.workspaces, cwd))
+  const picks = useMemo(() => findTestFlows({ items, folder, repoName }), [items, folder, repoName])
+  const paths = useMemo(() => picks.map((p) => p.path), [picks])
+  const view = useTestFlowView(paths)
+  return { picks, view, folder, repoName }
+}
+
+/** True once what the Test tab shows changed while another tab was open, until the Test tab opens again. */
+function useTestFlowDot(view: TestFlowView | null, testOpen: boolean): boolean {
+  const key = viewKeyOf(view)
+  const [seen, setSeen] = useState<string | null>(null)
+  if (key !== null && key !== seen && (seen === null || testOpen)) setSeen(key)
+  return !testOpen && seen !== null && key !== null && key !== seen
+}
+
 interface TabsProps extends SessionMedia {
   chatKey: ChatMediaKey
   cwd: string | undefined
@@ -70,8 +99,12 @@ interface TabsProps extends SessionMedia {
 
 const AGENTS_TITLE = "This session's subagents and what they are doing"
 
+function popOut(): void {
+  window.api.testFlow.popOut().catch((err) => console.error('could not open the test-flow window', err))
+}
+
 /**
- * The Chat, Agents and Media tabs over a transcript. The transcript stays mounted and laid out under the other
+ * The Chat, Agents, Media and Test tabs over a transcript. The transcript stays mounted and laid out under the other
  * tabs, only invisible, so its scroll position and scroll-follow carry on.
  */
 function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }: TabsProps) {
@@ -81,6 +114,8 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
   const agentCount = useMemo(() => flatAgents(agents).length, [agents])
   const agentsWorking = useMemo(() => agentTabCount(agents), [agents])
   const tab = shownTab(chosen, media.length, agentCount)
+  const testFlow = useSessionTestFlow(items, cwd)
+  const testFlowChanged = useTestFlowDot(testFlow.view, tab === 'test')
   const regionRef = useRef<HTMLDivElement | null>(null)
   const jumpTo = useRef<string | null>(null)
 
@@ -114,26 +149,28 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, children }:
     () => [
       { value: 'chat' as const, label: 'Chat', title: `The transcript (${MEDIA_TAB_SHORTCUT})` },
       ...(agentCount > 0 ? [{ value: 'agents' as const, label: 'Agents', count: agentsWorking, title: AGENTS_TITLE }] : []),
-      ...(media.length > 0 ? [{ value: 'media' as const, label: 'Media', count: media.length, title: `This session's images and videos (${MEDIA_TAB_SHORTCUT})` }] : [])
+      ...(media.length > 0 ? [{ value: 'media' as const, label: 'Media', count: media.length, title: `This session's images and videos (${MEDIA_TAB_SHORTCUT})` }] : []),
+      { value: 'test' as const, label: 'Test', dot: testFlowChanged ? 'changed' : undefined, title: "This session's test flow" }
     ],
-    [agentCount, agentsWorking, media.length]
+    [agentCount, agentsWorking, media.length, testFlowChanged]
   )
   const hidden = tab !== 'chat'
   return (
     <>
-      {tabs.length > 1 && <TabStrip<ChatTab> label="Chat, agents or media" value={tab} onChange={(t) => setTab(chatKey, t)} tabs={tabs} />}
+      <TabStrip<ChatTab> label="Chat, agents, media or test" value={tab} onChange={(t) => setTab(chatKey, t)} tabs={tabs} />
       <div ref={regionRef} className="relative flex min-h-0 flex-1 flex-col">
         <div ref={transcriptRef} className={'flex min-h-0 flex-1 flex-col' + (hidden ? ' invisible' : '')} aria-hidden={hidden || undefined}>
           {children}
         </div>
         {tab === 'media' && <MediaGrid ref={gridRef} media={media} cwd={cwd} revision={revision} onJump={jump} />}
+        {tab === 'test' && <TestFlowPanel {...testFlow} onPopOut={popOut} />}
         {tab === 'agents' && <AgentsPanel chatKey={chatKey} agents={agents} items={items} host={agentHost} cwd={cwd} />}
       </div>
     </>
   )
 }
 
-/** A hosted chat's transcript under its Chat, Agents and Media tabs. */
+/** A hosted chat's transcript under its Chat, Agents, Media and Test tabs. */
 export function HostedMediaTabs({ paneId, cwd, agents, children }: { paneId: string; cwd: string; agents: AgentHost; children: ReactNode }) {
   const session = useHostedMedia(paneId, cwd)
   return (
@@ -143,7 +180,7 @@ export function HostedMediaTabs({ paneId, cwd, agents, children }: { paneId: str
   )
 }
 
-/** The followed VS Code session's transcript under its Chat, Agents and Media tabs. */
+/** The followed VS Code session's transcript under its Chat, Agents, Media and Test tabs. */
 export function ObservedMediaTabs({ sessionId, cwd, agents, children }: { sessionId: string; cwd: string | undefined; agents: AgentHost; children: ReactNode }) {
   const session = useObservedMedia(cwd)
   return (
