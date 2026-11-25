@@ -66,3 +66,14 @@ export function frameBatch<T>(apply: (entries: T[]) => void, schedule: (cb: () =
     }
   }
 }
+
+/** Whether the event is a streamed delta, the only kind that waits for the next frame. */
+export function isDeltaEvent(event: { type: string; event?: unknown }): boolean {
+  if (event.type !== 'stream_event') return false
+  return (event.event as { type?: string } | null | undefined)?.type === 'content_block_delta'
+}
+
+/** Call before handling each event: anything but a delta first applies the deltas waiting, so it lands after them. */
+export function landAfterWaitingDeltas(batch: FrameBatch<StreamDelta>, event: { type: string; event?: unknown }): void {
+  if (!isDeltaEvent(event)) batch.flush()
+}

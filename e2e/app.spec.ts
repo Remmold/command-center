@@ -60,7 +60,7 @@ test.describe('auto-update', () => {
   })
 })
 
-test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while Alt+2 and Ctrl+Shift+J still open rows, and both are kept across a restart', async ({ launched }) => {
+test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while Alt+2 and Ctrl+Shift+J still open rows, and both and the chat history are kept across a restart', async ({ launched }) => {
   const { app, page, log } = launched
   const zoomPercent = (electronApp: ElectronApplication): Promise<number> =>
     evaluateMain(electronApp, ({ BrowserWindow }) => Math.round(BrowserWindow.getAllWindows()[0].webContents.getZoomFactor() * 100), null)
@@ -133,7 +133,7 @@ test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while
     await expect(list).toBeHidden()
   })
 
-  await test.step('after a restart the zoom and the hidden list are kept, and the View menu steps the saved level', async () => {
+  await test.step('after a restart the zoom, the hidden list and the chat history are kept, and the View menu steps the saved level', async () => {
     await evaluateMain(app, ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setPosition(-31000, -31000), null)
     const again = await launched.relaunch()
     await expect.poll(() => zoomPercent(again.app)).toBe(132)
@@ -144,6 +144,10 @@ test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while
     await expect(again.page.getByRole('navigation', { name: 'Sessions' })).toBeHidden()
     await again.page.keyboard.press('Control+b')
     await expect(again.page.getByRole('navigation', { name: 'Sessions' })).toBeVisible()
+    await again.page.keyboard.press('Control+Shift+J')
+    const chat = again.page.locator('[data-chat-pane]')
+    await expect(chat.getByText('say hello')).toBeVisible()
+    await expect(chat.getByText(BASIC_REPLY)).toBeVisible()
     expect(userLines(log).length).toBe(1)
 
     const clickViewMenu = (label: string) =>

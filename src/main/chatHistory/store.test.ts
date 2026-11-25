@@ -72,10 +72,11 @@ describe('chat history store', () => {
     expect(await restart().load()).toEqual({ 'pane-2': [user('u2', 'hi')] })
   })
 
-  it('a corrupt file loads as empty for that session only, and does not come back', async () => {
+  it('a corrupt file loads as empty for that session only, is set aside as .corrupt, and does not come back', async () => {
     await store.apply('pane-1', [{ kind: 'append', items: [user('u1', 'kept')] }])
     await fs.writeFile(join(root, 'pane-2.jsonl'), '{"kind":"append","items":[{"kind":"user"\n{"kind":"clear"}\n')
     expect(await restart().load()).toEqual({ 'pane-1': [user('u1', 'kept')], 'pane-2': [] })
+    expect(await fs.readFile(join(root, 'pane-2.jsonl.corrupt'), 'utf-8')).toContain('{"kind":"clear"}')
     await store.apply('pane-2', [{ kind: 'append', items: [user('u2', 'new')] }])
     expect((await restart().load())['pane-2']).toEqual([user('u2', 'new')])
   })

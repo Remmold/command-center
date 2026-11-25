@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyDeltas, frameBatch } from './streamDeltas'
+import { applyDeltas, frameBatch, landAfterWaitingDeltas, type StreamDelta } from './streamDeltas'
 import type { AssistantMessageItem } from './types'
 import type { ContentBlock } from '../../../shared/types'
 
@@ -101,5 +101,32 @@ describe('applying gathered deltas to the streaming message', () => {
       { index: 3, delta: { type: 'text_delta', text: 'lost' } }
     ])
     expect(after).toBe(before)
+  })
+})
+
+describe('an event that is not a delta', () => {
+  const delta = (text: string) => ({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } } })
+
+  it('lands after the deltas streamed before it, without waiting for the frame; a delta keeps waiting', () => {
+    const frames = fakeFrames()
+    let streaming = message([{ type: 'text', text: '' }])
+    const batch = frameBatch<StreamDelta>((pending) => (streaming = applyDeltas(streaming, pending)), frames.schedule)
+    const seen: string[] = []
+    const handle = (event: { type: string; event?: unknown }): void => {
+      landAfterWaitingDeltas(batch, event)
+      const inner = event.event as { type?: string; index?: number; delta?: StreamDelta['delta'] } | undefined
+      if (event.type === 'stream_event' && inner?.type === 'content_block_delta') batch.push({ index: inner.index ?? 0, delta: inner.delta ?? {} })
+      else seen.push(`${event.type}: ${(streaming.content[0] as { text: string }).text}`)
+    }
+
+    handle(delta('Hel'))
+    handle(delta('lo'))
+    expect((streaming.content[0] as { text: string }).text).toBe('')
+    handle({ type: 'stream_event', event: { type: 'content_block_stop', index: 0 } })
+    handle(delta('!'))
+    handle({ type: 'assistant' })
+    expect(seen).toEqual(['stream_event: Hello', 'assistant: Hello!'])
+    frames.runFrame()
+    expect((streaming.content[0] as { text: string }).text).toBe('Hello!')
   })
 })

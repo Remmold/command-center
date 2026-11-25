@@ -29,7 +29,7 @@ import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
 import { takeStartRequest } from '../../state/startRequests'
 import { committedLength, thinkingDurations } from './liveItems'
-import { applyDeltas, frameBatch, type FrameBatch, type StreamDelta } from './streamDeltas'
+import { applyDeltas, frameBatch, landAfterWaitingDeltas, type FrameBatch, type StreamDelta } from './streamDeltas'
 import { useFollowOutput } from './useFollowOutput'
 import { noteScroll, saveDraft, savedDraft, savedScroll } from '../../state/restoreStore'
 import { useChatItemsStore } from '../../state/chatItemsStore'
@@ -124,11 +124,6 @@ function isToolResultBlock(
 
 function sameStrings(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i])
-}
-
-function isDelta(event: ClaudeEvent): boolean {
-  if (event.type !== 'stream_event') return false
-  return ((event as ClaudeStreamEvent).event as AnthropicStreamInner | undefined)?.type === 'content_block_delta'
 }
 
 function formatInitNote(init: ClaudeSystemEvent): string {
@@ -425,8 +420,7 @@ export const ChatView = memo(function ChatView({
   }
 
   const handleEvent = (event: ClaudeEvent) => {
-    // Deltas wait for the next frame; anything else lands after the ones that came before it.
-    if (!isDelta(event)) deltaBatch.flush()
+    landAfterWaitingDeltas(deltaBatch, event)
     const sessId = (event as { session_id?: string }).session_id
     if (sessId) noteClaudeSessionId(paneId, sessId)
     if (handleQueueFrame(event)) return
