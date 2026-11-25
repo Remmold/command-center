@@ -72,6 +72,11 @@ describe('latestRuns', () => {
     expect(ids(latestRuns(runs, ONE, ACC_A))).toEqual({ covering: 'one', account: 'account' })
   })
 
+  it('leaves out an account run older than the run covering the workspace, whose account-file findings are newer', () => {
+    const later = [...runs, run('one-new', 'project', ACC_A, [ONE], '2026-11-24T09:00:00Z')]
+    expect(ids(latestRuns(later, ONE, ACC_A))).toEqual({ covering: 'one-new', account: null })
+  })
+
   it('shows the account run once when it is also the newest run covering the workspace', () => {
     expect(ids(latestRuns(runs, TWO, ACC_A))).toEqual({ covering: 'account', account: null })
   })
@@ -111,7 +116,7 @@ describe('shownFindings', () => {
 
   it('marks a finding stale when its file was modified after the run started', () => {
     const modified = { [pathKey(repoFile)]: STARTED + 1, [pathKey(accountFile)]: STARTED }
-    const shown = shownFindings(withFindings, modified, ACC_A, false)
+    const shown = shownFindings(withFindings, modified, ACC_A, 'all')
     expect(shown.map((f) => [f.id, f.stale])).toEqual([
       ['F1', true],
       ['F2', false]
@@ -119,23 +124,24 @@ describe('shownFindings', () => {
   })
 
   it('never marks a finding stale whose file is gone or whose run has no readable start', () => {
-    expect(shownFindings(withFindings, { [pathKey(repoFile)]: null }, ACC_A, false)[0].stale).toBe(false)
-    expect(shownFindings({ ...withFindings, startedAt: 'soon' }, { [pathKey(repoFile)]: STARTED + 1 }, ACC_A, false)[0].stale).toBe(false)
+    expect(shownFindings(withFindings, { [pathKey(repoFile)]: null }, ACC_A, 'all')[0].stale).toBe(false)
+    expect(shownFindings({ ...withFindings, startedAt: 'soon' }, { [pathKey(repoFile)]: STARTED + 1 }, ACC_A, 'all')[0].stale).toBe(false)
   })
 
   it('marks findings on account files as affecting every workspace of the account', () => {
-    const shown = shownFindings({ ...withFindings, findings: [finding('F1', repoFile), finding('F2', 'c:/users/a/.claude/CLAUDE.md')] }, {}, ACC_A, false)
+    const shown = shownFindings({ ...withFindings, findings: [finding('F1', repoFile), finding('F2', 'c:/users/a/.claude/CLAUDE.md')] }, {}, ACC_A, 'all')
     expect(shown.map((f) => [f.id, f.accountWide])).toEqual([
       ['F1', false],
       ['F2', true]
     ])
   })
 
-  it('keeps only the account-file findings of a run shown for its account', () => {
-    expect(shownFindings(withFindings, {}, ACC_A, true).map((f) => f.id)).toEqual(['F2'])
+  it('keeps only the account-file findings of a run shown for its account, and the others of the run it is newer than', () => {
+    expect(shownFindings(withFindings, {}, ACC_A, 'account').map((f) => f.id)).toEqual(['F2'])
+    expect(shownFindings(withFindings, {}, ACC_A, 'not-account').map((f) => f.id)).toEqual(['F1'])
   })
 
   it('tags each finding with its run', () => {
-    expect(shownFindings(withFindings, {}, ACC_A, false).every((f) => f.runId === RUN.runId)).toBe(true)
+    expect(shownFindings(withFindings, {}, ACC_A, 'all').every((f) => f.runId === RUN.runId)).toBe(true)
   })
 })

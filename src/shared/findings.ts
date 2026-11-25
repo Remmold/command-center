@@ -72,7 +72,7 @@ const isFinding = (v: unknown): v is Finding =>
 
 const isStep = (v: unknown): v is FindingsStep => isObject(v) && isString(v.id) && isString(v.title) && oneOf('pending', 'running', 'done')(v.status)
 
-const isRun = (v: Record<string, unknown>): boolean =>
+const isRun = (v: Record<string, unknown>): v is Record<string, unknown> & FindingsRun =>
   v.check === 'drift' &&
   oneOf('project', 'account', 'cross-project')(v.scope) &&
   isString(v.runId) &&
@@ -104,14 +104,16 @@ const newest = <T extends { run: FindingsRun }>(entries: readonly T[]): T | null
 
 /**
  * The runs a workspace's map shows: the newest run covering it, and the newest account or cross-project run of its
- * account folder (for account-file findings) when that is another run.
+ * account folder (for account-file findings) when that is another, newer run.
  */
 export function latestRuns<T extends { run: FindingsRun }>(entries: readonly T[], workspacePath: string, accountFolder: string): { covering: T | null; account: T | null } {
   const workspace = pathKey(workspacePath)
   const folder = pathKey(accountFolder)
   const covering = newest(entries.filter((e) => e.run.workspaces.some((w) => pathKey(w) === workspace)))
   const account = newest(entries.filter((e) => e.run.scope !== 'project' && pathKey(e.run.accountFolder) === folder))
-  return { covering, account: account === covering ? null : account }
+  // A covering run checks the account files too, so an account run no newer than it has nothing newer to add.
+  const newer = account !== null && account !== covering && (covering === null || startOf(account.run) > startOf(covering.run))
+  return { covering, account: newer ? account : null }
 }
 
 /** A finding as the map shows it; a health finding has none of the extras. */
@@ -124,18 +126,18 @@ export interface ShownFinding extends Finding {
   accountWide?: boolean
 }
 
-/**
- * A run's findings for the map. `modified` holds each finding file's modified time by `pathKey` (null when it is gone);
- * `accountOnly` keeps just the account-file findings, for a run shown because it covers the account.
- */
-export function shownFindings(run: FindingsRun, modified: Readonly<Record<string, number | null>>, accountFolder: string, accountOnly: boolean): ShownFinding[] {
+/** Which of a shown run's findings the map takes: account-file findings come from the newer of the two shown runs only. */
+export type ShownFiles = 'all' | 'account' | 'not-account'
+
+/** A run's findings for the map. `modified` holds each finding file's modified time by `pathKey` (null when it is gone). */
+export function shownFindings(run: FindingsRun, modified: Readonly<Record<string, number | null>>, accountFolder: string, files: ShownFiles): ShownFinding[] {
   const started = startOf(run)
   return run.findings
     .map((f) => {
       const changed = modified[pathKey(f.path)] ?? null
       return { ...f, runId: run.runId, stale: changed !== null && Number.isFinite(started) && changed > started, accountWide: isUnder(f.path, accountFolder) }
     })
-    .filter((f) => !accountOnly || f.accountWide)
+    .filter((f) => files === 'all' || f.accountWide === (files === 'account'))
 }
 
 /** A run the map shows, as main last read its file. */
@@ -146,8 +148,8 @@ export interface DriftRunView {
   writing: boolean
   /** Why the file's latest content was refused; `run` is then the last good parse. */
   note: string | null
-  /** Shown only for its account-file findings: the run is the account's newest but covers other workspaces. */
-  accountOnly: boolean
+  /** 'account' for a run shown for its account-file findings only; the covering run then shows the rest of its own. */
+  files: ShownFiles
   /** Each finding file's modified time in ms by `pathKey`; null when it is gone. */
   modified: Record<string, number | null>
 }
@@ -170,5 +172,5 @@ export function readFindingsRun(text: string, last: FindingsRun | null): Finding
     return { run: last, writing: false, note: `This run file is version ${String(parsed.version)}; this app reads version ${FINDINGS_VERSION} only.` }
   }
   if (!isRun(parsed)) return { run: last, writing: true, note: null }
-  return { run: parsed as unknown as FindingsRun, writing: false, note: null }
+  return { run: parsed, writing: false, note: null }
 }

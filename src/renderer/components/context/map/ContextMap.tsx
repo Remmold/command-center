@@ -42,7 +42,7 @@ export function ContextMapPane({ workspacePath, report, defaultName }: { workspa
   }, [workspaceId])
   const health = useMemo(() => (report ? healthCheck(report) : []), [report])
   const findings = useMemo(
-    () => [...health, ...(report && drift ? drift.runs.flatMap((r) => shownFindings(r.run, r.modified, report.accountFolder, r.accountOnly)) : [])],
+    () => [...health, ...(report && drift ? drift.runs.flatMap((r) => shownFindings(r.run, r.modified, report.accountFolder, r.files)) : [])],
     [report, health, drift]
   )
   const map = useMemo(() => (report ? mapLayout(report, findings, new Set(expanded)) : null), [report, findings, expanded])

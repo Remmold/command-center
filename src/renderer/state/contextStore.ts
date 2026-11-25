@@ -80,6 +80,8 @@ export const isDirty = (file: ContextEditorFile | null): boolean => file !== nul
 const confirmDiscard = (file: ContextEditorFile | null): boolean => !isDirty(file) || window.confirm(`Discard unsaved edits to ${file?.label}?`)
 
 export const useContextStore = create<ContextState>((set, get) => {
+  /** A drift read that resolves after a newer one must not overwrite it. */
+  let driftTurn = 0
   const readOpenFile = (workspaceId: string, path: string): void => {
     window.api.context.readFile(workspaceId, path).then(
       (result) => {
@@ -115,9 +117,10 @@ export const useContextStore = create<ContextState>((set, get) => {
     showDrift: () => {
       const { selectedId } = get()
       if (!selectedId) return
+      const turn = ++driftTurn
       window.api.driftChecks.show(selectedId).then(
         (drift) => {
-          if (get().selectedId === selectedId) set({ drift })
+          if (turn === driftTurn && get().selectedId === selectedId) set({ drift })
         },
         (err) => console.error('[context] could not read the drift checks', err)
       )

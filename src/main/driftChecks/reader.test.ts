@@ -48,7 +48,7 @@ describe('DriftChecksReader', () => {
     await write('old.json', JSON.stringify(run('old', { startedAt: '2026-11-01T10:00:00.000Z', done: true })))
     await write('new.json', JSON.stringify(run('new')))
     const read = await reader.read(folder, WS, ACC)
-    expect(read.view.runs.map((r) => [r.run.runId, r.writing, r.accountOnly])).toEqual([['new', false, false]])
+    expect(read.view.runs.map((r) => [r.run.runId, r.writing, r.files])).toEqual([['new', false, 'all']])
     expect(read.watch.map((w) => w.path)).toEqual([join(folder, 'new.json')])
   })
 

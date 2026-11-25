@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { latestRuns, pathKey, readFindingsRun, type DriftChecksView, type DriftRunView, type FindingsRead, type FindingsRun } from '../../shared/findings'
+import { latestRuns, pathKey, readFindingsRun, type DriftChecksView, type DriftRunView, type FindingsRead, type FindingsRun, type ShownFiles } from '../../shared/findings'
 import { stampOf, type WatchedFile } from '../testFlow/reader'
 
 interface Cached {
@@ -33,9 +33,11 @@ export class DriftChecksReader {
   async read(folder: string, workspacePath: string, accountFolder: string): Promise<{ view: DriftChecksView; watch: WatchedFile[] }> {
     const entries = await this.entries(folder)
     const { covering, account } = latestRuns(entries, workspacePath, accountFolder)
-    const shown = [covering && { entry: covering, accountOnly: false }, account && { entry: account, accountOnly: true }].filter((s) => s !== null)
+    const shown = [covering && { entry: covering, files: account ? 'not-account' : 'all' }, account && { entry: account, files: 'account' }].filter(
+      (s): s is { entry: Entry; files: ShownFiles } => s !== null
+    )
     const runs = await Promise.all(
-      shown.map(async ({ entry, accountOnly }): Promise<DriftRunView> => {
+      shown.map(async ({ entry, files }): Promise<DriftRunView> => {
         const paths = [...new Set(entry.run.findings.map((f) => f.path))]
         const times = await Promise.all(paths.map(modifiedMs))
         return {
@@ -43,7 +45,7 @@ export class DriftChecksReader {
           run: entry.run,
           writing: entry.writing,
           note: entry.note,
-          accountOnly,
+          files,
           modified: Object.fromEntries(paths.map((p, i) => [pathKey(p), times[i]]))
         }
       })

@@ -8,10 +8,6 @@ const SCOPE_TITLES: Record<FindingsRun['scope'], string> = { project: 'This proj
 
 const STEP_STATES: Record<FindingsRun['steps'][number]['status'], CheckState> = { pending: 'unchecked', running: 'mixed', done: 'checked' }
 
-function checked(run: FindingsRun, now: number): string {
-  const at = Date.parse(run.startedAt)
-  return Number.isNaN(at) ? 'checked at an unknown time' : `checked ${timeAgo(at, now)}`
-}
 
 function DriftRun({ shown, now }: { shown: DriftRunView; now: number }) {
   const { run } = shown
@@ -20,10 +16,10 @@ function DriftRun({ shown, now }: { shown: DriftRunView; now: number }) {
     <section aria-label={`Drift check ${run.runId}`} className="flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted">
         <SectionLabel as="h3">Drift check · {SCOPE_TITLES[run.scope]}</SectionLabel>
-        <span title={Number.isNaN(at) ? run.startedAt : new Date(at).toLocaleString()}>{checked(run, now)}</span>
+        {Number.isNaN(at) ? <span>checked at an unknown time</span> : <span title={new Date(at).toLocaleString()}>checked {timeAgo(at, now)}</span>}
         {!run.done && <Badge tone="quiet">running</Badge>}
         {shown.writing && <Badge tone="quiet">run is writing…</Badge>}
-        {shown.accountOnly && (
+        {shown.files === 'account' && (
           <Badge tone="quiet" tooltip="This run covers other projects; only its findings on account files show here.">
             account files only
           </Badge>
