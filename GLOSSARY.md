@@ -97,6 +97,10 @@ _Avoid_: Folder, category, channel
 The view the app opens on: Needs you, Now building, Usage per account and Live sessions on one screen.
 _Avoid_: Home, overview, start page
 
+**Chat drawer**:
+The panel docked on the Dashboard's right that shows one hosted session's chat, so it can be answered without leaving the Dashboard. It is the same chat Work shows, not a copy: same process, draft and scroll. Opening one there leaves Work's open chats as they were.
+_Avoid_: Peek, side panel, quick reply
+
 **Work view**:
 The view with one list of every session across all workspaces beside the open session, or two sessions side by side.
 _Avoid_: Sessions view, chat view, workspace view
