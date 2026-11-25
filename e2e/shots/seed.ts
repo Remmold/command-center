@@ -4,7 +4,10 @@ import { dirname, join } from 'node:path'
 import { expect, type ElectronApplication, type Page } from '@playwright/test'
 import { FAKE_BIN, assertFakeClaude } from '../guard'
 
-/** Fake repos with tickets in every column, shared by the screenshot and perf runs. */
+/**
+ * Fake repos with tickets in every column, shared by the screenshot and perf runs.
+ * Perf seeds must match real data sizes: Andreas's chat history was ~22.5M chars, and the earlier 1.4 MB seed hid the typing lag's cause.
+ */
 
 const HOUR = 60 * 60 * 1000
 
