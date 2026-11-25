@@ -93,6 +93,10 @@ _Avoid_: Config view, setup, Claude view
 One level of where Claude context comes from, in the order it applies: the account, then the repo, then local (CLAUDE.local.md, local settings, and the MCP servers the account's entry for this workspace adds). An item in a layer shared with Personal is one file for both accounts.
 _Avoid_: Scope, level, tier
 
+**Kind group**:
+The items of one kind within a context layer, shown together under one heading with their count and tokens: CLAUDE.md, Memory, Skills, Agents, Commands, MCP servers, Plugins, Settings & hooks, always in that order.
+_Avoid_: Category, section
+
 **Context cleanup**:
 A new hosted session, started from the Context view with a prepared prompt in its input, in which subagents check context files against the current code and report what has drifted; Andreas picks which fixes it applies. It comes in three kinds: **project** (one workspace's memory and repo files), **account** (the account's own files) and **cross-project** (chosen workspaces of one account plus that account's files).
 _Avoid_: Memory audit (that is the interactive skill), context refresh
