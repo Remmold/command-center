@@ -116,6 +116,10 @@ export function backgroundProcessList(state: BackgroundProcessesState): Backgrou
   return [...rows.filter((r) => r.status === 'running'), ...rows.filter((r) => r.status !== 'running')]
 }
 
+export function runningProcesses(processes: readonly BackgroundProcess[]): BackgroundProcess[] {
+  return processes.filter((p) => p.status === 'running')
+}
+
 export function runningCount(processes: readonly BackgroundProcess[]): number {
-  return processes.filter((p) => p.status === 'running').length
+  return runningProcesses(processes).length
 }

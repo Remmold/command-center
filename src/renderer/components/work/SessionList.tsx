@@ -13,6 +13,8 @@ import { createGroup, deleteGroup, groupOf, moveChat, moveChatStep, moveChatToNe
 import { sectionTitle } from '../../state/accounts'
 import { headerUsage, type HeaderTone } from '../../state/usageModel'
 import { useChatPairStore } from '../../state/chatPairStore'
+import { usePaneProcesses, useProcessServers } from '../../state/backgroundProcessesStore'
+import { runningProcesses } from '../../../shared/backgroundProcesses'
 import { pickPastSession, pickProject } from '../../state/launcherStore'
 import { closeSession } from '../../state/sessionNavigation'
 import { renameHostedSession } from '../../state/sessionTitleSync'
@@ -493,6 +495,7 @@ function SessionListRow({ row, place, active, onRename, onNewGroup }: SessionLis
       <ListRowText primary={row.title} />
       {row.kind === 'hosted' && row.modelTag && <ListRowLabel tone="secondary" hideWhenNarrow>{row.modelTag}</ListRowLabel>}
       {row.kind === 'observed' && <VsCodeGlyph tooltip={VSCODE_TOOLTIP} />}
+      {row.kind === 'hosted' && <ProcessesBadge paneId={row.paneId} />}
       <StatusDot status={row.status} look="soft" />
     </ListRow>
   )
@@ -513,6 +516,20 @@ function RenameRow({ paneId, title, onDone }: { paneId: string; title: string; o
         onCancel={onDone}
       />
     </ListRowSlot>
+  )
+}
+
+/** The session's running background processes; its tooltip has one line per process, with each confirmed port. */
+function ProcessesBadge({ paneId }: { paneId: string }) {
+  const processes = usePaneProcesses(paneId)
+  const servers = useProcessServers(paneId)
+  const running = runningProcesses(processes)
+  if (running.length === 0) return null
+  const tooltip = running.map((p) => [p.command, ...(servers[p.taskId] ?? []).map((s) => `:${s.port}`)].join(' ')).join('\n')
+  return (
+    <Badge tone="muted" tooltip={tooltip} label={`${running.length} background ${running.length === 1 ? 'process' : 'processes'} running`}>
+      {running.length}
+    </Badge>
   )
 }
 
