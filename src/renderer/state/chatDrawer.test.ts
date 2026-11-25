@@ -8,7 +8,8 @@ vi.stubGlobal('localStorage', {
   removeItem: (key: string) => void saved.delete(key)
 })
 
-const { useChatDrawerStore, drawerShare, initChatDrawer, DRAWER_MIN_WIDTH } = await import('./chatDrawer')
+const { useChatDrawerStore, initChatDrawer, DRAWER_MIN_WIDTH } = await import('./chatDrawer')
+const { clampDrawerShare } = await import('../components/ui/drawerShare')
 const { openInDrawer, useFocusRequestStore } = await import('./sessionNavigation')
 const { useProjectViewsStore } = await import('./projectViewsStore')
 const { useChatPairStore } = await import('./chatPairStore')
@@ -94,9 +95,9 @@ describe('the chat drawer width', () => {
 
   it('is kept between 420 px and 80 %', () => {
     expect(DRAWER_MIN_WIDTH).toBe(420)
-    expect(drawerShare(0.1, 1000)).toBe(0.42)
-    expect(drawerShare(0.95, 1000)).toBe(0.8)
-    expect(drawerShare(0.5, 1000)).toBe(0.5)
+    expect(clampDrawerShare(0.1, DRAWER_MIN_WIDTH, 1000)).toBe(0.42)
+    expect(clampDrawerShare(0.95, DRAWER_MIN_WIDTH, 1000)).toBe(0.8)
+    expect(clampDrawerShare(0.5, DRAWER_MIN_WIDTH, 1000)).toBe(0.5)
   })
 
   it('persists the share but not the session', () => {

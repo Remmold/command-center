@@ -52,6 +52,7 @@ interface LayerProps {
  */
 function Layer({ slot, onActivate, children, over }: LayerProps) {
   if (over) {
+    // One above App's z-30 view overlays, below Settings (z-40) and portaled dialogs and popovers (z-50).
     return (
       <div
         className="visible fixed z-[31] flex flex-col overflow-clip"
@@ -167,7 +168,7 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
                           addDirs={c.addDirs}
                           profileId={workspace?.profileId}
                           registerFocus={half === focused ? registerFocus : undefined}
-                          tabs={!over}
+                          transcriptOnly={!!over}
                         />
                       </div>
                     </Layer>

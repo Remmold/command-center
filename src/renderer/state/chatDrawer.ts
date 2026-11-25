@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { clampDrawerShare } from '../components/ui/drawerShare'
-import { useProjectViewsStore } from './projectViewsStore'
+import { useProjectViewsStore, type ProjectView } from './projectViewsStore'
 import { useViewStore } from './viewStore'
 
 export const DRAWER_MIN_WIDTH = 420
@@ -48,8 +47,8 @@ export const useChatDrawerStore = create<ChatDrawerState>()(
   )
 )
 
-export function drawerShare(share: number, hostWidth: number): number {
-  return clampDrawerShare(share, DRAWER_MIN_WIDTH, hostWidth)
+export function isHosted(views: Record<string, ProjectView>, paneId: string): boolean {
+  return Object.values(views).some((v) => v.claudeSessions.some((c) => c.id === paneId))
 }
 
 let initialised = false
@@ -61,7 +60,7 @@ export function initChatDrawer(): void {
   useProjectViewsStore.subscribe((s, prev) => {
     if (s.views === prev.views) return
     const { paneId, close } = useChatDrawerStore.getState()
-    if (paneId && !Object.values(s.views).some((v) => v.claudeSessions.some((c) => c.id === paneId))) close()
+    if (paneId && !isHosted(s.views, paneId)) close()
   })
 }
 

@@ -115,8 +115,8 @@ interface Props {
   /** The account a chat not started yet will run on. */
   profileId?: string
   registerFocus?: (fn: () => void) => void
-  /** false shows the transcript without its Agents, Media, Processes and Test tabs, as the Dashboard's chat drawer does. */
-  tabs?: boolean
+  /** The transcript without its Agents, Media, Processes and Test tabs, as the Dashboard's chat drawer shows it. */
+  transcriptOnly?: boolean
 }
 
 function isToolResultBlock(
@@ -160,7 +160,7 @@ export const ChatView = memo(function ChatView({
   addDirs,
   profileId,
   registerFocus,
-  tabs = true
+  transcriptOnly = false
 }: Props) {
   const items = useChatItemsStore((s) => s.items[paneId] ?? EMPTY_ITEMS)
   const appendItems = useChatItemsStore((s) => s.appendItems)
@@ -809,7 +809,7 @@ export const ChatView = memo(function ChatView({
 
   return (
     <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col" onKeyDown={handlePaneKeyDown}>
-      <HostedMediaTabs paneId={paneId} cwd={cwd} agents={agents} tabs={tabs}>
+      <HostedMediaTabs paneId={paneId} cwd={cwd} agents={agents} transcriptOnly={transcriptOnly}>
         <div ref={scrollRef} tabIndex={-1} data-transcript="" className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
           {/* Positioned so the screen-reader status below stays inside the scroll box instead of stretching the Layer stack. */}
           <div ref={contentRef} className="relative">

@@ -10,7 +10,7 @@ import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
 import { useRecentProjectsStore } from './recentProjectsStore'
 import { saveDraft } from './restoreStore'
-import { useChatDrawerStore } from './chatDrawer'
+import { isHosted, useChatDrawerStore } from './chatDrawer'
 
 export const NEXT_WAITING_SHORTCUT = 'Ctrl+Shift+J'
 
@@ -129,7 +129,7 @@ export function openSession(paneId: string, { focus = true, beside = false }: Op
 
 /** Shows a hosted session's chat in the Dashboard's chat drawer; Work's chats stay as they were. */
 export function openInDrawer(paneId: string): boolean {
-  if (!hostedSessions(useProjectViewsStore.getState().views).some((s) => s.paneId === paneId)) return false
+  if (!isHosted(useProjectViewsStore.getState().views, paneId)) return false
   useChatDrawerStore.getState().show(paneId)
   useFocusRequestStore.getState().requestFocus(paneId)
   return true

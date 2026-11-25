@@ -150,7 +150,7 @@ export function App() {
         <div
           data-testid="view-work"
           className={'min-h-0 min-w-0 flex-1 ' + (appView === 'work' ? '' : 'invisible')}
-          // The rest of Work stays invisible while the Dashboard's chat drawer borrows one chat, so only that chat is exposed.
+          // While the chat drawer borrows one chat, the rest of Work is hidden by its visibility alone.
           aria-hidden={appView !== 'work' && !drawerBorrow}
         >
           <WorkView registerFocus={registerFocus} />
