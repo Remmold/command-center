@@ -116,17 +116,22 @@ const BOOLEAN_FLAGS = new Set([
   '--no-session-persistence',
   '--replay-user-messages'
 ])
+/** Flags given once per value; their values are kept as a list. */
+const REPEATABLE_FLAGS = new Set(['--add-dir'])
 const DEFAULT_SCRIPT = { turns: [{ match: '', repeat: true, events: [{ type: 'text', text: 'Hello from the fake Claude.' }] }] }
 
 function parseArgs(argv) {
   const flags = {}
+  const set = (name, value) => {
+    flags[name] = REPEATABLE_FLAGS.has(name) ? [...(flags[name] ?? []), value] : value
+  }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (!arg.startsWith('-')) continue
     const eq = arg.indexOf('=')
-    if (eq !== -1) flags[arg.slice(0, eq)] = arg.slice(eq + 1)
+    if (eq !== -1) set(arg.slice(0, eq), arg.slice(eq + 1))
     else if (BOOLEAN_FLAGS.has(arg) || i + 1 >= argv.length || argv[i + 1].startsWith('-')) flags[arg] = true
-    else flags[arg] = argv[++i]
+    else set(arg, argv[++i])
   }
   return flags
 }
@@ -192,7 +197,7 @@ class Fake {
     this.counter = 0
     this.title = null
     this.bridgeSessionId = null
-    this.log({ kind: 'argv', argv, cwd: process.cwd(), configDir: process.env.CLAUDE_CONFIG_DIR ?? null })
+    this.log({ kind: 'argv', argv, cwd: process.cwd(), configDir: process.env.CLAUDE_CONFIG_DIR ?? null, addDirs: this.flags['--add-dir'] ?? [] })
   }
 
   log(entry) {

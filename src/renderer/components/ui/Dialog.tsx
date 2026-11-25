@@ -17,6 +17,11 @@ interface Props {
 const FRAME = { fit: 'max-h-[80vh]', tall: 'h-[85vh]' } as const
 const BODY = { fit: 'scrollbar-thin min-h-0 overflow-y-auto px-4 py-3', tall: 'flex min-h-0 flex-1' } as const
 
+/** A dialog's buttons, right-aligned under its body. */
+export function DialogActions({ children }: { children: ReactNode }) {
+  return <div className="mt-4 flex justify-end gap-2">{children}</div>
+}
+
 /** A centred modal with a title bar and a close button; Escape or a click outside closes it. */
 export function Dialog({ title, onClose, maxWidth = 440, size = 'fit', marker, children }: Props) {
   const closeRef = useRef(onClose)

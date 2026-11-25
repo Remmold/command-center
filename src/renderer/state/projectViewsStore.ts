@@ -36,6 +36,8 @@ export interface ClaudeChatSession extends SessionTitle {
   thinking: boolean
   /** Unset until the session first starts: then the last pick, else the user settings' `permissions.defaultMode`. */
   permissionMode?: PermissionMode
+  /** Folders outside the workspace it may read without asking, passed on every start; a cleanup session's. */
+  addDirs?: string[]
   /** session_id reported by claude in stream-json events; used for --resume */
   claudeSessionId?: string
 }
@@ -107,7 +109,7 @@ interface ProjectViewsState {
 
   addClaudeSession: (
     projectId: string,
-    options?: { model?: ClaudeModel; permissionMode?: PermissionMode }
+    options?: { model?: ClaudeModel; permissionMode?: PermissionMode; addDirs?: string[] }
   ) => ClaudeChatSession | null
   closeClaudeSession: (projectId: string, sessionId: string) => void
   setActiveClaudeSession: (projectId: string, sessionId: string) => void
@@ -323,7 +325,8 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           title: NEW_SESSION_TITLE,
           ...(options?.model ? { model: options.model } : startingChoiceOn(profileOf(projectId))),
           thinking: true,
-          permissionMode: options?.permissionMode
+          permissionMode: options?.permissionMode,
+          ...(options?.addDirs?.length ? { addDirs: options.addDirs } : {})
         }
         set((s) => {
           const v = s.views[projectId]

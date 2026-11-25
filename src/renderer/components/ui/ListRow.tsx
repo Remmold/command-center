@@ -26,6 +26,8 @@ interface Props {
 
 const ROOMY = 'h-9 pl-8 pr-2'
 
+const compactBox = (nested: boolean): string => `py-1 ${nested ? 'pl-9 pr-2' : 'px-3'}`
+
 const EDGE = { waiting: 'shadow-[inset_2px_0_0_0_rgb(var(--cc-status-approval))]' } as const
 
 const DISABLED = 'cursor-default text-faint'
@@ -33,7 +35,7 @@ const IDLE = 'text-fg hover:bg-list-hover focus-visible:bg-list-hover'
 const ACTIVE = 'bg-list-selected text-fg'
 
 export function ListRow({ children, onClick, onDoubleClick, onContextMenu, tooltip, nested = false, active = false, actions, actionsPinned = false, disabled = false, edge, size = 'compact', sortable, onKeyDown, rowKey }: Props) {
-  const box = size === 'roomy' ? ROOMY : `py-1 ${nested ? 'pl-9 pr-2' : 'px-3'}`
+  const box = size === 'roomy' ? ROOMY : compactBox(nested)
   return (
     <li className="group relative" {...sortable?.props}>
       <button
@@ -129,10 +131,19 @@ export function ListRowMeta({ children }: { children: ReactNode }) {
   return <span className="shrink-0 text-[10px] tabular-nums text-muted">{children}</span>
 }
 
+interface ListItemProps {
+  children: ReactNode
+  tooltip?: string
+  nested?: boolean
+  /** Padded like a compact ListRow, so it lines up among clickable rows. */
+  alignWithRows?: boolean
+}
+
 /** A non-clickable row: text plus trailing actions. */
-export function ListItem({ children, tooltip, nested = false }: { children: ReactNode; tooltip?: string; nested?: boolean }) {
+export function ListItem({ children, tooltip, nested = false, alignWithRows = false }: ListItemProps) {
+  const box = alignWithRows ? compactBox(nested) : `py-0.5 ${nested ? 'pl-6' : ''}`
   return (
-    <li title={tooltip} className={`flex w-full min-w-0 items-center gap-2 py-0.5 text-xs text-fg ${nested ? 'pl-6' : ''}`}>
+    <li title={tooltip} className={`flex w-full min-w-0 items-center gap-2 text-xs text-fg ${box}`}>
       {children}
     </li>
   )

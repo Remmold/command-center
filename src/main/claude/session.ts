@@ -34,7 +34,7 @@ export class ClaudeSession {
   private readonly handshake: Promise<void>
 
   constructor(options: ClaudeSessionOptions) {
-    const { paneId, cwd, model, effort, thinking, resumeSessionId, permissionMode, allowBypass, profileEnv = {} } = options
+    const { paneId, cwd, model, effort, thinking, resumeSessionId, permissionMode, allowBypass, addDirs = [], profileEnv = {} } = options
     this.paneId = paneId
     this.cwd = cwd
     const launch = locateClaude()
@@ -62,6 +62,7 @@ export class ClaudeSession {
     if (permissionMode) args.push('--permission-mode', permissionMode)
     // The CLI refuses a later switch to bypass unless the launch allowed it.
     if (allowBypass || permissionMode === 'bypassPermissions') args.push('--allow-dangerously-skip-permissions')
+    for (const dir of addDirs) args.push('--add-dir', dir)
 
     console.log('[claude] spawn', {
       paneId,

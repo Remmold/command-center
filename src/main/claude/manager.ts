@@ -49,6 +49,7 @@ class ClaudeManager {
         promptSuggestions: options.promptSuggestions,
         resumeSessionId: options.resumeSessionId,
         permissionMode: options.permissionMode,
+        addDirs: options.addDirs,
         profileEnv: options.profileEnv,
         teleported: options.teleported,
         onEvent: (id, event) => {

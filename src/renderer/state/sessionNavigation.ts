@@ -9,6 +9,7 @@ import { useProjectViewsStore, type ProjectView, type ShellTab } from './project
 import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
 import { useRecentProjectsStore } from './recentProjectsStore'
+import { saveDraft } from './restoreStore'
 
 export const NEXT_WAITING_SHORTCUT = 'Ctrl+Shift+J'
 
@@ -141,17 +142,30 @@ export function openSessionInPlaceOf(from: ChatRef, paneId: string): void {
   useFocusRequestStore.getState().requestFocus(paneId)
 }
 
+export interface StartOptions {
+  /** Waits in the new chat's input; never sent by itself. */
+  draft?: string
+  /** Folders outside the workspace the session may read without asking. */
+  addDirs?: string[]
+}
+
 /** Opens a new chat in the workspace, on its account profile. */
-export function startSession(workspace: Workspace): boolean {
+export function startSession(workspace: Workspace, { draft, addDirs }: StartOptions = {}): boolean {
   useRecentProjectsStore.getState().touch(workspace.id)
   const views = useProjectViewsStore.getState()
+  const prepared = draft !== undefined || addDirs !== undefined
   if (!views.views[workspace.id]) {
-    views.openProject(workspace)
-    const first = useProjectViewsStore.getState().views[workspace.id]?.claudeSessions[0]
-    return first ? openSession(first.id) : false
+    views.openProject(workspace, { firstSession: !prepared })
+    if (!prepared) {
+      const first = useProjectViewsStore.getState().views[workspace.id]?.claudeSessions[0]
+      return first ? openSession(first.id) : false
+    }
   }
-  const created = views.addClaudeSession(workspace.id)
-  return created ? openSession(created.id) : false
+  const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { addDirs })
+  if (!created) return false
+  // The input box reads its draft once, as the chat mounts.
+  if (draft !== undefined) saveDraft(created.id, draft)
+  return openSession(created.id)
 }
 
 /** Resumes a past session of the workspace as a new chat, showing its transcript so far. */
