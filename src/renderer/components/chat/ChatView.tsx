@@ -17,6 +17,7 @@ import { PermissionModePicker } from './PermissionModePicker'
 import { interruptNote } from './interrupt'
 import { pauseToSend, suggestionReducer, type SuggestionClear } from './promptSuggestion'
 import { useHostedChatOnScreen } from '../../hooks/useHostedChatOnScreen'
+import { useStableCallback } from '../../hooks/useStableCallback'
 import { UserPrompt } from './Message'
 import { pickUp, type HeldPrompt } from './heldPrompts'
 import { historyEntries } from './promptHistory'
@@ -28,6 +29,7 @@ import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
 import { takeStartRequest } from '../../state/startRequests'
 import { committedLength, thinkingDurations } from './liveItems'
+import { applyDeltas, frameBatch, type FrameBatch, type StreamDelta } from './streamDeltas'
 import { useFollowOutput } from './useFollowOutput'
 import { noteScroll, saveDraft, savedDraft, savedScroll } from '../../state/restoreStore'
 import { useChatItemsStore } from '../../state/chatItemsStore'
@@ -120,6 +122,15 @@ function isToolResultBlock(
   return block.type === 'tool_result'
 }
 
+function sameStrings(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i])
+}
+
+function isDelta(event: ClaudeEvent): boolean {
+  if (event.type !== 'stream_event') return false
+  return ((event as ClaudeStreamEvent).event as AnthropicStreamInner | undefined)?.type === 'content_block_delta'
+}
+
 function formatInitNote(init: ClaudeSystemEvent): string {
   const model = (init.model as string) ?? 'unknown model'
   const sid = (init.session_id as string) ?? ''
@@ -136,7 +147,7 @@ interface AnthropicStreamInner {
   type: string
   index?: number
   content_block?: ContentBlock
-  delta?: { type?: string; text?: string; thinking?: string; partial_json?: string }
+  delta?: StreamDelta['delta']
   message?: { id?: string }
 }
 
@@ -156,7 +167,13 @@ export const ChatView = memo(function ChatView({
   const mergeAssistant = useChatItemsStore((s) => s.mergeAssistant)
   const pendingApprovals = useApprovalsStore((s) => s.byPane[paneId] ?? EMPTY_REQUESTS)
   const held = useHeldPromptsStore((s) => s.byPane[paneId] ?? EMPTY_HELD)
-  const history = useMemo(() => historyEntries(items, held), [items, held])
+  const historyRef = useRef<string[]>([])
+  // The same list while the prompts stay the same, so an item commit does not redraw the prompt box.
+  const history = useMemo(() => {
+    const next = historyEntries(items, held)
+    if (!sameStrings(next, historyRef.current)) historyRef.current = next
+    return historyRef.current
+  }, [items, held])
 
   const [processRunning, setProcessRunning] = useState(false)
   const [turnActive, setTurnActive] = useState(false)
@@ -168,6 +185,9 @@ export const ChatView = memo(function ChatView({
   const [compacting, setCompacting] = useState(false)
   const [suggestion, setSuggestion] = useState<string | null>(null)
   const clearSuggestion = (reason: SuggestionClear): void => setSuggestion((s) => suggestionReducer(s, { type: 'clear', reason }))
+  const deltasRef = useRef<FrameBatch<StreamDelta> | null>(null)
+  deltasRef.current ??= frameBatch((pending) => setInProgress((prev) => (prev ? applyDeltas(prev, pending) : prev)))
+  const deltaBatch = deltasRef.current
   /** When each thinking block of the streaming message started, by block index. */
   const thinkingStartsRef = useRef<{ messageId: string | undefined; starts: Map<number, number> }>({ messageId: undefined, starts: new Map() })
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
@@ -205,11 +225,8 @@ export const ChatView = memo(function ChatView({
   const autoAvailable = choice.entry?.supportsAutoMode === true
   // A running process can switch to bypass only if it was launched allowing it.
   const bypassAllowed = processRunning ? launchedBypassRef.current === true : allowBypassSetting
-  const modes = availableModes({
-    current: mode,
-    autoAvailable,
-    bypassAvailable: bypassAllowed || launchedModeRef.current === 'bypassPermissions' || mode === 'bypassPermissions'
-  })
+  const bypassAvailable = bypassAllowed || launchedModeRef.current === 'bypassPermissions' || mode === 'bypassPermissions'
+  const modes = useMemo(() => availableModes({ current: mode, autoAvailable, bypassAvailable }), [mode, autoAvailable, bypassAvailable])
 
   const note = (text: string): void => appendItems(paneId, [{ kind: 'system', id: crypto.randomUUID(), text, at: Date.now() }])
 
@@ -319,6 +336,7 @@ export const ChatView = memo(function ChatView({
       clearSuggestion('restarted')
       setProcessRunning(false)
       setTurnActive(false)
+      deltaBatch.cancel()
       setInProgress(null)
       release(useHeldPromptsStore.getState().byPane[paneId] ?? [])
       useHeldPromptsStore.getState().set(paneId, [])
@@ -334,6 +352,7 @@ export const ChatView = memo(function ChatView({
     return () => {
       unsubEvent()
       unsubExit()
+      deltaBatch.cancel()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId])
@@ -372,20 +391,7 @@ export const ChatView = memo(function ChatView({
       return
     }
     if (inner.type === 'content_block_delta' && typeof inner.index === 'number' && inner.delta) {
-      const idx = inner.index
-      const delta = inner.delta
-      setInProgress((prev) => {
-        if (!prev) return prev
-        const content = [...prev.content]
-        const block = content[idx]
-        if (!block) return prev
-        if (delta.type === 'text_delta' && block.type === 'text' && typeof delta.text === 'string') {
-          content[idx] = { type: 'text', text: (block as { text: string }).text + delta.text }
-        } else if (delta.type === 'thinking_delta' && block.type === 'thinking' && typeof delta.thinking === 'string') {
-          content[idx] = { ...block, thinking: (typeof block.thinking === 'string' ? block.thinking : '') + delta.thinking }
-        }
-        return { ...prev, content }
-      })
+      deltaBatch.push({ index: inner.index, delta: inner.delta })
       return
     }
     if (inner.type === 'message_stop') {
@@ -419,6 +425,8 @@ export const ChatView = memo(function ChatView({
   }
 
   const handleEvent = (event: ClaudeEvent) => {
+    // Deltas wait for the next frame; anything else lands after the ones that came before it.
+    if (!isDelta(event)) deltaBatch.flush()
     const sessId = (event as { session_id?: string }).session_id
     if (sessId) noteClaudeSessionId(paneId, sessId)
     if (handleQueueFrame(event)) return
@@ -707,6 +715,7 @@ export const ChatView = memo(function ChatView({
     clearSuggestion('interrupted')
     window.api.claude.interrupt(paneId)
     setTurnActive(false)
+    deltaBatch.cancel()
     setInProgress(null)
   }
 
@@ -741,7 +750,52 @@ export const ChatView = memo(function ChatView({
     return { foreground, refused: backgroundRefused, move }
   }, [paneId, foreground, backgroundRefused])
 
-  const indicator = contextUsage ? contextIndicator(contextUsage) : null
+  const indicator = useMemo(() => (contextUsage ? contextIndicator(contextUsage) : null), [contextUsage])
+  const initialDraft = useMemo(() => savedDraft(paneId), [paneId])
+  const onDraftChange = useStableCallback((text: string) => saveDraft(paneId, text))
+  const onSend = useStableCallback(handleSend)
+  const onInterrupt = useStableCallback(handleInterrupt)
+  const onDismissSuggestion = useStableCallback(() => clearSuggestion('dismissed'))
+  const onAction = useStableCallback(runAction)
+  const onOpen = useStableCallback(openTarget)
+  const onShiftTab = useStableCallback(() => void pickMode(nextMode(modes, mode)))
+  const onSelectModel = useStableCallback((m: string) => void pickModel(m))
+  const onSelectEffort = useStableCallback((l: string) => void pickEffort(l))
+  const onToggleThinking = useStableCallback(() => void toggleThinking())
+  const onCompact = useStableCallback(() => void handleSend('/compact'))
+  const onSelectMode = useStableCallback((m: PermissionMode) => void pickMode(m))
+  const pillLabel = choice.pill.label
+  const menuTrailing = useMemo(
+    () => ({
+      model: <span className="shrink-0 text-[11px] text-muted">{pillLabel}</span>,
+      'toggle-thinking': <span className="shrink-0 text-[11px] text-muted">{thinking ? 'On' : 'Off'}</span>
+    }),
+    [pillLabel, thinking]
+  )
+  const footerStart = useMemo(
+    () => (
+      <>
+        <ModelPicker models={choice.models} current={choice.selection} pill={choice.pill} onSelectModel={onSelectModel} openSignal={modelMenuSignal} />
+        <EffortPicker level={choice.effort} levels={choice.levels} onSelect={onSelectEffort} />
+        <Button variant="ghost" pressed={thinking} onClick={onToggleThinking} tooltip="Toggle extended thinking mode">
+          <Brain size={13} strokeWidth={2} />
+          <span className="input-footer-wide">Thinking</span>
+        </Button>
+      </>
+    ),
+    [choice, modelMenuSignal, thinking, onSelectModel, onSelectEffort, onToggleThinking]
+  )
+  const footerEnd = useMemo(
+    () => (
+      <>
+        {indicator && <ContextPie indicator={indicator} onCompact={onCompact} />}
+        {/* The extension's footer rule: once unavailable, only a connected session keeps its pill. */}
+        {(remoteControl.status === 'connected' || remoteControlAvailable !== false) && <RemoteControlPill state={remoteControl} />}
+        <PermissionModePicker mode={mode} modes={modes} onSelect={onSelectMode} />
+      </>
+    ),
+    [indicator, remoteControl, remoteControlAvailable, mode, modes, onCompact, onSelectMode]
+  )
   const commands = useMemo(
     () => sessionInit?.commands ?? initCommandNames.map((name) => ({ name, description: '', argumentHint: '', aliases: [], builtin: false })),
     [sessionInit, initCommandNames]
@@ -799,52 +853,23 @@ export const ChatView = memo(function ChatView({
       <AgentsStillWorking paneId={paneId} turnActive={turnActive} transcript={transcript} />
       <InputBox
         busy={turnActive}
-        initialDraft={savedDraft(paneId)}
-        onDraftChange={(text) => saveDraft(paneId, text)}
+        initialDraft={initialDraft}
+        onDraftChange={onDraftChange}
         history={history}
-        onSend={handleSend}
-        onInterrupt={handleInterrupt}
+        onSend={onSend}
+        onInterrupt={onInterrupt}
         suggestion={suggestion}
-        onDismissSuggestion={() => clearSuggestion('dismissed')}
+        onDismissSuggestion={onDismissSuggestion}
         commands={commands}
         localActions={remoteControlShown ? WITH_REMOTE_CONTROL : LOCAL_ACTIONS}
-        onAction={runAction}
-        onOpen={openTarget}
-        menuTrailing={{
-          model: <span className="shrink-0 text-[11px] text-muted">{choice.pill.label}</span>,
-          'toggle-thinking': <span className="shrink-0 text-[11px] text-muted">{thinking ? 'On' : 'Off'}</span>
-        }}
+        onAction={onAction}
+        onOpen={onOpen}
+        menuTrailing={menuTrailing}
         cwd={cwd}
         registerFocus={registerInputFocus}
-        footerStart={
-          <>
-            <ModelPicker
-              models={choice.models}
-              current={choice.selection}
-              pill={choice.pill}
-              onSelectModel={(m) => void pickModel(m)}
-              openSignal={modelMenuSignal}
-            />
-            <EffortPicker level={choice.effort} levels={choice.levels} onSelect={(l) => void pickEffort(l)} />
-            <Button variant="ghost" pressed={thinking} onClick={() => void toggleThinking()} tooltip="Toggle extended thinking mode">
-              <Brain size={13} strokeWidth={2} />
-              <span className="input-footer-wide">Thinking</span>
-            </Button>
-          </>
-        }
-        footerEnd={
-          <>
-            {indicator && <ContextPie indicator={indicator} onCompact={() => void handleSend('/compact')} />}
-            {/* The extension's footer rule: once unavailable, only a connected session keeps its pill. */}
-            {(remoteControl.status === 'connected' || remoteControlAvailable !== false) && <RemoteControlPill state={remoteControl} />}
-            <PermissionModePicker
-              mode={mode}
-              modes={modes}
-              onSelect={(m) => void pickMode(m)}
-            />
-          </>
-        }
-        onShiftTab={() => void pickMode(nextMode(modes, mode))}
+        footerStart={footerStart}
+        footerEnd={footerEnd}
+        onShiftTab={onShiftTab}
       />
       {contextOpen && <ContextDialog paneId={paneId} onClose={closeContext} />}
     </div>

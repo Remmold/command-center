@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { ClaudeChatSession } from './projectViewsStore'
 import { defaultsOf, useModelStore } from './modelStore'
 import { currentChoice, type ModelChoice } from './modelPicker'
@@ -20,5 +20,11 @@ export function useModelChoice(
     if (!loaded && profileId) void useModelStore.getState().loadDefaults(profileId)
   }, [loaded, profileId])
   const knownDefault = useModelStore((s) => (profileId ? s.defaultByProfile[profileId] : undefined))
-  return currentChoice({ own: init?.models, cachedModels, knownDefault, defaults, session, applied })
+  const own = init?.models
+  const { model, effort } = session
+  // One object while its inputs stay the same, so the chat's footer does not redraw on every render.
+  return useMemo(
+    () => currentChoice({ own, cachedModels, knownDefault, defaults, session: { model, effort }, applied }),
+    [own, cachedModels, knownDefault, defaults, model, effort, applied]
+  )
 }

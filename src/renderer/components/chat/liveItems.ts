@@ -57,3 +57,34 @@ export function withStreaming(items: ChatItem[], streaming: AssistantMessageItem
   const shown: AssistantMessageItem = { ...committed, content: [...committed.content, ...streaming.content.slice(from)] }
   return { items: [...items.slice(0, index), shown, ...items.slice(index + 1)], live: { id: streaming.id, from } }
 }
+
+function showsText(block: ContentBlock): boolean {
+  return block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== ''
+}
+
+function sameShapeBlock(shape: ContentBlock, block: ContentBlock): boolean {
+  if (shape.type !== block.type) return false
+  if (block.type === 'text') return showsText(shape) === showsText(block)
+  if (block.type === 'thinking') return true
+  return shape === block
+}
+
+function shapeBlock(block: ContentBlock): ContentBlock {
+  if (block.type === 'text') return { type: 'text', text: showsText(block) ? '…' : '' }
+  if (block.type === 'thinking') return { ...block, thinking: '' }
+  return block
+}
+
+/**
+ * The streaming message as the row passes (pairing, grouping, row kinds, joins) see it: its blocks with text only as shown or blank.
+ * `previous` comes back while a delta changes nothing they read, so a delta does not rerun them.
+ */
+export function keepShape(previous: AssistantMessageItem | null, streaming: AssistantMessageItem | null): AssistantMessageItem | null {
+  if (!streaming) return null
+  const same =
+    previous !== null &&
+    previous.id === streaming.id &&
+    previous.content.length === streaming.content.length &&
+    streaming.content.every((block, i) => sameShapeBlock(previous.content[i], block))
+  return same ? previous : { ...streaming, content: streaming.content.map(shapeBlock) }
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { mergeAssistant, thinkingDurations, withStreaming } from './liveItems'
+import { keepShape, mergeAssistant, thinkingDurations, withStreaming } from './liveItems'
+import { visibleBlocks } from './timelineRows'
 import type { AssistantMessageItem, ChatItem } from './types'
 import type { ContentBlock } from '../../../shared/types'
 
@@ -60,5 +61,41 @@ describe('the message still streaming', () => {
 
   it('leaves the items alone when nothing streams', () => {
     expect(withStreaming([prompt], null)).toEqual({ items: [prompt], live: null })
+  })
+})
+
+describe('the streaming message as the row passes see it', () => {
+  const tool: ContentBlock = { type: 'tool_use', id: 'toolu_1', name: 'Read', input: {} }
+  const streamingWith = (content: ContentBlock[]): AssistantMessageItem => assistant('msg_1', content)
+
+  it('stays the same object while a delta only grows text that already shows', () => {
+    const first = keepShape(null, streamingWith([{ type: 'text', text: 'Hel' }, tool]))
+    expect(keepShape(first, streamingWith([{ type: 'text', text: 'Hello, world' }, tool]))).toBe(first)
+  })
+
+  it('stays the same object while a thinking block grows', () => {
+    const first = keepShape(null, streamingWith([{ type: 'thinking', thinking: 'Let', signature: '' }]))
+    expect(keepShape(first, streamingWith([{ type: 'thinking', thinking: 'Let me think', signature: '' }]))).toBe(first)
+  })
+
+  it('changes once a blank text block gets its first visible text, so the row starts to draw', () => {
+    const blank = keepShape(null, streamingWith([{ type: 'text', text: '' }]))
+    expect(visibleBlocks(blank!.content)).toEqual([])
+    const shown = keepShape(blank, streamingWith([{ type: 'text', text: 'Hi' }]))
+    expect(shown).not.toBe(blank)
+    expect(visibleBlocks(shown!.content)).toEqual([0])
+  })
+
+  it('changes when a block is added, and keeps its tool calls as they are', () => {
+    const first = keepShape(null, streamingWith([{ type: 'text', text: 'Reading' }]))
+    const next = keepShape(first, streamingWith([{ type: 'text', text: 'Reading' }, tool]))
+    expect(next).not.toBe(first)
+    expect(next!.content[1]).toBe(tool)
+  })
+
+  it('changes for a new message, and is null when nothing streams', () => {
+    const first = keepShape(null, streamingWith([{ type: 'text', text: 'Hi' }]))
+    expect(keepShape(first, assistant('msg_2', [{ type: 'text', text: 'Hi' }]))!.id).toBe('msg_2')
+    expect(keepShape(first, null)).toBeNull()
   })
 })
