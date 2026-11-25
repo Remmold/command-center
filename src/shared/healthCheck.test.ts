@@ -31,7 +31,7 @@ describe('healthCheck: MEMORY.md past what Claude loads', () => {
     expect(findings).toHaveLength(1)
     expect(findings[0]).toMatchObject({ path: `${MEM}/MEMORY.md`, verdict: 'structural', severity: 'problem', status: 'open' })
     expect(findings[0].claim).toContain('from line 201 on')
-    expect(findings[0].claim).toContain('1 line never reaches')
+    expect(findings[0].claim).toContain('1 line is cut off')
   })
 
   it('finds nothing in a MEMORY.md of exactly 25,600 bytes', () => {
@@ -42,7 +42,7 @@ describe('healthCheck: MEMORY.md past what Claude loads', () => {
     const findings = healthCheck(report([index([...lines(99, 256), 257])]))
     expect(findings).toHaveLength(1)
     expect(findings[0].claim).toContain('from line 100 on')
-    expect(findings[0].claim).toContain('1 line never reaches')
+    expect(findings[0].claim).toContain('1 line is cut off')
     expect(findings[0].evidence).toContain('25,601 bytes')
   })
 
@@ -51,7 +51,7 @@ describe('healthCheck: MEMORY.md past what Claude loads', () => {
     expect(findings).toHaveLength(1)
     expect(findings[0].claim).toContain('MEMORY.md is 225 lines')
     expect(findings[0].claim).toContain('from line 161 on')
-    expect(findings[0].claim).toContain('65 lines never reach')
+    expect(findings[0].claim).toContain('65 lines are cut off')
   })
 })
 

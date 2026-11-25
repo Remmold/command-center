@@ -230,9 +230,9 @@ async function indexFacts(dir: string, text: string, listed: ReadonlyMap<string,
       const target = markdownTarget(m[1])
       if (target === null) continue
       const path = resolve(dir, target)
-      const known = listed.get(fileKey(path)) ?? ((await isFile(path)) ? path : null)
-      if (known === null) missingTargets.push({ line: n + 1, target })
-      else if (!links.some((l) => fileKey(l) === fileKey(known))) links.push(known)
+      const reached = listed.get(fileKey(path)) ?? ((await isFile(path)) ? path : null)
+      if (reached === null) missingTargets.push({ line: n + 1, target })
+      else if (!links.some((l) => fileKey(l) === fileKey(reached))) links.push(reached)
     }
   }
   return { lines: ends.length, bytes: ends.at(-1) ?? 0, lineEnds: ends, links, missingTargets }
@@ -262,7 +262,7 @@ async function memory(r: Reading): Promise<ContextItem[]> {
   for (const name of names) {
     const path = join(dir, name)
     const unmatchedLinks = unmatched(name)
-    if (name === 'MEMORY.md' && index) out.unshift({ ...(await item(r, 'memory-index', name, path, 'account', estimateTokens(indexText ?? ''))), index, unmatchedLinks })
+    if (name === 'MEMORY.md') out.unshift({ ...(await item(r, 'memory-index', name, path, 'account', estimateTokens(indexText ?? ''))), ...(index ? { index } : {}), unmatchedLinks })
     else out.push({ ...(await item(r, 'memory-file', name, path, 'account', null)), indexed: linked.has(fileKey(path)), unmatchedLinks })
   }
   return out

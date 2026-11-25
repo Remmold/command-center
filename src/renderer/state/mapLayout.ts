@@ -63,6 +63,8 @@ export interface MapGroup {
   sharedWithDefault: boolean
   /** Why it can't be written, when every item in it is read-only. */
   readOnly: string | null
+  /** Memory files MEMORY.md never links. */
+  unindexed: boolean
 }
 
 export interface ContextMap {
@@ -83,67 +85,39 @@ export const BAND_ORDER: readonly MapBandName[] = ['start', 'on-demand', 'behavi
 export const LARGE_GROUP = 8
 export const BLOCK_SIZE_FLOOR = 50
 
-const BAND_OF: Record<ContextItemKind, MapBandName> = {
-  'claude-md': 'start',
-  import: 'start',
-  'memory-index': 'start',
-  skill: 'start',
-  agent: 'start',
-  'subfolder-claude-md': 'on-demand',
-  'memory-file': 'on-demand',
-  command: 'on-demand',
-  settings: 'behaviour',
-  hook: 'behaviour',
-  'mcp-server': 'behaviour',
-  plugin: 'behaviour'
-}
+/** Where an item goes: its kind, except that unlinked memory files and slash-only skills are each a set of their own. */
+type Slot = ContextItemKind | 'memory-file:unlinked' | 'skill:slash'
 
-/** Where a kind's items go in a band; unindexed memory files and slash-only skills are each a set of their own. */
-type Slot = ContextItemKind | 'memory-file:unindexed' | 'skill:slash'
-
-const SLOT_ORDER: readonly Slot[] = [
-  'claude-md',
-  'import',
-  'memory-index',
-  'skill',
-  'agent',
-  'subfolder-claude-md',
-  'memory-file',
-  'memory-file:unindexed',
-  'command',
-  'skill:slash',
-  'settings',
-  'hook',
-  'mcp-server',
-  'plugin'
+/** Every slot in the order its blocks are drawn, with its band and what a group of it is called. */
+const SLOTS: readonly { slot: Slot; band: MapBandName; noun: string }[] = [
+  { slot: 'claude-md', band: 'start', noun: 'CLAUDE.md files' },
+  { slot: 'import', band: 'start', noun: 'imported files' },
+  { slot: 'memory-index', band: 'start', noun: 'memory indexes' },
+  { slot: 'skill', band: 'start', noun: 'skills' },
+  { slot: 'agent', band: 'start', noun: 'agents' },
+  { slot: 'subfolder-claude-md', band: 'on-demand', noun: 'subfolder CLAUDE.md files' },
+  { slot: 'memory-file', band: 'on-demand', noun: 'memory files' },
+  { slot: 'memory-file:unlinked', band: 'on-demand', noun: 'unlinked memory files' },
+  { slot: 'command', band: 'on-demand', noun: 'commands' },
+  // A slash-only skill loads nothing at start, so it is On demand like a command.
+  { slot: 'skill:slash', band: 'on-demand', noun: 'slash-only skills' },
+  { slot: 'settings', band: 'behaviour', noun: 'settings files' },
+  { slot: 'hook', band: 'behaviour', noun: 'hooks' },
+  { slot: 'mcp-server', band: 'behaviour', noun: 'MCP servers' },
+  { slot: 'plugin', band: 'behaviour', noun: 'plugins' }
 ]
 
+const SLOT = new Map(SLOTS.map((s) => [s.slot, s]))
+
 function slotOf(item: ContextItem): Slot {
-  if (item.kind === 'memory-file' && item.indexed === false) return 'memory-file:unindexed'
+  if (item.kind === 'memory-file' && item.indexed === false) return 'memory-file:unlinked'
   if (item.kind === 'skill' && item.note === SLASH_COMMAND_ONLY) return 'skill:slash'
   return item.kind
 }
 
-/** A slash-only skill loads nothing at start, so it is On demand like a command. */
-const bandOf = (slot: Slot): MapBandName => (slot === 'skill:slash' ? 'on-demand' : BAND_OF[slot === 'memory-file:unindexed' ? 'memory-file' : slot])
+const bandOf = (item: ContextItem): MapBandName => SLOT.get(slotOf(item))!.band
 
-const groupNoun = (slot: Slot, kind: ContextItemKind): string =>
-  slot === 'memory-file:unindexed' ? `unindexed ${PLURALS[kind]}` : slot === 'skill:slash' ? `slash-only ${PLURALS[kind]}` : PLURALS[kind]
-
-const PLURALS: Record<ContextItemKind, string> = {
-  'claude-md': 'CLAUDE.md files',
-  import: 'imported files',
-  'memory-index': 'memory indexes',
-  skill: 'skills',
-  agent: 'agents',
-  'subfolder-claude-md': 'subfolder CLAUDE.md files',
-  'memory-file': 'memory files',
-  command: 'commands',
-  settings: 'settings files',
-  hook: 'hooks',
-  'mcp-server': 'MCP servers',
-  plugin: 'plugins'
-}
+const isUnlinked = (item: ContextItem): boolean => slotOf(item) === 'memory-file:unlinked'
 
 interface Placed {
   item: ContextItem
@@ -177,7 +151,7 @@ function flatten(layer: ContextLayerName, items: readonly ContextItem[]): Placed
 /** The placed items by slot in SLOT_ORDER, a plugin's items apart from the layer's own (Files lists them under the plugin). */
 function bySlotAndPlugin(placed: readonly Placed[]): [Slot, string | null, Placed[]][] {
   const out: [Slot, string | null, Placed[]][] = []
-  for (const slot of SLOT_ORDER) {
+  for (const { slot } of SLOTS) {
     const plugins = new Map<string | null, Placed[]>()
     for (const p of placed) {
       if (slotOf(p.item) !== slot) continue
@@ -196,7 +170,7 @@ function singleBlock(layer: ContextLayerName, placed: Placed, groupId: string | 
     label: item.label,
     kind: item.kind,
     layer,
-    band: bandOf(slotOf(item)),
+    band: bandOf(item),
     item,
     items: [item],
     tokens: item.tokens,
@@ -205,7 +179,7 @@ function singleBlock(layer: ContextLayerName, placed: Placed, groupId: string | 
     collapsed: false,
     sharedWithDefault: item.sharedWithDefault,
     readOnly: item.readOnly,
-    unindexed: slotOf(item) === 'memory-file:unindexed',
+    unindexed: isUnlinked(item),
     findings: findings.filter((f) => f.path === item.path)
   }
 }
@@ -227,7 +201,7 @@ function groupBlock(group: MapGroup, findings: readonly Finding[]): MapBlock {
     collapsed: true,
     sharedWithDefault: group.sharedWithDefault,
     readOnly: group.readOnly,
-    unindexed: members.every((m) => slotOf(m) === 'memory-file:unindexed'),
+    unindexed: group.unindexed,
     findings: findings.filter((f) => paths.has(f.path))
   }
 }
@@ -250,10 +224,11 @@ export function mapLayout(report: ContextReport, findings: readonly Finding[], e
         const kind = items[0].kind
         groups.push({
           id: groupId,
-          label: `${items.length} ${groupNoun(slot, kind)}${plugin ? ` from ${plugin}` : ''}`,
+          label: `${items.length} ${SLOT.get(slot)!.noun}${plugin ? ` from ${plugin}` : ''}`,
           kind,
           layer,
-          band: bandOf(slot),
+          band: SLOT.get(slot)!.band,
+          unindexed: slot === 'memory-file:unlinked',
           items,
           tokens: sumTokens(items),
           expanded: expanded.has(groupId),

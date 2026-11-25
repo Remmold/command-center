@@ -37,7 +37,7 @@ function detailOf(map: ContextMap, id: string | null): BlockDetail | null {
   const group = map.groups.find((g) => g.id === id)
   if (!group) return null
   const members = blocksOf(map).filter((b) => b.groupId === group.id)
-  return { ...group, item: null, groupId: group.id, unindexed: members.every((b) => b.unindexed), findings: members.flatMap((b) => b.findings) }
+  return { ...group, item: null, groupId: group.id, findings: members.flatMap((b) => b.findings) }
 }
 
 function explanation(s: BlockDetail): string {

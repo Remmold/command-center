@@ -42,7 +42,7 @@ function itemFindings(item: ContextItem): Finding[] {
     const lost = index.lines - cut + 1
     out.push(
       finding('memory-long', path, '', 'problem', {
-        claim: `MEMORY.md is ${plural(index.lines, 'line')}, but Claude loads only the first ${MEMORY_LINE_LIMIT} lines or ${count(MEMORY_BYTE_LIMIT)} bytes: from line ${cut} on, ${plural(lost, 'line')} never ${lost === 1 ? 'reaches' : 'reach'} a chat.`,
+        claim: `MEMORY.md is ${plural(index.lines, 'line')}, but Claude loads only the first ${MEMORY_LINE_LIMIT} lines or ${count(MEMORY_BYTE_LIMIT)} bytes: from line ${cut} on, ${plural(lost, 'line')} ${lost === 1 ? 'is' : 'are'} cut off and never ${lost === 1 ? 'reaches' : 'reach'} a chat in full.`,
         evidence: `${plural(index.lines, 'line')}, ${plural(index.bytes, 'byte')}; the limits are ${MEMORY_LINE_LIMIT} lines and ${count(MEMORY_BYTE_LIMIT)} bytes.`,
         fix: `Shorten MEMORY.md below ${MEMORY_LINE_LIMIT} lines and ${count(MEMORY_BYTE_LIMIT)} bytes: merge or drop index lines, or move detail into the memory files.`
       })

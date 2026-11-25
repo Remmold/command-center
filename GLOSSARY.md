@@ -126,7 +126,7 @@ The numbered steps beside the context map that walk through it in plain words wi
 _Avoid_: Wizard, tutorial, walkthrough
 
 **Health check**:
-The checks the app runs on context files itself, at no token cost: MEMORY.md longer than Claude loads, memory files MEMORY.md never links, index lines to missing files, and CLAUDE.md files past Claude Code's size warning.
+The checks the app runs on context files itself, at no token cost: MEMORY.md longer than Claude loads, memory files MEMORY.md never links, index lines to missing files, and CLAUDE.md files past Claude Code's size warning. `[[links]]` that match no memory file are listed as notes, never as problems.
 _Avoid_: Lint, audit, validation
 
 **Drift check**:

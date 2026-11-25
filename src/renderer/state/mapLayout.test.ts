@@ -217,7 +217,7 @@ describe('mapLayout', () => {
 
     const lots = many('memory-file', 9).map((m) => ({ ...m, label: `u-${m.label}`, path: `/x/u-${m.label}`, indexed: false }))
     const grouped = mapLayout(report({ account: [...linked, ...lots] }), [])
-    expect(band(grouped, 'account', 'on-demand')).toEqual(['9 memory files', '9 unindexed memory files'])
+    expect(band(grouped, 'account', 'on-demand')).toEqual(['9 memory files', '9 unlinked memory files'])
     expect(grouped.lanes[0].bands[1].blocks.map((b) => b.unindexed)).toEqual([false, true])
   })
 

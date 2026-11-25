@@ -142,7 +142,7 @@ function MapTile({ block, defaultName }: { block: MapBlock; defaultName: string 
     <>
       {block.sharedWithDefault && <Link2 size={10} aria-label={`shared with ${defaultName}`} className="shrink-0" />}
       {block.readOnly && <Lock size={10} aria-label="read-only" className="shrink-0" />}
-      {problems > 0 && <CountDot count={problems} tone="warning" label={plural(problems, 'problem')} />}
+      {problems > 0 && <CountDot count={problems} tone="warning" label={plural(problems, 'finding')} />}
       {notes > 0 && <CountDot count={notes} tone="muted" label={plural(notes, 'note')} />}
     </>
   )
