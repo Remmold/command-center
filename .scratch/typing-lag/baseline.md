@@ -63,3 +63,5 @@ The check also counts `Storage.prototype.setItem` calls and characters (key plus
 | tool-call turn | 75-95 | 3 (restore 2, project-views 1) | 1101 | 0.03-0.04 | 12-15 |
 
 All of these come at the turn's start; 4 s mid-turn on their own wrote nothing. Budget: at most 0.25 writes and 200 characters per event (over 6x and 13x today's), with at least 50 events counted. A store that re-saves on every event writes 1 or more per event and fails it. Checked once with the budget set to 0.01: both scenarios went red on writes per event.
+
+The streaming turn now streams 12 texts instead of 6, so it still runs after the keys and the 4 s window (with 6 it sometimes ended first and the Stop click timed out). The keys land at the same point of the reply as before. Over 11 runs on this setup: 10 green, 1 red on one streaming key (150 ms, p90 8); the check before these changes, 5 runs: 4 green, 1 red on the Stop click.

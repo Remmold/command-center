@@ -34,7 +34,7 @@ const paragraph = (i: number): string =>
 /** The seeded script plus two turns: "stream…" streams long text, "tools…" commits a text and a tool call once a second. */
 function script(): string {
   const base = JSON.parse(readFileSync(join(__dirname, 'script.json'), 'utf8')) as { turns: unknown[] }
-  const stream = Array.from({ length: 6 }, () => ({ type: 'text', text: Array.from({ length: 25 }, (_, i) => paragraph(i)).join('') }))
+  const stream = Array.from({ length: 12 }, () => ({ type: 'text', text: Array.from({ length: 25 }, (_, i) => paragraph(i)).join('') }))
   const tools = Array.from({ length: 40 }, (_, k) => [
     { type: 'text', text: `Step ${k}: reading the next file to check the offset handling.` },
     { type: 'tool_use', name: 'Read', input: { file_path: '{cwd}{sep}README.md' }, approval: false, result: 'y'.repeat(4000), delayMs: 1000 }

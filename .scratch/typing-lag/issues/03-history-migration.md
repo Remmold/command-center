@@ -14,4 +14,4 @@
 
 ## Comments
 
-- 2026-11-25: an entry that cannot be parsed as chat history is now deleted instead of retried every start (~150 ms each); a failed write still keeps it for the next start. Spec's "Migration, once" updated.
+- 2026-11-25: an entry that cannot be parsed as chat history is now deleted instead of retried every start (~150 ms each); a failed write (or any error other than bad JSON or a wrong shape) still keeps it for the next start. One session that is not a list of items is skipped, not the whole entry. Spec's "Migration, once" updated.

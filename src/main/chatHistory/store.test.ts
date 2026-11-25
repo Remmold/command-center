@@ -104,9 +104,15 @@ describe('chat history store', () => {
 
   it('a legacy entry that is not chat history is reported unreadable and saves nothing', async () => {
     expect(await store.importLegacy('{"state":{"items":{"pane-1":[{"kind":"user"')).toBe('unreadable')
-    expect(await store.importLegacy('{"state":{"items":{"pane-1":"not a list"}},"version":1}')).toBe('unreadable')
     expect(await store.importLegacy('{"version":1}')).toBe('unreadable')
+    expect(await store.importLegacy('null')).toBe('unreadable')
     expect(await restart().load()).toEqual({})
+  })
+
+  it('a legacy session that is not a list of items is skipped; the others are imported', async () => {
+    const entry = JSON.stringify({ state: { items: { 'pane-1': 'not a list', 'pane-2': [null], 'pane-3': [user('o3', 'old')] } }, version: 1 })
+    expect(await store.importLegacy(entry)).toBe('imported')
+    expect(await restart().load()).toEqual({ 'pane-3': [user('o3', 'old')] })
   })
 
   it('a legacy import whose write fails rejects', async () => {

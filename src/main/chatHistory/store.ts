@@ -12,8 +12,8 @@ export interface ChatHistoryStore {
   delete: (paneId: string) => Promise<void>
   /**
    * Saves each session of the legacy localStorage entry (zustand persist JSON) that has no file yet; a session with a
-   * file keeps it. Resolves `'unreadable'`, saving nothing, when the entry is not chat history; rejects when a write
-   * fails (rerunning it is safe).
+   * file keeps it, and a session that is not a list of items is skipped. Resolves `'unreadable'`, saving nothing, when
+   * the entry is not JSON or has no sessions; rejects when a write fails (rerunning it is safe).
    */
   importLegacy: (entry: string) => Promise<LegacyImport>
 }
@@ -49,15 +49,24 @@ function parseLog(text: string): { changes: HistoryChange[]; ok: boolean } {
   return { changes, ok: true }
 }
 
-/** The sessions of the legacy entry `{"state":{"items":{<paneId>: ChatItem[]}},"version":1}`; throws when it is not one. */
-function parseLegacy(entry: string): Record<string, ChatItem[]> {
-  const parsed: unknown = JSON.parse(entry)
+/**
+ * The sessions of the legacy entry `{"state":{"items":{<paneId>: ChatItem[]}},"version":1}`, skipping one that is not a
+ * list of items; null when the entry is not JSON or has no sessions object. Other errors (out of memory) throw.
+ */
+function parseLegacy(entry: string): Record<string, ChatItem[]> | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(entry)
+  } catch (err) {
+    if (err instanceof SyntaxError) return null
+    throw err
+  }
   const items = (parsed as { state?: { items?: unknown } } | null)?.state?.items
-  if (typeof items !== 'object' || items === null || Array.isArray(items)) throw new Error('the legacy chat history has no sessions')
+  if (typeof items !== 'object' || items === null || Array.isArray(items)) return null
   const sessions: Record<string, ChatItem[]> = {}
   for (const [paneId, list] of Object.entries(items)) {
-    if (!isChatItemList(list)) throw new Error(`the legacy chat history of ${paneId} is not a list of items`)
-    sessions[paneId] = list
+    if (isChatItemList(list)) sessions[paneId] = list
+    else console.error(`the legacy chat history of ${paneId} is not a list of items; skipped`)
   }
   return sessions
 }
@@ -145,11 +154,9 @@ export function createChatHistoryStore(dir: string): ChatHistoryStore {
     delete: (paneId) => serial(() => fs.rm(join(dir, fileName(paneId)), { force: true })),
     importLegacy: (entry) =>
       serial(async () => {
-        let sessions: Record<string, ChatItem[]>
-        try {
-          sessions = parseLegacy(entry)
-        } catch (err) {
-          console.error('the legacy chat history is not chat history; nothing imported', err)
+        const sessions = parseLegacy(entry)
+        if (!sessions) {
+          console.error('the legacy chat history is not chat history; nothing imported')
           return 'unreadable'
         }
         await fs.mkdir(dir, { recursive: true })
