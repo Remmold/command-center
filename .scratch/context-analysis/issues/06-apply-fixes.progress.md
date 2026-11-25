@@ -1,3 +1,3 @@
-Done: ticket 06 built (ticks, Apply N fixes to the run's live chat or a new session, applied/skipped on the map, skeleton removed on a failed start); quick green, full pnpm e2e 13/13 green.
-Next: code review of the 06 commit, review fixes in a follow-up commit.
-Open reds: none.
+Done: ticket 06 committed (2a911de) and reviewed; review fixes (tile mark for applied/skipped, folders of every ticked run, shared isUnder/findingKey, ADR 0005 note) committed; quick green, Context e2e 2/2 green.
+Next: ship gate for the context-analysis feature.
+Open reds: none; known gap: a fix sent to a live chat whose process then fails to start shows its error only in that chat.

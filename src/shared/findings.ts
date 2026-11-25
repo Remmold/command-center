@@ -96,7 +96,8 @@ export function pathKey(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
 
-const isUnder = (path: string, folder: string): boolean => pathKey(path).startsWith(`${pathKey(folder)}/`)
+/** The path is inside the folder, compared by `pathKey`. */
+export const isUnder = (path: string, folder: string): boolean => pathKey(path).startsWith(`${pathKey(folder)}/`)
 
 const startOf = (run: FindingsRun): number => {
   const at = Date.parse(run.startedAt)

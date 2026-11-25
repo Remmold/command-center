@@ -105,6 +105,7 @@ test('Map tour: step 5 shows the seeded MEMORY.md finding, step 6 starts a drift
   await expect.poll(() => log.userTexts().find((text) => text.startsWith('Fix findings:')) ?? '').toMatch(/^Findings file: .+\.json\nIds: F1$/m)
   await expect(detail.getByText('applied', { exact: true })).toBeVisible()
   await expect(detail.getByRole('checkbox', { name: 'Fix F1' })).toHaveCount(0)
+  await expect(map.getByRole('region', { name: 'Repo · Every start' }).getByRole('button', { name: /^CLAUDE\.md.*1 applied or skipped/ })).toBeVisible()
 
   await map.getByRole('button', { name: 'Open chat' }).click()
   await expect(page.getByTestId('view-work').getByText('Recorded one finding in the findings file.')).toBeVisible()

@@ -1,6 +1,6 @@
 import type { ContextReport } from '../../shared/context'
 import { buildDriftCheck, type DriftCheckProject } from '../../shared/driftCheck'
-import { pathKey, type DriftChecksView, type DriftRunView, type ShownFinding } from '../../shared/findings'
+import { isUnder, pathKey, type DriftChecksView, type DriftRunView, type ShownFinding } from '../../shared/findings'
 import { fixMessage } from '../../shared/fixMessage'
 import type { Workspace } from '../../shared/types'
 import { isHosted } from './chatDrawer'
@@ -15,8 +15,6 @@ export interface ApplyFixes {
   drift: DriftChecksView | null
   ticked: readonly ShownFinding[]
 }
-
-const isUnder = (path: string, folder: string): boolean => pathKey(path).startsWith(`${pathKey(folder)}/`)
 
 /** The covered workspaces' reports, so a new session gets the folders the run's own session had. */
 async function runProjects(shown: DriftRunView, workspace: Workspace, report: ContextReport): Promise<DriftCheckProject[]> {
@@ -59,6 +57,8 @@ export async function applyFixes({ workspace, report, drift, ticked }: ApplyFixe
     sendToChat(latest.run.sessionId, prompt)
     return null
   }
-  const addDirs = latest ? await runAddDirs(latest, workspace, report) : healthAddDirs(ticked, workspace, report)
+  // Each run with a ticked finding brings its folders, so the new session can edit and mark them all.
+  const sources = runs.filter((r) => r === latest || ticked.some((f) => f.runId === r.run.runId))
+  const addDirs = latest ? [...new Set((await Promise.all(sources.map((r) => runAddDirs(r, workspace, report)))).flat())] : healthAddDirs(ticked, workspace, report)
   return startSession(workspace, { addDirs, send: { prompt } }) ? null : 'Could not start a session for the fixes.'
 }

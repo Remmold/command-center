@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link2, Lock } from 'lucide-react'
+import { Check, Link2, Lock } from 'lucide-react'
 import { formatTokens, type ContextLayerName, type ContextReport } from '../../../../shared/context'
 import { shownFindings, type DriftChecksView, type ShownFinding } from '../../../../shared/findings'
 import { healthCheck } from '../../../../shared/healthCheck'
@@ -206,12 +206,14 @@ function MapTile({ block, lit, defaultName }: { block: MapBlock; lit: boolean; d
   }
   const problems = block.findings.filter(tickable).length
   const notes = block.findings.filter((f) => f.severity === 'note').length
+  const done = block.findings.filter((f) => f.status !== 'open').length
   const marks = (
     <>
       {block.sharedWithDefault && <Link2 size={10} aria-label={`shared with ${defaultName}`} className="shrink-0" />}
       {block.readOnly && <Lock size={10} aria-label="read-only" className="shrink-0" />}
       {problems > 0 && <CountDot count={problems} tone="warning" label={plural(problems, 'finding')} />}
       {notes > 0 && <CountDot count={notes} tone="muted" label={plural(notes, 'note')} />}
+      {done > 0 && <Check size={10} aria-label={`${done} applied or skipped`} className="shrink-0" />}
     </>
   )
   return (
@@ -219,7 +221,7 @@ function MapTile({ block, lit, defaultName }: { block: MapBlock; lit: boolean; d
       nodeId={block.id}
       label={block.label}
       meta={block.tokens === null ? undefined : formatTokens(block.tokens)}
-      marks={block.sharedWithDefault || block.readOnly || problems + notes > 0 ? marks : undefined}
+      marks={block.sharedWithDefault || block.readOnly || problems + notes + done > 0 ? marks : undefined}
       width={width}
       height={height}
       selected={selected}

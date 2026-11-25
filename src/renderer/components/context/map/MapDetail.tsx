@@ -112,7 +112,7 @@ export function MapDetail({ map, defaultName }: { map: ContextMap; defaultName: 
         <Panel title="Findings" count={s.findings.length} empty="No findings.">
           <ul className="flex flex-col gap-3 text-xs">
             {s.findings.map((f) => (
-              <li key={`${f.runId ?? 'health'}:${f.id}`} data-stale={f.stale ? '' : undefined} className={`flex flex-col gap-1 ${f.stale ? 'opacity-50' : ''}`}>
+              <li key={findingKey(f)} data-stale={f.stale ? '' : undefined} className={`flex flex-col gap-1 ${f.stale ? 'opacity-50' : ''}`}>
                 <span className="text-fg">
                   {f.severity === 'note' && <Badge tone="quiet">note</Badge>} {f.status !== 'open' && <Badge tone="quiet">{f.status}</Badge>} {f.claim}
                 </span>
