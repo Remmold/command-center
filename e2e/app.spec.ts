@@ -16,7 +16,7 @@ test.describe('zoom and auto-update', () => {
     evaluateMain(app, (_electron, v: string) => (globalThis as unknown as { __ccFakeUpdater: Fake }).__ccFakeUpdater.deliver(v), version)
   const restartRequests = (app: ElectronApplication): Promise<number> => fakeCount(app, 'restartRequests')
 
-  test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while Alt+2 and Ctrl+Shift+J still open rows, and both are kept across a restart; after it, Settings → General checks again on Check now, and an update that arrives mid-turn waits for the chat, then restarts after the idle timer', async ({ launched }) => {
+  test('zoom starts at 110% and steps per key, Ctrl+B hides the session list while Alt+2 and Ctrl+Shift+J still open rows, and both and the chat history are kept across a restart; after it, Settings → General checks again on Check now, and an update that arrives mid-turn waits for the chat, then restarts after the idle timer', async ({ launched }) => {
     const { app, page, log } = launched
     // The slow script is for the update steps; the zoom steps chat on the basic one until the restart.
     await useScript(app, 'basic')
@@ -92,7 +92,7 @@ test.describe('zoom and auto-update', () => {
     })
 
     let again = launched
-    await test.step('after a restart the zoom and the hidden list are kept, and the View menu steps the saved level', async () => {
+    await test.step('after a restart the zoom, the hidden list and the chat history are kept, and the View menu steps the saved level', async () => {
       await evaluateMain(app, ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setPosition(-31000, -31000), null)
       again = { ...launched, ...(await launched.relaunch()) }
       await expect.poll(() => zoomPercent(again.app)).toBe(132)
@@ -103,6 +103,10 @@ test.describe('zoom and auto-update', () => {
       await expect(again.page.getByRole('navigation', { name: 'Sessions' })).toBeHidden()
       await again.page.keyboard.press('Control+b')
       await expect(again.page.getByRole('navigation', { name: 'Sessions' })).toBeVisible()
+      await again.page.keyboard.press('Control+Shift+J')
+      const chat = again.page.locator('[data-chat-pane]')
+      await expect(chat.getByText('say hello')).toBeVisible()
+      await expect(chat.getByText(BASIC_REPLY)).toBeVisible()
       expect(userLines(log).length).toBe(1)
 
       const clickViewMenu = (label: string) =>

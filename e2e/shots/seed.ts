@@ -4,7 +4,10 @@ import { dirname, join } from 'node:path'
 import { expect, type ElectronApplication, type Page } from '@playwright/test'
 import { FAKE_BIN, assertFakeClaude } from '../guard'
 
-/** Fake repos with tickets in every column, shared by the screenshot and perf runs. */
+/**
+ * Fake repos with tickets in every column, shared by the screenshot and perf runs.
+ * Perf seeds must match real data sizes: Andreas's chat history was ~22.5M chars, and the earlier 1.4 MB seed hid the typing lag's cause.
+ */
 
 const HOUR = 60 * 60 * 1000
 
@@ -210,6 +213,64 @@ export async function resize(app: ElectronApplication, width: number, height: nu
   }, [width, height] as const)
 }
 
+
+// Browser globals of the functions that run inside the page; this project compiles against Node's types.
+declare const localStorage: { getItem(key: string): string | null }
+
+const LONG_MESSAGES = 300
+export const CODE = Array.from({ length: 30 }, (_, i) => `  const value${i} = await store.read('key-${i}') ?? fallback(${i}) // line ${i}`).join('\n')
+
+/** A 300-message chat: user steps and assistant replies with a 30-line code block each. */
+export function longTranscript(tag: string): unknown[] {
+  const items: unknown[] = []
+  for (let i = 0; i < LONG_MESSAGES / 2; i++) {
+    const at = Date.now() - (LONG_MESSAGES - i) * 60_000
+    items.push({ kind: 'user', id: `${tag}-u${i}`, text: `step ${i}: refactor the reader for case ${i}`, at })
+    const text = [
+      `Here is step **${i}**. The reader now keeps \`offset\` in the store and returns early on an empty file.`,
+      '',
+      `- checked case ${i}`,
+      `- kept the old path for \`legacy\` input`,
+      '',
+      '```ts',
+      `export async function read${i}(store: Store): Promise<number> {`,
+      CODE,
+      '  return value0',
+      '}',
+      '```',
+      '',
+      'Tests pass.'
+    ].join('\n')
+    const message = { id: `${tag}-m${i}`, role: 'assistant', content: [{ type: 'text', text }] }
+    items.push({ kind: 'assistant', id: `${tag}-a${i}`, content: message.content, raw: { type: 'assistant', message }, at })
+  }
+  return items
+}
+
+/**
+ * Saves each transcript as the history of its project's first chat, plus `extraChats` copies of the first one under
+ * sessions no chat shows (old sessions' history), as main's history files. Reload the page afterwards so the app reads
+ * them. Returns the saved size in MB.
+ */
+export async function saveChats(page: Page, userData: string, byProject: Record<string, unknown[]>, extraChats = 0): Promise<number> {
+  const firstChat = await page.evaluate((projects) => {
+    const views = JSON.parse(localStorage.getItem('command-center.project-views')!).state.views as Record<string, { claudeSessions: { id: string }[] }>
+    return projects.map((projectId) => views[projectId].claudeSessions[0].id)
+  }, Object.keys(byProject))
+  const dir = join(userData, 'chat-history')
+  mkdirSync(dir, { recursive: true })
+  let bytes = 0
+  const save = (paneId: string, items: unknown[]): void => {
+    const text = `${JSON.stringify({ kind: 'set', items })}
+`
+    writeFileSync(join(dir, `${encodeURIComponent(paneId)}.jsonl`), text)
+    bytes += text.length
+  }
+  Object.values(byProject).forEach((items, i) => save(firstChat[i], items))
+  const first = Object.values(byProject)[0]
+  for (let x = 0; x < extraChats; x++) save(`seed-old-${x}`, first)
+  return bytes / 1024 / 1024
+}
 
 const DAY = 24 * HOUR
 const CODE_LINE = (i: number): string => `  const entry${i} = await store.read(\`key-${i}\`) ?? fallback(${i}) // keeps the old path for legacy input, line ${i}`

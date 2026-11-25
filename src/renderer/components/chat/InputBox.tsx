@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, FileText, Paperclip, Square, X } from 'lucide-react'
 import { SlashMenu } from './SlashMenu'
 import { MentionMenu } from './MentionMenu'
@@ -150,7 +150,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
-export function InputBox({
+export const InputBox = memo(function InputBox({
   busy = false,
   history = [],
   placeholder,
@@ -653,4 +653,4 @@ export function InputBox({
       </MessageColumn>
     </div>
   )
-}
+})
