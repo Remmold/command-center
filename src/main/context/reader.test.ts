@@ -193,7 +193,8 @@ describe('context reader: subfolder CLAUDE.md files', () => {
   })
 
   it('leaves out a folder the repo gitignores', async () => {
-    execFileSync('git', ['init', '-q'], { cwd: repo })
+    // Under the pre-commit hook an inherited GIT_DIR makes this init rewrite the shared repo config as bare.
+    execFileSync('git', ['init', '-q'], { cwd: repo, env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))) })
     await put(join(repo, '.gitignore'), 'build/\n')
     await put(join(repo, 'build', 'CLAUDE.md'), chars(40))
     await put(join(repo, 'docs', 'CLAUDE.md'), chars(40))

@@ -5,57 +5,6 @@ import type { Locator } from '@playwright/test'
 import { BASIC_REPLY } from './common'
 import { delayClaudeStart, evaluateMain, expect, newChatIn, send, startSession, test } from './harness'
 
-test('a VS Code profile’s folder is offered, adopted logged in, never written to, and only forgotten on Remove', async ({ launched }) => {
-  const { app, page, log, vscodeUserDir, root } = launched
-  const work = join(root, 'claude-work')
-  mkdirSync(work, { recursive: true })
-  writeFileSync(join(work, '.credentials.json'), '{}')
-  writeFileSync(join(work, 'marker.txt'), 'mine')
-  mkdirSync(join(vscodeUserDir, 'profiles', 'abc123'), { recursive: true })
-  writeFileSync(
-    join(vscodeUserDir, 'profiles', 'abc123', 'settings.json'),
-    `{\n  // Work\n  "claudeCode.environmentVariables": [{ "name": "CLAUDE_CONFIG_DIR", "value": ${JSON.stringify(work)} },],\n}`
-  )
-  mkdirSync(join(vscodeUserDir, 'globalStorage'), { recursive: true })
-  writeFileSync(join(vscodeUserDir, 'globalStorage', 'storage.json'), JSON.stringify({ userDataProfiles: [{ location: 'abc123', name: 'Work' }] }))
-  const side = join(root, 'claude-side')
-  mkdirSync(side, { recursive: true })
-
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Accounts', { exact: true }).click()
-  const accounts = page.getByRole('region', { name: 'Account profiles' })
-  const existing = page.getByRole('region', { name: 'Existing folders' })
-  const row = (text: string) => accounts.getByRole('listitem').filter({ hasText: text })
-  await expect(existing.getByText('Found in VS Code profile Work')).toBeVisible()
-  await existing.getByRole('button', { name: 'Add' }).click()
-  await expect(row('Work · logged in · existing folder')).toBeVisible()
-  await expect(existing).toBeHidden()
-  await expect.poll(() => log.entries().some((e) => e.kind === 'argv' && e.configDir === work)).toBe(true)
-
-  const pickFolder = (folder: string) =>
-    app.evaluate(({ dialog }, picked) => {
-      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog
-    }, folder)
-  await pickFolder(work)
-  await page.getByRole('button', { name: 'Use existing folder…' }).click()
-  await expect(page.getByText('Work already uses this folder.')).toBeVisible()
-  await pickFolder(side)
-  await page.getByRole('button', { name: 'Use existing folder…' }).click()
-  await expect(row('claude-side · not logged in · existing folder')).toBeVisible()
-
-  let confirmText = ''
-  page.once('dialog', (d) => {
-    confirmText = d.message()
-    void d.accept()
-  })
-  await row('Work ·').getByRole('button', { name: 'Remove' }).click()
-  await expect(row('Work ·')).toBeHidden()
-  expect(confirmText).toContain(`the folder ${work} stays on disk, untouched`)
-  expect(readdirSync(work).sort()).toEqual(['.credentials.json', 'marker.txt'])
-  expect(readdirSync(side)).toEqual([])
-  await expect(existing.getByText('Found in VS Code profile Work')).toBeVisible()
-})
-
 function folderUri(path: string): string {
   const [drive, ...rest] = path.split(/[\\/]/)
   return `file:///${drive.toLowerCase().replace(':', '%3A')}/${rest.map(encodeURIComponent).join('/')}`
@@ -295,82 +244,135 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   })
 })
 
-test('a Work chat shows the Work badge and pill, moving its workspace warns, and Restart resumes on the workspace account', async ({ launched }) => {
-  const { app, page, log, root, configDir, workspace } = launched
-  const work = join(root, 'claude-work')
-  mkdirSync(work, { recursive: true })
-  writeFileSync(join(work, '.credentials.json'), '{}')
-  writeFileSync(join(work, 'fake-account.json'), JSON.stringify({ email: 'me@work.example', organization: 'Work AB', subscriptionType: 'Claude Team' }))
-  writeFileSync(join(root, 'user-data', 'profiles.json'), JSON.stringify([{ id: 'p-work', name: 'Work', createdAt: 1, configDir: work }]))
-  await page.evaluate(async () => {
-    const { api } = globalThis as unknown as { api: RendererApi }
-    await api.workspaces.setProfile('e2e-workspace', 'p-work')
-  })
-  await page.reload()
-  await page.waitForLoadState('domcontentloaded')
+test('a VS Code profile’s folder is offered, adopted logged in, never written to, and only forgotten on Remove; then a Work chat shows the Work badge and pill, moving its workspace warns, and Restart resumes on the workspace account', async ({ launched }) => {
+  await test.step('a VS Code profile’s folder is offered, adopted logged in, never written to, and only forgotten on Remove', async () => {
+    const { app, page, log, vscodeUserDir, root } = launched
+    const work = join(root, 'claude-work')
+    mkdirSync(work, { recursive: true })
+    writeFileSync(join(work, '.credentials.json'), '{}')
+    writeFileSync(join(work, 'marker.txt'), 'mine')
+    mkdirSync(join(vscodeUserDir, 'profiles', 'abc123'), { recursive: true })
+    writeFileSync(
+      join(vscodeUserDir, 'profiles', 'abc123', 'settings.json'),
+      `{\n  // Work\n  "claudeCode.environmentVariables": [{ "name": "CLAUDE_CONFIG_DIR", "value": ${JSON.stringify(work)} },],\n}`
+    )
+    mkdirSync(join(vscodeUserDir, 'globalStorage'), { recursive: true })
+    writeFileSync(join(vscodeUserDir, 'globalStorage', 'storage.json'), JSON.stringify({ userDataProfiles: [{ location: 'abc123', name: 'Work' }] }))
+    const side = join(root, 'claude-side')
+    mkdirSync(side, { recursive: true })
 
-  const workBadge = page.getByRole('button', { name: /^Account: Work( |$)/ })
-  await delayClaudeStart(app, 2500)
-  await page.keyboard.press('Control+2')
-  await page.keyboard.press('Control+t')
-  await newChatIn(page, /e2e-workspace/)
-  await expect(workBadge).toContainText('pending')
-  await expect.poll(() => log.initializedIn(workspace)).toBe(true)
-  await expect(workBadge).not.toContainText('pending')
-  await delayClaudeStart(app, 0)
-  await expect(workBadge).toHaveAccessibleName('Account: Work · Claude Team')
-  await expect(workBadge).toHaveAttribute('title', /Email: me@work\.example\nOrganization: Work AB\nConfig folder: .*claude-work\nReported by Claude/)
-
-  const workPill = page.getByRole('button', { name: /^Account & usage for (Work|me@work\.example)$/ })
-  const homePill = page.getByRole('button', { name: 'Account & usage for Personal' })
-  await expect(workPill).toHaveAttribute('aria-current', 'true')
-  await expect(homePill).not.toHaveAttribute('aria-current', 'true')
-  await expect(homePill).toHaveCSS('opacity', '0.5')
-
-  await send(page, 'say hello')
-  await expect(page.getByText(BASIC_REPLY)).toBeVisible()
-
-  await page.evaluate(() => (globalThis as unknown as { api: RendererApi }).api.usage.refresh('p-work'))
-  const list = page.getByRole('navigation', { name: 'Sessions' })
-  const workHeader = list.getByRole('button', { name: /^Work · Team/ })
-  await expect(workHeader.getByRole('meter', { name: 'Work Weekly (7 day)' })).toHaveAttribute('aria-valuenow', '69', { timeout: 15_000 })
-  await expect(workHeader).toContainText('69%')
-  await expect(workHeader).toHaveAttribute('title', /^Work · Claude Team\nme@work\.example\nWeekly \(7 day\): 69% used · \d+% of the week passed · (on track|ahead of pace by \d+%) · resets /)
-  await workHeader.click()
-  await expect(workHeader.getByRole('meter', { name: 'Work Weekly (7 day)' })).toBeVisible()
-  await workHeader.click()
-
-  const moveWorkspaceTo = async (configFolder: string) => {
     await page.getByRole('button', { name: 'Settings', exact: true }).click()
-    await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Workspaces', { exact: true }).click()
-    await page.getByRole('button', { name: 'account profile for e2e-workspace' }).click()
-    await page.getByTitle(configFolder, { exact: true }).click()
-    await page.keyboard.press('Escape')
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Accounts', { exact: true }).click()
+    const accounts = page.getByRole('region', { name: 'Account profiles' })
+    const existing = page.getByRole('region', { name: 'Existing folders' })
+    const row = (text: string) => accounts.getByRole('listitem').filter({ hasText: text })
+    await expect(existing.getByText('Found in VS Code profile Work')).toBeVisible()
+    await existing.getByRole('button', { name: 'Add' }).click()
+    await expect(row('Work · logged in · existing folder')).toBeVisible()
+    await expect(existing).toBeHidden()
+    await expect.poll(() => log.entries().some((e) => e.kind === 'argv' && e.configDir === work)).toBe(true)
+
+    const pickFolder = (folder: string) =>
+      app.evaluate(({ dialog }, picked) => {
+        dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [picked] })) as typeof dialog.showOpenDialog
+      }, folder)
+    await pickFolder(work)
+    await page.getByRole('button', { name: 'Use existing folder…' }).click()
+    await expect(page.getByText('Work already uses this folder.')).toBeVisible()
+    await pickFolder(side)
+    await page.getByRole('button', { name: 'Use existing folder…' }).click()
+    await expect(row('claude-side · not logged in · existing folder')).toBeVisible()
+
+    let confirmText = ''
+    page.once('dialog', (d) => {
+      confirmText = d.message()
+      void d.accept()
+    })
+    await row('Work ·').getByRole('button', { name: 'Remove' }).click()
+    await expect(row('Work ·')).toBeHidden()
+    expect(confirmText).toContain(`the folder ${work} stays on disk, untouched`)
+    expect(readdirSync(work).sort()).toEqual(['.credentials.json', 'marker.txt'])
+    expect(readdirSync(side)).toEqual([])
+    await expect(existing.getByText('Found in VS Code profile Work')).toBeVisible()
+  })
+
+  await test.step('a Work chat shows the Work badge and pill, moving its workspace warns, and Restart resumes on the workspace account', async () => {
+    const { app, page, log, root, configDir, workspace } = launched
+    const work = join(root, 'claude-work')
+    mkdirSync(work, { recursive: true })
+    writeFileSync(join(work, '.credentials.json'), '{}')
+    writeFileSync(join(work, 'fake-account.json'), JSON.stringify({ email: 'me@work.example', organization: 'Work AB', subscriptionType: 'Claude Team' }))
+    writeFileSync(join(root, 'user-data', 'profiles.json'), JSON.stringify([{ id: 'p-work', name: 'Work', createdAt: 1, configDir: work }]))
+    await page.evaluate(async () => {
+      const { api } = globalThis as unknown as { api: RendererApi }
+      await api.workspaces.setProfile('e2e-workspace', 'p-work')
+    })
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+
+    const workBadge = page.getByRole('button', { name: /^Account: Work( |$)/ })
+    await delayClaudeStart(app, 1000)
     await page.keyboard.press('Control+2')
-  }
-  const starts = () => log.entries().filter((e) => e.kind === 'argv' && e.cwd === workspace)
-  const resumedOn = (folder: string) => {
-    const last = starts().at(-1)
-    const argv = (last?.argv ?? []) as string[]
-    return last?.configDir === folder && argv.includes('--resume')
-  }
+    await page.keyboard.press('Control+t')
+    await newChatIn(page, /e2e-workspace/)
+    await expect(workBadge).toContainText('pending')
+    await expect.poll(() => log.initializedIn(workspace)).toBe(true)
+    await expect(workBadge).not.toContainText('pending')
+    await delayClaudeStart(app, 0)
+    await expect(workBadge).toHaveAccessibleName('Account: Work · Claude Team')
+    await expect(workBadge).toHaveAttribute('title', /Email: me@work\.example\nOrganization: Work AB\nConfig folder: .*claude-work\nReported by Claude/)
 
-  await moveWorkspaceTo(configDir)
-  await expect(page.getByText('Running on Work; this workspace is set to Personal')).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Account: Work/ })).toHaveAttribute('title', /This workspace is now set to another account/)
+    const workPill = page.getByRole('button', { name: /^Account & usage for (Work|me@work\.example)$/ })
+    const homePill = page.getByRole('button', { name: 'Account & usage for Personal' })
+    await expect(workPill).toHaveAttribute('aria-current', 'true')
+    await expect(homePill).not.toHaveAttribute('aria-current', 'true')
+    await expect(homePill).toHaveCSS('opacity', '0.5')
 
-  await moveWorkspaceTo(work)
-  await expect(page.getByText(/^Running on/)).toBeHidden()
-  await moveWorkspaceTo(configDir)
-  await page.getByRole('button', { name: 'Restart on Personal' }).click()
-  await expect.poll(() => resumedOn(configDir)).toBe(true)
-  await expect(page.getByRole('button', { name: 'Account: Personal · Claude Ultra' })).not.toContainText('pending')
-  await expect(page.getByText(/^Running on/)).toBeHidden()
+    await send(page, 'say hello')
+    await expect(page.getByText(BASIC_REPLY)).toBeVisible()
 
-  await moveWorkspaceTo(work)
-  await expect(page.getByText('Running on Personal; this workspace is set to Work')).toBeVisible()
-  await page.getByRole('button', { name: 'Restart on Work' }).click()
-  await expect.poll(() => resumedOn(work)).toBe(true)
-  await expect(workBadge).not.toContainText('pending')
-  await expect(page.getByText(/^Running on/)).toBeHidden()
+    await page.evaluate(() => (globalThis as unknown as { api: RendererApi }).api.usage.refresh('p-work'))
+    const list = page.getByRole('navigation', { name: 'Sessions' })
+    const workHeader = list.getByRole('button', { name: /^Work · Team/ })
+    await expect(workHeader.getByRole('meter', { name: 'Work Weekly (7 day)' })).toHaveAttribute('aria-valuenow', '69', { timeout: 15_000 })
+    await expect(workHeader).toContainText('69%')
+    await expect(workHeader).toHaveAttribute('title', /^Work · Claude Team\nme@work\.example\nWeekly \(7 day\): 69% used · \d+% of the week passed · (on track|ahead of pace by \d+%) · resets /)
+    await workHeader.click()
+    await expect(workHeader.getByRole('meter', { name: 'Work Weekly (7 day)' })).toBeVisible()
+    await workHeader.click()
+
+    const moveWorkspaceTo = async (configFolder: string) => {
+      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      await page.getByRole('navigation', { name: 'Settings sections' }).getByText('Workspaces', { exact: true }).click()
+      await page.getByRole('button', { name: 'account profile for e2e-workspace' }).click()
+      await page.getByTitle(configFolder, { exact: true }).click()
+      await page.keyboard.press('Escape')
+      await page.keyboard.press('Control+2')
+    }
+    const starts = () => log.entries().filter((e) => e.kind === 'argv' && e.cwd === workspace)
+    const resumedOn = (folder: string) => {
+      const last = starts().at(-1)
+      const argv = (last?.argv ?? []) as string[]
+      return last?.configDir === folder && argv.includes('--resume')
+    }
+
+    await moveWorkspaceTo(configDir)
+    await expect(page.getByText('Running on Work; this workspace is set to Personal')).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Account: Work/ })).toHaveAttribute('title', /This workspace is now set to another account/)
+
+    await moveWorkspaceTo(work)
+    await expect(page.getByText(/^Running on/)).toBeHidden()
+    await moveWorkspaceTo(configDir)
+    await page.getByRole('button', { name: 'Restart on Personal' }).click()
+    await expect.poll(() => resumedOn(configDir)).toBe(true)
+    await expect(page.getByRole('button', { name: 'Account: Personal · Claude Ultra' })).not.toContainText('pending')
+    await expect(page.getByText(/^Running on/)).toBeHidden()
+
+    await moveWorkspaceTo(work)
+    await expect(page.getByText('Running on Personal; this workspace is set to Work')).toBeVisible()
+    await page.getByRole('button', { name: 'Restart on Work' }).click()
+    await expect.poll(() => resumedOn(work)).toBe(true)
+    await expect(workBadge).not.toContainText('pending')
+    await expect(page.getByText(/^Running on/)).toBeHidden()
+  })
 })
