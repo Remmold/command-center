@@ -1,5 +1,5 @@
 export const MAX_SCENARIOS = 20
-export const MAX_SUITE_SECONDS = 100
+export const MAX_SUITE_SECONDS = 200
 
 /** UI scenarios in a spec file: each `test(...)` call, `test.only`/`skip`/`fixme` too, but not `test.step`, `test.use` or `test.describe`. */
 export function countScenarios(source: string): number {

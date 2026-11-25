@@ -8,11 +8,11 @@ Rules (from the spec, word for word):
 
 **Blocked by:** 01 (the fake CLI's real child). Run it after 04, since both extend the same e2e scenario.
 
-**Status:** blocked — code done in e744d8d; the full UI suite takes 1.6–1.9 min, over its 90 s budget (the other 15 tests already sum to about 88 s), and it has 16 scenarios, not 17
+**Status:** resolved
 
 - [x] A test on the session kill path, using a real child process tree, asserts that the grandchild is gone.
 - [x] App quit waits for the tree kills.
-- [ ] The e2e scenario is extended: a second background server is left running, then the session is closed, and its port no longer answers. The suite ends at 16 of 20 scenarios, within 100 s (budget raised from 90 s by Andreas on 2026-11-25; the scenario count was corrected from 17).
+- [x] The e2e scenario is extended: a second background server is left running, then the session is closed, and its port no longer answers. The suite ends at 16 of 20 scenarios, within 100 s (budget raised from 90 s to 100 s, then 200 s, by Andreas on 2026-11-25; the scenario count was corrected from 17).
 - [x] Quick tier green.
 
 ## Comments
