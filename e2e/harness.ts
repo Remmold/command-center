@@ -203,6 +203,9 @@ function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName, extra: Re
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
   delete env.ELECTRON_RUN_AS_NODE
   delete env.ELECTRON_RENDERER_URL
+  // The runner's colour settings must not reach the app: NO_COLOR beside FORCE_COLOR makes Node print a warning into process output.
+  delete env.NO_COLOR
+  delete env.FORCE_COLOR
   Object.assign(env, {
     CC_CLAUDE_BIN: FAKE_BIN,
     FAKE_CLAUDE_SCRIPT: SCRIPTS[script],
