@@ -7,7 +7,7 @@ pnpm build
 pnpm exec playwright test -c e2e/shots/playwright.config.ts e2e/shots/typing.shots.ts
 ```
 
-(Pass the file path, not a bare `typing`: the worktree's own folder name contains "typing", so a bare filter runs every shots spec.)
+(A bare `typing` filter works too: the shots config matches a filter against repo-relative paths only, so the worktree's folder name no longer matches every spec.)
 
 Setup: one visible 300-message chat plus 30 old 300-message chats, 22.8 MB of saved chat history; 120 keystrokes per scenario into the focused prompt box, timed from keydown to the next frame. Limits per scenario: no key over 50 ms, p90 under 20 ms.
 
@@ -52,3 +52,14 @@ Redraw cost per delta, measured with a throwaway probe (not kept): the visible 3
 | frame p90 ms | 6 | **unchanged** (6) |
 
 What is left per delta is the streaming message's own markdown parse and code highlighting (a CPU profile of the after build: remark/unified and highlight.js on top, no transcript-wide passes).
+
+## localStorage writes per Claude event (2026-11-25, branch feature/typing-lag)
+
+The check also counts `Storage.prototype.setItem` calls and characters (key plus value) against the Claude events main sends the window, over each turn without the keys: from sending the prompt to its first content, then 4 s after the keys. The keys are left out because the prompt draft (`command-center.restore`) is saved once per key, about 120 writes per scenario, which is per keystroke, not per event.
+
+| Scenario | events | writes | characters | writes per event | characters per event |
+| --- | --- | --- | --- | --- | --- |
+| streaming text turn | 248-267 | 5 (restore 2, project-views 3) | 2502-2536 | 0.02 | 9-10 |
+| tool-call turn | 75-95 | 3 (restore 2, project-views 1) | 1101 | 0.03-0.04 | 12-15 |
+
+All of these come at the turn's start; 4 s mid-turn on their own wrote nothing. Budget: at most 0.25 writes and 200 characters per event (over 6x and 13x today's), with at least 50 events counted. A store that re-saves on every event writes 1 or more per event and fails it. Checked once with the budget set to 0.01: both scenarios went red on writes per event.
