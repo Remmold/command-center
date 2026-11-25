@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The Claude session id is only set when it differs from the stored one (checked before calling the store), so a streamed event with an unchanged id writes nothing.
 - [ ] Any other store found writing on an unchanged state on the per-event path gets the same guard.
