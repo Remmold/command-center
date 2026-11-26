@@ -17,7 +17,7 @@ export function TestStepsList({ view, onMark }: Props) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
       <MessageColumn>
-        <p aria-label="Test result counter" className="mb-3 text-xs text-muted">
+        <p role="status" className="mb-3 text-xs text-muted">
           {pass} pass · {fail} fail · {waiting} waiting
         </p>
         <ol className="flex flex-col gap-2">

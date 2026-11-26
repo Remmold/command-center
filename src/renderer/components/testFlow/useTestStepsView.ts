@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Mark, StepsView } from '../../../shared/testSteps'
 
 interface TestSteps {
@@ -12,6 +12,7 @@ export function useTestStepsView(path: string | null): TestSteps {
   const [watcher] = useState(() => crypto.randomUUID())
   const [revision, setRevision] = useState(0)
   const [shown, setShown] = useState<{ path: string; view: StepsView } | null>(null)
+  const watching = useRef(false)
 
   useEffect(() => window.api.testFlow.onChanged((changed) => changed === watcher && setRevision((r) => r + 1)), [watcher])
   useEffect(
@@ -22,9 +23,12 @@ export function useTestStepsView(path: string | null): TestSteps {
   )
   useEffect(() => {
     if (!path) {
-      void window.api.testFlow.release(watcher).catch(() => undefined)
+      // Most sessions are no feature's; only a path that went away has watches to drop.
+      if (watching.current) void window.api.testFlow.release(watcher).catch(() => undefined)
+      watching.current = false
       return
     }
+    watching.current = true
     let active = true
     window.api.testFlow
       .showSteps(watcher, path)
