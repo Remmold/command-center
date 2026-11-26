@@ -47,11 +47,21 @@ test('Claude Code settings: a Model & thinking change and one found by search wa
   await expect(page.getByRole('alert')).toContainText('Ctrl+C')
   await page.getByRole('button', { name: 'Again', exact: true }).click()
   await page.keyboard.press('Control+k')
+  await page.keyboard.press('Enter')
   await page.keyboard.press('Control+e')
-  await page.getByRole('button', { name: 'Use', exact: true }).click()
+  // Keyboard only: one keystroke per recording, so Tab then leaves the box.
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: 'Use', exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+
+  // A key-binding change and a settings change found by the page-wide search wait in one save bar, and Save writes both files.
+  await search.fill('extended thinking')
+  await page.getByRole('group', { name: 'Extended thinking', exact: true }).getByRole('checkbox', { name: 'On' }).uncheck()
+  await expect(bar).toContainText('2 changes')
   await bar.getByRole('button', { name: 'Save' }).click()
   await expect(bar).toBeHidden()
   expect(JSON.parse(readFileSync(join(configDir, 'keybindings.json'), 'utf-8')).bindings).toEqual([{ context: 'Chat', bindings: { 'ctrl+k ctrl+e': 'chat:externalEditor' } }])
+  expect(JSON.parse(readFileSync(file, 'utf-8')).alwaysThinkingEnabled).toBe(false)
   await page.getByRole('navigation', { name: 'Claude Code categories' }).getByText('Model & thinking', { exact: true }).click()
 
   // In a narrow window the toolbar and each row's control wrap rather than run under the layer bar or off the right.
