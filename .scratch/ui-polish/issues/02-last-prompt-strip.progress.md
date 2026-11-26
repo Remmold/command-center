@@ -1,3 +1,3 @@
-Done: last prompt picker (unit-tested), LastPromptStrip in ChatView and MessageList (drawer gets it via ChatView), follow-output leave hook, one e2e scenario; quick and the new scenario green.
-Next: full pnpm e2e, commit, then code review since 9f5488f.
+Done: ticket 02 resolved (e30aadd) plus review fixes (9104d75): whole prompt on one line by CSS ellipsis, no flash on open, focus ring, observer rebuilt only on new items; quick and full UI suite (13/13) green.
+Next: none for 02; Andreas's manual look at the strip (placement under the tab bar, highlight ring).
 Open reds: none.
