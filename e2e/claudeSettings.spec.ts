@@ -2,10 +2,13 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from './harness'
 
+// A browser global of the functions that run inside the page; this project compiles against Node's types.
+declare const window: { innerWidth: number }
+
 test.use({ userSettings: { model: 'sonnet', someKeyThePageDoesNotKnow: { keep: [1, 2] } } })
 
 test('Claude Code settings: a Model & thinking change and one found by search wait in the save bar, and Save writes only that key into the account’s file; a change from outside then shows', async ({ launched }) => {
-  const { page, configDir } = launched
+  const { app, page, configDir } = launched
   const file = join(configDir, 'settings.json')
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
@@ -36,4 +39,19 @@ test('Claude Code settings: a Model & thinking change and one found by search wa
   writeFileSync(file, JSON.stringify({ model: 'haiku', someKeyThePageDoesNotKnow: { keep: [1, 2] }, alwaysThinkingEnabled: true }, null, 2) + '\n')
   await expect(model).toHaveValue('haiku')
   await expect(bar).toBeHidden()
+
+  // In a narrow window the toolbar and each row's control wrap rather than run under the layer bar or off the right.
+  await app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    win.unmaximize()
+    win.setContentSize(700, 800)
+  })
+  await expect.poll(() => page.evaluate(() => window.innerWidth)).toBeLessThan(700)
+  const right = await page.evaluate(() => window.innerWidth)
+  const layerBar = await page.getByRole('tablist', { name: 'Layer' }).boundingBox()
+  const searchBox = await search.boundingBox()
+  const modelBox = await model.boundingBox()
+  expect(layerBar && searchBox && (searchBox.y >= layerBar.y + layerBar.height || searchBox.x >= layerBar.x + layerBar.width)).toBe(true)
+  expect(searchBox && searchBox.x + searchBox.width).toBeLessThanOrEqual(right)
+  expect(modelBox && modelBox.x + modelBox.width).toBeLessThanOrEqual(right)
 })

@@ -282,15 +282,16 @@ export function ClaudeCodeSettings() {
     <Page label="Claude Code">
       <PageHeader title="Claude Code" description="The settings Claude Code reads from its settings files, as plain controls." />
       <Toolbar
+        wrap
         actions={
-          <div className="flex items-center gap-3">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
             <Checkbox checked={showAdvanced} onChange={setShowAdvanced}>
               Show advanced
             </Checkbox>
             <Checkbox checked={hideTerminalOnly} onChange={setHideTerminalOnly}>
               Hide terminal-only
             </Checkbox>
-            <div className="w-56">
+            <div className="w-56 max-w-full">
               <SearchField label="Search settings" placeholder="Search by name, words or key" value={query} onChange={setQuery} />
             </div>
           </div>

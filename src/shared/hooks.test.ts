@@ -86,6 +86,19 @@ describe('hooks the editor cannot show', () => {
   })
 })
 
+describe('blocking on failure', () => {
+  it('is a field of command, web request and MCP tool hooks only, so a prompt hook with it goes to Other keys and a retype drops it', () => {
+    const blocking = (type: string, fields: Record<string, unknown>) => ({ PreToolUse: [{ hooks: [{ type, ...fields, onFailure: 'block' }] }] })
+    expect(hooksLeftOut(blocking('command', { command: 'node check.js' }))).toEqual([])
+    expect(hooksLeftOut(blocking('http', { url: 'http://localhost/hook' }))).toEqual([])
+    expect(hooksLeftOut(blocking('mcp_tool', { server: 'memory', tool: 'save' }))).toEqual([])
+    expect(hooksLeftOut(blocking('prompt', { prompt: 'ok?' }))).toEqual([['PreToolUse']])
+    expect(hooksLeftOut({ PreToolUse: [{ hooks: [{ type: 'command', command: 'x', onFailure: 'maybe' }] }] })).toEqual([['PreToolUse']])
+    expect(retype({ type: 'command', command: 'x', onFailure: 'block' }, 'http', { url: 'u' })).toEqual({ type: 'http', onFailure: 'block', url: 'u' })
+    expect(retype({ type: 'command', command: 'x', onFailure: 'block' }, 'prompt', { prompt: 'p' })).toEqual({ type: 'prompt', prompt: 'p' })
+  })
+})
+
 describe('hook groups from other layers', () => {
   it('lists each layer’s groups per event, read only, without the ones the edited layer has too', () => {
     const shared = { matcher: 'Agent', hooks: [guard] }

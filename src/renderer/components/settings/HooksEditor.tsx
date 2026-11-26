@@ -193,6 +193,7 @@ function HookRow({ event, hook, onChange, disabled, unparsedKey, onUnparsed, fro
           <span>{timeoutText(hook, event)}</span>
           {typeof hook.statusMessage === 'string' && <span>Shows “{hook.statusMessage}”</span>}
           {hook.async === true && <span>In the background</span>}
+          {hook.onFailure === 'block' && <span>Blocks the action if it fails</span>}
           {typeof hook.if === 'string' && <span>Only for {hook.if}</span>}
           {typeof hook.if === 'string' && !takesIf(known) && <Badge tone="quiet-warning">Never runs here: its filter counts only on tool events</Badge>}
           {!runsType(known, type) && <Badge tone="quiet-warning">Claude doesn’t run a {typeLabel(type)} hook on this event</Badge>}

@@ -109,6 +109,16 @@ const IF: HookField = {
   description: 'A permission rule, such as Bash(git *). Counts only on tool events; on any other event the hook never runs.',
   placeholder: 'Bash(git *)'
 }
+const ON_FAILURE: HookField = {
+  key: 'onFailure',
+  label: 'When it fails',
+  kind: 'choice',
+  description: 'Whether the action goes ahead when the hook fails or times out. Not set, it goes ahead on most events.',
+  options: [
+    { value: 'continue', label: 'Go ahead' },
+    { value: 'block', label: 'Block the action' }
+  ]
+}
 const STATUS: HookField = { key: 'statusMessage', label: 'Message while it runs', kind: 'text', description: 'Shown beside the spinner while the hook runs.' }
 const MODEL: HookField = { key: 'model', label: 'Model', kind: 'text', description: 'The model that answers. Empty uses a fast model.', placeholder: 'a fast model' }
 const PROMPT: HookField = { key: 'prompt', label: 'Prompt', kind: 'text', required: true, description: '$ARGUMENTS stands for the event as JSON.', placeholder: 'Is this command safe? $ARGUMENTS' }
@@ -128,6 +138,7 @@ export const HOOK_FIELDS: Record<HookType, readonly HookField[]> = {
       ]
     },
     TIMEOUT,
+    ON_FAILURE,
     { key: 'async', label: 'Run in the background', kind: 'toggle', description: 'Claude goes on without waiting for it.' },
     { key: 'asyncRewake', label: 'Wake Claude on exit code 2', kind: 'toggle', description: 'Runs in the background and wakes Claude when it exits with code 2.' },
     IF,
@@ -140,6 +151,7 @@ export const HOOK_FIELDS: Record<HookType, readonly HookField[]> = {
     { key: 'headers', label: 'Headers', kind: 'object', description: 'Extra headers as JSON, such as {"Authorization": "Bearer $TOKEN"}.' },
     { key: 'allowedEnvVars', label: 'Variables it may send', kind: 'list', description: 'The environment variables the headers may use. Separate them with commas.' },
     TIMEOUT,
+    ON_FAILURE,
     IF,
     STATUS
   ],
@@ -148,6 +160,7 @@ export const HOOK_FIELDS: Record<HookType, readonly HookField[]> = {
     { key: 'tool', label: 'Tool', kind: 'text', required: true, description: 'The tool of that server to call.', placeholder: 'save' },
     { key: 'input', label: 'Tool input', kind: 'object', description: 'The tool’s arguments as JSON. ${tool_input.file_path} and the like take values from the event.' },
     TIMEOUT,
+    ON_FAILURE,
     IF,
     STATUS
   ]
