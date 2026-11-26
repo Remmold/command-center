@@ -78,7 +78,7 @@ function block(f: DigestFeature): string[] {
 }
 
 /** Everything after the header; what decides whether the file needs writing again. */
-export function digestBody(features: readonly DigestFeature[]): string {
+export function digestBody(features: readonly DigestFeature[], workspaceLabels: readonly string[] = []): string {
   const active = features.filter((f) => f.completedAt === null)
   const completed = features.filter((f) => f.completedAt !== null)
   const lines: string[] = ['# Features in progress', '']
@@ -89,11 +89,15 @@ export function digestBody(features: readonly DigestFeature[]): string {
     for (const f of completed) lines.push(`- ${f.name} (${f.workspaceName ?? 'workspace removed'}, ${f.accountName ?? 'account removed'})`)
     lines.push('')
   }
+  lines.push('# Workspaces', '', 'A feature proposal names one of these exactly; they are the labels of the New feature dialog.', '')
+  if (workspaceLabels.length === 0) lines.push('No workspaces.')
+  for (const label of workspaceLabels) lines.push(`- ${label}`)
+  lines.push('')
   return lines.join('\n')
 }
 
-export function renderFeatureDigest(features: readonly DigestFeature[], writtenAt: number): string {
-  return `${digestHeader(writtenAt)}\n${digestBody(features)}`
+export function renderFeatureDigest(features: readonly DigestFeature[], writtenAt: number, workspaceLabels: readonly string[] = []): string {
+  return `${digestHeader(writtenAt)}\n${digestBody(features, workspaceLabels)}`
 }
 
 const WINDOWS = [

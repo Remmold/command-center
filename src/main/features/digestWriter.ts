@@ -7,6 +7,8 @@ const DEBOUNCE_MS = 500
 export interface DigestWriterDeps {
   file: string
   features: () => Promise<DigestFeature[]>
+  /** The labels the New feature dialog's Workspace picker shows. */
+  workspaceLabels?: () => Promise<string[]>
   now?: () => number
   debounceMs?: number
 }
@@ -30,9 +32,10 @@ export function createDigestWriter(deps: DigestWriterDeps) {
 
   const write = async (): Promise<boolean> => {
     const features = await deps.features()
-    if ((await bodyOnDisk(deps.file)) === digestBody(features)) return false
+    const labels = (await deps.workspaceLabels?.()) ?? []
+    if ((await bodyOnDisk(deps.file)) === digestBody(features, labels)) return false
     await fs.mkdir(dirname(deps.file), { recursive: true })
-    await fs.writeFile(`${deps.file}.tmp`, renderFeatureDigest(features, now()), 'utf-8')
+    await fs.writeFile(`${deps.file}.tmp`, renderFeatureDigest(features, now(), labels), 'utf-8')
     await fs.rename(`${deps.file}.tmp`, deps.file)
     return true
   }

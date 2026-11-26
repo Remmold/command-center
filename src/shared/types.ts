@@ -13,7 +13,7 @@ import type { LocalServer } from './localPorts'
 import type { SidebarLayout } from './sidebarGroups'
 import type { FeatureStageView } from './featureStage'
 import type { FeatureServersView } from './featureServers'
-import type { FeatureRecord, NewFeatureRequest, NewFeatureResult } from './features'
+import type { FeatureRecord, NewFeatureRequest, NewFeatureResult, PreflightRequest, PreflightResult } from './features'
 import type { MainChatInfo } from './mainChat'
 import type { PreviewConfig } from './previewConfig'
 import type { PreviewDraftRead } from './previewSetup'
@@ -467,8 +467,10 @@ export interface RendererApi {
     list: () => Promise<FeatureRecord[]>
     /** Makes the worktree, its workspace and the record; the caller then starts the feature session under `request.sessionId`. */
     create: (request: NewFeatureRequest) => Promise<NewFeatureResult>
-    /** Undoes a created feature whose session could not start. */
-    discard: (name: string, workspaceId: string) => Promise<void>
+    /** The checks a start makes first, with nothing made; the proposal card shows a failure's message before Go. */
+    preflight: (request: PreflightRequest) => Promise<PreflightResult>
+    /** Undoes a created feature whose session could not start; resolves with what the undo could not remove. */
+    discard: (name: string, workspaceId: string) => Promise<string[]>
     /** Each feature's stage by name, read from its files. */
     stages: () => Promise<Record<string, FeatureStageView>>
     /** Keeps the feature session's Claude id on its record, so the session can be resumed once its chat is gone. */

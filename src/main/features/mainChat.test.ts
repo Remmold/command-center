@@ -1,6 +1,7 @@
 import { posix } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { claudeArgs } from '../claude/args'
+import { FEATURE_PROPOSAL_INSTRUCTIONS } from '../../shared/featureProposal'
 import { MAIN_CHAT_PANE_ID, READ_ONLY_TOOLS, mainChatFirstPrompt, mainChatLaunch, mainChatReply, type PathResolver } from '../../shared/mainChat'
 
 const DATA = 'C:\\Users\\a\\AppData\\Roaming\\cc'
@@ -27,6 +28,16 @@ describe('the main chat process arguments', () => {
     expect(args).toContain('--setting-sources=project')
     expect(args).not.toContain('user,project,local')
     expect(args.filter((a) => a.startsWith('--setting-sources'))).toHaveLength(1)
+  })
+
+  it('appends the proposal rules to the system prompt as one argument, so a resumed chat has them', () => {
+    expect(args.filter((a) => a.startsWith('--append-system-prompt'))).toEqual([`--append-system-prompt=${FEATURE_PROPOSAL_INSTRUCTIONS}`])
+  })
+
+  it('adds nothing else: still only the read tools, and the chat is told it cannot stop, complete, reopen or delete a feature', () => {
+    expect(args).toContain('--tools=Read,Grep,Glob')
+    expect(launch.cliArgs).toHaveLength(5)
+    expect(FEATURE_PROPOSAL_INSTRUCTIONS).toMatch(/cannot write files, run commands, or stop, complete, reopen or delete a feature/)
   })
 
   it('reads the digest folder and every feature worktree, once each', () => {

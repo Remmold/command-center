@@ -1,5 +1,6 @@
 import { repoDisplayName, type RepoIdentityViews } from '../../shared/repoIdentity'
 import type { Workspace } from '../../shared/types'
+import { workspaceLabel } from '../../shared/workspaceLabel'
 
 export interface WorkspacePickInput {
   workspaces: readonly Workspace[]
@@ -15,8 +16,7 @@ export interface WorkspacePick {
   repoName: string
 }
 
-/** The repo's display name, with the worktree's tag. */
-export const workspaceLabel = (workspace: Workspace, repoName: string): string => (workspace.worktreeTag ? `${repoName} · ${workspace.worktreeTag}` : repoName)
+export { workspaceLabel }
 
 const byRepoThenTag = (a: WorkspacePick, b: WorkspacePick): number =>
   a.repoName.localeCompare(b.repoName) || a.workspace.worktreeTag.localeCompare(b.workspace.worktreeTag)

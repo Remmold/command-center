@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import type { FeatureServersView } from '../../shared/featureServers'
 import type { FeatureStageView } from '../../shared/featureStage'
-import { featureFirstPrompt, featureOpenPlan, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
+import { MAIN_CHAT_PANE_ID } from '../../shared/mainChat'
+import { onePerName } from './proposalGo'
+import { sendToChat } from './startRequests'
+import { failureReport, featureFirstPrompt, featureOpenPlan, startOutcomeMessage, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
 import type { ChatItem } from '../components/chat/types'
 import { useChatItemsStore } from './chatItemsStore'
 import { hostedSessions, openSession, startSession } from './sessionNavigation'
@@ -63,12 +66,27 @@ export async function startFeature(request: Omit<NewFeatureRequest, 'sessionId'>
   await reload()
   const workspace = useWorkspacesStore.getState().workspaces.find((w) => w.id === feature.workspaceId)
   const started = workspace
-    ? startSession(workspace, { send: { id: sessionId, prompt: featureFirstPrompt(feature, request.description, previewBrowser) } })
+    ? startSession(workspace, { send: { id: sessionId, prompt: featureFirstPrompt(feature, request.description, previewBrowser, made.briefPath) } })
     : false
   if (started) return null
-  await window.api.features.discard(feature.name, request.workspaceId)
+  const left = await window.api.features.discard(feature.name, request.workspaceId).catch(() => [`the feature ${feature.name} with its worktree, branch and workspace entry (the undo itself failed)`])
   await reload()
-  return 'The feature session could not start.'
+  return failureReport('session', 'the session did not start', left)
+}
+
+/** Cards this app session pressed Go on and that started, by `proposalKey`; the live card then reads Started. In memory only: a restart derives the state from the feature list. */
+export const useStartedProposalsStore = create<{ keys: ReadonlySet<string>; remember: (key: string) => void }>((set) => ({
+  keys: new Set(),
+  remember: (key) => set((s) => ({ keys: new Set(s.keys).add(key) }))
+}))
+
+/** Go on a proposal card: the same start as New feature, with the brief; a press while the same name is starting does nothing. */
+export const goProposal = onePerName(startFeature)
+
+/** Tells the main chat how a start that ran ended, as a message sent the way a typed prompt is. The start's result is already final: a send that fails only shows a toast. */
+export function tellMainChat(name: string, error: string | null): void {
+  const unreached = (): void => useToastStore.getState().show('The main chat could not be told how the feature start ended; its error shows in that chat.')
+  sendToChat(MAIN_CHAT_PANE_ID, startOutcomeMessage(name, error)).then((reached) => (reached ? undefined : unreached()), unreached)
 }
 
 /** Follows stage changes from main; call once. */

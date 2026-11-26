@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { compactMetadata } from './compaction'
 import { ChatItems } from './ChatItems'
+import { MAIN_CHAT_PANE_ID } from '../../../shared/mainChat'
 import { HostedMediaTabs } from './MediaTabs'
 import { MessageColumn } from './MessageColumn'
 import { ChatBanner } from './ChatBanner'
@@ -846,7 +847,7 @@ export const ChatView = memo(function ChatView({
                     : 'idle — sending will start a new claude process'}
                 </ChatBanner>
               )}
-              <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} agents={agents} busy={turnActive} background={background} />
+              <ChatItems items={items} cwd={cwd} streaming={inProgress} thinkingTokens={thinkingTokens} agents={agents} busy={turnActive} background={background} proposalCards={paneId === MAIN_CHAT_PANE_ID} />
               {pendingApprovals.map((req) => (
                 <ApprovalPrompt key={req.requestId} request={req} autoAvailable={autoAvailable} onSetMode={setMode} />
               ))}

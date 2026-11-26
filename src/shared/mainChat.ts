@@ -1,4 +1,5 @@
 import { allowReply, denyReply, type AllowReply, type DenyReply, type ToolInput } from './approval'
+import { FEATURE_PROPOSAL_INSTRUCTIONS } from './featureProposal'
 import { pathKey } from './findings'
 import { dirnameOf } from './pathParts'
 
@@ -20,13 +21,19 @@ export interface MainChatLaunch {
   cliArgs: string[]
 }
 
-/** What the main chat's process starts with: read access to the digest's folder and every feature worktree, and read tools only. */
+/** What the main chat's process starts with: read access to the digest's folder and every feature worktree, and read tools only, and the rules for proposing a feature appended to its system prompt (so a resumed chat has them too). */
 export function mainChatLaunch(digestFile: string, worktrees: readonly string[]): MainChatLaunch {
   const addDirs: string[] = []
   for (const dir of [dirnameOf(digestFile), ...worktrees]) if (!addDirs.some((d) => pathKey(d) === pathKey(dir))) addDirs.push(dir)
   return {
     addDirs,
-    cliArgs: [`--tools=${READ_ONLY_TOOLS.join(',')}`, `--disallowedTools=${NEVER_TOOLS.join(',')}`, '--strict-mcp-config', '--setting-sources=project']
+    cliArgs: [
+      `--tools=${READ_ONLY_TOOLS.join(',')}`,
+      `--disallowedTools=${NEVER_TOOLS.join(',')}`,
+      '--strict-mcp-config',
+      '--setting-sources=project',
+      `--append-system-prompt=${FEATURE_PROPOSAL_INSTRUCTIONS}`
+    ]
   }
 }
 
@@ -36,7 +43,7 @@ export function mainChatFirstPrompt(digestFile: string): string {
     'You are the main chat of Command Center. You answer questions about the features the user is building; you never act.',
     `The feature digest, kept current by the app, is at ${digestFile}. Read it before answering.`,
     "Each feature in it has a Read: line naming its .scratch folder: read that feature's spec, tickets and progress notes when asked for detail.",
-    'You can only read files. You cannot write, run commands, or start, stop or complete a feature; say so if asked to.'
+    'You can only read files. You cannot write, run commands, or stop, complete, reopen or delete a feature; say so if asked to. You may propose a feature, as your instructions describe, but only the user can start it.'
   ].join('\n')
 }
 

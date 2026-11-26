@@ -23,6 +23,21 @@ const feature = (over: Partial<DigestFeature> = {}): DigestFeature => ({
 const server = (status: FeatureServerView['status'], name = 'web'): FeatureServerView => ({ name, port: 4100, status, terminalId: 't' })
 const stageOf = (stage: 'Grilling' | 'Spec' | 'Tickets' | 'Building' | 'Testing' | 'Completed', done = 0, total = 0): FeatureStageView => ({ missing: false, stage, done, total })
 
+const blockLines = (): string[] => [
+  '## dark-mode',
+  '- Workspace: app (dark-mode)',
+  '- Stage: Building',
+  '- Tickets: 1/3 done',
+  '- Session: idle',
+  '- Account: Work',
+  '- Rate limit: no',
+  '- Last test result: none yet',
+  '- Servers: not started',
+  `- Worktree: ${WT}`,
+  `- Read: ${join(WT, '.scratch', 'dark-mode')}`,
+  ''
+]
+
 describe('feature digest', () => {
   it.each(['Grilling', 'Spec', 'Tickets', 'Building', 'Testing'] as const)('names the %s stage with tickets done out of total', (stage) => {
     const text = digestBody([feature({ stage: stageOf(stage, 2, 5) })])
@@ -44,6 +59,26 @@ describe('feature digest', () => {
     const text = digestBody([feature({ name: 'a', accountName: 'Work' }), feature({ name: 'b', accountName: 'Personal' })])
     expect(text).toContain('- Account: Work')
     expect(text).toContain('- Account: Personal')
+  })
+
+  it('lists the workspace labels in a Workspaces section after the feature blocks', () => {
+    const text = digestBody([feature()], ['app', 'app · dark-mode'])
+    const section = text.slice(text.indexOf('# Workspaces'))
+    expect(section).toContain(['- app', '- app · dark-mode', ''].join('\n'))
+    expect(text.indexOf('## dark-mode')).toBeLessThan(text.indexOf('# Workspaces'))
+  })
+
+  it('keeps every per-feature block exactly as it was, whatever the workspace list says', () => {
+    const features = [feature(), feature({ name: 'b', completedAt: 5 })]
+    const before = digestBody(features)
+    expect(digestBody(features, ['one', 'two']).startsWith(before.slice(0, before.indexOf('# Workspaces')))).toBe(true)
+    expect(before.slice(0, before.indexOf('# Workspaces'))).toBe(
+      ['# Features in progress', '', ...blockLines(), '# Completed', '', '- b (app (dark-mode), Work)', '', ''].join('\n')
+    )
+  })
+
+  it('says so when there are no workspaces', () => {
+    expect(digestBody([])).toContain('No workspaces.')
   })
 
   it('says a rate limited account is rate limited, with its reset time', () => {

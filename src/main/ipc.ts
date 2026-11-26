@@ -35,7 +35,7 @@ import { isTeleportedSession } from './claude/teleport'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { contextReport, readListedFile, startTotals, writeListedFile } from './context/service'
-import { addWorktree, branchTaken, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
+import { addWorktree, branchTaken, fileInBranch, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
 import { createFeatureStore } from './features/store'
 import { featureAccount } from './features/account'
 import { killRunningInstalls, runInstall } from './features/install'
@@ -50,10 +50,11 @@ import { createPreviewConfigStore } from './previewConfig/store'
 import { beginPreviewDraft, discardPreviewDraft, readPreviewDraftFile, sweepStalePreviewDrafts } from './previewConfig/draftFile'
 import { createStageService, type StageService } from './features/stageService'
 import { rateLimitOf, type DigestFeature } from './features/digest'
+import { workspaceOptions } from '../shared/workspaceLabel'
 import { createDigestWriter, type DigestWriter } from './features/digestWriter'
 import { readTestFlowsFolder } from './testFlow/settings'
-import { createFeature, discardFeature, type CreateDeps } from './features/create'
-import type { FeatureRecord, NewFeatureRequest } from '../shared/features'
+import { createFeature, discardFeature, preflightFeature, writeNewFile, type CreateDeps } from './features/create'
+import type { FeatureRecord, NewFeatureRequest, PreflightRequest, PreflightResult } from '../shared/features'
 import type { PreviewConfig } from '../shared/previewConfig'
 import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
@@ -271,6 +272,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       isRepo: isGitRepo,
       mainBranch,
       branchTaken,
+      fileInBranch,
       addWorktree,
       removeNewWorktree
     },
@@ -289,6 +291,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     runInstall,
     installing: (name, running) => sendAll(IPC.FEATURES_INSTALLING, { name, running }),
     pathExists: (path) => fs.access(path).then(() => true, () => false),
+    writeNewFile,
     now: () => Date.now()
   }
   featureStages = createStageService({
@@ -310,6 +313,13 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     if (result.ok) workspacesChanged()
     featureStages?.changed()
     return result
+  })
+  ipcMain.handle(IPC.FEATURES_PREFLIGHT, (_e, request: PreflightRequest): Promise<PreflightResult> => {
+    const text = (v: unknown): v is string => typeof v === 'string'
+    if (!request || !text(request.workspaceId) || !text(request.name) || !text(request.description) || (request.brief !== undefined && !text(request.brief))) {
+      return Promise.resolve({ ok: false, error: 'The proposal could not be checked.' })
+    }
+    return preflightFeature(featureDeps, request)
   })
   const previewConfigFor = async (feature: FeatureRecord): Promise<PreviewConfig | null> => {
     for (const id of sourceCandidates(feature, await workspaces.list())) {
@@ -416,9 +426,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
   ipcMain.handle(IPC.FEATURES_DISCARD, async (_e, name: string, workspaceId: string) => {
     const source = (await workspaces.list()).find((w) => w.id === workspaceId)
-    if (source) await discardFeature(featureDeps, name, source.path)
+    const left = source ? await discardFeature(featureDeps, name, source.path) : [`the feature ${name} with its worktree and workspace entry (its source workspace was not found, so nothing was undone)`]
     workspacesChanged()
     featureStages?.changed()
+    return left
   })
 
   const sidebarGroups = createSidebarGroupsStore(app.getPath('userData'))
@@ -445,9 +456,11 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   })
 
   ipcMain.handle(IPC.REPO_IDENTITIES_LIST, () => repoIdentities.list())
-  ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, (_e, key: string, name: string) =>
-    repoIdentities.setDisplayName(key, name)
-  )
+  ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, async (_e, key: string, name: string) => {
+    const views = await repoIdentities.setDisplayName(key, name)
+    featureDigest?.changed()
+    return views
+  })
   ipcMain.handle(IPC.REPO_IDENTITIES_SET_ICON, (_e, key: string, icon: unknown) => repoIdentities.setIcon(key, icon))
   ipcMain.handle(IPC.REPO_IDENTITIES_CHOOSE_IMAGE, async (event, key: string) => {
     const options: Electron.OpenDialogOptions = {
@@ -515,6 +528,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   usage.start()
   featureDigest = createDigestWriter({
     file: featureDigestFile(),
+    workspaceLabels: async () => workspaceOptions(listed(await workspaces.list()), await repoIdentities.list()).map((o) => o.label),
     features: async (): Promise<DigestFeature[]> => {
       const [features, allWorkspaces, allProfiles, stages] = await Promise.all([featureStore.list(), workspaces.list(), profiles.list(), featureStages?.snapshot() ?? {}])
       const servers = serverRunner.all()
