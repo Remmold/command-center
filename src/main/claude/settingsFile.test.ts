@@ -25,6 +25,21 @@ describe('applyPatch', () => {
     })
   })
 
+  it('removes an object its last key was removed from, and its parent when that empties too, but keeps an empty object it did not touch', () => {
+    const before = text({
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' }, 'claude-sonnet-5': { effortLevel: 'low', other: 1 } },
+      kept: {}
+    })
+    const one = applyPatch(before, null, { set: {}, remove: ['modelSettings.claude-opus-5-5.effortLevel', 'modelSettings.claude-sonnet-5.effortLevel'] })
+    expect(one).toEqual({ ok: true, text: text({ modelSettings: { 'claude-sonnet-5': { other: 1 } }, kept: {} }) })
+
+    const last = applyPatch(text({ modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }, kept: {} }), null, {
+      set: {},
+      remove: ['modelSettings.claude-opus-5-5.effortLevel']
+    })
+    expect(last).toEqual({ ok: true, text: text({ kept: {} }) })
+  })
+
   it('returns the patched keys Claude changed since the base was read, and applies nothing', () => {
     const base = { model: 'sonnet', permissions: { allow: ['Read'] }, theme: 'dark' }
     const onDisk = text({ model: 'haiku', permissions: { allow: ['Read', 'Bash(git status)'] }, theme: 'light' })

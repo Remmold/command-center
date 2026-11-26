@@ -86,15 +86,20 @@ function setAt(settings: SettingsObject, path: string, value: unknown): void {
   at[last] = value
 }
 
+/** Deletes the key, then each object above it that this left empty, so no `{}` stays behind. */
 function removeAt(settings: SettingsObject, path: string): void {
   const segments = pathKeys(path)
-  const last = segments.pop() as string
-  let at: unknown = settings
-  for (const segment of segments) {
-    if (!isSettingsObject(at)) return
-    at = at[segment]
+  const parents: SettingsObject[] = [settings]
+  for (const segment of segments.slice(0, -1)) {
+    const next = parents[parents.length - 1][segment]
+    if (!isSettingsObject(next)) return
+    parents.push(next)
   }
-  if (isSettingsObject(at)) delete at[last]
+  for (let depth = segments.length - 1; depth >= 0; depth--) {
+    if (!(segments[depth] in parents[depth])) return
+    delete parents[depth][segments[depth]]
+    if (depth > 0 && Object.keys(parents[depth]).length > 0) return
+  }
 }
 
 /** A copy of the settings with the patch applied; new keys go at the end. */
