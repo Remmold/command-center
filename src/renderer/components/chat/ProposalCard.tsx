@@ -21,7 +21,7 @@ function Field({ label, children, error = false }: { label: string; children: st
   )
 }
 
-/** A feature the main chat proposes: its four parts in full, and where it stands. Starting it comes with ticket 02. */
+/** A feature the main chat proposes: its four parts in full, and where it stands. */
 function ProposalCard({ proposal, state }: { proposal: FeatureProposal; state: ProposalState }) {
   const { proposals } = useToolContext()
   const workspace = useMemo(() => resolveWorkspace(proposal.workspace, proposals?.options ?? []), [proposal.workspace, proposals])

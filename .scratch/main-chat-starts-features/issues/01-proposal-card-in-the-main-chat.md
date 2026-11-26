@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] A shared module holds the proposal format: a fenced block tagged `feature-proposal` in an assistant reply, four labelled parts (workspace, name, description, brief), written with a four-backtick fence so a brief may contain fenced code. One parser and one instructions text, from the same module.
 - [x] The main chat's rules (may propose, never claims to have started anything, one proposal at a time, point at the Go button, asks which workspace when it is unclear, read-only otherwise) are added to its launch arguments as an appended system prompt, so a chat resumed from before this feature has them. The first prompt keeps the digest pointer.
