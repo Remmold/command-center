@@ -11,5 +11,7 @@
 - [ ] The runner waits for the ready check for up to 60 seconds, and reports Starting, Ready or Failed per server. A failed or timed-out server shows its output and a Retry.
 - [ ] The feature row shows the servers' state (all Ready, Starting, Failed) and has Start servers and Stop servers actions. Stopping frees no ports; the feature keeps them.
 - [ ] Two features, of one project or of two, never get the same port, even when started at once.
+- [ ] A feature finds its preview config through its source workspace (ticket 03 keys configs by the workspace picked in New feature; a feature record holds the worktree's own workspace id): map back through the repo group or store the source id on the record.
+- [ ] Ticket 03's install step runs on the feature's account environment too (it uses the plain cleaned environment today, so an account-bound registry login is not seen), and shows that an install is running while it runs.
 - [ ] Vitest: allocator (range, skip taken, skip bound, keep stable, exhausted), runner states with a fake server (ready, never ready at 60 seconds with a short test timeout, fails at start), command template, environment names the feature's profile.
 - [ ] No new UI suite scenario.
