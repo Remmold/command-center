@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HOOK_EVENTS, addHook, changeHook, hookChangeText, hooksLeftOut, otherLayerGroups, readHookEvents, retype, type HookGroup } from './hooks'
+import { HOOK_EVENTS, addHook, changeHook, defaultTimeout, hookChangeText, hookEvent, hooksLeftOut, otherLayerGroups, readHookEvents, retype, takesIf, type HookGroup } from './hooks'
 import { isEditableStatusLine } from './statusLine'
 import schema from './fixtures/claude-code-settings.schema.json'
 
@@ -17,11 +17,24 @@ const base = {
   }
 }
 
+/** Events the hooks docs list that the schema snapshot doesn't have yet. */
+const HOOKS_DOCS_ONLY = ['PreSkillShellCommand', 'PreModelSwitch', 'PostModelSwitch']
+
 describe('hook events', () => {
   it('explains every event the schema documents, once', () => {
     const documented = Object.keys((schema as unknown as { properties: { hooks: { properties: Record<string, unknown> } } }).properties.hooks.properties)
-    expect(HOOK_EVENTS.map((e) => e.name).sort()).toEqual([...documented].sort())
+    expect(HOOK_EVENTS.map((e) => e.name).sort()).toEqual([...documented, ...HOOKS_DOCS_ONLY].sort())
     for (const event of HOOK_EVENTS) expect(event.label, event.name).toMatch(/^[A-Z]/)
+  })
+
+  it('knows the skill shell and model switch events, which run no prompt or agent hooks', () => {
+    const hooks = { PreSkillShellCommand: [{ matcher: 'Bash|PowerShell', hooks: [lint] }], PreModelSwitch: [{ matcher: 'claude-opus-5', hooks: [lint] }], PostModelSwitch: [{ hooks: [notify] }] }
+    expect(hooksLeftOut(hooks)).toEqual([])
+    for (const name of HOOKS_DOCS_ONLY) expect(hookEvent(name)?.types, name).toEqual(['command', 'http', 'mcp_tool'])
+    expect(takesIf(hookEvent('PreSkillShellCommand'))).toBe(true)
+    expect(takesIf(hookEvent('PreModelSwitch'))).toBe(false)
+    expect(defaultTimeout('command', 'PreModelSwitch')).toBe(30)
+    expect(defaultTimeout('command', 'PreSkillShellCommand')).toBe(600)
   })
 })
 
@@ -57,12 +70,12 @@ describe('hooks the editor cannot show', () => {
   it('leaves out an unknown event and an event with a hook of an unknown type or field, so they show under Other keys', () => {
     const hooks = {
       PreToolUse: [{ matcher: 'Agent', hooks: [guard] }],
-      PreModelSwitch: [{ hooks: [lint] }],
+      FutureEvent: [{ hooks: [lint] }],
       Stop: [{ hooks: [{ type: 'command', command: 'x', future: true }] }],
       SessionEnd: [{ hooks: [{ type: 'webhook', url: 'x' }] }],
       Notification: 'not a list'
     }
-    expect(hooksLeftOut(hooks)).toEqual([['PreModelSwitch'], ['Stop'], ['SessionEnd'], ['Notification']])
+    expect(hooksLeftOut(hooks)).toEqual([['FutureEvent'], ['Stop'], ['SessionEnd'], ['Notification']])
     expect(readHookEvents(hooks).map((e) => e.event)).toEqual(['PreToolUse'])
     expect(hooksLeftOut([1])).toEqual([[]])
   })

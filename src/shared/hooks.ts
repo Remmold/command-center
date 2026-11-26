@@ -14,14 +14,18 @@ export interface HookEvent {
   description: string
   /** Null when the event ignores matchers. */
   matcher: MatcherSpec | null
-  /** The event runs only command hooks. */
-  commandOnly?: boolean
+  /** The hook types the event runs, when not all of them. */
+  types?: readonly HookType[]
 }
 
 const TOOL: MatcherSpec = { subject: 'the tool', examples: 'Bash, Edit|Write or mcp__memory__.*' }
 const AGENT_TYPE: MatcherSpec = { subject: 'the subagent', examples: 'Explore or Plan' }
 const COMPACT_TRIGGER: MatcherSpec = { subject: 'how it started', examples: 'manual or auto' }
 const MCP_SERVER: MatcherSpec = { subject: 'the MCP server', examples: 'the server’s name' }
+const SKILL_SHELL: MatcherSpec = { subject: 'the tool', examples: 'Bash|PowerShell' }
+const NEW_MODEL: MatcherSpec = { subject: 'the model it switches to', examples: 'claude-opus-5 or .*opus.*' }
+const COMMAND_ONLY: readonly HookType[] = ['command']
+const NO_MODEL_HOOKS: readonly HookType[] = ['command', 'http', 'mcp_tool']
 
 /** Every event the settings schema documents, in the order a chat meets them. */
 export const HOOK_EVENTS: readonly HookEvent[] = [
@@ -30,6 +34,7 @@ export const HOOK_EVENTS: readonly HookEvent[] = [
   { name: 'InstructionsLoaded', label: 'When a CLAUDE.md or rules file loads', description: 'Runs each time a CLAUDE.md or .claude/rules file is read into the chat. It can only watch, for logging.', matcher: { subject: 'why it loaded', examples: 'session_start, nested_traversal or path_glob_match' } },
   { name: 'UserPromptSubmit', label: 'When you send a prompt', description: 'Runs before Claude reads your prompt. It can add context to it or block it.', matcher: null },
   { name: 'UserPromptExpansion', label: 'When a command expands into a prompt', description: 'Runs when a slash command or skill you typed becomes a prompt, before Claude reads it. It can block it.', matcher: { subject: 'the command', examples: 'a command or skill name' } },
+  { name: 'PreSkillShellCommand', label: 'Before a skill runs a shell command', description: 'Runs before a shell command written into a skill or custom command runs as it loads. It can block the command; Before a tool runs doesn’t see these.', matcher: SKILL_SHELL, types: NO_MODEL_HOOKS },
   { name: 'PreToolUse', label: 'Before a tool runs', description: 'Runs before Claude uses a tool. It can allow, block or change the call.', matcher: TOOL },
   { name: 'PermissionRequest', label: 'When Claude asks permission', description: 'Runs when a tool call would ask for your approval. It can answer for you.', matcher: TOOL },
   { name: 'PermissionDenied', label: 'When auto mode refuses a tool', description: 'Runs when the auto mode safety check denies a tool call.', matcher: TOOL },
@@ -47,21 +52,25 @@ export const HOOK_EVENTS: readonly HookEvent[] = [
   { name: 'TeammateIdle', label: 'When a teammate is about to go idle', description: 'Runs when a teammate in an agent team is about to stop. Exit code 2 keeps it working.', matcher: null },
   { name: 'PreCompact', label: 'Before the chat is compacted', description: 'Runs before Claude summarises the chat to free up context.', matcher: COMPACT_TRIGGER },
   { name: 'PostCompact', label: 'After the chat is compacted', description: 'Runs after Claude summarised the chat.', matcher: COMPACT_TRIGGER },
+  { name: 'PreModelSwitch', label: 'Before you switch models', description: 'Runs before a model switch you or a client asked for, such as /model. It can block the switch; switches Claude makes itself skip it.', matcher: NEW_MODEL, types: NO_MODEL_HOOKS },
+  { name: 'PostModelSwitch', label: 'After the model changes', description: 'Runs after the chat’s model changed, also when Claude changed it itself, such as on resume. What it prints is added to the chat.', matcher: NEW_MODEL, types: NO_MODEL_HOOKS },
   { name: 'Elicitation', label: 'When an MCP server asks you something', description: 'Runs when an MCP server asks for your input during a tool call. It can answer for you.', matcher: MCP_SERVER },
   { name: 'ElicitationResult', label: 'After you answer an MCP server', description: 'Runs after you answered an MCP server, before the answer goes back to it.', matcher: MCP_SERVER },
-  { name: 'ConfigChange', label: 'When a settings or skill file changes', description: 'Runs when a settings file or skill changes during a chat. Exit code 2 refuses the change, except for organisation settings.', matcher: { subject: 'the file', examples: 'user_settings, project_settings, local_settings or skills' }, commandOnly: true },
+  { name: 'ConfigChange', label: 'When a settings or skill file changes', description: 'Runs when a settings file or skill changes during a chat. Exit code 2 refuses the change, except for organisation settings.', matcher: { subject: 'the file', examples: 'user_settings, project_settings, local_settings or skills' }, types: COMMAND_ONLY },
   { name: 'CwdChanged', label: 'When the working folder changes', description: 'Runs each time the chat’s working folder changes, such as after a cd.', matcher: null },
   { name: 'DirectoryAdded', label: 'When a folder is added to the chat', description: 'Runs after a folder is added mid-chat, such as with /add-dir.', matcher: { subject: 'how it was added', examples: 'slash_command or register_repo_root' } },
   { name: 'FileChanged', label: 'When a watched file changes', description: 'Runs when a file it watches is created, changed or deleted.', matcher: { subject: 'the file names to watch', examples: '.envrc|.env' } },
-  { name: 'WorktreeCreate', label: 'When a worktree is made', description: 'Makes the worktree instead of git: it must print the new folder’s full path, and a failure stops the worktree.', matcher: null, commandOnly: true },
-  { name: 'WorktreeRemove', label: 'When a worktree is removed', description: 'Runs when a worktree is removed as a chat or subagent ends, to clean up. It can’t stop the removal.', matcher: null, commandOnly: true },
+  { name: 'WorktreeCreate', label: 'When a worktree is made', description: 'Makes the worktree instead of git: it must print the new folder’s full path, and a failure stops the worktree.', matcher: null, types: COMMAND_ONLY },
+  { name: 'WorktreeRemove', label: 'When a worktree is removed', description: 'Runs when a worktree is removed as a chat or subagent ends, to clean up. It can’t stop the removal.', matcher: null, types: COMMAND_ONLY },
   { name: 'SessionEnd', label: 'When a chat ends', description: 'Runs as a chat ends, to clean up or log. It can’t stop the chat ending.', matcher: { subject: 'why it ended', examples: 'clear, logout, prompt_input_exit or other' } }
 ]
 
 export const hookEvent = (name: string): HookEvent | undefined => HOOK_EVENTS.find((e) => e.name === name)
 
-/** Whether the event is a tool call's, the only kind a hook's `if` filter counts on. */
-export const takesIf = (event: HookEvent | undefined): boolean => event?.matcher === TOOL
+export const runsType = (event: HookEvent | undefined, type: string): boolean => !event?.types || event.types.some((t) => t === type)
+
+/** Whether the event is a tool call's or a skill's shell command, the only kinds a hook's `if` filter counts on. */
+export const takesIf = (event: HookEvent | undefined): boolean => event?.matcher === TOOL || event?.matcher === SKILL_SHELL
 
 export type HookType = 'command' | 'prompt' | 'agent' | 'http' | 'mcp_tool'
 
@@ -266,7 +275,7 @@ export function hookSummary(hook: Hook): string {
   }
 }
 
-const QUICK_EVENTS: Record<string, number> = { UserPromptSubmit: 30, MessageDisplay: 10 }
+const QUICK_EVENTS: Record<string, number> = { UserPromptSubmit: 30, PreModelSwitch: 30, PostModelSwitch: 30, MessageDisplay: 10 }
 
 /** The seconds Claude waits for a hook of the type on the event when it sets no time limit. */
 export function defaultTimeout(type: HookType, event: string): number {

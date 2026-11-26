@@ -163,11 +163,11 @@ describe('the other keys of a file', () => {
 
   it('include the hook events and status lines their editors can’t show', () => {
     const file = {
-      hooks: { PreToolUse: [{ matcher: 'Agent', hooks: [{ type: 'command', command: 'guard', timeout: 10 }] }], PreModelSwitch: [{ hooks: [] }] },
+      hooks: { PreToolUse: [{ matcher: 'Agent', hooks: [{ type: 'command', command: 'guard', timeout: 10 }] }], FutureEvent: [{ hooks: [] }] },
       statusLine: { type: 'command', command: 'node statusline.js', padding: 2 },
       subagentStatusLine: { type: 'command', command: 'x', padding: 2 }
     }
-    expect(otherKeys(file)).toEqual(['hooks.PreModelSwitch', 'subagentStatusLine'])
+    expect(otherKeys(file)).toEqual(['hooks.FutureEvent', 'subagentStatusLine'])
   })
 
   it('take a split object whole when it is not an object, so its value is still shown', () => {

@@ -19,6 +19,7 @@ import {
   readHookEvents,
   requiredFields,
   retype,
+  runsType,
   setMatcher,
   takesIf,
   typeLabel,
@@ -55,7 +56,7 @@ const NOT_SET = ''
 const eventWords = (event: HookEvent | undefined): string | undefined =>
   event && (event.matcher ? `${event.description} A matcher filters on ${event.matcher.subject}, such as ${event.matcher.examples}.` : event.description)
 
-const typeChoices = (event: HookEvent | undefined) => (event?.commandOnly ? HOOK_TYPES.filter((t) => t.value === 'command') : HOOK_TYPES)
+const typeChoices = (event: HookEvent | undefined) => HOOK_TYPES.filter((t) => runsType(event, t.value))
 
 const timeoutText = (hook: Hook, event: string): string =>
   typeof hook.timeout === 'number' ? `Time limit ${hook.timeout} s` : `Time limit ${defaultTimeout(hook.type as HookType, event)} s (default)`
@@ -194,7 +195,7 @@ function HookRow({ event, hook, onChange, disabled, unparsedKey, onUnparsed, fro
           {hook.async === true && <span>In the background</span>}
           {typeof hook.if === 'string' && <span>Only for {hook.if}</span>}
           {typeof hook.if === 'string' && !takesIf(known) && <Badge tone="quiet-warning">Never runs here: its filter counts only on tool events</Badge>}
-          {known?.commandOnly && type !== 'command' && <Badge tone="quiet-warning">This event runs only command hooks</Badge>}
+          {!runsType(known, type) && <Badge tone="quiet-warning">Claude doesn’t run a {typeLabel(type)} hook on this event</Badge>}
           {isCommandCenterPermissionHook(hook) && <Badge tone="quiet">Command Center’s old permission hook: the app takes it out of this file when it starts</Badge>}
           {from && <Badge tone="quiet">From {from}</Badge>}
         </>
@@ -343,7 +344,10 @@ function HookBuilder({ hooks, disabled, onAdd }: { hooks: Record<string, HookGro
             disabled={disabled}
             onChange={(next) => {
               setEventName(next)
-              if (hookEvent(next)?.commandOnly) setType('command')
+              if (!runsType(hookEvent(next), type)) {
+                setType('command')
+                setValues({})
+              }
             }}
           />
           <Button variant="secondary" disabled={disabled || !ready} onClick={add}>
