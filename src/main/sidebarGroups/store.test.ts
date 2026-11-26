@@ -21,6 +21,7 @@ const LAYOUT = {
     default: {
       ungrouped: ['pane:n'],
       ungroupedFolded: false,
+      ungroupedAt: 0,
       groups: [{ id: 'g1', name: 'Today', folded: true, chats: ['pane:a', 'session:b'] }],
       known: { 'pane:a': { seen: 3, session: 's-a' }, 'pane:n': { seen: 3 }, 'session:b': { seen: 2, session: 'b' } }
     }
@@ -46,7 +47,7 @@ describe('sidebar groups store', () => {
 
   it('drops malformed parts and refuses to save a non-layout', async () => {
     await fs.writeFile(join(root, 'sidebar-groups.json'), JSON.stringify({ accounts: { default: { groups: [{ id: 'g', name: 'G', chats: ['x', 'x', 4] }, { name: 'no id' }], ungrouped: ['x'] } } }))
-    expect(await store.load()).toEqual({ accounts: { default: { ungrouped: ['x'], ungroupedFolded: false, groups: [{ id: 'g', name: 'G', folded: false, chats: [] }], known: {} } } })
+    expect(await store.load()).toEqual({ accounts: { default: { ungrouped: ['x'], ungroupedFolded: false, ungroupedAt: 1, groups: [{ id: 'g', name: 'G', folded: false, chats: [] }], known: {} } } })
     await expect(store.save('nope')).rejects.toThrow()
   })
 })

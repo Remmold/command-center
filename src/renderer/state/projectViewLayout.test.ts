@@ -3,6 +3,7 @@ import type { ProjectView } from './projectViewsStore'
 import {
   LAYOUT_VERSION,
   chatOnScreen,
+  dropShellTabs,
   migrateLayout,
   openShellTab,
   persistableView,
@@ -50,19 +51,28 @@ describe('IDE panels per workspace', () => {
   })
 })
 
-describe('opening a shell on request', () => {
-  it('adds a focused tab carrying the extra env and shows the shell drawer', () => {
-    const opened = openShellTab(view('a'), { id: 't1', kind: 'pwsh', env: { CLAUDE_CONFIG_DIR: 'C:/p/work' } })
-    expect(opened.shellTabs).toEqual([
-      { id: 't1', label: 'pwsh', kind: 'pwsh', env: { CLAUDE_CONFIG_DIR: 'C:/p/work' } }
-    ])
+describe('Shell drawer tabs', () => {
+  it('shows a terminal as the focused tab and opens the drawer', () => {
+    const opened = openShellTab(view('a'), 't1')
+    expect(opened.shellTabs).toEqual(['t1'])
     expect(opened.activeShellTabId).toBe('t1')
     expect(opened.shellDrawerOpen).toBe(true)
+    expect(openShellTab(opened, 't1').shellTabs).toEqual(['t1'])
   })
 
-  it('numbers a second shell of the same kind', () => {
-    const twice = openShellTab(openShellTab(view('a'), { id: 't1', kind: 'pwsh' }), { id: 't2', kind: 'pwsh' })
-    expect(twice.shellTabs.map((t) => t.label)).toEqual(['pwsh', 'pwsh 2'])
+  it('drops a tab, focusing the last one left, and closes the drawer when none are left', () => {
+    const two = openShellTab(openShellTab(view('a'), 't1'), 't2')
+    const one = dropShellTabs(two, (id) => id === 't2')
+    expect(one).toMatchObject({ shellTabs: ['t1'], activeShellTabId: 't1', shellDrawerOpen: true })
+    expect(dropShellTabs(two, (id) => id === 't1')).toMatchObject({ shellTabs: ['t2'], activeShellTabId: 't2' })
+    expect(dropShellTabs(one, () => true)).toMatchObject({ shellTabs: [], activeShellTabId: null, shellDrawerOpen: false })
+    expect(dropShellTabs(one, () => false)).toBe(one)
+  })
+
+  it('forgets tabs saved as whole shells before terminals moved to main', () => {
+    const saved = { views: { a: { shellTabs: [{ id: 't1', label: 'pwsh', kind: 'pwsh' }], activeShellTabId: 't1' } } }
+    migrateLayout(saved, 12)
+    expect(saved.views.a).toMatchObject({ shellTabs: [], activeShellTabId: null })
   })
 })
 

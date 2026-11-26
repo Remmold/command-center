@@ -14,7 +14,8 @@ import { ObservedService } from './observed/service'
 import { observedRefreshMs } from '../shared/observedRefresh'
 import * as apps from './apps/store'
 import { appManager } from './apps/manager'
-import { ptyManager } from './pty/manager'
+import { createPtyManager } from './pty/nodePty'
+import { TerminalRegistry } from './pty/terminalRegistry'
 import { claudeManager } from './claude/manager'
 import { holdQuit } from './quitHold'
 import { listProjectFiles } from './files/lister'
@@ -59,7 +60,8 @@ import {
   type ScreenFocus,
   type SessionInitEnvelope,
   type SessionRename,
-  type RenameResult
+  type RenameResult,
+  type CreateTerminalRequest
 } from '../shared/types'
 import type { RepoIdentityService } from './repoIdentity/service'
 import type { StartWithWindowsControl } from './tray/startWithWindows'
@@ -67,6 +69,9 @@ import { onZoomChanged, stepZoom, zoomLevel } from './zoom/service'
 import { isZoomStep } from '../shared/zoom'
 
 let unsubscribers: Array<() => void> = []
+
+/** The app's one terminal pool (ADR 0006). */
+export const terminals = new TerminalRegistry(createPtyManager())
 
 /** A stuck taskkill must never keep the app from quitting. */
 const QUIT_KILL_LIMIT_MS = 3000
@@ -329,41 +334,28 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     })
   )
 
-  // PTY (shells only — claude no longer goes through here)
-  ipcMain.handle(
-    IPC.PTY_SPAWN,
-    (
-      _e,
-      paneId: string,
-      kind: Parameters<typeof ptyManager.spawn>[1],
-      cwd: string,
-      env?: Record<string, string>
-    ) => ptyManager.spawn(paneId, kind, cwd, env)
-  )
-  ipcMain.on(IPC.PTY_WRITE, (_e, paneId: string, data: string) =>
-    ptyManager.write(paneId, data)
-  )
-  ipcMain.on(IPC.PTY_RESIZE, (_e, paneId: string, cols: number, rows: number) =>
-    ptyManager.resize(paneId, cols, rows)
-  )
-  ipcMain.on(IPC.PTY_KILL, (_e, paneId: string) => ptyManager.kill(paneId))
+  // Terminals: one pool in main; the Shell drawer and the Processes view attach (ADR 0006)
+  ipcMain.handle(IPC.TERMINALS_LIST, () => terminals.list())
+  ipcMain.handle(IPC.TERMINALS_CREATE, (_e, request: CreateTerminalRequest) => terminals.create(request))
+  ipcMain.handle(IPC.TERMINALS_ATTACH, (_e, id: string) => terminals.attach(id))
+  ipcMain.on(IPC.TERMINALS_WRITE, (_e, id: string, data: string) => terminals.write(id, data))
+  ipcMain.on(IPC.TERMINALS_RESIZE, (_e, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows))
+  ipcMain.on(IPC.TERMINALS_RENAME, (_e, id: string, label: string) => terminals.rename(id, label))
+  ipcMain.handle(IPC.TERMINALS_RESTART, (_e, id: string) => terminals.restart(id))
+  ipcMain.handle(IPC.TERMINALS_STOP, (_e, id: string) => terminals.stop(id))
+  ipcMain.on(IPC.TERMINALS_CLOSE, (_e, id: string) => void terminals.close(id))
 
   unsubscribers.push(
-    ptyManager.onData((paneId, data) => {
+    terminals.onData((id, data) => {
       for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) win.webContents.send(IPC.PTY_DATA, { paneId, data })
+        if (!win.isDestroyed()) win.webContents.send(IPC.TERMINALS_DATA, { id, data })
       }
     })
   )
   unsubscribers.push(
-    ptyManager.onExit((paneId, exitCode, signal) => {
+    terminals.onChanged((list) => {
       for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed())
-          win.webContents.send(IPC.PTY_EXIT, {
-            paneId,
-            exitCode,
-            signal: signal ?? null
-          })
+        if (!win.isDestroyed()) win.webContents.send(IPC.TERMINALS_CHANGED, list)
       }
     })
   )
@@ -579,12 +571,12 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   holdQuit(
     app,
     () => {
-      ptyManager.killAll()
+      const terminalsClosed = terminals.closeAll()
       const killed = claudeManager.stopAll()
       claudeManager.setIncomingHandlerFactory(null)
       for (const u of unsubscribers) u()
       unsubscribers = []
-      return killed
+      return Promise.all([terminalsClosed, killed]).then(() => undefined)
     },
     QUIT_KILL_LIMIT_MS
   )

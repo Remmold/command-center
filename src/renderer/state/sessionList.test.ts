@@ -4,6 +4,8 @@ import type { ObservedSession, SessionStatus, SessionStatusEntry, Workspace } fr
 import {
   accountChats,
   accountSections,
+  guestAccount,
+  moveTargets,
   listFold,
   repoFoldKey,
   seedSource,
@@ -16,7 +18,7 @@ import {
   type ListFold,
   type SessionListInput
 } from './sessionList'
-import { createGroup, moveChat, placeChats, seedLayout, setFolded } from './sidebarGroups'
+import { createGroup, moveChat, moveGroup, placeChats, seedLayout, setFolded } from './sidebarGroups'
 import type { Account } from './accounts'
 
 const workspace = (id: string, repoName: string, worktreeTag = ''): Workspace => ({
@@ -210,7 +212,10 @@ describe('account sections', () => {
     const orphan = { ...workspace('or', 'orphan'), profileId: 'gone' }
     const list = sessionList(input({ workspaces: [...WORKSPACES, orphan], hosted: [hosted('x', 'orphan one', 0, 'or')] }))
     expect(accountSections(list, ACCOUNTS, NO_LAYOUT).map((s) => [s.account.profileId, s.rows[0].title])).toEqual([['default', 'orphan one']])
-    expect(accountChats(list, ACCOUNTS)).toEqual([{ profileId: 'default', chats: [{ id: 'pane:x' }] }])
+    expect(accountChats(list, ACCOUNTS)).toEqual([
+      { profileId: 'default', chats: [{ id: 'pane:x' }] },
+      { profileId: 'p-work', chats: [] }
+    ])
   })
 
   it('numbers rows for Alt+1..9 in the order shown, skipping collapsed sections', () => {
@@ -304,12 +309,28 @@ describe('own groups', () => {
     expect(waitingRows(accountSections(list(), ACCOUNTS, layout)).map((r) => r.title)).toEqual(['main waiting', 'ct waiting'])
   })
 
-  it('shows Ungrouped first with a new chat, and hides it when empty', () => {
+  it('shows a new chat at the top of Ungrouped, which is last, and hides Ungrouped when empty', () => {
     const more = list({ hosted: [...sessions.hosted!, hosted('new', 'brand new', 0, 'cc')] })
     const layout = placeChats(seeded(), accountChats(more, ACCOUNTS), 0)
     const [home] = accountSections(more, ACCOUNTS, layout)
-    expect(home.groups.map((g) => [g.id, g.rows.map((r) => r.title)])[0]).toEqual([UNGROUPED, ['brand new']])
+    expect(home.groups.map((g) => g.name)).toEqual(['mmorpg', 'command-center', 'Ungrouped'])
+    expect(home.groups[2].rows.map((r) => r.title)).toEqual(['brand new'])
+    expect(home.rows.at(-1)?.title).toBe('brand new')
     expect(accountSections(list(), ACCOUNTS, seeded())[0].groups.map((g) => g.id)).not.toContain(UNGROUPED)
+  })
+
+  it('shows Ungrouped where it was moved, a new chat at its top', () => {
+    const moved = moveGroup(seeded(), 'default', UNGROUPED, 'repo:key-command-center')
+    const withOld = placeChats(moved, accountChats(list({ hosted: [...sessions.hosted!, hosted('old', 'older', 0, 'cc')] }), ACCOUNTS), 0)
+    const more = list({ hosted: [...sessions.hosted!, hosted('old', 'older', 0, 'cc'), hosted('new', 'brand new', 0, 'cc')] })
+    const [home] = accountSections(more, ACCOUNTS, placeChats(withOld, accountChats(more, ACCOUNTS), 0))
+    expect(home.groups.map((g) => [g.name, g.rows.map((r) => r.title)])).toEqual([
+      ['mmorpg', ['main waiting', 'shard idle']],
+      ['Ungrouped', ['brand new', 'older']],
+      ['command-center', ['cc idle', 'cc vscode']]
+    ])
+    const unplaced = accountSections(more, ACCOUNTS, withOld)[0]
+    expect(unplaced.groups[1].rows.map((r) => r.title)).toEqual(['brand new', 'older'])
   })
 
   it('shows an empty own group so a chat can be dropped in, but hides it during a search; matches stay under their group', () => {
@@ -342,6 +363,49 @@ describe('own groups', () => {
     expect(home.groups.map((g) => g.needsYou)).toEqual([1, 0])
     expect(work.groups.map((g) => g.needsYou)).toEqual([0, 1])
     expect(waitingBadge(home.groups[0].needsYou, home.groups[0].name, false)).toEqual({ text: '1 waiting', tooltip: '1 chat in mmorpg is waiting on you' })
+  })
+
+  const asGuest = () => moveChat(seeded(), 'p-work', 'pane:c1', { group: 'repo:key-continuum', before: null })
+
+  it('shows a guest only under the account it sits in, with every row in exactly one place', () => {
+    const sections = accountSections(list(), ACCOUNTS, asGuest())
+    expect(shape(sections)).toEqual([
+      ['Personal', [['mmorpg', ['main waiting', 'shard idle']], ['command-center', ['cc vscode']]]],
+      ['Work', [['nordkastell', ['nk idle']], ['continuum', ['ct waiting', 'ct running', 'cc idle']]]]
+    ])
+    const keys = sections.flatMap((s) => s.rows.map((r) => r.key))
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(keys).toHaveLength(list().flatMap((g) => g.rows).length)
+  })
+
+  it('placing leaves a guest where it is, and gives an account holding only guests its section', () => {
+    const only = list({ hosted: [hosted('c1', 'cc idle', 5, 'cc')], observed: [] })
+    const layout = placeChats(asGuest(), accountChats(only, ACCOUNTS), 0)
+    expect(shape(accountSections(only, ACCOUNTS, layout))).toEqual([['Work', [['nordkastell', []], ['continuum', ['cc idle']]]]])
+    expect(accountChats(only, ACCOUNTS)).toEqual([
+      { profileId: 'default', chats: [{ id: 'pane:c1' }] },
+      { profileId: 'p-work', chats: [] }
+    ])
+  })
+
+  it('tags a row as a guest with its own account while it sits under another, and not once it is back or its workspace moved there', () => {
+    const tag = (layout: SidebarLayout, over: Partial<SessionListInput> = {}) =>
+      accountSections(list(over), ACCOUNTS, layout).flatMap((s) => s.rows.flatMap((r) => (guestAccount(r, s, ACCOUNTS) ? [[s.account.name, r.title, guestAccount(r, s, ACCOUNTS)!.name]] : [])))
+    expect(tag(seeded())).toEqual([])
+    expect(tag(asGuest())).toEqual([['Work', 'cc idle', 'Personal']])
+    expect(tag(moveChat(asGuest(), 'default', 'pane:c1', { group: UNGROUPED, before: null }))).toEqual([])
+    expect(tag(asGuest(), { workspaces: WS.map((w) => (w.id === 'cc' ? onWork(w) : w)) })).toEqual([['Personal', 'cc vscode', 'Work']])
+  })
+
+  it('offers every account’s own groups and Ungrouped to move to, in their order, the current account first', () => {
+    const layout = moveGroup(createGroup(seeded(), 'p-work', { id: 'later', name: 'Later' }), 'p-work', UNGROUPED, 'repo:key-nordkastell')
+    const names = (profileId: string) => moveTargets(layout, ACCOUNTS, profileId).map((t) => [t.account.name, t.groups.map((g) => g.name)])
+    expect(names('p-work')).toEqual([
+      ['Work', ['Ungrouped', 'nordkastell', 'continuum', 'Later']],
+      ['Personal', ['mmorpg', 'command-center', 'Ungrouped']]
+    ])
+    expect(names('default')[0][0]).toBe('Personal')
+    expect(moveTargets({ accounts: {} }, ACCOUNTS, 'default').map((t) => t.groups.map((g) => g.id))).toEqual([[UNGROUPED], [UNGROUPED]])
   })
 
   it('ignores account folds without account headers, and opens every group while searching', () => {

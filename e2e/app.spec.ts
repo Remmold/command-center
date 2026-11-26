@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { ElectronApplication } from '@playwright/test'
 import { OFFSCREEN_POSITION } from '../src/main/testWindow'
 import { BASIC_REPLY, userLines } from './common'
-import { evaluateMain, expect, newChatIn, prompt, send, startSession, test, useScript } from './harness'
+import { chatPane, evaluateMain, expect, newChatIn, prompt, send, sessionList, shellDrawer, startSession, test, useScript } from './harness'
 
 test.describe('zoom and auto-update', () => {
   test.use({ script: 'slow', env: { CC_UPDATE_IDLE_MS: '1500' } })
@@ -22,7 +22,7 @@ test.describe('zoom and auto-update', () => {
     await useScript(app, 'basic')
     const zoomPercent = (electronApp: ElectronApplication): Promise<number> =>
       evaluateMain(electronApp, ({ BrowserWindow }) => Math.round(BrowserWindow.getAllWindows()[0].webContents.getZoomFactor() * 100), null)
-    const list = page.getByRole('navigation', { name: 'Sessions' })
+    const list = sessionList(page)
     const show = page.getByRole('button', { name: 'Show sessions' })
 
     await test.step('starts at 110%, steps one level per key from the prompt box, resets with Ctrl+0', async () => {
@@ -66,7 +66,7 @@ test.describe('zoom and auto-update', () => {
 
     await test.step('a shell steps the zoom and takes Ctrl+B too; Settings → General steps it', async () => {
       await page.keyboard.press('Control+`')
-      const terminal = page.locator('.xterm-helper-textarea').first()
+      const terminal = shellDrawer(page).locator('.xterm-helper-textarea').first()
       await expect(terminal).toBeAttached()
       await terminal.focus()
       await page.keyboard.press('Control+=')
@@ -100,9 +100,9 @@ test.describe('zoom and auto-update', () => {
       expect(await evaluateMain(again.app, ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds().x, null)).toBe(OFFSCREEN_POSITION.x)
       await again.page.keyboard.press('Control+2')
       await expect(again.page.getByRole('button', { name: 'Show sessions' })).toBeVisible()
-      await expect(again.page.getByRole('navigation', { name: 'Sessions' })).toBeHidden()
+      await expect(sessionList(again.page)).toBeHidden()
       await again.page.keyboard.press('Control+b')
-      await expect(again.page.getByRole('navigation', { name: 'Sessions' })).toBeVisible()
+      await expect(sessionList(again.page)).toBeVisible()
       await again.page.keyboard.press('Control+Shift+J')
       const chat = again.page.locator('[data-chat-pane]')
       await expect(chat.getByText('say hello')).toBeVisible()
@@ -162,7 +162,7 @@ test.describe('zoom and auto-update', () => {
         await expect(dialog).toHaveCount(0)
         expect(await restartRequests(app)).toBe(0)
 
-        await page.locator('[data-chat-pane]').getByRole('button', { name: 'Stop' }).click()
+        await chatPane(page).getByRole('button', { name: 'Stop' }).click()
         await expect(page.getByText('Interrupted', { exact: true })).toBeVisible()
         await expect(pill).toBeVisible()
         await expect.poll(() => restartRequests(app), { timeout: 10_000 }).toBe(1)

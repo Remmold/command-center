@@ -31,6 +31,7 @@ import { deliver, takeChatSends, takeSendRequest, takeStartRequest, useChatSends
 import { committedLength, thinkingDurations } from './liveItems'
 import { applyDeltas, frameBatch, landAfterWaitingDeltas, type FrameBatch, type StreamDelta } from './streamDeltas'
 import { useFollowOutput } from './useFollowOutput'
+import { LastPromptStrip } from './LastPromptStrip'
 import { noteScroll, saveDraft, savedDraft, savedScroll } from '../../state/restoreStore'
 import { useChatItemsStore } from '../../state/chatItemsStore'
 import { useChatMediaStore } from '../../state/chatMediaStore'
@@ -202,7 +203,7 @@ export const ChatView = memo(function ChatView({
   const remoteControlShown = remoteControlOffered(remoteControlAvailable, remoteControl)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const { toBottom } = useFollowOutput(scrollRef, contentRef, { saved: savedScroll(paneId), onScrolled: (s) => noteScroll(paneId, s) })
+  const { toBottom, leave: leaveBottom } = useFollowOutput(scrollRef, contentRef, { saved: savedScroll(paneId), onScrolled: (s) => noteScroll(paneId, s) })
   const initialItemsCountRef = useRef(items.length)
   const focusInputRef = useRef<(() => void) | null>(null)
   const paneRef = useRef<HTMLDivElement | null>(null)
@@ -819,6 +820,7 @@ export const ChatView = memo(function ChatView({
   return (
     <div ref={paneRef} data-chat-pane className="flex h-full min-h-0 flex-col" onKeyDown={handlePaneKeyDown}>
       <HostedMediaTabs paneId={paneId} cwd={cwd} agents={agents} transcriptOnly={transcriptOnly}>
+        <LastPromptStrip items={items} held={held} scrollRef={scrollRef} onLeaveBottom={leaveBottom} />
         <div ref={scrollRef} tabIndex={-1} data-transcript="" className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none">
           {/* Positioned so the screen-reader status below stays inside the scroll box instead of stretching the Layer stack. */}
           <div ref={contentRef} className="relative">

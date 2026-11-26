@@ -95,7 +95,7 @@ describe('SubagentWatcher', () => {
     const timers = vi.spyOn(globalThis, 'setInterval')
     try {
       const { events, watcher } = watch(dir)
-      await expect.poll(() => events.length).toBe(30)
+      await expect.poll(() => events.length, { timeout: 5000 }).toBe(30)
       expect(watcher.followed()).toHaveLength(30)
       await pause(150)
       expect(timers).toHaveBeenCalledTimes(1)

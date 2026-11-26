@@ -1,4 +1,5 @@
-import { Menu, MenuItem, type MenuItemConstructorOptions } from 'electron'
+import type { MenuItem } from 'electron'
+import { replaceMenuItems } from '../appMenu'
 import type { ZoomStep } from '../../shared/zoom'
 import { stepZoom } from './service'
 
@@ -17,20 +18,8 @@ function zoomOf(item: MenuItem): (typeof MENU_ZOOM)[string] | undefined {
  * Their keys stay the renderer's, so the accelerators are only shown.
  */
 export function routeMenuZoom(): void {
-  const menu = Menu.getApplicationMenu()
-  if (!menu) return
-  const items = menu.items.map((top): MenuItem | MenuItemConstructorOptions => {
-    const sub = top.submenu?.items
-    if (!sub?.some((i) => zoomOf(i))) return top
-    return {
-      label: top.label,
-      submenu: Menu.buildFromTemplate(
-        sub.map((i) => {
-          const zoom = zoomOf(i)
-          return zoom ? { label: i.label, accelerator: zoom.accelerator, registerAccelerator: false, click: () => void stepZoom(zoom.step) } : i
-        })
-      )
-    }
+  replaceMenuItems((item) => {
+    const zoom = zoomOf(item)
+    return zoom ? { label: item.label, accelerator: zoom.accelerator, registerAccelerator: false, click: () => void stepZoom(zoom.step) } : null
   })
-  Menu.setApplicationMenu(Menu.buildFromTemplate(items))
 }

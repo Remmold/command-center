@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASIC_REPLY, FAST_OBSERVED, transcriptLine } from './common'
-import { expect, send, startSession, test, transcriptsOf, useScript, type FakeLog } from './harness'
+import { expect, send, sessionList, startSession, test, transcriptsOf, useScript, type FakeLog } from './harness'
 
 const OLD_SESSION = '11111111-1111-4111-8111-111111111111'
 const UNNAMED_SESSION = '22222222-2222-4222-8222-222222222222'
@@ -61,7 +61,7 @@ test.describe('session history and VS Code sessions in Work', () => {
       const transcripts = transcriptsOf(launched)
       seedPastSessions(transcripts)
       await startSession(launched)
-      const list = page.getByRole('navigation', { name: 'Sessions' })
+      const list = sessionList(page)
 
       await send(page, 'fix the login bug today please')
       await expect(list.getByText('Fix the login bug today', { exact: true })).toBeVisible()
@@ -164,7 +164,7 @@ test.describe('session history and VS Code sessions in Work', () => {
       await expect(badge).toHaveAttribute('title', /Unknown account: no running VS Code session/)
       mkdirSync(join(launched.configDir, 'sessions'), { recursive: true })
       writeFileSync(join(launched.configDir, 'sessions', `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: OBSERVED_ID, status: 'idle', updatedAt: Date.now() }))
-      await expect(badge).toHaveAccessibleName('Account: Personal · Claude Ultra', { timeout: 15_000 })
+      await expect(badge).toHaveAccessibleName('Account: Personal · Ultra', { timeout: 15_000 })
       await expect(badge).toHaveAttribute('title', /From the running VS Code session/)
       const scroller = pane.locator('.overflow-y-auto').first()
       const fits = async (): Promise<boolean> => {

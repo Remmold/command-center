@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ObservedSession, Workspace } from '../../../shared/types'
 import { DEFAULT_PROFILE_NAME } from '../../../shared/profiles'
 import { vscodeFolderFor } from '../../../shared/vscodeMatch'
-import { useMinuteClock } from '../../hooks/useMinuteClock'
 import { accountMismatch, chatAccountView, hostedChatAccount, observedChatAccount, type ChatAccount } from '../../state/chatAccount'
 import { chatKey, usePublishChatAccount } from '../../state/chatAccountStore'
 import { useAccountSwitchStore } from '../../state/accountSwitchStore'
@@ -10,26 +9,19 @@ import { useProfilesStore } from '../../state/profilesStore'
 import { useChatProcess } from '../../state/sessionInitStore'
 import { usePaneStatus } from '../../state/sessionStatusStore'
 import { useUsageStore } from '../../state/usageStore'
-import { useUsageEntries } from '../../state/useUsageEntries'
 import { useAccounts } from '../../state/useAccounts'
-import { useAccountColor } from '../../state/useAccountColor'
 import { useVsCodeMatchStore } from '../../state/vscodeMatchStore'
-import { UsageMeters } from '../AccountUsage'
 import { AccountBadge } from '../ui/AccountBadge'
 import { Button } from '../ui/Button'
 import { NoticeLine } from '../ui/NoticeLine'
 import { AccountSwitcher } from './AccountSwitcher'
 
-/** The badge's label, colour, bars and hover text for a resolved chat account. */
-function useBadge(chat: ChatAccount) {
+/** The badge's label, qualifier and hover text for a resolved chat account. */
+function useBadgeView(chat: ChatAccount) {
   const accounts = useAccounts()
   const usage = useUsageStore((s) => s.byProfile)
   const usageAccounts = useMemo(() => Object.fromEntries(Object.entries(usage).map(([id, u]) => [id, u.account])), [usage])
-  const view = useMemo(() => chatAccountView(chat, accounts, usageAccounts), [chat, accounts, usageAccounts])
-  const color = useAccountColor(chat.profileId)
-  const entry = useUsageEntries(null, useMinuteClock()).find((e) => e.profileId === chat.profileId)
-  const meters = entry && entry.bars.length > 0 ? <UsageMeters entry={entry} /> : null
-  return { view, color, meters }
+  return useMemo(() => chatAccountView(chat, accounts, usageAccounts), [chat, accounts, usageAccounts])
 }
 
 function useHostedChatAccount(workspace: Workspace, paneId: string): ChatAccount {
@@ -44,7 +36,7 @@ function useHostedChatAccount(workspace: Workspace, paneId: string): ChatAccount
 export function HostedAccountBadge({ workspace, paneId }: { workspace: Workspace; paneId: string }) {
   const chat = useHostedChatAccount(workspace, paneId)
   const profiles = useProfilesStore((s) => s.profiles)
-  const { view, color, meters } = useBadge(chat)
+  const view = useBadgeView(chat)
   const mismatch = accountMismatch(chat, workspace.profileId, profiles) !== null
   return (
     <AccountSwitcher workspace={workspace} paneId={paneId}>
@@ -54,12 +46,10 @@ export function HostedAccountBadge({ workspace, paneId }: { workspace: Workspace
           onClick={menu.toggle}
           pressed={menu.open}
           ariaLabel={`Account: ${view.label}`}
-          color={color}
           label={view.label}
           qualifier={view.qualifier}
           tooltip={mismatch ? `${view.tooltip}\nThis workspace is now set to another account` : view.tooltip}
           warning={mismatch}
-          meters={meters}
         />
       )}
     </AccountSwitcher>
@@ -130,6 +120,6 @@ export function ObservedAccountBadge({ workspace, sessionId, status }: { workspa
     [liveDir, folders, workspace.path, profiles]
   )
   usePublishChatAccount(chatKey({ kind: 'observed', workspaceId: workspace.id, sessionId }), chat.profileId)
-  const { view, color, meters } = useBadge(chat)
-  return <AccountBadge ariaLabel={`Account: ${view.label}`} color={color} label={view.label} qualifier={view.qualifier} tooltip={view.tooltip} meters={meters} />
+  const view = useBadgeView(chat)
+  return <AccountBadge ariaLabel={`Account: ${view.label}`} label={view.label} qualifier={view.qualifier} tooltip={view.tooltip} />
 }

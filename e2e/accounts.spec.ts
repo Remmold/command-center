@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Locator } from '@playwright/test'
 import { BASIC_REPLY } from './common'
-import { delayClaudeStart, evaluateMain, expect, newChatIn, send, startSession, test } from './harness'
+import { delayClaudeStart, evaluateMain, expect, newChatIn, send, sessionList, startSession, test } from './harness'
 
 function folderUri(path: string): string {
   const [drive, ...rest] = path.split(/[\\/]/)
@@ -158,7 +158,7 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await send(page, 'say hello')
   await expect(page.getByText(BASIC_REPLY)).toBeVisible()
 
-  const list = page.getByRole('navigation', { name: 'Sessions' })
+  const list = sessionList(page)
   const homeSection = list.getByRole('region', { name: 'Personal · Ultra' })
   const workSection = list.getByRole('region', { name: 'Work · Ultra' })
   const workWaiting = workSection.getByRole('listitem').filter({ has: page.getByRole('img', { name: 'Your turn' }) })
@@ -190,8 +190,8 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await expect(repoHeader).toHaveText(/Ungrouped$/)
 
   await page.keyboard.press('Control+3')
-  await page.getByRole('tab', { name: 'By account' }).click()
   const board = page.getByTestId('view-board')
+  await board.getByRole('tab', { name: 'By account' }).click()
   await expect(board.getByRole('region', { name: homeLabel }).getByText('Home ticket')).toBeVisible()
   await expect(board.getByRole('region', { name: workLabel }).getByText('Work ticket')).toBeVisible()
 
@@ -200,7 +200,7 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await expect(page.getByRole('region', { name: workLabel }).getByRole('listitem', { name: 'work-repo' })).toBeVisible()
   await expect(page.getByRole('region', { name: homeLabel }).getByRole('listitem', { name: 'e2e-workspace' })).toBeVisible()
 
-  await test.step('own groups: made from the account menu, a chat dragged into one, a group dragged above another, a drop on another account refused, Alt+Shift+Up into the group above, all kept after a reload', async () => {
+  await test.step('own groups: made from the account menu above Ungrouped, Ungrouped dragged to the top, a chat dragged into one, a group dragged above another, a chat dragged under another account as a tagged guest and moved back by menu, Alt+Shift+Up into the group above, all kept after a reload', async () => {
     await page.keyboard.press('Control+2')
     const homeChat = homeSection.getByRole('listitem')
     const groupNames = () => homeSection.locator('section').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
@@ -222,6 +222,8 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
     await page.getByRole('menuitem', { name: 'Personal', exact: true }).click()
     await homeSection.getByRole('textbox', { name: 'Group name' }).fill('Later')
     await page.keyboard.press('Enter')
+    await expect.poll(groupNames).toEqual(['Today', 'Later', 'Ungrouped'])
+    await drag(header('Ungrouped'), header('Today'), 'top')
     await expect.poll(groupNames).toEqual(['Ungrouped', 'Today', 'Later'])
 
     await drag(homeChat, header('Today'), 'top')
@@ -229,8 +231,16 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
     await drag(header('Later'), header('Today'), 'top')
     await expect.poll(groupNames).toEqual(['Later', 'Today'])
     await drag(homeChat, workWaiting, 'top')
-    await expect(workSection.getByRole('listitem')).toHaveCount(1)
+    const guest = workSection.getByRole('listitem').filter({ has: page.getByTitle('Runs on Personal · Ultra') })
+    await expect(workSection.getByRole('listitem')).toHaveCount(2)
+    await expect(guest).toHaveText(/Personal/)
+    await expect(homeSection).toBeHidden()
+    await guest.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Move to group' }).click()
+    await page.getByRole('menuitem', { name: 'Today', exact: true }).click()
     await expect(homeSection.getByRole('region', { name: 'Today' }).getByRole('listitem')).toHaveCount(1)
+    await expect(workSection.getByRole('listitem')).toHaveCount(1)
+    await expect(homeChat.getByTitle('Runs on Personal · Ultra')).toHaveCount(0)
     await homeChat.getByRole('button').first().focus()
     await page.keyboard.press('Alt+Shift+ArrowUp')
     await expect(homeSection.getByRole('region', { name: 'Later' }).getByRole('listitem')).toHaveCount(1)
@@ -319,7 +329,7 @@ test('a VS Code profile’s folder is offered, adopted logged in, never written 
     await expect.poll(() => log.initializedIn(workspace)).toBe(true)
     await expect(workBadge).not.toContainText('pending')
     await delayClaudeStart(app, 0)
-    await expect(workBadge).toHaveAccessibleName('Account: Work · Claude Team')
+    await expect(workBadge).toHaveAccessibleName('Account: Work · Team')
     await expect(workBadge).toHaveAttribute('title', /Email: me@work\.example\nOrganization: Work AB\nConfig folder: .*claude-work\nReported by Claude/)
 
     const workPill = page.getByRole('button', { name: /^Account & usage for (Work|me@work\.example)$/ })
@@ -332,7 +342,7 @@ test('a VS Code profile’s folder is offered, adopted logged in, never written 
     await expect(page.getByText(BASIC_REPLY)).toBeVisible()
 
     await page.evaluate(() => (globalThis as unknown as { api: RendererApi }).api.usage.refresh('p-work'))
-    const list = page.getByRole('navigation', { name: 'Sessions' })
+    const list = sessionList(page)
     const workHeader = list.getByRole('button', { name: /^Work · Team/ })
     await expect(workHeader.getByRole('meter', { name: 'Work Weekly (7 day)' })).toHaveAttribute('aria-valuenow', '69', { timeout: 15_000 })
     await expect(workHeader).toContainText('69%')
@@ -365,7 +375,7 @@ test('a VS Code profile’s folder is offered, adopted logged in, never written 
     await moveWorkspaceTo(configDir)
     await page.getByRole('button', { name: 'Restart on Personal' }).click()
     await expect.poll(() => resumedOn(configDir)).toBe(true)
-    await expect(page.getByRole('button', { name: 'Account: Personal · Claude Ultra' })).not.toContainText('pending')
+    await expect(page.getByRole('button', { name: 'Account: Personal · Ultra' })).not.toContainText('pending')
     await expect(page.getByText(/^Running on/)).toBeHidden()
 
     await moveWorkspaceTo(work)

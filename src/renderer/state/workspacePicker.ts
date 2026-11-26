@@ -15,6 +15,9 @@ export interface WorkspacePick {
   repoName: string
 }
 
+/** The repo's display name, with the worktree's tag. */
+export const workspaceLabel = (workspace: Workspace, repoName: string): string => (workspace.worktreeTag ? `${repoName} · ${workspace.worktreeTag}` : repoName)
+
 const byRepoThenTag = (a: WorkspacePick, b: WorkspacePick): number =>
   a.repoName.localeCompare(b.repoName) || a.workspace.worktreeTag.localeCompare(b.workspace.worktreeTag)
 

@@ -29,82 +29,76 @@ function preferExe(hits: string[]): string | undefined {
   return hits.find((p) => p.toLowerCase().endsWith('.exe')) ?? hits[0]
 }
 
-/**
- * Escape a path for PowerShell single-quoted string:
- *   ' → ''
- */
+function found(name: string): string | undefined {
+  const hit = preferExe(where(name))
+  return hit && existsSync(hit) ? hit : undefined
+}
+
+/** Escape a path for a PowerShell single-quoted string: ' → '' */
 function psEscape(path: string): string {
   return path.replace(/'/g, "''")
 }
 
+/** Quote for a POSIX shell: wraps in single quotes, each ' becoming '\''. */
+function shSingleQuote(text: string): string {
+  return `'${text.replace(/'/g, `'\''`)}'`
+}
+
 /**
- * Returns the command + args to launch the given shell, forcing the initial
- * working directory to `cwd`. Shell profiles love to call Set-Location, so
- * we use explicit per-shell flags instead of relying on node-pty's spawn cwd.
+ * The Windows arguments for `kind`, starting in `cwd`. Shell profiles love to call
+ * Set-Location, so each shell gets explicit flags rather than relying on the spawn cwd.
+ * With a `command` the shell runs it through its run-a-command form and exits after it.
  */
-export function locateShell(kind: ShellKind, cwd?: string): ShellLaunch {
+export function shellArgs(kind: ShellKind, cwd?: string, command?: string): string[] {
+  if (kind === 'pwsh') {
+    const args = ['-NoLogo']
+    if (cwd) args.push('-WorkingDirectory', cwd)
+    if (command) args.push('-Command', command)
+    return args
+  }
+  if (kind === 'powershell') {
+    const enter = cwd ? `Set-Location -LiteralPath '${psEscape(cwd)}'` : ''
+    if (command) return ['-NoLogo', '-Command', enter ? `${enter}; ${command}` : command]
+    return enter ? ['-NoLogo', '-NoExit', '-Command', enter] : ['-NoLogo', '-NoExit']
+  }
+  if (kind === 'cmd') {
+    const enter = cwd ? `cd /D "${cwd}"` : ''
+    if (command) return ['/c', enter ? `${enter} && ${command}` : command]
+    // /K keeps cmd open after the `cd`.
+    return enter ? ['/K', enter] : []
+  }
+  const enter = cwd ? `cd ${shSingleQuote(cwd)} && ` : ''
+  if (command) return ['--login', '-c', `${enter}${command}`]
+  return cwd ? ['--login', '-i', '-c', `${enter}exec bash -i`] : ['--login', '-i']
+}
+
+/** The command and arguments that launch `kind` in `cwd`, running `command` when given. */
+export function locateShell(kind: ShellKind, cwd?: string, command?: string): ShellLaunch {
   if (process.platform === 'win32') {
     if (kind === 'pwsh') {
-      const pwsh = preferExe(where('pwsh'))
-      if (pwsh && existsSync(pwsh)) {
-        const args = ['-NoLogo']
-        if (cwd) args.push('-WorkingDirectory', cwd)
-        return { command: pwsh, args }
-      }
-      // Fall back to Windows PowerShell.
-      const ps = preferExe(where('powershell'))
-      if (ps && existsSync(ps)) {
-        const args = ['-NoLogo', '-NoExit']
-        if (cwd) args.push('-Command', `Set-Location -LiteralPath '${psEscape(cwd)}'`)
-        return { command: ps, args }
-      }
+      const pwsh = found('pwsh')
+      if (pwsh) return { command: pwsh, args: shellArgs('pwsh', cwd, command) }
+      const ps = found('powershell')
+      if (ps) return { command: ps, args: shellArgs('powershell', cwd, command) }
       throw new ShellNotFoundError('pwsh')
     }
     if (kind === 'powershell') {
-      const ps = preferExe(where('powershell'))
-      if (ps && existsSync(ps)) {
-        const args = ['-NoLogo', '-NoExit']
-        if (cwd) args.push('-Command', `Set-Location -LiteralPath '${psEscape(cwd)}'`)
-        return { command: ps, args }
-      }
+      const ps = found('powershell')
+      if (ps) return { command: ps, args: shellArgs('powershell', cwd, command) }
       throw new ShellNotFoundError('powershell')
     }
-    if (kind === 'cmd') {
-      const cmdExe = process.env.COMSPEC ?? 'cmd.exe'
-      if (cwd) {
-        // /K keeps cmd open; we then `cd /D "<cwd>"` before the prompt.
-        return { command: cmdExe, args: ['/K', `cd /D "${cwd}"`] }
-      }
-      return { command: cmdExe, args: [] }
-    }
-    if (kind === 'bash') {
-      const bash = preferExe(where('bash'))
-      if (bash && existsSync(bash)) {
-        // git-bash on Windows: cd before interactive prompt.
-        const args = ['--login', '-i']
-        if (cwd) {
-          // Use -c to pre-cd, then exec bash itself interactively.
-          const safe = cwd.replace(/'/g, `'\\''`)
-          return {
-            command: bash,
-            args: ['--login', '-i', '-c', `cd '${safe}' && exec bash -i`]
-          }
-        }
-        return { command: bash, args }
-      }
-      throw new ShellNotFoundError('bash')
-    }
-  } else {
-    if (kind === 'bash' || kind === 'cmd') {
-      const shell = process.env.SHELL ?? '/bin/bash'
-      if (cwd) {
-        const safe = cwd.replace(/'/g, `'\\''`)
-        return { command: shell, args: ['-c', `cd '${safe}' && exec '${shell}'`] }
-      }
-      return { command: shell, args: [] }
-    }
-    const hit = preferExe(where(kind))
-    if (hit && existsSync(hit)) return { command: hit, args: [] }
+    if (kind === 'cmd') return { command: process.env.COMSPEC ?? 'cmd.exe', args: shellArgs('cmd', cwd, command) }
+    const bash = found('bash')
+    if (bash) return { command: bash, args: shellArgs('bash', cwd, command) }
+    throw new ShellNotFoundError('bash')
   }
+  if (kind === 'bash' || kind === 'cmd') {
+    const shell = process.env.SHELL ?? '/bin/bash'
+    const enter = cwd ? `cd ${shSingleQuote(cwd)} && ` : ''
+    if (command) return { command: shell, args: ['-c', `${enter}${command}`] }
+    return cwd ? { command: shell, args: ['-c', `${enter}exec ${shSingleQuote(shell)}`] } : { command: shell, args: [] }
+  }
+  const hit = found(kind)
+  if (hit) return { command: hit, args: command ? ['-Command', command] : [] }
   throw new ShellNotFoundError(kind)
 }

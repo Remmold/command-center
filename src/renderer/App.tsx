@@ -3,7 +3,7 @@ import { TitleBar } from './components/TitleBar'
 import { DashboardView } from './components/dashboard/DashboardView'
 import { SettingsPage } from './components/settings/SettingsPage'
 import { WorkView } from './components/work/WorkView'
-import { useProjectViewsStore } from './state/projectViewsStore'
+import { initShellTabs, useProjectViewsStore } from './state/projectViewsStore'
 import { useAppsStore } from './state/appsStore'
 import { useUsageStore } from './state/usageStore'
 import { useApprovalsStore } from './state/approvalsStore'
@@ -11,8 +11,10 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
 import { ContextView } from './components/context/ContextView'
+import { ProcessesView } from './components/processes/ProcessesView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
 import { useBackgroundProcessesStore } from './state/backgroundProcessesStore'
+import { useTerminalsStore } from './state/terminalsStore'
 import { useSessionInitStore } from './state/sessionInitStore'
 import { useRemoteControlStore } from './state/remoteControlStore'
 import { useModelStore } from './state/modelStore'
@@ -72,6 +74,8 @@ export function App() {
     initSessionInit()
     initModels()
     useBackgroundProcessesStore.getState().init()
+    initShellTabs()
+    useTerminalsStore.getState().init()
     useRemoteControlStore.getState().init()
     useUpdateStore.getState().init()
     useZoomStore.getState().init()
@@ -145,6 +149,11 @@ export function App() {
         {appView === 'context' && (
           <div data-testid="view-context" className="absolute inset-0 z-30">
             <ContextView />
+          </div>
+        )}
+        {appView === 'processes' && (
+          <div data-testid="view-processes" className="absolute inset-0 z-30">
+            <ProcessesView />
           </div>
         )}
         <div

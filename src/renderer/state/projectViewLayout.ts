@@ -1,12 +1,14 @@
 import type { PtyKind } from '../../shared/types'
-import type { ProjectView, ShellTab } from './projectViewsStore'
+import type { ProjectView } from './projectViewsStore'
 
-export const LAYOUT_VERSION = 12
+export const LAYOUT_VERSION = 13
 
 interface SavedLayout {
   idePanelsOpen?: unknown
   shellDrawerOpen?: unknown
   bottomPanelOpen?: unknown
+  shellTabs?: unknown
+  activeShellTabId?: unknown
 }
 
 /** Mutates the saved views in place, like the store's other migration steps. */
@@ -16,6 +18,11 @@ export function migrateLayout(persisted: { views?: Record<string, SavedLayout> }
     if (typeof v.idePanelsOpen !== 'boolean') v.idePanelsOpen = false
     if (typeof v.shellDrawerOpen !== 'boolean') v.shellDrawerOpen = false
     delete v.bottomPanelOpen
+    // Tabs saved as whole shells name ptys that ended with the app that ran them.
+    if (Array.isArray(v.shellTabs) && v.shellTabs.some((t) => typeof t !== 'string')) {
+      v.shellTabs = []
+      v.activeShellTabId = null
+    }
   }
 }
 
@@ -41,29 +48,29 @@ export interface ShellOptions {
   env?: Record<string, string>
 }
 
-export interface ShellRequest extends ShellOptions {
-  id: string
-  kind: PtyKind
-}
-
-function nextShellLabel(existing: ShellTab[], kind: PtyKind): string {
-  const base = kind === 'pwsh' || kind === 'powershell' ? 'pwsh' : kind
-  const sameKind = existing.filter((t) => t.kind === kind).length
-  return sameKind === 0 ? base : `${base} ${sameKind + 1}`
-}
-
-export function openShellTab(view: ProjectView, request: ShellRequest): ProjectView {
-  const tab: ShellTab = {
-    id: request.id,
-    label: nextShellLabel(view.shellTabs, request.kind),
-    kind: request.kind,
-    ...(request.env ? { env: request.env } : {})
-  }
+/** Shows terminal `id` as the drawer's focused tab. */
+export function openShellTab(view: ProjectView, id: string): ProjectView {
   return {
     ...view,
-    shellTabs: [...view.shellTabs, tab],
-    activeShellTabId: tab.id,
+    shellTabs: view.shellTabs.includes(id) ? view.shellTabs : [...view.shellTabs, id],
+    activeShellTabId: id,
     shellDrawerOpen: true
+  }
+}
+
+/** Takes terminals off the drawer only; the terminals themselves keep running (ADR 0006). */
+export function dropShellTabs(view: ProjectView, gone: (id: string) => boolean): ProjectView {
+  const remaining = view.shellTabs.filter((id) => !gone(id))
+  if (remaining.length === view.shellTabs.length) return view
+  const activeShellTabId =
+    view.activeShellTabId !== null && remaining.includes(view.activeShellTabId)
+      ? view.activeShellTabId
+      : (remaining[remaining.length - 1] ?? null)
+  return {
+    ...view,
+    shellTabs: remaining,
+    activeShellTabId,
+    shellDrawerOpen: remaining.length === 0 ? false : view.shellDrawerOpen
   }
 }
 

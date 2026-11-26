@@ -144,4 +144,26 @@ describe('update controller', () => {
     updater.deliver('0.1.2')
     expect(seen).toEqual(['0.1.2'])
   })
+
+  it('a restart cancelled at the quit confirm neither installs nor marks the next launch as updated', async () => {
+    const updater = new FakeUpdater()
+    let answer = false
+    let marked = 0
+    const controller = createUpdateController({
+      updater, clock, version: '0.1.1', idleMs: 5 * MIN, checkEveryMs: 30 * MIN, autoRestart: false,
+      confirmRestart: async () => answer,
+      beforeRestart: () => marked++
+    })
+    updater.deliver('0.1.2')
+    expect(controller.restart(false)).toEqual({ kind: 'restart' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(updater.installs).toBe(0)
+    expect(marked).toBe(0)
+
+    answer = true
+    controller.restart(false)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(updater.installs).toBe(1)
+    expect(marked).toBe(1)
+  })
 })

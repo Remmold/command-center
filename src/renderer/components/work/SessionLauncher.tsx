@@ -16,7 +16,7 @@ import { renameHostedSession } from '../../state/sessionTitleSync'
 import { useToastStore } from '../../state/toastStore'
 import { useTakeOverStore, type TakeOverTarget } from '../../state/takeOverStore'
 import { useAccounts } from '../../state/useAccounts'
-import { workspacePicks } from '../../state/workspacePicker'
+import { workspaceLabel, workspacePicks } from '../../state/workspacePicker'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { repoDisplayName } from '../../../shared/repoIdentity'
 import { AccountTag } from '../AccountTag'
@@ -28,8 +28,6 @@ import { StatusDot } from '../ui/StatusDot'
 import { TextField } from '../ui/TextField'
 
 type FinalAction = Exclude<PickAction, { kind: 'show-all' }>
-
-const workspaceLabel = (workspace: Workspace, repoName: string): string => (workspace.worktreeTag ? `${repoName} · ${workspace.worktreeTag}` : repoName)
 
 const workspaceById = (id: string): Workspace | undefined => useWorkspacesStore.getState().workspaces.find((w) => w.id === id)
 

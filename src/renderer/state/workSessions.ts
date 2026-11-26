@@ -28,7 +28,7 @@ import {
   type SessionRow
 } from './sessionList'
 import { dayNumber, type SidebarLayout } from '../../shared/sidebarGroups'
-import { groupOf, placeChats, seedLayout, setFolded } from './sidebarGroups'
+import { groupOf, hostOf, placeChats, seedLayout, setFolded } from './sidebarGroups'
 import { useSidebarGroupsStore } from './sidebarGroupsStore'
 import { useProfilesStore } from './profilesStore'
 import { accountOf, type Account } from './accounts'
@@ -181,6 +181,8 @@ export interface SessionSections {
   headed: boolean
   /** The saved groups are still being read; the list shows nothing yet. */
   loading: boolean
+  /** The layout the sections show; null while loading. */
+  layout: SidebarLayout | null
 }
 
 /** The layout the list shows: the saved one (or, before any is saved, one seeded from the repo groups) with every chat placed. */
@@ -205,10 +207,10 @@ function sectionsOf(
   layout: SidebarLayout | null
 ): SessionSections {
   const headed = accounts.length > 1
-  if (!layout) return { sections: [], headed, loading: true }
+  if (!layout) return { sections: [], headed, loading: true, layout }
   const searching = search.trim() !== ''
   const groups = searching ? sessionList({ ...sources, search }) : all
-  return { sections: accountSections(groups, accounts, layout, searching), headed, loading: false }
+  return { sections: accountSections(groups, accounts, layout, searching), headed, loading: false, layout }
 }
 
 export function useSessionSections(): SessionSections {
@@ -259,9 +261,12 @@ export function changeLayout(change: (layout: SidebarLayout) => SidebarLayout): 
   if (next !== layout) useSidebarGroupsStore.getState().commit(next)
 }
 
-/** The account a row's chat sorts in. */
-function rowAccount(row: SessionRow): string {
-  return accountOf(currentAccounts(), row.workspace.profileId).profileId
+/** The account section a row sits in: where it is placed, else its own account. */
+function rowSection(row: SessionRow): string {
+  const layout = currentLayout()
+  const live = currentAccounts()
+  const host = layout && hostOf(layout, row.placeId)
+  return host && live.some((a) => a.profileId === host) ? host : accountOf(live, row.workspace.profileId).profileId
 }
 
 export interface ShownChats {
@@ -287,7 +292,7 @@ export function isShown(row: SessionRow, pair: ChatPair): boolean {
 }
 
 export function openRow(row: SessionRow, options?: OpenOptions): void {
-  const profileId = rowAccount(row)
+  const profileId = rowSection(row)
   useAccountSectionsStore.getState().expand(profileId)
   changeLayout((layout) => {
     const group = groupOf(layout, profileId, row.placeId)
