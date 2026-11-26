@@ -4,10 +4,10 @@
 
 **Blocked by:** 05
 
-**Status:** in-progress
+**Status:** resolved
 
-- [ ] A table of name and value for the edited layer's `env`, with the effective values for the workspace.
-- [ ] The name field autocompletes every documented variable name.
-- [ ] About 60–80 useful ones also carry a description and a value type (on/off, number, text) and show a typed input.
-- [ ] A value whose name contains KEY, TOKEN, SECRET or PASSWORD is masked until clicked to show.
-- [ ] Vitest: the environment catalog has unique names; masking applies by name.
+- [x] A table of name and value for the edited layer's `env`, with the effective values for the workspace.
+- [x] The name field autocompletes every documented variable name.
+- [x] About 60–80 useful ones also carry a description and a value type (on/off, number, text) and show a typed input.
+- [x] A value whose name contains KEY, TOKEN, SECRET or PASSWORD is masked until clicked to show.
+- [x] Vitest: the environment catalog has unique names; masking applies by name.
