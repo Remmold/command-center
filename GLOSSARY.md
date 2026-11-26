@@ -118,7 +118,7 @@ The one hosted session that belongs to a feature, started by New feature and lin
 _Avoid_: Sub-session, feature chat
 
 **New feature**:
-The dialog that starts a feature: Andreas picks a workspace and describes the feature. The app makes the feature's worktree, starts its feature session and sends it `/flow` with the description.
+The dialog that starts a feature: Andreas picks a workspace and describes the feature. The app makes the feature's worktree, starts its feature session and sends it `/flow` with the description. A **feature proposal** started from the main chat takes the same path, plus the starting brief.
 _Avoid_: Start flow, create ticket
 
 **Feature account**:
@@ -130,11 +130,19 @@ The git worktree and branch made for one feature, so two features of one repo ca
 _Avoid_: Sandbox, checkout
 
 **Main chat**:
-The one permanent hosted session pinned at the top of Work, for asking general questions about every feature in progress. It answers only; it never starts, stops or completes anything.
+The one permanent hosted session pinned at the top of Work, for asking general questions about every feature in progress and for planning new ones. It answers and proposes only: it can write a **feature proposal**, but the app starts the feature, and only when Andreas presses Go. It never stops or completes anything.
 _Avoid_: Conductor, assistant, master session
 
+**Feature proposal**:
+What the main chat writes when a plan is agreed: a workspace, a name, a description and a starting brief, shown in the chat as a card with a Go button. Nothing is made until Andreas presses Go. Only the newest card is live; an older one reads as superseded, or as Started when its feature exists.
+_Avoid_: Draft feature, request
+
+**Starting brief**:
+The agreed plan (goal, scope, out of scope, open questions, first steps) of a feature started from a proposal. It is saved as `brief.md` in the feature's `.scratch` folder and is the first thing the feature session reads.
+_Avoid_: Plan file, handoff
+
 **Feature digest**:
-The file the app keeps up to date for the main chat: each feature with its stage, tickets done out of total, session status, test result and server state.
+The file the app keeps up to date for the main chat: the workspaces it can propose a feature in, then each feature with its stage, tickets done out of total, session status, test result and server state.
 _Avoid_: Status report, summary file
 
 **Feature stage**:
