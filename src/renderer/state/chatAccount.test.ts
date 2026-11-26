@@ -97,14 +97,14 @@ describe('the badge words', () => {
   ]
   const usage = { 'p-work': { email: 'me@work.se', organization: 'Work AB' } }
 
-  it('names the account and the plan Claude reported, and says where that came from on hover', () => {
+  it('names the account and the plan Claude reported without its Claude prefix, and gives the full plan and its source on hover', () => {
     const chat = hostedChatAccount({
       process: { profileId: 'p-work', account: { email: 'me@work.se', organization: 'Work AB', subscriptionType: 'claude team' } },
       workspaceProfileId: 'p-work',
       profiles
     })
     expect(chatAccountView(chat, accounts, usage)).toEqual({
-      label: 'Work · Claude team',
+      label: 'Work · team',
       qualifier: null,
       tooltip: ['Work · Claude team', 'Email: me@work.se', 'Organization: Work AB', 'Config folder: C:\\Users\\me\\.claude-work', 'Reported by Claude'].join('\n')
     })

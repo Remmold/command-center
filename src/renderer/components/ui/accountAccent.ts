@@ -15,15 +15,6 @@ export const ACCENT_DOT: Record<AccountColor, string> = {
   red: 'bg-account-red'
 }
 
-export const ACCENT_EDGE: Record<AccountColor, string> = {
-  blue: 'border-l-account-blue',
-  orange: 'border-l-account-orange',
-  purple: 'border-l-account-purple',
-  teal: 'border-l-account-teal',
-  green: 'border-l-account-green',
-  red: 'border-l-account-red'
-}
-
 export const ACCENT_RING: Record<AccountColor, string> = {
   blue: 'ring-account-blue',
   orange: 'ring-account-orange',
@@ -31,4 +22,14 @@ export const ACCENT_RING: Record<AccountColor, string> = {
   teal: 'ring-account-teal',
   green: 'ring-account-green',
   red: 'ring-account-red'
+}
+
+/** A tag in an account's accent: tinted fill, accent text. */
+export const ACCENT_TAG: Record<AccountColor, string> = {
+  blue: 'bg-account-blue/15 text-account-blue',
+  orange: 'bg-account-orange/15 text-account-orange',
+  purple: 'bg-account-purple/15 text-account-purple',
+  teal: 'bg-account-teal/15 text-account-teal',
+  green: 'bg-account-green/15 text-account-green',
+  red: 'bg-account-red/15 text-account-red'
 }

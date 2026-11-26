@@ -5,7 +5,7 @@ import { claudeManager } from '../claude/manager'
 import { approvalBroker } from '../claude/approvals'
 import { agentSweep } from '../claude/agentSweepService'
 import { userDataPath } from '../util/paths'
-import { createUpdateController, type UpdateController, type UpdaterPort } from './controller'
+import { createUpdateController, type UpdateController, type UpdateControllerOptions, type UpdaterPort } from './controller'
 import { AUTO_RESTART_IDLE_MS } from './restartPlan'
 import { FakeUpdater, githubUpdater } from './updaters'
 import { flushWindowPlace } from '../windowPlace/service'
@@ -44,9 +44,10 @@ function savedAutoRestart(): boolean {
   }
 }
 
-export function startUpdates(): UpdateController {
+export function startUpdates(options: Required<Pick<UpdateControllerOptions, 'confirmRestart'>>): UpdateController {
   const { updater, idleMs } = pickUpdater()
   const controller = createUpdateController({
+    confirmRestart: options.confirmRestart,
     updater,
     idleMs,
     checkEveryMs: CHECK_EVERY_MS,

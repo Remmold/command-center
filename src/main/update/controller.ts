@@ -27,6 +27,8 @@ export interface UpdateControllerOptions {
   afterUpdate?: boolean
   /** Restart by itself once idle; off leaves the install to a click or the next quit. */
   autoRestart: boolean
+  /** Asked before every restart to install; false leaves the app running. */
+  confirmRestart?: () => Promise<boolean>
   /** Runs right before the app quits to install. */
   beforeRestart?: () => void
 }
@@ -55,9 +57,23 @@ export function createUpdateController(options: UpdateControllerOptions): Update
     for (const cb of listeners) cb(status)
   }
 
-  const install = (): void => {
+  const installNow = (): void => {
     options.beforeRestart?.()
     updater.quitAndInstall()
+  }
+
+  // electron-updater starts the installer before it quits, so the question comes before quitAndInstall.
+  const install = (): void => {
+    if (!options.confirmRestart) {
+      installNow()
+      return
+    }
+    void options.confirmRestart().then(
+      (ok) => {
+        if (ok) installNow()
+      },
+      (err) => console.error('[update] restart confirm failed', err)
+    )
   }
 
   const schedule = (): void => {

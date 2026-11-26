@@ -1,5 +1,7 @@
 import { app, BrowserWindow, dialog, protocol, session } from 'electron'
-import { registerIpc } from './ipc'
+import { registerIpc, terminals } from './ipc'
+import { quitQuestion, type QuitKind } from './quitConfirm'
+import { routeMenuQuit } from './menuQuit'
 import { removeLegacyHook } from './permission/legacyHook'
 import { sessionStatusTracker } from './sessions/tracker'
 import * as workspaces from './workspaces/store'
@@ -39,31 +41,31 @@ const ICON_SEARCH_DELAY_MS = 3000
 let confirmingQuit = false
 
 async function confirmAndQuit(): Promise<void> {
-  if (confirmingQuit) return
-  confirmingQuit = true
-  try {
-    if (await quitConfirmed()) app.quit()
-  } finally {
-    confirmingQuit = false
-  }
+  if (await confirmQuit('quit')) app.quit()
 }
 
-async function quitConfirmed(): Promise<boolean> {
-  const running = sessionStatusTracker.list().filter((e) => e.status === 'running').length
-  if (running > 0) {
+/** One question at a time; a quit asked for while one is showing is dropped. */
+async function confirmQuit(kind: QuitKind): Promise<boolean> {
+  if (confirmingQuit) return false
+  const sessions = sessionStatusTracker.list().filter((e) => e.status === 'running').length
+  const question = quitQuestion({ sessions, terminals: terminals.runningCount() }, kind)
+  if (!question) return true
+  confirmingQuit = true
+  try {
     const { response } = await dialog.showMessageBox({
       type: 'warning',
       title: 'Quit Command Center',
-      message: running === 1 ? '1 session is running.' : `${running} sessions are running.`,
-      detail: 'Quitting stops them mid-turn.',
+      message: question.message,
+      detail: question.detail,
       buttons: ['Quit', 'Cancel'],
       defaultId: 1,
       cancelId: 1,
       noLink: true
     })
     return response === 0
+  } finally {
+    confirmingQuit = false
   }
-  return true
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -101,8 +103,9 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc({ repoIdentities, startWithWindows })
     handleMediaScheme()
     handleTestFlowScheme()
-    startUpdates()
+    startUpdates({ confirmRestart: () => confirmQuit('update-restart') })
     routeMenuZoom()
+    routeMenuQuit(() => void confirmAndQuit())
     const win = createMainWindow({ show: !startsHidden(process.argv) })
 
     const tray = createAppTray({

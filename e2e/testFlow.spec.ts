@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RendererApi } from '../src/shared/types'
 import { clipboardText } from './common'
-import { expect, newChatIn, send, startSession, test } from './harness'
+import { chatTabs, expect, newChatIn, send, startSession, test } from './harness'
 
 /** A page shaped as the render script writes it: inline style and script, click-to-copy rows, plus web addresses it must never reach. */
 const PAGE = `<!doctype html>
@@ -61,7 +61,7 @@ test.describe('test flows', () => {
     await startSession(launched)
 
     await test.step('with nothing written, the file named after the repo shows as markdown', async () => {
-      await pane.locator('[data-tab-strip]').getByRole('tab', { name: 'Test', exact: true }).click()
+      await chatTabs(page).getByRole('tab', { name: 'Test', exact: true }).click()
       await expect(panel.getByRole('heading', { name: 'Repo flow' })).toBeVisible()
       await expect(panel.getByText('e2e-workspace.md', { exact: true })).toBeVisible()
     })
@@ -84,7 +84,7 @@ test.describe('test flows', () => {
     })
 
     const frame = panel.frameLocator('iframe[title="run.html"]')
-    const strip = pane.locator('[data-tab-strip]')
+    const strip = chatTabs(page)
     const scrolled = () => frame.locator('html').evaluate((el) => el.scrollTop)
 
     await test.step('a rewrite of the file reloads the tab at the same scroll place', async () => {

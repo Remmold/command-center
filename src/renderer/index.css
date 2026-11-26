@@ -78,21 +78,6 @@ code, kbd, pre, samp {
       display: none;
     }
   }
-
-  /* An account badge keeps room for a few letters of its name and its bars. */
-  .account-badge-min {
-    min-width: 7.5rem;
-  }
-
-  @container (max-width: 19rem) {
-    .hide-in-tight-header {
-      display: none;
-    }
-
-    .account-badge-min {
-      min-width: 4rem;
-    }
-  }
 }
 
 /* Under 360 px the row titles were cut; the model text goes. */
@@ -125,5 +110,21 @@ code, kbd, pre, samp {
   .input-footer-wide,
   .input-footer [data-pill-label='shrinks'] {
     display: none;
+  }
+}
+
+/* The prompt the last prompt strip jumped to, ringed for a moment; FLASH_MS in LastPromptStrip.tsx matches its length. */
+@layer utilities {
+  .prompt-flash [data-user-prompt] {
+    animation: prompt-flash 1.5s ease-out;
+  }
+
+  @keyframes prompt-flash {
+    from {
+      box-shadow: 0 0 0 2px rgb(var(--cc-accent));
+    }
+    to {
+      box-shadow: 0 0 0 2px rgb(var(--cc-accent) / 0);
+    }
   }
 }

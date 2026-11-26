@@ -321,8 +321,17 @@ export function transcriptsOf({ configDir, workspace }: Pick<Launched, 'configDi
   return join(configDir, 'projects', workspace.replace(/[^a-zA-Z0-9]/g, '-'))
 }
 
+/** New UI tests look elements up through one of these regions, never page-wide, for any name that can repeat across regions. */
+export const titleBar = (page: Page) => page.getByRole('banner', { name: 'Title bar' })
+export const sessionList = (page: Page) => page.getByRole('navigation', { name: 'Sessions' })
+export const chatPane = (page: Page) => page.locator('[data-chat-pane]:visible')
+/** The Chat, Agents, Media, Processes and Test tabs of the shown chat. */
+export const chatTabs = (page: Page) => chatPane(page).locator('[data-tab-strip]')
+export const shellDrawer = (page: Page) => page.getByRole('region', { name: 'Shell drawer', exact: true })
+export const processesView = (page: Page) => page.getByTestId('view-processes')
+
 export function prompt(page: Page) {
-  return page.locator('[data-chat-pane] textarea:visible')
+  return page.locator('[data-chat-pane] textarea:visible:not(.xterm-helper-textarea)')
 }
 
 export async function send(page: Page, text: string): Promise<void> {

@@ -18,8 +18,8 @@ import type {
   ObservedItemsEvent,
   ObservedSession,
   ProfileUsage,
-  PtyDataEvent,
-  PtyExitEvent,
+  TerminalDataEvent,
+  TerminalInfo,
   RendererApi,
   ScreenFocus,
   SessionStatusEntry,
@@ -206,21 +206,25 @@ const api: RendererApi = {
     write: (cwd: string, relativePath: string, content: string) =>
       ipcRenderer.invoke(IPC.FILES_WRITE, cwd, relativePath, content)
   },
-  pty: {
-    spawn: (paneId, kind, cwd, env): Promise<SpawnResult> =>
-      ipcRenderer.invoke(IPC.PTY_SPAWN, paneId, kind, cwd, env),
-    write: (paneId, data) => ipcRenderer.send(IPC.PTY_WRITE, paneId, data),
-    resize: (paneId, cols, rows) => ipcRenderer.send(IPC.PTY_RESIZE, paneId, cols, rows),
-    kill: (paneId) => ipcRenderer.send(IPC.PTY_KILL, paneId),
-    onData: (cb) => {
-      const handler = (_e: IpcRendererEvent, event: PtyDataEvent) => cb(event)
-      ipcRenderer.on(IPC.PTY_DATA, handler)
-      return () => ipcRenderer.off(IPC.PTY_DATA, handler)
+  terminals: {
+    list: () => ipcRenderer.invoke(IPC.TERMINALS_LIST),
+    create: (request) => ipcRenderer.invoke(IPC.TERMINALS_CREATE, request),
+    attach: (id) => ipcRenderer.invoke(IPC.TERMINALS_ATTACH, id),
+    write: (id, data) => ipcRenderer.send(IPC.TERMINALS_WRITE, id, data),
+    resize: (id, cols, rows) => ipcRenderer.send(IPC.TERMINALS_RESIZE, id, cols, rows),
+    rename: (id, label) => ipcRenderer.send(IPC.TERMINALS_RENAME, id, label),
+    restart: (id) => ipcRenderer.invoke(IPC.TERMINALS_RESTART, id),
+    stop: (id) => ipcRenderer.invoke(IPC.TERMINALS_STOP, id),
+    close: (id) => ipcRenderer.send(IPC.TERMINALS_CLOSE, id),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, list: TerminalInfo[]) => cb(list)
+      ipcRenderer.on(IPC.TERMINALS_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.TERMINALS_CHANGED, handler)
     },
-    onExit: (cb) => {
-      const handler = (_e: IpcRendererEvent, event: PtyExitEvent) => cb(event)
-      ipcRenderer.on(IPC.PTY_EXIT, handler)
-      return () => ipcRenderer.off(IPC.PTY_EXIT, handler)
+    onData: (cb) => {
+      const handler = (_e: IpcRendererEvent, event: TerminalDataEvent) => cb(event)
+      ipcRenderer.on(IPC.TERMINALS_DATA, handler)
+      return () => ipcRenderer.off(IPC.TERMINALS_DATA, handler)
     }
   },
   claude: {

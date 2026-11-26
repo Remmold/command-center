@@ -1,0 +1,3 @@
+- done: quiet badge committed (66a29a2), review fixes (dead ACCENT_EDGE, shorter docstrings) committed; build + pnpm quick + e2e accounts.spec.ts and sessions.spec.ts green
+- next: none; ticket resolved, Lane 2 look check by Andreas
+- open reds: none

@@ -1,6 +1,6 @@
 import { DEFAULT_PROFILE_ID, type CliAccount, type VsCodeFolderAccount } from '../../shared/types'
 import { sameDir } from '../../shared/vscodeMatch'
-import { planName } from './accounts'
+import { planName, sectionTitle } from './accounts'
 
 /**
  * Where a chat's account comes from: the CLI's `initialize` reply, the profile its process started on
@@ -115,12 +115,12 @@ export function chatAccountView(
   const known = chat.profileId ? usageAccounts[chat.profileId] : undefined
   const plan = chat.plan ?? account?.plan ?? null
   const name = account?.name ?? 'Unknown account'
-  const label = account && plan ? `${name} · ${plan}` : name
+  const label = account ? sectionTitle({ name, plan }) : name
   const email = chat.email ?? known?.email
   const organization = chat.organization ?? known?.organization
   const source = chat.source === 'probably' ? `Probably: VS Code profile ${chat.vscodeProfileName ?? ''}`.trim() : SOURCE_TEXT[chat.source]
   const lines = [
-    label,
+    account && plan ? `${name} · ${plan}` : name,
     ...(email ? [`Email: ${email}`] : []),
     ...(organization ? [`Organization: ${organization}`] : []),
     ...(chat.configDir ? [`Config folder: ${chat.configDir}`] : []),
