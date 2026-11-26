@@ -45,13 +45,13 @@ const PATH_FIELDS = ['file_path', 'path']
 
 /**
  * Answers a permission request from the main chat's process. A read tool inside one of `roots` is allowed, which covers a
- * worktree made after the process started; everything else is refused.
+ * worktree made after the process started; everything else is refused, a call naming no path included (a Glob pattern can itself be an absolute path).
  */
 export function mainChatReply(toolName: string, input: ToolInput, roots: readonly string[]): AllowReply | DenyReply {
   if (!READ_ONLY_TOOLS.includes(toolName)) return denyReply('The main chat answers only; it cannot use this tool.')
   const paths = PATH_FIELDS.flatMap((f) => (typeof input[f] === 'string' ? [input[f] as string] : []))
   const inside = (p: string): boolean => roots.some((r) => pathKey(p) === pathKey(r) || pathKey(p).startsWith(`${pathKey(r)}/`))
-  if (!paths.every(inside) || (paths.length === 0 && toolName === 'Read')) return denyReply('The main chat reads only the feature digest and the features\' worktrees.')
+  if (paths.length === 0 || !paths.every(inside)) return denyReply('The main chat reads only the feature digest and the features\' worktrees.')
   return allowReply(input)
 }
 

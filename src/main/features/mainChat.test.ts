@@ -50,6 +50,7 @@ describe('an approval request from the main chat', () => {
   it('refuses a read outside the roots, a bare Read, and a sibling folder that only shares a prefix', () => {
     expect(behavior('Read', { file_path: 'C:\\secrets\\a.txt' })).toBe('deny')
     expect(behavior('Read', {})).toBe('deny')
+    expect(behavior('Glob', { pattern: 'C:/secrets/**' })).toBe('deny')
     expect(behavior('Read', { file_path: 'C:\\wt\\login-old\\a.md' })).toBe('deny')
   })
 
