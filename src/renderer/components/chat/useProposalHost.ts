@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { proposalStates } from '../../../shared/featureProposal'
 import { workspaceOptions } from '../../../shared/workspaceLabel'
-import { goProposal, openFeatureSession, useFeaturesStore } from '../../state/featuresStore'
+import { goProposal, openFeatureSession, useFeaturesStore, useStartedProposalsStore } from '../../state/featuresStore'
 import { useRepoIdentitiesStore } from '../../state/repoIdentitiesStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import type { ChatItem } from './types'
@@ -11,16 +11,24 @@ import type { ProposalHost } from './toolContext'
 export function useProposalHost(items: ChatItem[], busy: boolean, enabled: boolean): ProposalHost | undefined {
   const features = useFeaturesStore((s) => s.features)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
+  const started = useStartedProposalsStore((s) => s.keys)
   const identities = useRepoIdentitiesStore((s) => s.identities)
   const options = useMemo(() => (enabled ? workspaceOptions(workspaces, identities) : []), [enabled, workspaces, identities])
+  const featureNames = useMemo(() => features.map((f) => f.name), [features])
   return useMemo(
     () =>
       enabled
         ? {
-            states: proposalStates(items, !busy, features.map((f) => f.name)),
+            states: proposalStates(items, !busy, featureNames, started),
             options,
-            go: async (proposal, workspaceId) => {
+            featureNames,
+            check: async (proposal, workspaceId) => {
+              const result = await window.api.features.preflight({ workspaceId, name: proposal.name, description: proposal.description, brief: proposal.brief })
+              return result.ok ? null : result.error
+            },
+            go: async (key, proposal, workspaceId) => {
               const result = await goProposal({ workspaceId, name: proposal.name, description: proposal.description, brief: proposal.brief })
+              if (result.ran && result.error === null) useStartedProposalsStore.getState().remember(key)
               return result.ran ? result.error : undefined
             },
             open: async (name) => {
@@ -29,6 +37,6 @@ export function useProposalHost(items: ChatItem[], busy: boolean, enabled: boole
             }
           }
         : undefined,
-    [enabled, items, busy, features, options]
+    [enabled, items, busy, features, featureNames, started, options]
   )
 }

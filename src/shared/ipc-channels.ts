@@ -8,6 +8,7 @@ export const IPC = {
   FEATURES_LIST: 'features:list',
   FEATURES_CREATE: 'features:create',
   FEATURES_DISCARD: 'features:discard',
+  FEATURES_PREFLIGHT: 'features:preflight',
   FEATURES_STAGES: 'features:stages',
   FEATURES_SET_CLAUDE_SESSION: 'features:setClaudeSession',
   FEATURES_STAGES_CHANGED: 'features:stagesChanged',

@@ -7,7 +7,7 @@ import { BRIEF_LIMIT, type FeatureRecord } from '../../shared/features'
 import type { Workspace } from '../../shared/types'
 import { addWorktree, branchTaken, isGitRepo, mainBranch, removeNewWorktree } from '../git/service'
 import { git, isolateGitEnv, makeTempRepo } from '../util/testGit'
-import { createFeature, discardFeature, featureBranch, worktreePathFor, writeNewFile, type CreateDeps } from './create'
+import { createFeature, discardFeature, featureBranch, preflightFeature, worktreePathFor, writeNewFile, type CreateDeps } from './create'
 
 // Each test runs real git processes; a loaded machine must not turn that into a timeout.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
@@ -217,6 +217,48 @@ describe('createFeature starting brief', () => {
     expect(over).toEqual({ ok: false, error: expect.stringMatching(/limit is 20000/) })
     nothingLeft()
     expect((await createFeature(deps(), { ...request, brief: 'x'.repeat(BRIEF_LIMIT) })).ok).toBe(true)
+  })
+})
+
+describe('preflightFeature', () => {
+  const problems: [string, () => Promise<void> | void, Partial<typeof request> & { brief?: string }, RegExp][] = [
+    ['a taken name', async () => void (await createFeature(deps(), request)), { name: 'login' }, /already called login/],
+    ['an invalid name', () => undefined, { name: 'No Good' }, /lowercase letters/],
+    ['an existing branch', () => void git(repo, 'branch', 'feat/login'), {}, /branch feat\/login already exists/],
+    ['an existing folder', () => mkdirSync(worktreePathFor(repo, 'login'), { recursive: true }), {}, /already exists/],
+    ['a workspace that is not a repository', () => void workspaces.push(workspace(join(root, 'plain'), 'work-profile', 'plain')), { workspaceId: 'plain' }, /not a git repository/],
+    ['a removed account', () => void (profileRemoved = true), {}, /account of .* was removed/],
+    ['no flow skill', () => { rmSync(join(configDir, 'skills'), { recursive: true }); profileAdopted = true }, {}, /cannot run \/flow/],
+    ['an unknown workspace', () => undefined, { workspaceId: 'nope' }, /no longer exists/],
+    ['an empty description', () => undefined, { description: ' ' }, /Describe the feature/],
+    ['a brief over the limit', () => undefined, { brief: 'x'.repeat(BRIEF_LIMIT + 1) }, /limit is 20000/]
+  ]
+
+  it.each(problems)('gives createFeature the same message for %s', async (_label, arrange, change, message) => {
+    mkdirSync(join(root, 'plain'), { recursive: true })
+    await arrange()
+    const asked = { ...request, ...change }
+    const before = records.length
+    const preflight = await preflightFeature(deps(), asked)
+    expect(preflight).toEqual({ ok: false, error: expect.stringMatching(message) })
+    const created = await createFeature(deps(), asked)
+    expect(created).toEqual(preflight)
+    expect(records).toHaveLength(before)
+  })
+
+  it('says a clean request is fine and makes nothing', async () => {
+    expect(await preflightFeature(deps(), { ...request, brief: 'Plan' })).toEqual({ ok: true })
+    expect(existsSync(worktreePathFor(repo, 'login'))).toBe(false)
+    expect(git(repo, 'branch', '--list', 'feat/login').trim()).toBe('')
+    expect(records).toEqual([])
+  })
+
+  it('reports a repository without a main branch the way createFeature does', async () => {
+    const d = deps()
+    d.git.mainBranch = async () => null
+    const preflight = await preflightFeature(d, request)
+    expect(preflight).toEqual({ ok: false, error: expect.stringMatching(/no main or master branch/) })
+    expect(await createFeature(d, request)).toEqual(preflight)
   })
 })
 

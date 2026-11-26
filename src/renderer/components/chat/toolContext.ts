@@ -36,8 +36,12 @@ export interface BackgroundHost {
 export interface ProposalHost {
   states: ReadonlyMap<string, ProposalState>
   options: readonly WorkspaceOption[]
+  /** The names of the existing features; a change means the card's preflight is asked again. */
+  featureNames: readonly string[]
+  /** Preflight: why Go would fail for the proposal in the workspace, or null when nothing stands in its way. */
+  check: (proposal: FeatureProposal, workspaceId: string) => Promise<string | null>
   /** Go: starts the proposed feature in the workspace; resolves with why it failed, null on success, or undefined when one is already starting. */
-  go: (proposal: FeatureProposal, workspaceId: string) => Promise<string | null | undefined>
+  go: (key: string, proposal: FeatureProposal, workspaceId: string) => Promise<string | null | undefined>
   /** Shows the session of the feature with this name; resolves with why it cannot, or null. */
   open: (name: string) => Promise<string | null>
 }

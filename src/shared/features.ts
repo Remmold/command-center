@@ -29,6 +29,11 @@ export interface NewFeatureRequest {
   brief?: string
 }
 
+/** What the proposal card asks main before enabling Go: the request without the session id. */
+export type PreflightRequest = Omit<NewFeatureRequest, 'sessionId'>
+
+export type PreflightResult = { ok: true } | { ok: false; error: string }
+
 /** The longest starting brief `createFeature` accepts, in characters. */
 export const BRIEF_LIMIT = 20_000
 

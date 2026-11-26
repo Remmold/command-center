@@ -72,6 +72,12 @@ export async function startFeature(request: Omit<NewFeatureRequest, 'sessionId'>
   return 'The feature session could not start.'
 }
 
+/** Cards this app session pressed Go on and that started, by `proposalKey`; the live card then reads Started. In memory only: a restart derives the state from the feature list. */
+export const useStartedProposalsStore = create<{ keys: ReadonlySet<string>; remember: (key: string) => void }>((set) => ({
+  keys: new Set(),
+  remember: (key) => set((s) => ({ keys: new Set(s.keys).add(key) }))
+}))
+
 /** Go on a proposal card: the same start as New feature, with the brief; a press while the same name is starting does nothing. */
 export const goProposal = onePerName(startFeature)
 

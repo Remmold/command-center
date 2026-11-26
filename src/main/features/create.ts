@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { nameProblem } from '../../shared/featureName'
-import { BRIEF_LIMIT, briefRelativePath, type FeatureRecord, type NewFeatureRequest, type NewFeatureResult } from '../../shared/features'
+import { BRIEF_LIMIT, briefRelativePath, type FeatureRecord, type NewFeatureRequest, type NewFeatureResult, type PreflightRequest, type PreflightResult } from '../../shared/features'
 import type { Workspace } from '../../shared/types'
 import { flowProblem } from './flowProblem'
 
@@ -47,14 +47,13 @@ export async function writeNewFile(path: string, text: string): Promise<void> {
   await fs.writeFile(path, text, { flag: 'wx' })
 }
 
-const fail = (error: string): NewFeatureResult => ({ ok: false, error })
+const fail = (error: string): { ok: false; error: string } => ({ ok: false, error })
 const reason = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
-/**
- * Makes the worktree and branch, adds the worktree as a workspace on the source workspace's account and records the
- * feature. A failure at any step removes what this call made.
- */
-export async function createFeature(deps: CreateDeps, request: NewFeatureRequest): Promise<NewFeatureResult> {
+type StartPlan = { source: Workspace; profile: { id: string; env: Record<string, string> }; base: string; branch: string; worktreePath: string; briefPath: string }
+
+/** The checks that come before anything is made. `createFeature` and the proposal card both run them, so they cannot disagree. */
+async function checkStart(deps: CreateDeps, request: PreflightRequest): Promise<{ ok: true; plan: StartPlan } | { ok: false; error: string }> {
   const source = await deps.workspaces.get(request.workspaceId)
   if (request.brief !== undefined && request.brief.length > BRIEF_LIMIT) return fail(`The starting brief is ${request.brief.length} characters; the limit is ${BRIEF_LIMIT}.`)
   if (!source) return fail('That workspace no longer exists.')
@@ -74,6 +73,23 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
   const briefPath = join(worktreePath, ...briefRelativePath(request.name).split('/'))
   if (await deps.pathExists(worktreePath)) return fail(`The folder ${worktreePath} already exists.`)
   if (await deps.git.branchTaken(source.path, branch)) return fail(`The branch ${branch} already exists.`)
+  return { ok: true, plan: { source, profile, base, branch, worktreePath, briefPath } }
+}
+
+/** Whether a start would get past its first checks; nothing is made. */
+export async function preflightFeature(deps: CreateDeps, request: PreflightRequest): Promise<PreflightResult> {
+  const checked = await checkStart(deps, request)
+  return checked.ok ? { ok: true } : checked
+}
+
+/**
+ * Makes the worktree and branch, adds the worktree as a workspace on the source workspace's account and records the
+ * feature. A failure at any step removes what this call made.
+ */
+export async function createFeature(deps: CreateDeps, request: NewFeatureRequest): Promise<NewFeatureResult> {
+  const checked = await checkStart(deps, request)
+  if (!checked.ok) return checked
+  const { source, profile, base, branch, worktreePath, briefPath } = checked.plan
 
   let madeWorktree = false
   let workspace: Workspace | undefined

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PROPOSAL_NOT_UNDERSTOOD, proposalKey, proposalSegments, resolveWorkspace, type FeatureProposal, type ProposalState } from '../../../shared/featureProposal'
 import { Button } from '../ui/Button'
 import { Markdown } from '../ui/Markdown'
@@ -23,17 +23,36 @@ function Field({ label, children, error = false }: { label: string; children: st
 }
 
 /** A feature the main chat proposes: its four parts in full, and where it stands. */
-function ProposalCard({ proposal, state }: { proposal: FeatureProposal; state: ProposalState }) {
+function ProposalCard({ cardKey, proposal, state }: { cardKey: string; proposal: FeatureProposal; state: ProposalState }) {
   const { proposals } = useToolContext()
   const workspace = useMemo(() => resolveWorkspace(proposal.workspace, proposals?.options ?? []), [proposal.workspace, proposals])
   const note = STATE_NOTE[state]
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // undefined: asking main; null: nothing in the way; text: why Go would fail.
+  const [problem, setProblem] = useState<string | null | undefined>(undefined)
+  const check = useRef(proposals?.check)
+  check.current = proposals?.check
+  const workspaceId = workspace.kind === 'ok' ? workspace.id : null
+  const namesKey = (proposals?.featureNames ?? []).join('|')
+  const { name, description, brief } = proposal
+  useEffect(() => {
+    if (state !== 'live' || workspaceId === null || starting) return
+    let current = true
+    setProblem(undefined)
+    check.current?.(proposal, workspaceId).then(
+      (found) => current && setProblem(found),
+      () => current && setProblem('The proposal could not be checked.')
+    )
+    return () => {
+      current = false
+    }
+  }, [state, workspaceId, name, description, brief, namesKey, starting])
   const go = async () => {
     if (!proposals || workspace.kind !== 'ok') return
     setStarting(true)
     setError(null)
-    const failed = await proposals.go(proposal, workspace.id)
+    const failed = await proposals.go(cardKey, proposal, workspace.id)
     setStarting(false)
     if (failed) setError(failed)
   }
@@ -67,9 +86,15 @@ function ProposalCard({ proposal, state }: { proposal: FeatureProposal; state: P
           {error}
         </p>
       )}
+      {state === 'live' && typeof problem === 'string' && !starting && (
+        <div data-proposal-problem="" role="alert" className="mt-2 text-error">
+          <p>{problem}</p>
+          <p>Ask the main chat for another name.</p>
+        </div>
+      )}
       {state === 'live' && (
         <div className="mt-2 flex justify-end">
-          <Button onClick={() => void go()} disabled={starting || workspace.kind !== 'ok'}>
+          <Button onClick={() => void go()} disabled={starting || problem !== null}>
             {starting ? 'Starting…' : 'Go'}
           </Button>
         </div>
@@ -102,7 +127,7 @@ export function ProposalText({ text, itemId, block }: { text: string; itemId: st
             </div>
           )
         }
-        return <ProposalCard key={s} proposal={segment.proposal} state={proposals?.states.get(proposalKey(itemId, block, s)) ?? 'superseded'} />
+        return <ProposalCard key={s} cardKey={proposalKey(itemId, block, s)} proposal={segment.proposal} state={proposals?.states.get(proposalKey(itemId, block, s)) ?? 'superseded'} />
       })}
     </>
   )

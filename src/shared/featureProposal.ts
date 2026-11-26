@@ -86,10 +86,16 @@ export const proposalKey = (itemId: string, block: number, segment: number): str
 
 /**
  * Each proposal block of the transcript, keyed by `proposalKey`. The newest block, even one that did not parse, is the only
- * one that can be live, and only while no user message follows it and the chat has settled its turn. A card reads
- * Started when a feature of its name exists, live or not, else an older one reads Superseded.
+ * one that can be live, and only while no user message follows it. The live card reads Started only when this session
+ * pressed Go on it (`started`); a name another feature has leaves it live, for preflight to explain. An older card reads
+ * Started when a feature of its name exists, else Superseded.
  */
-export function proposalStates(items: readonly ChatItem[], settled: boolean, featureNames: readonly string[]): Map<string, ProposalState> {
+export function proposalStates(
+  items: readonly ChatItem[],
+  settled: boolean,
+  featureNames: readonly string[],
+  started: ReadonlySet<string> = new Set()
+): Map<string, ProposalState> {
   const entries: { key: string; name: string | null; itemIndex: number }[] = []
   items.forEach((item, itemIndex) => {
     if (item.kind !== 'assistant' || item.parentToolUseId) return
@@ -104,9 +110,8 @@ export function proposalStates(items: readonly ChatItem[], settled: boolean, fea
   const last = entries[entries.length - 1]
   const taken = new Set(featureNames.map((n) => n.toLowerCase()))
   for (const e of entries) {
-    if (e.name !== null && taken.has(e.name.toLowerCase())) states.set(e.key, 'started')
-    else if (e === last && !items.slice(e.itemIndex + 1).some((i) => i.kind === 'user')) states.set(e.key, settled ? 'live' : 'waiting')
-    else states.set(e.key, 'superseded')
+    if (e === last && !items.slice(e.itemIndex + 1).some((i) => i.kind === 'user')) states.set(e.key, started.has(e.key) ? 'started' : settled ? 'live' : 'waiting')
+    else states.set(e.key, e.name !== null && taken.has(e.name.toLowerCase()) ? 'started' : 'superseded')
   }
   return states
 }

@@ -96,10 +96,22 @@ describe('proposal card state', () => {
     expect(states.get(key('a2'))).toBe('superseded')
   })
 
-  it('reads the newest card as Started, not live, once a feature has its name', () => {
+  it('keeps the newest card live when another feature already has its name, so preflight can say why', () => {
     const items = [reply('a1', card('one'))]
-    expect(proposalStates(items, true, ['one']).get(key('a1'))).toBe('started')
+    expect(proposalStates(items, true, ['one']).get(key('a1'))).toBe('live')
     expect(proposalStates(items, true, ['other']).get(key('a1'))).toBe('live')
+  })
+
+  it('reads the newest card as Started only once this session pressed Go on it', () => {
+    const items = [reply('a1', card('one'))]
+    expect(proposalStates(items, true, ['one'], new Set([key('a1')])).get(key('a1'))).toBe('started')
+    expect(proposalStates(items, true, ['one'], new Set([key('other')])).get(key('a1'))).toBe('live')
+  })
+
+  it('ignores a remembered Go once the card is no longer the newest and no feature has its name', () => {
+    const items = [reply('a1', card('one')), user('u2')]
+    expect(proposalStates(items, true, [], new Set([key('a1')])).get(key('a1'))).toBe('superseded')
+    expect(proposalStates(items, true, ['one'], new Set()).get(key('a1'))).toBe('started')
   })
 
   it('does not let a newer block that did not parse leave the older card live', () => {

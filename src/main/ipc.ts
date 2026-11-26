@@ -53,8 +53,8 @@ import { rateLimitOf, type DigestFeature } from './features/digest'
 import { workspaceOptions } from '../shared/workspaceLabel'
 import { createDigestWriter, type DigestWriter } from './features/digestWriter'
 import { readTestFlowsFolder } from './testFlow/settings'
-import { createFeature, discardFeature, writeNewFile, type CreateDeps } from './features/create'
-import type { FeatureRecord, NewFeatureRequest } from '../shared/features'
+import { createFeature, discardFeature, preflightFeature, writeNewFile, type CreateDeps } from './features/create'
+import type { FeatureRecord, NewFeatureRequest, PreflightRequest, PreflightResult } from '../shared/features'
 import type { PreviewConfig } from '../shared/previewConfig'
 import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
@@ -312,6 +312,13 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     if (result.ok) workspacesChanged()
     featureStages?.changed()
     return result
+  })
+  ipcMain.handle(IPC.FEATURES_PREFLIGHT, (_e, request: PreflightRequest): Promise<PreflightResult> => {
+    const text = (v: unknown): v is string => typeof v === 'string'
+    if (!request || !text(request.workspaceId) || !text(request.name) || !text(request.description) || (request.brief !== undefined && !text(request.brief))) {
+      return Promise.resolve({ ok: false, error: 'The proposal could not be checked.' })
+    }
+    return preflightFeature(featureDeps, request)
   })
   const previewConfigFor = async (feature: FeatureRecord): Promise<PreviewConfig | null> => {
     for (const id of sourceCandidates(feature, await workspaces.list())) {

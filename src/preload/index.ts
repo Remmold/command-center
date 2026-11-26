@@ -61,6 +61,7 @@ const api: RendererApi = {
   features: {
     list: () => ipcRenderer.invoke(IPC.FEATURES_LIST),
     create: (request) => ipcRenderer.invoke(IPC.FEATURES_CREATE, request),
+    preflight: (request) => ipcRenderer.invoke(IPC.FEATURES_PREFLIGHT, request),
     discard: (name, workspaceId) => ipcRenderer.invoke(IPC.FEATURES_DISCARD, name, workspaceId),
     stages: () => ipcRenderer.invoke(IPC.FEATURES_STAGES),
     setClaudeSession: (name, claudeSessionId) => ipcRenderer.invoke(IPC.FEATURES_SET_CLAUDE_SESSION, name, claudeSessionId),
