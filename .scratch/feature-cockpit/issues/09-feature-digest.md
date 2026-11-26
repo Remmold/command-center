@@ -4,7 +4,7 @@
 
 **Blocked by:** 02, 04, 05
 
-**Status:** in-progress — built, review pending
+**Status:** resolved
 
 - [x] A pure digest writer renders every feature record into one markdown file in the app's data folder: name, workspace, stage, tickets done out of total, session status, the account's name, the last test result (ticket 05), the servers' state (ticket 04), and whether the account is rate limited, taken from the usage service the Dashboard already uses.
 - [x] The file is rewritten on a change of any of those facts, never on a timer, and writes only when its text differs.

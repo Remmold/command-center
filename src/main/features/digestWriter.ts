@@ -21,7 +21,7 @@ async function bodyOnDisk(file: string): Promise<string | null> {
   }
 }
 
-/** Keeps the digest file current: written after a burst of changes settles, and only when its facts differ. Starts nothing and has no timer of its own. */
+/** Keeps the digest file current: written after a burst of changes settles, and only when its facts differ, never on a clock. Starts no Claude process. */
 export function createDigestWriter(deps: DigestWriterDeps) {
   const now = deps.now ?? Date.now
   let timer: NodeJS.Timeout | null = null

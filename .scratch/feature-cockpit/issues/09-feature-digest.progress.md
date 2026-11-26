@@ -1,3 +1,3 @@
-Done: pure digest renderer (src/main/features/digest.ts), debounced change-only writer (digestWriter.ts), wired in ipc.ts to stage, server, session, usage, profile and workspace changes; path via featureDigestFile() in util/paths.ts.
+Done: digest renderer, change-only debounced writer, wiring in ipc.ts; self-review fixed one misleading comment.
 Checks: pnpm quick, build, pnpm e2e (17 of 20) green.
-Next: self-review of the diff, then resolve.
+Not seen live: the file written by a running app; a limit that expires with no new usage reading stays listed until the next usage event.
