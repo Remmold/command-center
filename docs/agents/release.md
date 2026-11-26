@@ -2,7 +2,7 @@
 
 Only Andreas releases. These are the steps from a green `main` to a published installer.
 
-**Audit due:** the last test audit ran at 0.1.28 (ticket `.scratch/test-audit/issues/05-audit-at-0.1.28.md`); the next is due at 0.1.33.
+**Audit due:** the last test audit ran at 0.1.33 (ticket `.scratch/test-audit/issues/06-audit-at-0.1.33.md`); the next is due at 0.1.38.
 
 0. **Audit check:** before every release, the conductor reads the "Audit due" line above; when this release is the one due, run step 5 first.
 

@@ -1,4 +1,4 @@
-Last audit: 0.1.28 (2026-11-25, ticket 05-audit-at-0.1.28)
+Last audit: 0.1.33 (2026-11-26, ticket 06-audit-at-0.1.33)
 
 # Test audit inventory
 
@@ -284,4 +284,63 @@ A scripted check (test-imported exports with no production caller, duplicate tes
 | Unit tests | 1,439 (+2 skipped) in 147 files | **1,438 (+2 skipped)** in 147 files |
 | Quick tier (`pnpm quick`, wall) | not re-measured | 15.1 s |
 | Assertions removed | — | **0** (one moved from a dead function onto the live one) |
+| Named regression guards | 11 | **11, assertions unchanged** |
+
+# 0.1.33
+
+Scheduled audit at 0.1.33, run on `main` (0.1.32 code plus the merged feature cockpit and "main chat starts features" work). Baseline: 18 scenarios (budget 20 and 200 s), one JSON reporter run through `pnpm e2e:gate`, nothing else busy, **123.7 s**. Times are per scenario, launch and shutdown included. The suite is slower than at 0.1.28 (84.8 s) because of the new areas: the three feature scenarios, the Claude Code settings page, the last-prompt strip and the terminals scenario came in since.
+
+**R** = guards a bug that reached Andreas; its assertions are unchanged. **New** = added this period.
+
+## UI scenarios, before -> after
+
+| # | Scenario (before) | Before | Proves | Unit overlap | R | Now |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | chat > chat rendering, Media tab, Agents tab | 16.6 s | rendering, scroll-follow, MCP/compaction, Media tab, Agents tab, stop_task | thinking, todos, scrollFollow, subagents, agentList | **R** (scroll-follow) | unchanged |
+| 2 | featureCockpit > Test boots the feature server... | 10.6 s | Test boots the server, pair opens on its page, Pass and Complete stops it, other account keeps running | complete, ports, preview config | **New** | unchanged, plus #11's assertions after both features start |
+| 3 | app > zoom and auto-update | 10.5 s | zoom keys, Ctrl+B, restart, window place; update busy gate | zoom, shortcutMap, busyGate, restartPlan | **R** (window place, off-screen windows, storage flush, update busy gate) | unchanged |
+| 4 | processes > the Processes tab... | 10.2 s | background server listed, port, badge, Stop, Run it myself, tree ended on close | backgroundProcesses, processTree | | unchanged |
+| 5 | chat > a basic chat | 8.7 s | views, Manual start, @ menu, attachments, history, slash menu, model/effort, draft over reload | shortcutMap, mentionSearch, attachments, promptHistory, launchGate | | unchanged |
+| 6 | sessions > history, VS Code session, take-over | 8.2 s | rename, Past sessions, observed cut-off, wheel leave, take-over | sessionTitle, pastSessions, transcriptItems, takeOver | **R** (observed cut-off, wheel leave) | unchanged |
+| 7 | chat > slow turns, then tool approval | 7.4 s | send-mid-turn queue, Stop, Run in background, approvals, settings.json mode | heldPrompts, interrupt, approval, approvals | **R** (send-mid-turn queue) | unchanged |
+| 8 | accounts > VS Code's accounts are adopted... | 6.5 s | banner, one-click adopt, new chats on Work, model/effort per account, repo icon picker | vscodeMatch, userSettings, projectIcons | | unchanged |
+| 9 | accounts > a VS Code profile's folder... then the Work chat | 6.1 s | profile adopt, Work badge and pill, mismatch warning, Restart | adopt, vscodeProfiles, chatAccount | | unchanged |
+| 10 | chat > the last prompt strip | 4.9 s | strip shows when the prompt scrolls away, a click brings it back while output arrives | none (render-only) | | unchanged (its long script matches no other launch) |
+| 11 | featureCockpit > New feature on a workspace of each of two accounts | 4.9 s | two Features rows, each session on its own account folder, first prompt names the feature | feature start, feature naming | **New** | merged into #2: same two repos, two accounts, two New feature dialogs; no launch of its own |
+| 12 | testFlow > the Test tab... | 4.7 s | repo-named markdown, HTML twin offline, reload on rewrite, pop-out follows focus | testFlow reader, watch | | unchanged |
+| 13 | accounts > Work shows a one-line header per account... | 4.6 s | account sections, waiting badge, Ungrouped fold, search, Alt+1, Board By account, own groups | sessionList, order, boardLayout | | unchanged |
+| 14 | context > Files, then the Map tour | 4.5 s | seeded CLAUDE.md, Ctrl+S, broken JSON, drift check, Apply, Open chat | context reader, driftCheck | | unchanged |
+| 15 | processes > New terminal... | 4.3 s | terminal runs and echoes, Shell drawer, Close ends it | terminal model | **New** | unchanged (the Processes scenario seeds a background server; this one only a terminal) |
+| 16 | dashboard > chat drawer, ticket strip | 3.8 s | drawer open, reply, swap, Board detour, Open in Work, ticket strip | chatDrawer | | unchanged |
+| 17 | featureCockpit > The main chat proposes a feature; Go starts it | 3.7 s | proposal card, Go starts the feature with brief.md in its worktree, first prompt names it, main chat keeps only read tools | proposal, start, preflight | **New** | unchanged (needs the `proposal` script on a main chat) |
+| 18 | claudeSettings > Claude Code settings | 2.8 s | save bar, Save writes only the changed key, outside change shows, key bindings, narrow-window wrap | settings model, keybindings | | unchanged (its settings.json fixture is the whole point) |
+
+Only #11 was merged. The other pairs that look mergeable differ in script, account setup or fixture settings.json, so a merge there costs a rewritten script rather than saving a launch. No scenario is a pure duplicate of a unit test: each proves app wiring (IPC, the CLI protocol through the fake's log, or what is on screen). Scenarios #2, #11, #15 and #17 are the feature-cockpit and terminal work from this period (the unit-overlap names are approximate, from the area's tests).
+
+## Where the merged scenario's assertions live
+
+Nothing was deleted outright. All of #11's assertions moved to `featureCockpit.spec.ts` (#2, now titled "New feature on a workspace of each of two accounts ... ; Test boots ..."), run right after both features start:
+- both Features rows visible (login page, export reports);
+- the personal feature's session starts in `-worktrees/add-a-login-page` on the personal config dir, the Work one on the Work profile's config dir (`profile.configDir` is now returned from #2's setup);
+- the first prompt starts with `/flow Add a login page` and names `Feature name: add-a-login-page`.
+#2 already wrote the `flow` skill file and created the Work profile; its extra preview config and test-flows folder do not change how a feature starts.
+
+## Unit tests (light pass)
+
+A scripted check (test-imported exports with no production caller; duplicate test names within a file):
+- **Dead code:** none. Every export a unit test imports has a production caller.
+- **Duplicates:** two repeated names (`refuses a feature that is not completed` in `complete.test.ts`, `does not open a session that is not hosted` in `chatDrawer.test.ts`) sit in different `describe` blocks and call different functions (`reopenFeature` / `removeFeatureWorktree`, `openInDrawer` / `openNotifiedSession`). Kept.
+- **Copied constants:** the extension-wording constants and the drawer's width limit stay, as at 0.1.28.
+
+2,011 (+2 skipped) in 202 files before and after.
+
+## Before / after
+
+| Measure | Before (0.1.33) | After |
+| --- | --- | --- |
+| UI scenarios | 18 | **17** |
+| UI time, JSON total (`pnpm e2e:gate`, nothing else busy) | 123.7 s | **122.5 s** (green, no rerun; the merge removes one launch, the rest is run-to-run noise of a few seconds) |
+| Unit tests | 2,011 (+2 skipped) in 202 files | **unchanged** |
+| Quick tier (`pnpm quick`) | green | green |
+| Assertions removed | - | **0** |
 | Named regression guards | 11 | **11, assertions unchanged** |
