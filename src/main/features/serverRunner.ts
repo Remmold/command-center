@@ -201,6 +201,14 @@ export function createServerRunner(deps: RunnerDeps) {
       }
       await Promise.all(stopping)
     },
+    /** Stops the feature's servers, kills them and closes their terminals, forgetting them, so nothing of it is tracked or listed. */
+    async remove(name: string): Promise<void> {
+      const servers = tracked.get(name)
+      if (!servers) return
+      tracked.delete(name)
+      await Promise.all([...servers.values()].map((t) => deps.terminals.close(t.view.terminalId)))
+      changed(name)
+    },
     current: viewOf,
     all: (): Record<string, FeatureServersView> => Object.fromEntries([...tracked.keys()].map((n) => [n, viewOf(n)])),
     /** Resolves once none of the feature's servers is Starting. */

@@ -96,6 +96,22 @@ export function testFeature(name: string): void {
   })
 }
 
+async function settle(done: Promise<{ ok: true } | { ok: false; error: string }>): Promise<boolean> {
+  const result = await done
+  if (!result.ok) useToastStore.getState().show(result.error)
+  await reload()
+  return result.ok
+}
+
+/** Complete: the servers, windows and browser store go, the feature moves under Completed; the worktree stays. */
+export const completeFeature = (name: string): Promise<boolean> => settle(window.api.features.complete(name))
+
+/** A completed feature returns to its stage with fresh ports. */
+export const reopenFeature = (name: string): Promise<boolean> => settle(window.api.features.reopen(name))
+
+/** Removes a completed feature's worktree; main refuses while its branch has unmerged commits. */
+export const removeFeatureWorktree = (name: string): Promise<boolean> => settle(window.api.features.removeWorktree(name))
+
 export function retryFeatureServer(name: string, server: string): void {
   void window.api.features.retryServer(name, server).then((r) => {
     if (!r.ok) useToastStore.getState().show(r.error)

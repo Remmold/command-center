@@ -50,6 +50,8 @@ export function createFeatureStore(file: string) {
       }),
     setPorts: (name: string, ports: number[], portNames: string[]): Promise<void> =>
       serial(async () => writeAll((await readAll()).map((r) => (r.name === name ? { ...r, ports, portNames } : r)))),
+    setCompleted: (name: string, completedAt: number | null): Promise<void> =>
+      serial(async () => writeAll((await readAll()).map((r) => (r.name === name ? { ...r, completedAt } : r)))),
     remove: (name: string): Promise<void> => serial(async () => writeAll((await readAll()).filter((r) => r.name !== name)))
   }
 }

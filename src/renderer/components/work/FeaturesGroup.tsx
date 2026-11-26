@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { accountNote, completedFeatureRows, featureRows, stageNote, type FeatureRow } from '../../state/featureRows'
-import { retryFeatureServer, openFeatureSession, startFeatureServers, stopFeatureServers, testFeature, useFeaturesStore } from '../../state/featuresStore'
+import { completeFeature, removeFeatureWorktree, reopenFeature, retryFeatureServer, openFeatureSession, startFeatureServers, stopFeatureServers, testFeature, useFeaturesStore } from '../../state/featuresStore'
 import { serversNote, serversRunning, type FeatureServerView } from '../../../shared/featureServers'
 import { Button } from '../ui/Button'
 import { useProfilesStore } from '../../state/profilesStore'
@@ -9,6 +9,7 @@ import { useToastStore } from '../../state/toastStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { RepoIcon } from '../RepoIcon'
 import { CollapsibleSection } from '../ui/CollapsibleSection'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ListRow, ListRowLabel, ListRowText } from '../ui/ListRow'
 import { StatusDot } from '../ui/StatusDot'
 
@@ -60,7 +61,19 @@ function FeatureListRow({ row }: { row: FeatureRow }) {
   const completed = useFeaturesStore((s) => s.features.find((f) => f.name === row.name)?.completedAt ?? null) !== null
   const failed = servers.filter((s) => s.status === 'failed')
   const hasTestSteps = row.stage !== undefined && !row.stage.missing && row.stage.stage === 'Testing'
-  const actions = completed ? undefined : (
+  const [asking, setAsking] = useState<'complete' | 'remove' | null>(null)
+  const tests = row.stage && !row.stage.missing ? row.stage.tests : undefined
+  const allPass = tests !== undefined && tests.pass > 0 && tests.fail === 0 && tests.waiting === 0
+  const actions = completed ? (
+    <>
+      <Button variant="secondary" onClick={() => void reopenFeature(row.name)} tooltip="Bring this feature back to its stage, with fresh ports, so it can be tested again">
+        Re-open
+      </Button>
+      <Button variant="ghost" onClick={() => setAsking('remove')} tooltip="Delete the worktree folder; the branch stays">
+        Remove worktree
+      </Button>
+    </>
+  ) : (
     <>
       {hasTestSteps && (
         <Button variant="secondary" onClick={() => testFeature(row.name)} tooltip="Boot the servers, then open the test steps and the preview browser side by side">
@@ -76,6 +89,9 @@ function FeatureListRow({ row }: { row: FeatureRow }) {
           Start servers
         </Button>
       )}
+      <Button variant="secondary" onClick={() => (allPass ? void completeFeature(row.name) : setAsking('complete'))} tooltip="Stop the servers, close the test windows and move this feature under Completed; the worktree and branch stay">
+        Complete
+      </Button>
     </>
   )
   return (
@@ -100,6 +116,30 @@ function FeatureListRow({ row }: { row: FeatureRow }) {
         </ListRowLabel>
         <StatusDot status={row.status} look="soft" />
       </ListRow>
+      {asking === 'complete' && (
+        <ConfirmDialog
+          title={`Complete ${row.name}?`}
+          message="Some test steps are still open: not every step is marked Pass. Complete this feature anyway?"
+          confirmLabel="Complete anyway"
+          onConfirm={() => {
+            setAsking(null)
+            void completeFeature(row.name)
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      )}
+      {asking === 'remove' && (
+        <ConfirmDialog
+          title={`Remove the worktree of ${row.name}?`}
+          message="The worktree folder is deleted. The branch stays. It is refused while the branch has commits the main branch does not."
+          confirmLabel="Remove worktree"
+          onConfirm={() => {
+            setAsking(null)
+            void removeFeatureWorktree(row.name)
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      )}
       {failed.map((server) => (
         <FailedServer key={server.name} feature={row.name} server={server} />
       ))}

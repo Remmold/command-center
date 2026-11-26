@@ -70,6 +70,9 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.FEATURES_INSTALLING, handler)
     },
     test: (name) => ipcRenderer.invoke(IPC.FEATURES_TEST, name),
+    complete: (name) => ipcRenderer.invoke(IPC.FEATURES_COMPLETE, name),
+    reopen: (name) => ipcRenderer.invoke(IPC.FEATURES_REOPEN, name),
+    removeWorktree: (name) => ipcRenderer.invoke(IPC.FEATURES_REMOVE_WORKTREE, name),
     startServers: (name) => ipcRenderer.invoke(IPC.FEATURES_SERVERS_START, name),
     retryServer: (name, server) => ipcRenderer.invoke(IPC.FEATURES_SERVERS_RETRY, name, server),
     stopServers: (name) => ipcRenderer.invoke(IPC.FEATURES_SERVERS_STOP, name),

@@ -476,6 +476,12 @@ export interface RendererApi {
     onInstalling: (cb: (name: string, running: boolean) => void) => () => void
     /** The Test button: boots the servers, then opens the test pair once every one is Ready (or only the test flow without a preview config); an open pair is brought to the front. Resolves once the windows are open, or with why not. */
     test: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
+    /** Complete: stops the servers, closes the pair and its browser store, frees the ports and marks the feature Completed; the worktree and branch stay. */
+    complete: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
+    /** Returns a completed feature to its stage with fresh ports. */
+    reopen: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
+    /** Removes a completed feature's worktree; refused while its branch has commits the main branch lacks. */
+    removeWorktree: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
     /** Boots the feature's servers from its preview config on its own ports; resolves once they are launched, not ready. */
     startServers: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
     /** Runs one server again, e.g. after it Failed. */

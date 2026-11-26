@@ -287,4 +287,20 @@ describe('server runner', () => {
     expect(seen.at(-1)).toBe('a:Starting')
     expect(portOf(r.current('a'), 'api')).toBe(4101)
   })
+
+  it('remove kills the servers and closes their terminals, so nothing of the feature is tracked or listed', async () => {
+    const r = runner()
+    await r.start('a')
+    await r.start('b')
+    answering.add(4100)
+    answering.add(4101)
+    await r.settled('a')
+    const seen: string[] = []
+    r.onChanged((name, view) => seen.push(name + ":" + view.servers.length))
+    await r.remove('a')
+    expect(r.current('a').servers).toEqual([])
+    expect(Object.keys(r.all())).toEqual(['b'])
+    expect(pool.list().map((t) => t.id).sort()).toEqual(['feature-server:b:api', 'feature-server:b:web'])
+    expect(seen.at(-1)).toBe('a:0')
+  })
 })

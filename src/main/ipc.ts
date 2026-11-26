@@ -38,7 +38,8 @@ import { createFeatureStore } from './features/store'
 import { runInstall } from './features/install'
 import { createPortReserver, portAccepts, portIsFree } from './features/ports'
 import { createServerRunner } from './features/serverRunner'
-import { openPair } from './features/pairWindows'
+import { closeFeaturePair, openPair } from './features/pairWindows'
+import { commitsBeyond, completeFeature, removeFeatureWorktree, removeWorktreeOnly, reopenFeature } from './features/complete'
 import { testFeature } from './features/testPair'
 import { featureChecklistPath, repoNameFor } from '../shared/testFlow'
 import { sourceCandidates } from './features/source'
@@ -275,6 +276,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     }
     return null
   }
+  const portReserver = createPortReserver({ list: featureStore.list, save: featureStore.setPorts, isFree: portIsFree })
   const serverRunner = createServerRunner({
     terminals,
     feature: async (name) => (await featureStore.list()).find((f) => f.name === name),
@@ -283,7 +285,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       const workspace = (await workspaces.list()).find((w) => w.id === workspaceId)
       return workspace ? (await profiles.prepareSession(workspace.profileId)).env : null
     },
-    reservePorts: createPortReserver({ list: featureStore.list, save: featureStore.setPorts, isFree: portIsFree }).reserve,
+    reservePorts: portReserver.reserve,
     isReady: (port) => portAccepts(port),
     shell: DEFAULT_SHELL_KIND
   })
@@ -315,6 +317,58 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     typeof name === 'string' && typeof server === 'string' ? serverRunner.retry(name, server) : { ok: false, error: 'No server was named.' }
   )
   ipcMain.handle(IPC.FEATURES_SERVERS_STOP, (_e, name: unknown) => (typeof name === 'string' ? serverRunner.stop(name) : undefined))
+  const featureNamed = async (n: string) => (await featureStore.list()).find((f) => f.name === n)
+  ipcMain.handle(IPC.FEATURES_COMPLETE, async (_e, name: unknown) => {
+    if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
+    const result = await completeFeature(
+      { feature: featureNamed, runner: serverRunner, closePair: closeFeaturePair, setPorts: featureStore.setPorts, setCompleted: featureStore.setCompleted, now: () => Date.now() },
+      name
+    )
+    featureStages?.changed()
+    return result
+  })
+  ipcMain.handle(IPC.FEATURES_REOPEN, async (_e, name: unknown) => {
+    if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
+    const result = await reopenFeature(
+      {
+        feature: featureNamed,
+        config: previewConfigFor,
+        reservePorts: portReserver.reserve,
+        setPorts: featureStore.setPorts,
+        setCompleted: featureStore.setCompleted
+      },
+      name
+    )
+    featureStages?.changed()
+    return result
+  })
+  ipcMain.handle(IPC.FEATURES_REMOVE_WORKTREE, async (_e, name: unknown) => {
+    if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
+    const result = await removeFeatureWorktree(
+      {
+        feature: featureNamed,
+        repo: async (feature) => {
+          const all = await workspaces.list()
+          for (const id of sourceCandidates(feature, all)) {
+            const path = all.find((w) => w.id === id)?.path
+            const base = path ? await mainBranch(path) : null
+            if (path && base) return { path, base }
+          }
+          return null
+        },
+        commitsBeyond,
+        removeWorktree: removeWorktreeOnly,
+        forget: async (feature) => {
+          await featureStore.remove(feature.name)
+          await workspaces.remove(feature.workspaceId).catch(() => undefined)
+        }
+      },
+      name
+    )
+    if (result.ok) workspacesChanged()
+    featureStages?.changed()
+    return result
+  })
   ipcMain.handle(IPC.FEATURES_SET_CLAUDE_SESSION, (_e, name: unknown, claudeSessionId: unknown) =>
     typeof name === 'string' && typeof claudeSessionId === 'string' ? featureStore.setClaudeSessionId(name, claudeSessionId) : undefined
   )
