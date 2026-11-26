@@ -27,6 +27,7 @@ import { Panel, PanelColumns } from '../ui/Panel'
 import { StatRow } from '../ui/StatRow'
 import { StatusTag } from '../ui/StatusDot'
 import { DrawerHost } from '../ui/Drawer'
+import { ApprovalsPanel } from './ApprovalsPanel'
 import { ChatDrawer } from './ChatDrawer'
 import { NowBuildingList } from './NowBuildingList'
 import { VsCodeAccountsNotice } from './VsCodeAccountsNotice'
@@ -52,6 +53,7 @@ export function DashboardView() {
         <Page label="Dashboard">
           <PageBody>
             <VsCodeAccountsNotice />
+            <ApprovalsPanel now={now} />
             <Panel title="Needs you" count={dash.needsYou.length} empty="Nobody is waiting on you" boxed>
               <ul>
                 {dash.needsYou.map((row) => (

@@ -13,6 +13,7 @@ function ticket(number: string, column: BoardColumn, title = `ticket ${number}`,
     statusNote,
     statusLine: null,
     statusKnown: true,
+    summary: null,
     sightings: [
       { workspaceId: 'ws', worktreeTag: '', column, blockedBy: [], filePath: `x/${number}.md`, progressPath: null, status: null, statusNote, statusLine: null, statusKnown: true }
     ]

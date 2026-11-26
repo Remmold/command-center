@@ -730,6 +730,8 @@ export interface BoardTicket extends TicketStatus {
   /** Lower-cased ticket file name; copies merge on it, so two files sharing a number stay two cards. */
   fileName: string
   title: string
+  /** The ticket's "What to build" text, else its first paragraph, as plain text; null when it has neither. */
+  summary: string | null
   column: BoardColumn
   /** The copy that decides the status first (most advanced, main checkout on a tie), then the rest by the same order. */
   sightings: TicketSighting[]

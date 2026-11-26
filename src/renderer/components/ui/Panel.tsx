@@ -7,16 +7,19 @@ interface PanelProps {
   empty: string
   /** Frames the children on a widget surface. */
   boxed?: boolean
+  /** Shown at the heading's right end, also while count is 0. */
+  actions?: ReactNode
   children: ReactNode
 }
 
 /** A titled block of a page, headed like a VS Code side bar section. */
-export function Panel({ title, count, empty, boxed = false, children }: PanelProps) {
+export function Panel({ title, count, empty, boxed = false, actions, children }: PanelProps) {
   return (
     <section aria-label={title} className="flex min-w-0 flex-col gap-1.5">
       <h2 className="flex h-[22px] items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted">
         {title}
         {count > 0 && <span className="font-normal tabular-nums text-faint">{count}</span>}
+        {actions && <span className="ml-auto flex items-center gap-1 normal-case tracking-normal">{actions}</span>}
       </h2>
       {count === 0 ? (
         <p className="text-xs text-muted">{empty}</p>
