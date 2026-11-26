@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] A new pure function, beside `currentTicket`, picks the last sent user prompt from a chat's items. It skips queued or held prompts and returns `{ id, text }` or nothing. Unit-tested like `currentTicket.test.ts`: last sent prompt, queued and held skipped, empty chat returns nothing, legacy repeated ids.
 - [ ] A new strip component sits in the chat's top area, next to `CurrentTicketStrip`, outside the scroll box. It reuses `ui/SummaryStrip` for its look. Its first line is cut to one line by CSS ellipsis, not by character count.

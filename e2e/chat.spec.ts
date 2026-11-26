@@ -950,6 +950,31 @@ test.describe('chat rendering', () => {
       })
     }
   })
+
+  test('the last prompt strip shows once the prompt scrolls away, and a click brings the prompt back while output still arrives', async ({ launched }) => {
+    const { page } = launched
+    const pane = page.locator('[data-chat-pane]')
+    const strip = pane.getByRole('region', { name: 'Last prompt' })
+    await page.setViewportSize({ width: 900, height: 420 })
+    await startSession(launched)
+    await expect(strip).toHaveCount(0)
+
+    await send(page, 'tall answer')
+    await expect(pane.getByText('The second part arrived.')).toBeVisible()
+    await send(page, 'a long answer\nwith a second line')
+    await expect(pane.getByText('End of the first part.').nth(1)).toBeVisible()
+
+    await expect(strip).toBeVisible()
+    await expect(strip.getByRole('button')).toHaveText('a long answer')
+    const lastPrompt = pane.locator('[data-user-prompt]', { hasText: 'with a second line' })
+    await expect(lastPrompt).not.toBeInViewport()
+
+    await strip.getByRole('button').click()
+    await expect(lastPrompt).toBeInViewport()
+    await expect(strip).toHaveCount(0)
+    await expect(pane.getByText('The second part arrived.').nth(1)).toBeAttached({ timeout: 10_000 })
+    await expect(lastPrompt).toBeInViewport()
+  })
 })
 
 /** Agent files a previous process of the chat left two days ago: two that handed back, one that stopped writing without a report. */

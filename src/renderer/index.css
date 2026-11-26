@@ -112,3 +112,19 @@ code, kbd, pre, samp {
     display: none;
   }
 }
+
+/* The prompt the last prompt strip jumped to, ringed for a moment. */
+@layer utilities {
+  .prompt-flash [data-user-prompt] {
+    animation: prompt-flash 1.5s ease-out;
+  }
+
+  @keyframes prompt-flash {
+    from {
+      box-shadow: 0 0 0 2px rgb(var(--cc-accent));
+    }
+    to {
+      box-shadow: 0 0 0 2px rgb(var(--cc-accent) / 0);
+    }
+  }
+}

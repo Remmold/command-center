@@ -11,9 +11,14 @@ interface Restore {
 /**
  * Keeps a scroll box pinned to the bottom while its content grows, but only while the reader is at
  * the bottom: scrolling up to read stops it, scrolling back down starts it again. `toBottom` is the
- * extension's `scrollToBottomOnSend`.
+ * extension's `scrollToBottomOnSend`. `leave` is the reader leaving the bottom from outside the box, as a jump to an
+ * earlier message.
  */
-export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: RefObject<HTMLElement>, restore: Restore = {}): { toBottom: () => void } {
+export function useFollowOutput(
+  scrollRef: RefObject<HTMLElement>,
+  contentRef: RefObject<HTMLElement>,
+  restore: Restore = {}
+): { toBottom: () => void; leave: () => void } {
   const following = useRef(restore.saved?.following ?? true)
   const pending = useRef(restore.saved && !restore.saved.following ? restore.saved : undefined)
   const scrolledRef = useRef(restore.onScrolled)
@@ -28,6 +33,11 @@ export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: R
     el.scrollTop = el.scrollHeight
     ownTop.current = el.scrollTop
   }, [scrollRef])
+
+  const leave = useCallback(() => {
+    following.current = false
+    ownTop.current = undefined
+  }, [])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -59,10 +69,6 @@ export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: R
       }
     })
     // The reader's own move wins over the next re-pin, which would otherwise land before its scroll event.
-    const leave = (): void => {
-      following.current = false
-      ownTop.current = undefined
-    }
     const onWheel = (e: WheelEvent): void => {
       if (readerLeavesBottom({ kind: 'wheel', deltaY: e.deltaY })) leave()
     }
@@ -86,7 +92,7 @@ export function useFollowOutput(scrollRef: RefObject<HTMLElement>, contentRef: R
       el.removeEventListener('pointerdown', onPointer)
       observer.disconnect()
     }
-  }, [scrollRef, contentRef])
+  }, [scrollRef, contentRef, leave])
 
-  return { toBottom }
+  return { toBottom, leave }
 }
