@@ -8,6 +8,7 @@ import {
   moveChatStep,
   moveChatToNextGroup,
   moveGroup,
+  moveGroupBeside,
   placeChats,
   PRUNE_AFTER_DAYS,
   renameGroup,
@@ -204,6 +205,16 @@ describe('groups', () => {
     expect(moveGroup(layout, 'home', UNGROUPED, null)).toBe(layout)
     expect(moveGroup(layout, 'home', UNGROUPED, WORK_ID)).toBe(layout)
     expect(moveGroup(layout, 'home', UNGROUPED, UNGROUPED)).toBe(layout)
+  })
+
+  it('a group dropped on a header goes right before or right after it, Ungrouped too', () => {
+    expect(shape(moveGroupBeside(three(), 'home', TODAY_ID, REVIEW_ID, 'after'))).toEqual(['Review: r', 'Today: a b c', `${UNGROUPED}: n`])
+    expect(shape(moveGroupBeside(three(), 'home', UNGROUPED, TODAY_ID, 'after'))).toEqual(['Today: a b c', `${UNGROUPED}: n`, 'Review: r'])
+    expect(shape(moveGroupBeside(three(), 'home', TODAY_ID, UNGROUPED, 'after'))).toEqual(['Review: r', `${UNGROUPED}: n`, 'Today: a b c'])
+    expect(shape(moveGroupBeside(three(), 'home', REVIEW_ID, TODAY_ID, 'before'))).toEqual(['Review: r', 'Today: a b c', `${UNGROUPED}: n`])
+    const layout = three()
+    expect(moveGroupBeside(layout, 'home', TODAY_ID, REVIEW_ID, 'before')).toBe(layout)
+    expect(moveGroupBeside(layout, 'home', TODAY_ID, WORK_ID, 'after')).toBe(layout)
   })
 
   it('reorders a group before another, or to the very end, below Ungrouped', () => {

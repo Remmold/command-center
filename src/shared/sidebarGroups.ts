@@ -55,7 +55,7 @@ function parseKnown(x: unknown): Record<string, ChatSeen> {
   return out
 }
 
-/** A layout saved before Ungrouped could move has no place for it; it then goes last, which the next save keeps. */
+/** Missing or invalid means last; the next save keeps it. */
 function ungroupedPlace(x: unknown, groups: number): number {
   return typeof x === 'number' && Number.isInteger(x) && x >= 0 ? Math.min(x, groups) : groups
 }

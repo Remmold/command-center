@@ -9,7 +9,7 @@ import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useSessionListStore } from '../../state/sessionListStore'
 import { groupOpen, isNeedsYouRow, sessionRowTooltip, waitingBadge, type AccountSection, type ListFold, type ListGroup, type SessionRow } from '../../state/sessionList'
 import { UNGROUPED } from '../../../shared/sidebarGroups'
-import { createGroup, deleteGroup, EMPTY_ACCOUNT, groupOf, groupOrder, moveChat, moveChatStep, moveChatToNextGroup, moveGroup, renameGroup, setFolded } from '../../state/sidebarGroups'
+import { createGroup, deleteGroup, groupOf, moveChat, moveChatStep, moveChatToNextGroup, moveGroupBeside, renameGroup, setFolded } from '../../state/sidebarGroups'
 import { sectionTitle } from '../../state/accounts'
 import { headerUsage, type HeaderTone } from '../../state/usageModel'
 import { useChatPairStore } from '../../state/chatPairStore'
@@ -56,6 +56,8 @@ function newGroup(profileId: string, chat?: string): GroupRef {
   return { profileId, groupId }
 }
 
+const rowElement = (rowKey: string) => document.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(rowKey)}"]`)
+
 /** A chat that shows up in the list, like a new one at the top of Ungrouped, is scrolled into view. */
 function useScrollToAdded(sections: readonly AccountSection[], watching: boolean): void {
   const seen = useRef<ReadonlySet<string> | null>(null)
@@ -65,13 +67,13 @@ function useScrollToAdded(sections: readonly AccountSection[], watching: boolean
     const before = seen.current
     seen.current = new Set(keys)
     const added = before && keys.find((k) => !before.has(k))
-    if (added) document.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(added)}"]`)?.scrollIntoView({ block: 'nearest' })
+    if (added) rowElement(added)?.scrollIntoView({ block: 'nearest' })
   }, [sections, watching])
 }
 
 /** After a move remounts the row, focus follows it. */
 function refocus(rowKey: string): void {
-  requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(rowKey)}"]`)?.focus())
+  requestAnimationFrame(() => rowElement(rowKey)?.focus())
 }
 
 export function SessionList() {
@@ -244,9 +246,7 @@ function GroupSection({ profileId, group, fold, renaming, onRename, onRenamed, c
 function dropOnGroup(profileId: string, group: ListGroup, dragged: DragItem, side: 'before' | 'after'): void {
   changeLayout((layout) => {
     if (dragged.kind === CHAT) return moveChat(layout, profileId, dragged.id, { group: group.id, before: group.rows[0]?.placeId ?? null })
-    if (side === 'before') return moveGroup(layout, profileId, dragged.id, group.id)
-    const order = groupOrder(layout.accounts[profileId] ?? EMPTY_ACCOUNT).filter((id) => id !== dragged.id)
-    return moveGroup(layout, profileId, dragged.id, order[order.indexOf(group.id) + 1] ?? null)
+    return moveGroupBeside(layout, profileId, dragged.id, group.id, side)
   })
 }
 

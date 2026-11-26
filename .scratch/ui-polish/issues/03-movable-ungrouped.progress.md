@@ -1,3 +1,3 @@
-Done: ungroupedAt in layout (parse migrates to last), groupOrder/moveGroup/createGroup/deleteGroup/accountSections follow it, Ungrouped draggable, new rows scrolled into view; unit tests + pnpm quick green.
-Next: pnpm e2e sessions.spec.ts and accounts.spec.ts, commit, then code review since 65f790e.
-Open reds: none known (e2e not run yet).
+Done: ticket 03 resolved (417880f + review fixes); Ungrouped movable, last by default, unit + sidebar e2e green.
+Next: none; ticket 04 (guest sessions) builds on groupOrder/moveGroupBeside.
+Open reds: none. Known gap: a new chat in a folded Ungrouped or folded account is not unfolded, so it is not scrolled into view.

@@ -191,23 +191,32 @@ export function moveGroup(layout: SidebarLayout, profileId: string, group: strin
   })
 }
 
+/** A group dropped on another's header: right before it, or right after it. */
+export function moveGroupBeside(layout: SidebarLayout, profileId: string, group: string, target: string, side: 'before' | 'after'): SidebarLayout {
+  if (side === 'before') return moveGroup(layout, profileId, group, target)
+  const order = groupOrder(layout.accounts[profileId] ?? EMPTY_ACCOUNT).filter((id) => id !== group)
+  const at = order.indexOf(target)
+  return at < 0 ? layout : moveGroup(layout, profileId, group, order[at + 1] ?? null)
+}
+
 /** A new group goes last; made from a chat, it takes the chat and goes right after the chat's group. Never below an Ungrouped that is last. */
 export function createGroup(layout: SidebarLayout, profileId: string, spec: { id: string; name: string; chat?: string }): SidebarLayout {
   const name = spec.name.trim()
   if (!name) return layout
+  const { chat } = spec
   return changeAccount(layout, profileId, (a) => {
     const fresh: OwnGroup = { id: spec.id, name, folded: false, chats: [] }
-    const from = spec.chat ? listsOf(a).find((l) => l.chats.includes(spec.chat!)) : undefined
-    if (spec.chat && !from) return null
+    const from = chat === undefined ? undefined : listsOf(a).find((l) => l.chats.includes(chat))
+    if (chat !== undefined && !from) return null
     const order = groupOrder(a)
-    const after = from ? order.indexOf(from.id) + 1 : order.length
-    const ungroupedLast = order[order.length - 1] === UNGROUPED
-    order.splice(ungroupedLast && after === order.length ? after - 1 : after, 0, spec.id)
+    const wanted = from ? order.indexOf(from.id) + 1 : order.length
+    const belowLastUngrouped = wanted === order.length && order[order.length - 1] === UNGROUPED
+    order.splice(belowLastUngrouped ? wanted - 1 : wanted, 0, spec.id)
     const placed = withOrder(a, order, [...a.groups, fresh])
-    if (!from) return placed
+    if (!from || chat === undefined) return placed
     return withLists(placed, [
-      { id: from.id, chats: from.chats.filter((c) => c !== spec.chat) },
-      { id: spec.id, chats: [spec.chat!] }
+      { id: from.id, chats: from.chats.filter((c) => c !== chat) },
+      { id: spec.id, chats: [chat] }
     ])
   })
 }
