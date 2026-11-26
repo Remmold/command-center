@@ -64,9 +64,14 @@ export function createUpdateController(options: UpdateControllerOptions): Update
 
   // electron-updater starts the installer before it quits, so the question comes before quitAndInstall.
   const install = (): void => {
-    if (!options.confirmRestart) return installNow()
+    if (!options.confirmRestart) {
+      installNow()
+      return
+    }
     void options.confirmRestart().then(
-      (ok) => ok && installNow(),
+      (ok) => {
+        if (ok) installNow()
+      },
       (err) => console.error('[update] restart confirm failed', err)
     )
   }
