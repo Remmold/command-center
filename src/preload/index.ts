@@ -57,6 +57,7 @@ const api: RendererApi = {
     create: (request) => ipcRenderer.invoke(IPC.FEATURES_CREATE, request),
     discard: (name, workspaceId) => ipcRenderer.invoke(IPC.FEATURES_DISCARD, name, workspaceId),
     stages: () => ipcRenderer.invoke(IPC.FEATURES_STAGES),
+    setClaudeSession: (name, claudeSessionId) => ipcRenderer.invoke(IPC.FEATURES_SET_CLAUDE_SESSION, name, claudeSessionId),
     onStagesChanged: (cb) => {
       const handler = (_e: IpcRendererEvent, stages: Record<string, FeatureStageView>) => cb(stages)
       ipcRenderer.on(IPC.FEATURES_STAGES_CHANGED, handler)

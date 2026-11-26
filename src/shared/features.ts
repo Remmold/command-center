@@ -6,6 +6,8 @@ export interface FeatureRecord {
   worktreePath: string
   branch: string
   sessionId: string
+  /** The Claude CLI's own id for the session, once known; what resumes it after the chat is gone. */
+  claudeSessionId?: string
   /** Reserved server ports; empty until a feature boots servers. */
   ports: number[]
   startedAt: number
@@ -34,4 +36,23 @@ export function featureFirstPrompt(feature: Pick<FeatureRecord, 'name' | 'worktr
     `Feature worktree: ${feature.worktreePath}`,
     'Work in this worktree; do not make another one.'
   ].join('\n')
+}
+
+export type FeatureOpen =
+  | { kind: 'open' }
+  | { kind: 'rehost'; claudeSessionId: string }
+  | { kind: 'missing'; reason: string }
+
+/** What clicking a feature row does: show its hosted chat, host it again resumed, or say plainly why it cannot. */
+export function featureOpenPlan(
+  feature: Pick<FeatureRecord, 'name' | 'claudeSessionId' | 'sessionId'>,
+  hosted: boolean,
+  workspaceExists: boolean,
+  worktreeMissing: boolean
+): FeatureOpen {
+  if (hosted) return { kind: 'open' }
+  if (!workspaceExists) return { kind: 'missing', reason: `The session of ${feature.name} was not found: its workspace was removed.` }
+  if (worktreeMissing) return { kind: 'missing', reason: `The session of ${feature.name} was not found: its worktree folder is gone.` }
+  if (!feature.claudeSessionId) return { kind: 'missing', reason: `The session of ${feature.name} was not found: it was closed before Claude gave it an id, so there is nothing to resume.` }
+  return { kind: 'rehost', claudeSessionId: feature.claudeSessionId }
 }

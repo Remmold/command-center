@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
 import { accountNote, completedFeatureRows, featureRows, stageNote, type FeatureRow } from '../../state/featureRows'
-import { useFeaturesStore } from '../../state/featuresStore'
+import { openFeatureSession, useFeaturesStore } from '../../state/featuresStore'
 import { useProfilesStore } from '../../state/profilesStore'
-import { openSession } from '../../state/sessionNavigation'
 import { useSessionStatusStore } from '../../state/sessionStatusStore'
 import { useToastStore } from '../../state/toastStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
@@ -44,9 +43,11 @@ export function FeaturesGroup() {
 }
 
 function openFeature(row: FeatureRow): void {
-  if (!openSession(row.sessionId, { focus: false })) {
-    useToastStore.getState().show(`The session of ${row.name} was not found: it was closed, or its chat is gone.`)
-  }
+  const feature = useFeaturesStore.getState().features.find((f) => f.name === row.name)
+  if (!feature) return
+  void openFeatureSession(feature).then((why) => {
+    if (why) useToastStore.getState().show(why)
+  })
 }
 
 function FeatureListRow({ row }: { row: FeatureRow }) {

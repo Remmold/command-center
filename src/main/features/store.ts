@@ -42,6 +42,12 @@ export function createFeatureStore(file: string) {
   return {
     list: (): Promise<FeatureRecord[]> => serial(readAll),
     add: (record: FeatureRecord): Promise<void> => serial(async () => writeAll([...(await readAll()), record])),
+    setClaudeSessionId: (name: string, claudeSessionId: string): Promise<void> =>
+      serial(async () => {
+        const all = await readAll()
+        if (!all.some((r) => r.name === name && r.claudeSessionId !== claudeSessionId)) return
+        await writeAll(all.map((r) => (r.name === name ? { ...r, claudeSessionId } : r)))
+      }),
     remove: (name: string): Promise<void> => serial(async () => writeAll((await readAll()).filter((r) => r.name !== name)))
   }
 }

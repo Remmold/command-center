@@ -105,7 +105,7 @@ interface ProjectViewsState {
 
   addClaudeSession: (
     projectId: string,
-    options?: { id?: string; model?: ClaudeModel; effort?: string; permissionMode?: PermissionMode; addDirs?: string[] }
+    options?: { id?: string; claudeSessionId?: string; model?: ClaudeModel; effort?: string; permissionMode?: PermissionMode; addDirs?: string[] }
   ) => ClaudeChatSession | null
   closeClaudeSession: (projectId: string, sessionId: string) => void
   setActiveClaudeSession: (projectId: string, sessionId: string) => void
@@ -333,6 +333,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           title: NEW_SESSION_TITLE,
           ...(options?.model || options?.effort ? pickedOf(options) : startingChoiceOn(profileOf(projectId))),
           thinking: true,
+          ...(options?.claudeSessionId ? { claudeSessionId: options.claudeSessionId } : {}),
           permissionMode: options?.permissionMode,
           ...(options?.addDirs?.length ? { addDirs: options.addDirs } : {})
         }

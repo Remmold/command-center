@@ -9,6 +9,7 @@ export const IPC = {
   FEATURES_CREATE: 'features:create',
   FEATURES_DISCARD: 'features:discard',
   FEATURES_STAGES: 'features:stages',
+  FEATURES_SET_CLAUDE_SESSION: 'features:setClaudeSession',
   FEATURES_STAGES_CHANGED: 'features:stagesChanged',
   SIDEBAR_GROUPS_LOAD: 'sidebarGroups:load',
   SIDEBAR_GROUPS_SAVE: 'sidebarGroups:save',

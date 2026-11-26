@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import type { FeatureStageView } from '../../shared/featureStage'
-import { featureFirstPrompt, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
-import { startSession } from './sessionNavigation'
+import { featureFirstPrompt, featureOpenPlan, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
+import type { ChatItem } from '../components/chat/types'
+import { useChatItemsStore } from './chatItemsStore'
+import { hostedSessions, openSession, startSession } from './sessionNavigation'
+import { useProjectViewsStore } from './projectViewsStore'
 import { useWorkspacesStore } from './workspacesStore'
 
 interface FeaturesState {
@@ -63,4 +66,33 @@ export async function startFeature(request: Omit<NewFeatureRequest, 'sessionId'>
 /** Follows stage changes from main; call once. */
 export function followFeatureStages(): () => void {
   return window.api.features.onStagesChanged((stages) => useFeaturesStore.setState({ stages }))
+}
+
+/** Keeps a feature session's Claude id on its record, which is what resumes it once its chat is gone. */
+export function rememberFeatureSession(paneId: string, claudeSessionId: string): void {
+  const feature = useFeaturesStore.getState().features.find((f) => f.sessionId === paneId)
+  if (!feature || feature.claudeSessionId === claudeSessionId) return
+  useFeaturesStore.setState((s) => ({ features: s.features.map((f) => (f === feature ? { ...f, claudeSessionId } : f)) }))
+  void window.api.features.setClaudeSession(feature.name, claudeSessionId).catch((err) => console.error('failed to save the feature session id', err))
+}
+
+/** Shows the feature's session; one whose chat is gone is hosted again, resumed, in the feature's worktree and on its account. Resolves with why it cannot, or null. */
+export async function openFeatureSession(feature: FeatureRecord): Promise<string | null> {
+  const views = useProjectViewsStore.getState()
+  const workspace = useWorkspacesStore.getState().workspaces.find((w) => w.id === feature.workspaceId)
+  const hosted = hostedSessions(views.views).some((s) => s.paneId === feature.sessionId)
+  const plan = featureOpenPlan(feature, hosted, workspace !== undefined, useFeaturesStore.getState().stages[feature.name]?.missing === true)
+  if (plan.kind === 'missing') return plan.reason
+  if (plan.kind === 'open') return openSession(feature.sessionId, { focus: false }) ? null : `The session of ${feature.name} was not found.`
+  if (!workspace) return null
+  if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
+  const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { id: feature.sessionId, claudeSessionId: plan.claudeSessionId })
+  if (!created) return `The session of ${feature.name} could not be hosted again.`
+  const read = await window.api.observed.read(workspace.id, plan.claudeSessionId)
+  if (read.ok) {
+    const history: ChatItem[] = read.items
+    useChatItemsStore.getState().appendItems(created.id, history)
+  }
+  openSession(created.id, { focus: false })
+  return null
 }

@@ -250,6 +250,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     featureStages?.changed()
     return result
   })
+  ipcMain.handle(IPC.FEATURES_SET_CLAUDE_SESSION, (_e, name: unknown, claudeSessionId: unknown) =>
+    typeof name === 'string' && typeof claudeSessionId === 'string' ? featureStore.setClaudeSessionId(name, claudeSessionId) : undefined
+  )
   ipcMain.handle(IPC.FEATURES_DISCARD, async (_e, name: string, workspaceId: string) => {
     const source = (await workspaces.list()).find((w) => w.id === workspaceId)
     if (source) await discardFeature(featureDeps, name, source.path)

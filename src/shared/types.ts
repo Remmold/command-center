@@ -466,6 +466,8 @@ export interface RendererApi {
     discard: (name: string, workspaceId: string) => Promise<void>
     /** Each feature's stage by name, read from its files. */
     stages: () => Promise<Record<string, FeatureStageView>>
+    /** Keeps the feature session's Claude id on its record, so the session can be resumed once its chat is gone. */
+    setClaudeSession: (name: string, claudeSessionId: string) => Promise<void>
     onStagesChanged: (cb: (stages: Record<string, FeatureStageView>) => void) => () => void
   }
   sidebarGroups: {
