@@ -4,7 +4,7 @@
 
 **Blocked by:** 05
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Allow, Ask and Deny show as three lists for the edited layer, with the effective (combined) rules visible for the workspace.
 - [ ] Add a rule by picking a tool (Bash, PowerShell, Read, Edit, Write, WebFetch, an MCP server, Agent, …) and typing a pattern, with a plain sentence of what it does ("Allow Bash commands starting with git status").

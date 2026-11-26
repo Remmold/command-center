@@ -57,6 +57,8 @@ export interface SettingEntry {
   risk?: (value: unknown) => string | null
   /** An object Claude takes whole from the highest layer that sets it, instead of combining it per key. */
   whole?: boolean
+  /** For an editor that shows only part of its value: the paths inside it, as keys, that it leaves out; `[]` is the whole value. */
+  leavesOut?: (value: unknown) => string[][]
   /** The docs' exceptions: from the `from` layers, a value further along the ladder beats the value that would win. */
   stricter?: {
     /** Values from least to most strict; one value is enough when only it is the stricter one. */
@@ -137,6 +139,16 @@ export const EFFORT_OPTIONS: ChoiceOption[] = [
 const CACHE_TTL = choice(['5m', '5 minutes'], ['1h', '1 hour'])
 const QUESTION_WAIT = choice(['60s', '1 minute'], ['5m', '5 minutes'], ['10m', '10 minutes'], ['never', 'Never'])
 
+/** What the effort per model editor can't show: anything but a text `effortLevel` in an object per model. */
+function notEffortLevels(value: unknown): string[][] {
+  if (!isSettingsObject(value)) return [[]]
+  return Object.entries(value).flatMap(([model, settings]) =>
+    isSettingsObject(settings)
+      ? Object.entries(settings).flatMap(([key, inner]) => (key === 'effortLevel' && typeof inner === 'string' ? [] : [[model, key]]))
+      : [[model]]
+  )
+}
+
 const model = inCategory('Model & thinking')
 const MODEL_AND_THINKING: SettingEntry[] = [
   model('model', 'Model', 'The model new chats start on. The model picker in a chat saves its pick here too.', { kind: 'choice', options: MODEL_OPTIONS }, {
@@ -149,7 +161,8 @@ const MODEL_AND_THINKING: SettingEntry[] = [
   }),
   model('modelSettings', 'Effort per model', 'The effort saved for each model. The effort picker in a chat saves here.', { kind: 'editor', editor: 'modelEffort' }, {
     defaultLabel: 'none saved',
-    newChatsOnly: true
+    newChatsOnly: true,
+    leavesOut: notEffortLevels
   }),
   model('alwaysThinkingEnabled', 'Extended thinking', 'Lets Claude think before it answers, in every chat.', TOGGLE, { defaultLabel: "the model's default", newChatsOnly: true }),
   model('fastMode', 'Fast mode', 'Faster answers at a higher price, on the models that offer it.', TOGGLE, { default: false }),
@@ -581,7 +594,8 @@ export function otherKeys(settings: SettingsObject | null): string[] {
   const walk = (value: SettingsObject, parent: string[]): string[] =>
     Object.entries(value).flatMap(([key, inner]) => {
       const path = keyPath(...parent, key)
-      if (entryOf(path)) return []
+      const entry = entryOf(path)
+      if (entry) return entry.key === path && entry.leavesOut ? entry.leavesOut(inner).map((inside) => keyPath(...parent, key, ...inside)) : []
       return splitIntoRows(path) && isSettingsObject(inner) ? walk(inner, [...parent, key]) : [path]
     })
   return settings ? walk(settings, []) : []

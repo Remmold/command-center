@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
-import { SETTINGS_CATALOG, SETTING_CATEGORIES, entryFor, entryOf, formatSettingValue, matchesSearch, otherKeys, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
-import { changeCount, getAt, pathKeys, patchSize, sameValue, withPatch, type SettingsObject, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
+import { SETTINGS_CATALOG, SETTING_CATEGORIES, entryFor, entryOf, formatSettingValue, matchesSearch, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { changeCount, getAt, pathKeys, patchSize, sameValue, withPatch, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
 import { effectiveSetting, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
 import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
 import { conflicts, pendingChanges, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
@@ -24,8 +24,15 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { Toolbar } from '../ui/Toolbar'
-import { OtherKeysList, type OtherKeyRow } from './OtherKeysList'
+import { OtherKeysList } from './OtherKeysList'
+import { otherKeyRows, otherKeysNotice } from './otherKeysView'
 import { SettingField, type ShownEffective } from './SettingField'
+
+/** Names the boxes whose text Save would lose. */
+function unparsedNote(keys: readonly string[]): string {
+  const names = keys.map((key) => settingWords(key).label).join(', ')
+  return `${keys.length === 1 ? 'A box holds' : `${keys.length} boxes hold`} JSON not taken yet: ${names}`
+}
 
 const OTHER_KEYS_CATEGORY: SettingCategory = 'Other keys'
 
@@ -67,24 +74,6 @@ function layersWithPending(read: ClaudeSettingsRead | null, pending: Record<stri
 function shownEffective(entry: SettingEntry, layers: LayerSettings, edited: SettingsLayer): ShownEffective {
   const effective = effectiveSetting(entry, layers)
   return { value: effective.value, locked: effective.locked, badge: sourceBadge(effective, entry, layers, edited) }
-}
-
-/** The file's other keys with their waiting changes, a key waiting to be removed included. */
-function otherKeyRows(
-  disk: SettingsObject | null,
-  edited: SettingsObject | null,
-  pending: PendingFile | null,
-  fileChanged: ReadonlyMap<string, { value: unknown }>
-): OtherKeyRow[] {
-  const before = pending?.base ?? disk
-  const paths = [...new Set([...otherKeys(before), ...otherKeys(edited)])]
-  return paths.map((path) => ({
-    path,
-    value: getAt(edited, path),
-    before: getAt(before, path),
-    changed: pending !== null && (Object.hasOwn(pending.patch.set, path) || pending.patch.remove.includes(path)),
-    fileValue: fileChanged.get(path)
-  }))
 }
 
 /** Settings closes and Context opens on the file; nothing happens when unsaved changes are kept. */
@@ -218,7 +207,9 @@ export function ClaudeCodeSettings() {
   const saving = useClaudeSettingsStore((s) => s.saving)
   const saveError = useClaudeSettingsStore((s) => s.saveError)
   const settling = useClaudeSettingsStore((s) => s.settling)
-  const { load, applyChange, selectLayer, selectProfile, selectWorkspace, stage, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
+  const unparsed = useClaudeSettingsStore((s) => s.unparsed)
+  const discards = useClaudeSettingsStore((s) => s.discards)
+  const { load, applyChange, selectLayer, selectProfile, selectWorkspace, stage, markUnparsed, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
   const { file, pending } = useEditedFile()
   const [category, setCategory] = useState<SettingCategory>(CATEGORIES[0])
   const [query, setQuery] = useState('')
@@ -249,9 +240,9 @@ export function ClaudeCodeSettings() {
   const fileChanged = useMemo(() => new Map(conflicts(pending, snapshot?.value ?? null).map((c) => [entryOf(c.key)?.key ?? c.key, { value: c.theirs }])), [pending, snapshot])
   const unreadable = snapshot?.value === null
   const otherRows = useMemo(() => {
-    const rows = otherKeyRows(snapshot?.value ?? null, layers[layer], pending, fileChanged)
+    const rows = otherKeyRows(snapshot?.value ?? null, layers[layer], pending)
     return searching ? rows.filter((row) => matchesSearch(entryFor(row.path), query)) : rows
-  }, [snapshot, layers, layer, pending, fileChanged, searching, query])
+  }, [snapshot, layers, layer, pending, searching, query])
   const showOtherKeys = searching ? otherRows.length > 0 : category === OTHER_KEYS_CATEGORY
   const noWorkspace = layer !== 'account' && workspaces.length === 0
 
@@ -303,7 +294,7 @@ export function ClaudeCodeSettings() {
             </nav>
           }
         >
-          <PageBody>
+          <PageBody key={discards}>
             <FileLine note={layer === 'account' ? accountNote(profile, defaultName) : LAYER_NOTES[layer]} />
             {read?.organisation && <NoticeLine tone="warning">Your organisation’s settings in {read.organisation.path} apply over every layer and can’t be changed here.</NoticeLine>}
             {read?.organisation?.snapshot.error && (
@@ -333,6 +324,7 @@ export function ClaudeCodeSettings() {
                       fileValue={fileChanged.get(entry.key)}
                       disabled={!snapshot || unreadable || saving}
                       onStage={stage}
+                      onUnparsed={markUnparsed}
                     />
                   ))}
                 </div>
@@ -340,25 +332,24 @@ export function ClaudeCodeSettings() {
             ))}
             {showOtherKeys && (
               <PageGroup title={OTHER_KEYS_CATEGORY}>
-                <NoticeLine>
-                  {otherRows.length === 0 ? 'Every key in this file has its own setting above.' : 'Keys this page has no control for, as raw JSON. Leaving a box checks it before the change waits for Save.'}
-                </NoticeLine>
-                <OtherKeysList rows={otherRows} disabled={!snapshot || unreadable || saving} onStage={stage} />
+                {snapshot && <NoticeLine>{otherKeysNotice(snapshot, otherRows.length)}</NoticeLine>}
+                <OtherKeysList rows={otherRows} disabled={!snapshot || unreadable || saving} onStage={stage} onUnparsed={markUnparsed} />
               </PageGroup>
             )}
           </PageBody>
         </SidebarLayout>
       </div>
-      {(count > 0 || saveError) && (
+      {(count > 0 || saveError || unparsed.length > 0) && (
         <SaveBar
           label="Unsaved Claude Code changes"
-          summary={changeCount(count)}
+          summary={unparsed.length > 0 ? `${changeCount(count)} · ${unparsedNote(unparsed)}` : changeCount(count)}
           error={saveError}
           actions={
             <>
               <Button variant="ghost" disabled={count === 0} onClick={() => setReviewing(true)}>
                 Review
               </Button>
+              {/* Not disabled by a box being typed in: pressing Save leaves the box, which takes JSON that parses. */}
               <Button disabled={count === 0 || saving} onClick={() => void save()}>
                 Save
               </Button>

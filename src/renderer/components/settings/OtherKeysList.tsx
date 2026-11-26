@@ -20,12 +20,14 @@ interface Props {
   disabled: boolean
   /** Stages a value for a key path; undefined removes the key from the layer. */
   onStage: (key: string, value: unknown) => void
+  /** Told whether a key's box holds text not yet taken as its value. */
+  onUnparsed: (key: string, unparsed: boolean) => void
 }
 
 const shownValue = (value: unknown): string => (value === undefined ? 'not set' : JSON.stringify(value))
 
 /** Each key the page has no control for, with its raw value as JSON to edit, or a Remove. */
-export function OtherKeysList({ rows, disabled, onStage }: Props) {
+export function OtherKeysList({ rows, disabled, onStage, onUnparsed }: Props) {
   return (
     <div>
       {rows.map(({ path, value, before, changed, fileValue }) => {
@@ -54,7 +56,9 @@ export function OtherKeysList({ rows, disabled, onStage }: Props) {
               )
             }
           >
-            {!removed && <JsonField label={`Value of ${name}`} value={value} disabled={disabled} onChange={(next) => onStage(path, next)} />}
+            {!removed && (
+              <JsonField label={`Value of ${name}`} value={value} disabled={disabled} onChange={(next) => onStage(path, next)} onUnparsedChange={(unparsed) => onUnparsed(path, unparsed)} />
+            )}
           </FormRow>
         )
       })}

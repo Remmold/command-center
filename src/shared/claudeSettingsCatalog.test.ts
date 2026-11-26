@@ -126,7 +126,19 @@ describe('the other keys of a file', () => {
   })
 
   it('leave out everything inside a row that holds a whole object', () => {
-    expect(otherKeys({ env: { MADE_UP: '1' }, modelSettings: { 'claude-opus-5-5': { effortLevel: 'high', other: 1 } }, enabledPlugins: { a: true } })).toEqual([])
+    expect(otherKeys({ env: { MADE_UP: '1' }, enabledPlugins: { a: true } })).toEqual([])
+  })
+
+  it('include what the effort per model editor does not show: other keys of a model, a level that is not text, a model or value that is not an object', () => {
+    const modelSettings = { 'claude-opus-5-5': { effortLevel: 'high', autoCompactWindow: 200000, maxEffortLevel: 'xhigh' }, 'claude-x.1': { effortLevel: 3 }, odd: 'nope' }
+    expect(otherKeys({ modelSettings })).toEqual([
+      'modelSettings.claude-opus-5-5.autoCompactWindow',
+      'modelSettings.claude-opus-5-5.maxEffortLevel',
+      'modelSettings.claude-x~11.effortLevel',
+      'modelSettings.odd'
+    ])
+    expect(otherKeys({ modelSettings: 'nope' })).toEqual(['modelSettings'])
+    expect(otherKeys({ modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } } })).toEqual([])
   })
 
   it('take a split object whole when it is not an object, so its value is still shown', () => {

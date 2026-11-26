@@ -20,6 +20,10 @@ interface ClaudeSettingsState {
   saveError: string | null
   /** Save is asking which value to keep for the keys the file changed under. */
   settling: boolean
+  /** The key paths of raw JSON boxes holding text not yet taken as their value; Save waits until there are none. */
+  unparsed: string[]
+  /** Counts Discards, so the form can drop text typed in its boxes. */
+  discards: number
   load: () => Promise<void>
   /** A watched file changed on disk: its snapshot refreshes and its waiting changes stay. */
   applyChange: (change: SettingsFileChange) => void
@@ -27,6 +31,7 @@ interface ClaudeSettingsState {
   selectProfile: (profileId: string) => void
   selectWorkspace: (workspaceId: string) => void
   stage: (key: string, value: unknown) => void
+  markUnparsed: (key: string, unparsed: boolean) => void
   discard: () => void
   /** Asks per conflicting key first; nothing is written while one is unsettled. */
   save: () => Promise<void>
@@ -88,6 +93,8 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
     saving: false,
     saveError: null,
     settling: false,
+    unparsed: [],
+    discards: 0,
     load: async () => {
       const thisRead = ++readTurn
       const workspace = shownWorkspace(get(), useWorkspacesStore.getState().workspaces)
@@ -132,17 +139,21 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
       const next = stage(current ?? null, file.snapshot.value, key, value)
       set({ pending: next ? { ...rest, [file.path]: next } : rest, saveError: null })
     },
+    markUnparsed: (key, unparsed) => {
+      const others = get().unparsed.filter((k) => k !== key)
+      if (unparsed !== others.length < get().unparsed.length) set({ unparsed: unparsed ? [...others, key] : others })
+    },
     discard: () => {
       const file = editedFile(get().read, get().layer)
       if (!file) return
       const { [file.path]: _dropped, ...rest } = get().pending
-      set({ pending: rest, saveError: null, settling: false })
+      set({ pending: rest, saveError: null, settling: false, discards: get().discards + 1 })
       void get().load()
     },
     save: async () => {
       const file = editedFile(get().read, get().layer)
       const changes = file ? get().pending[file.path] : undefined
-      if (!file || !changes || get().saving) return
+      if (!file || !changes || get().saving || get().unparsed.length > 0) return
       if (conflicts(changes, file.snapshot.value).length > 0) {
         set({ settling: true, saveError: null })
         return

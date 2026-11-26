@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { draftFor, isUnparsed, leaveDraft, typeDraft, valueChanged } from './jsonDraft'
 
 interface Props {
   label: string
@@ -6,49 +7,45 @@ interface Props {
   disabled?: boolean
   /** Called on leaving the box with the parsed value, only when the text parses and differs. */
   onChange: (value: unknown) => void
+  /** Told whether the box holds text not yet taken as its value, and false once it unmounts. */
+  onUnparsedChange?: (unparsed: boolean) => void
 }
 
 const MAX_ROWS = 8
 
-const jsonText = (value: unknown): string => JSON.stringify(value, null, 2) ?? ''
-
 /** A small box of raw JSON; text that does not parse shows its parse message and changes nothing. */
-export function JsonField({ label, value, disabled = false, onChange }: Props) {
-  const text = jsonText(value)
-  const [syncedText, setSyncedText] = useState(text)
-  const [draft, setDraft] = useState(text)
-  const [error, setError] = useState<string | null>(null)
-  if (syncedText !== text) {
-    setSyncedText(text)
-    setDraft(text)
-    setError(null)
-  }
+export function JsonField({ label, value, disabled = false, onChange, onUnparsedChange }: Props) {
+  const [box, setBox] = useState(() => draftFor(value))
+  const synced = valueChanged(box, value)
+  if (synced !== box) setBox(synced)
+  const unparsed = isUnparsed(synced)
+  const report = useRef(onUnparsedChange)
+  report.current = onUnparsedChange
+  useEffect(() => {
+    report.current?.(unparsed)
+    return () => report.current?.(false)
+  }, [unparsed])
   const leave = () => {
-    if (draft === text) return setError(null)
-    try {
-      const parsed: unknown = JSON.parse(draft)
-      setError(null)
-      onChange(parsed)
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    const left = leaveDraft(synced)
+    setBox(left.box)
+    if (left.parsed) onChange(left.parsed.value)
   }
   return (
     <div>
       <textarea
         aria-label={label}
-        aria-invalid={error !== null}
+        aria-invalid={synced.error !== null}
         disabled={disabled}
         spellCheck={false}
-        rows={Math.min(MAX_ROWS, draft.split('\n').length)}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        rows={Math.min(MAX_ROWS, synced.draft.split('\n').length)}
+        value={synced.draft}
+        onChange={(e) => setBox(typeDraft(synced, e.target.value))}
         onBlur={leave}
-        className={`w-full min-w-0 resize-y rounded border bg-input px-2 py-1 font-mono text-[11px] text-fg focus:border-focus focus:outline-none ${error ? 'border-error' : 'border-strong'}`}
+        className={`w-full min-w-0 resize-y rounded border bg-input px-2 py-1 font-mono text-[11px] text-fg focus:border-focus focus:outline-none ${synced.error ? 'border-error' : 'border-strong'}`}
       />
-      {error && (
+      {synced.error && (
         <p role="alert" className="mt-0.5 text-[11px] text-error">
-          Not valid JSON: {error}
+          Not valid JSON: {synced.error}
         </p>
       )}
     </div>

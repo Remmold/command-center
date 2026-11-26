@@ -28,6 +28,8 @@ interface Props {
   disabled: boolean
   /** Stages a value for a key path; undefined removes the key from the layer. */
   onStage: (key: string, value: unknown) => void
+  /** Told whether the row's raw JSON box holds text not yet taken as its value. */
+  onUnparsed: (key: string, unparsed: boolean) => void
 }
 
 const NOT_SET = ''
@@ -98,7 +100,7 @@ function Control({ entry, layer, value, disabled, onChange }: Pick<Props, 'entry
 }
 
 /** One catalog setting as a row: its words, raw key, control, default and the value that applies. */
-export function SettingField({ entry, layer, value, effective, changed, fileValue, disabled, onStage }: Props) {
+export function SettingField({ entry, layer, value, effective, changed, fileValue, disabled, onStage, onUnparsed }: Props) {
   const notHere = layerRule(entry, layer)
   const ignoredValue = notHere === null && value !== undefined ? layerRule(entry, layer, value) : null
   const risk = entry.risk?.(value) ?? null
@@ -140,7 +142,15 @@ export function SettingField({ entry, layer, value, effective, changed, fileValu
       control={<Control entry={entry} layer={layer} value={value} disabled={readOnly} onChange={(next) => onStage(entry.key, next)} />}
     >
       {isModelEffort(entry) && <ModelEffortList value={value} disabled={readOnly} onStage={onStage} />}
-      {isRawJson(entry) && <JsonField label={`Value of ${entry.label}`} value={value} disabled={readOnly} onChange={(next) => onStage(entry.key, next)} />}
+      {isRawJson(entry) && (
+        <JsonField
+          label={`Value of ${entry.label}`}
+          value={value}
+          disabled={readOnly}
+          onChange={(next) => onStage(entry.key, next)}
+          onUnparsedChange={(unparsed) => onUnparsed(entry.key, unparsed)}
+        />
+      )}
     </FormRow>
   )
 }
