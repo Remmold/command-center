@@ -22,7 +22,7 @@ export interface ItemEdit {
   remove: string[]
 }
 
-/** The string lists Claude appends to itself, such as an "always allow" rule; they are patched per item, never whole (ADR 0006). */
+/** The string lists Claude appends to itself, such as an "always allow" rule; they are patched per item, never whole (ADR 0007). */
 export const ITEM_LISTS: readonly string[] = ['permissions.allow', 'permissions.ask', 'permissions.deny', 'permissions.additionalDirectories']
 
 export const isStringList = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string')

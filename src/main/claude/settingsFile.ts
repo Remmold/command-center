@@ -106,7 +106,7 @@ let queue: Promise<unknown> = Promise.resolve()
 
 /**
  * Re-reads the file and writes the patch onto it, one save at a time. Writes in place rather than by
- * rename: app-made profiles share the file through a hard link, which a rename would break (ADR 0006).
+ * rename: app-made profiles share the file through a hard link, which a rename would break (ADR 0007).
  */
 export function saveSettingsFile(file: string, base: SettingsObject | null, patch: SettingsPatch): Promise<SettingsSaveResult> {
   const run = async (): Promise<SettingsSaveResult> => {

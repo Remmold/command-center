@@ -1,6 +1,6 @@
 # 03: Follow file changes on disk and settle conflicts on Save
 
-**What to build:** the page refreshes when Claude or anything else changes a file it shows, keeping pending changes, and Save asks which value to keep when the same key changed on disk. Spec: `.scratch/claude-settings/spec.md` (user stories 49, 50; "Settings file module" watching, "Renderer" changed event). ADR 0006.
+**What to build:** the page refreshes when Claude or anything else changes a file it shows, keeping pending changes, and Save asks which value to keep when the same key changed on disk. Spec: `.scratch/claude-settings/spec.md` (user stories 49, 50; "Settings file module" watching, "Renderer" changed event). ADR 0007.
 
 **Blocked by:** 02
 

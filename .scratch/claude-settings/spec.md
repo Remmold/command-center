@@ -15,7 +15,7 @@ A new **Claude Code** section in Settings (between Accounts and Apps). It lists 
 - Each setting carries a tag: **All chats** or **Terminal only**. A filter can hide terminal-only ones.
 - A search box finds settings by label, description or raw key name.
 - Entries the page has no control for appear under **Other keys**, with their raw value, editable and removable. Nothing in a file is ever dropped.
-- Changes wait in a **save bar** ("3 changes · Review · Save · Discard"). Review shows before and after per setting. Save writes only the changed keys onto the file as it is on disk at that moment (ADR 0006). If Claude changed one of those keys meanwhile, Save asks which value to keep.
+- Changes wait in a **save bar** ("3 changes · Review · Save · Discard"). Review shows before and after per setting. Save writes only the changed keys onto the file as it is on disk at that moment (ADR 0007). If Claude changed one of those keys meanwhile, Save asks which value to keep.
 - The page watches its files and refreshes when Claude or anything else changes them.
 - The Work account's adopted folder is editable here too, but only its settings.json and keybindings.json, and only on Save.
 
@@ -144,6 +144,6 @@ Good tests check what Andreas would see or what lands on disk, never internal st
 
 ## Further Notes
 
-- The adopted-folder exception and ADR 0006 were written during the grilling.
+- The adopted-folder exception and ADR 0007 were written during the grilling.
 - The CLI's `--setting-sources user,project,local` means hosted chats read all three layers, so the effective value shown is what hosted chats use (organisation settings apply on top).
 - The Local file stays next to `.claude/settings.json` in the workspace folder on Windows, even inside a git repo.

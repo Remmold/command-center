@@ -531,7 +531,7 @@ export interface RendererApi {
      * Until the next read or `unwatch`, main watches these files and calls `onChanged` when one's text changes.
      */
     read: (profileId: string, workspaceId: string | null) => Promise<ClaudeSettingsRead>
-    /** Writes the patch onto the file as it is on disk (ADR 0006); only account and workspace settings files are allowed. */
+    /** Writes the patch onto the file as it is on disk (ADR 0007); only account and workspace settings files are allowed. */
     save: (path: string, base: SettingsObject, patch: SettingsPatch) => Promise<SettingsSaveResult>
     unwatch: () => void
     onChanged: (cb: (change: SettingsFileChange) => void) => () => void

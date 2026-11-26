@@ -1,6 +1,6 @@
 # 01: Claude Code section with the Account layer, Model & thinking, and a safe save
 
-**What to build:** a Claude Code section in Settings (between Accounts and Apps) that edits the Account layer's settings.json of a chosen account profile, starting with the Model & thinking category, and saves through a save bar that writes only the changed keys, in place. This is the tracer bullet every later ticket builds on. Spec: `.scratch/claude-settings/spec.md` (user stories 1–8, 10–12, 44–48, 51–55, 57, 58; "Setting catalog", "Settings file module", "Renderer"). ADR 0006.
+**What to build:** a Claude Code section in Settings (between Accounts and Apps) that edits the Account layer's settings.json of a chosen account profile, starting with the Model & thinking category, and saves through a save bar that writes only the changed keys, in place. This is the tracer bullet every later ticket builds on. Spec: `.scratch/claude-settings/spec.md` (user stories 1–8, 10–12, 44–48, 51–55, 57, 58; "Setting catalog", "Settings file module", "Renderer"). ADR 0007.
 
 **Blocked by:** None (can start immediately)
 
