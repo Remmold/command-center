@@ -12,5 +12,7 @@
 - [ ] Clicking a row opens the feature session. Nothing in the app requires typing into it.
 - [ ] A Completed group, folded by default, lists completed features. Nothing completes a feature yet (ticket 08), so a test seeds a completed feature record.
 - [ ] A feature whose worktree folder is gone shows a plain "worktree missing" note instead of a stage and never breaks the list.
+- [ ] A feature session counts in the Needs you queue, the "jump to next waiting" key and the tray badge (ticket 01 hides feature sessions from the ordinary Work list, so these skipped them).
+- [ ] After an app restart a feature's session is hosted again when its row is clicked (or still running), and a row whose session cannot be found says so plainly instead of doing nothing on click.
 - [ ] Vitest: the stage reader for every stage above, the tickets count, an in-progress ticket, a missing folder.
 - [ ] No new UI suite scenario.
