@@ -45,7 +45,7 @@ import { testFeature } from './features/testPair'
 import { featureChecklistPath, repoNameFor } from '../shared/testFlow'
 import { sourceCandidates } from './features/source'
 import { createPreviewConfigStore } from './previewConfig/store'
-import { beginPreviewDraft, discardPreviewDraft, readPreviewDraftFile } from './previewConfig/draftFile'
+import { beginPreviewDraft, discardPreviewDraft, readPreviewDraftFile, sweepStalePreviewDrafts } from './previewConfig/draftFile'
 import { createStageService, type StageService } from './features/stageService'
 import { rateLimitOf, type DigestFeature } from './features/digest'
 import { createDigestWriter, type DigestWriter } from './features/digestWriter'
@@ -258,6 +258,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.PREVIEW_CONFIG_SAVE, (_e, workspaceId: unknown, raw: unknown) =>
     typeof workspaceId === 'string' ? previewConfigs.save(workspaceId, raw) : { ok: false, error: 'No workspace was named.' }
   )
+  void sweepStalePreviewDrafts(previewDraftsFolder(), Date.now())
   ipcMain.handle(IPC.PREVIEW_DRAFT_BEGIN, () => beginPreviewDraft(previewDraftsFolder(), randomUUID()))
   ipcMain.handle(IPC.PREVIEW_DRAFT_READ, (_e, file: unknown) => readPreviewDraftFile(previewDraftsFolder(), file))
   ipcMain.handle(IPC.PREVIEW_DRAFT_DISCARD, (_e, file: unknown) => discardPreviewDraft(previewDraftsFolder(), file))

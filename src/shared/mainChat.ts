@@ -1,5 +1,6 @@
 import { allowReply, denyReply, type AllowReply, type DenyReply, type ToolInput } from './approval'
 import { pathKey } from './findings'
+import { dirnameOf } from './pathParts'
 
 /** The pane the main chat always runs in. */
 export const MAIN_CHAT_PANE_ID = 'main-chat'
@@ -19,12 +20,10 @@ export interface MainChatLaunch {
   cliArgs: string[]
 }
 
-const dirOf = (file: string): string => file.replace(/[\\/][^\\/]*$/, '')
-
 /** What the main chat's process starts with: read access to the digest's folder and every feature worktree, and read tools only. */
 export function mainChatLaunch(digestFile: string, worktrees: readonly string[]): MainChatLaunch {
   const addDirs: string[] = []
-  for (const dir of [dirOf(digestFile), ...worktrees]) if (!addDirs.some((d) => pathKey(d) === pathKey(dir))) addDirs.push(dir)
+  for (const dir of [dirnameOf(digestFile), ...worktrees]) if (!addDirs.some((d) => pathKey(d) === pathKey(dir))) addDirs.push(dir)
   return {
     addDirs,
     cliArgs: [`--tools=${READ_ONLY_TOOLS.join(',')}`, `--disallowedTools=${NEVER_TOOLS.join(',')}`, '--strict-mcp-config']

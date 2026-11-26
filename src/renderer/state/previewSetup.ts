@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { dirnameOf } from '../../shared/pathParts'
 import { buildPreviewSetupPrompt } from '../../shared/previewSetup'
 import type { Workspace } from '../../shared/types'
 import { startingChoiceOn } from './modelStore'
@@ -8,14 +9,17 @@ import { settleable } from './startRequests'
 interface PreviewSetupState {
   /** The draft file each workspace's running Set up preview session is to write. */
   pending: Record<string, string>
+  /** When each pending wait began, for the give-up limit. */
+  begunAt: Record<string, number>
 }
 
-export const usePreviewSetupStore = create<PreviewSetupState>()(() => ({ pending: {} }))
+export const usePreviewSetupStore = create<PreviewSetupState>()(() => ({ pending: {}, begunAt: {} }))
 
 function setPending(workspaceId: string, file: string | null): void {
   usePreviewSetupStore.setState((s) => {
     const { [workspaceId]: _old, ...rest } = s.pending
-    return { pending: file ? { ...rest, [workspaceId]: file } : rest }
+    const { [workspaceId]: _began, ...begun } = s.begunAt
+    return file ? { pending: { ...rest, [workspaceId]: file }, begunAt: { ...begun, [workspaceId]: Date.now() } } : { pending: rest, begunAt: begun }
   })
 }
 
@@ -33,7 +37,7 @@ export async function endPreviewSetup(workspaceId: string): Promise<void> {
 export async function startPreviewSetup(workspace: Workspace): Promise<string | null> {
   const begun = await window.api.previewConfig.draftBegin()
   if (!begun.ok) return `Could not prepare the draft file: ${begun.error}`
-  const folder = begun.file.replace(/[\/][^\/]*$/, '')
+  const folder = dirnameOf(begun.file)
   const reached = settleable()
   setPending(workspace.id, begun.file)
   const started = startSession(workspace, {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { readPreviewConfig, type PreviewConfig } from '../../../shared/previewConfig'
+import { settlePreviewDraft } from '../../../shared/previewSetup'
 import { endPreviewSetup, startPreviewSetup, usePreviewSetupStore } from '../../state/previewSetup'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { Button } from '../ui/Button'
@@ -47,6 +48,7 @@ export function PreviewSettings() {
   const [loaded, setLoaded] = useState(false)
   const [setupNote, setSetupNote] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [offered, setOffered] = useState<PreviewConfig | null>(null)
 
   useEffect(() => {
     void load()
@@ -87,22 +89,29 @@ export function PreviewSettings() {
 
   // Claude writes the proposal into the named file; the draft lands here unsaved, so Save stays the user's act.
   useEffect(() => {
+    setOffered(null)
     if (!currentId || !loaded || !waitingOn) return
     let live = true
+    const startedAt = usePreviewSetupStore.getState().begunAt[currentId] ?? Date.now()
+    let emptySince: number | null = null
     const poll = async (): Promise<void> => {
       const read = await window.api.previewConfig.draftRead(waitingOn).catch(() => ({ kind: 'waiting' }) as const)
-      if (!live || read.kind === 'waiting') return
-      clearInterval(timer)
-      await endPreviewSetup(currentId)
       if (!live) return
-      if (read.kind === 'refused') setError(`Claude's proposal was refused: ${read.error}`)
-      else if (read.kind === 'none') setSetupNote(read.reason ? `No browser needed: ${read.reason}` : 'No browser needed: this project has nothing to serve.')
-      else if (dirtyRef.current) setSetupNote("Claude's proposal arrived after you changed this page, so it was dropped. Discard your changes and set up again.")
-      else {
-        setDraft(toDraft(read.config))
-        setError(null)
-        setSetupNote("Claude's proposal is loaded below, not saved. Check it, then Save.")
+      const now = Date.now()
+      emptySince = read.kind === 'empty' ? (emptySince ?? now) : null
+      const step = settlePreviewDraft(read, { dirty: dirtyRef.current, waitedMs: now - startedAt, emptyForMs: emptySince === null ? 0 : now - emptySince })
+      if (step.kind === 'wait') return
+      clearInterval(timer)
+      if (step.kind === 'offer') {
+        setOffered(step.config)
+        return
       }
+      if (step.apply) {
+        setDraft(toDraft(step.apply))
+      }
+      setError(step.error)
+      setSetupNote(step.note)
+      await endPreviewSetup(currentId)
     }
     const timer = setInterval(() => void poll(), 1500)
     void poll()
@@ -111,6 +120,15 @@ export function PreviewSettings() {
       clearInterval(timer)
     }
   }, [currentId, loaded, waitingOn])
+
+  const loadOffered = async (): Promise<void> => {
+    if (!currentId || !offered) return
+    setDraft(toDraft(offered))
+    setError(null)
+    setSetupNote("Claude's proposal is loaded below, not saved. Check it, then Save.")
+    setOffered(null)
+    await endPreviewSetup(currentId)
+  }
 
   const setUp = async (): Promise<void> => {
     if (!current) return
@@ -175,7 +193,15 @@ export function PreviewSettings() {
                     )
                   }
                 />
-                {waitingOn && <NoticeLine>Claude is reading the project; the proposal appears here when it is written.</NoticeLine>}
+                {waitingOn && !offered && <NoticeLine>Claude is reading the project; the proposal appears here when it is written.</NoticeLine>}
+                {offered && (
+                  <NoticeLine>
+                    Claude's proposal arrived while you had unsaved changes, so it was kept. Load it to replace your changes, or Cancel to drop it.{' '}
+                    <Button variant="secondary" onClick={() => void loadOffered()}>
+                      Load proposal
+                    </Button>
+                  </NoticeLine>
+                )}
                 {setupNote && <NoticeLine>{setupNote}</NoticeLine>}
               </PageGroup>
             )}

@@ -36,6 +36,7 @@ export type PreviewDraftRead =
   | { kind: 'waiting' }
   | { kind: 'config'; config: PreviewConfig }
   | { kind: 'none'; reason: string }
+  | { kind: 'empty' }
   | { kind: 'refused'; error: string }
 
 /** Reads the draft file's text: text that is not JSON (yet) waits, since the file may be half written; anything else is a proposal or a refusal with its reason. */
@@ -52,6 +53,34 @@ export function readPreviewDraft(text: string): PreviewDraftRead {
   }
   const read = readPreviewConfig(raw)
   if (!read.ok) return { kind: 'refused', error: read.error }
-  if (read.config.servers.length === 0) return { kind: 'refused', error: 'The proposal has no servers; a project with nothing to serve says {"noBrowser": true}.' }
+  if (read.config.servers.length === 0) return { kind: 'empty' }
   return { kind: 'config', config: read.config }
+}
+
+export const PREVIEW_SETUP_GIVE_UP_MS = 10 * 60_000
+export const PREVIEW_EMPTY_GRACE_MS = 30_000
+
+export type PreviewSettle =
+  | { kind: 'wait' }
+  | { kind: 'offer'; config: PreviewConfig }
+  | { kind: 'end'; error: string | null; note: string | null; apply?: PreviewConfig }
+
+/** What to do with a read of the draft file: keep waiting, end the setup (with what to show), or offer a proposal that landed over unsaved edits. */
+export function settlePreviewDraft(read: PreviewDraftRead, ctx: { dirty: boolean; waitedMs: number; emptyForMs: number }): PreviewSettle {
+  switch (read.kind) {
+    case 'waiting':
+      return ctx.waitedMs >= PREVIEW_SETUP_GIVE_UP_MS
+        ? { kind: 'end', error: null, note: 'Claude gave no answer in 10 minutes, so the setup was stopped. Set up again to retry.' }
+        : { kind: 'wait' }
+    case 'empty':
+      return ctx.emptyForMs < PREVIEW_EMPTY_GRACE_MS
+        ? { kind: 'wait' }
+        : { kind: 'end', error: "Claude's proposal has no servers; a project with nothing to serve says {\"noBrowser\": true}.", note: null }
+    case 'refused':
+      return { kind: 'end', error: `Claude's proposal was refused: ${read.error}`, note: null }
+    case 'none':
+      return { kind: 'end', error: null, note: read.reason ? `No browser needed: ${read.reason}` : 'No browser needed: this project has nothing to serve.' }
+    case 'config':
+      return ctx.dirty ? { kind: 'offer', config: read.config } : { kind: 'end', error: null, note: "Claude's proposal is loaded below, not saved. Check it, then Save.", apply: read.config }
+  }
 }

@@ -35,3 +35,19 @@ export async function discardPreviewDraft(folder: string, file: unknown): Promis
   if (!insideFolder(folder, file)) return
   await fs.rm(file, { force: true })
 }
+
+const STALE_DRAFT_MS = 24 * 60 * 60 * 1000
+
+/** Removes draft files left in the folder for more than a day, by a session that never answered. */
+export async function sweepStalePreviewDrafts(folder: string, now: number): Promise<void> {
+  const names = await fs.readdir(folder).catch(() => [] as string[])
+  await Promise.all(
+    names
+      .filter((name) => NAME.test(name))
+      .map(async (name) => {
+        const file = join(folder, name)
+        const stat = await fs.stat(file).catch(() => null)
+        if (stat && now - stat.mtimeMs > STALE_DRAFT_MS) await fs.rm(file, { force: true })
+      })
+  )
+}
