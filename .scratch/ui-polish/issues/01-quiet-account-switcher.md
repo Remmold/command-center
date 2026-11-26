@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] `HostedAccountBadge` stops rendering usage meters and the bordered box. It shows the account text (short name · plan) and a ▾ chevron, in the header's muted text style, and turns brighter on hover.
 - [x] The click target and the `AccountSwitcher` popover stay unchanged. Picking an account still moves the whole workspace and restarts the chat after its turn.

@@ -1,3 +1,3 @@
-- done: badge is quiet text (label drops "Claude ", ▾ on hosted, no meters/box), chatAccount test + e2e locators updated; build + pnpm quick green
-- next: run pnpm e2e e2e/accounts.spec.ts and the observed-session sessions.spec test, then commit, then code review since 2bf26cb
+- done: quiet badge committed (66a29a2), review fixes (dead ACCENT_EDGE, shorter docstrings) committed; build + pnpm quick + e2e accounts.spec.ts and sessions.spec.ts green
+- next: none; ticket resolved, Lane 2 look check by Andreas
 - open reds: none

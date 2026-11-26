@@ -17,7 +17,7 @@ interface Props {
 const BASE =
   'inline-flex h-6 max-w-full shrink items-center gap-1 overflow-hidden rounded px-1 text-[11px] focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus'
 
-/** Which account something runs on, as quiet header text: its name and plan, "Personal · Ultra". */
+/** Which account something runs on: its name and plan, e.g. "Personal · Ultra". */
 export const AccountBadge = forwardRef<HTMLButtonElement, Props>(function AccountBadge(
   { label, qualifier, tooltip, warning = false, onClick, pressed = false, ariaLabel },
   ref

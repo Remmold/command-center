@@ -15,15 +15,6 @@ export const ACCENT_DOT: Record<AccountColor, string> = {
   red: 'bg-account-red'
 }
 
-export const ACCENT_EDGE: Record<AccountColor, string> = {
-  blue: 'border-l-account-blue',
-  orange: 'border-l-account-orange',
-  purple: 'border-l-account-purple',
-  teal: 'border-l-account-teal',
-  green: 'border-l-account-green',
-  red: 'border-l-account-red'
-}
-
 export const ACCENT_RING: Record<AccountColor, string> = {
   blue: 'ring-account-blue',
   orange: 'ring-account-orange',

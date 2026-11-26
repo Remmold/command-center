@@ -105,7 +105,7 @@ interface NamedAccount {
   plan: string | null
 }
 
-/** The chat-header badge's words: the label drops the plan's "Claude " prefix, the hover keeps it; the email and organisation fall back to what the usage check read. */
+/** The chat-header badge's words; the email and organisation fall back to what the usage check read. */
 export function chatAccountView(
   chat: ChatAccount,
   accounts: readonly NamedAccount[],
