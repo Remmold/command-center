@@ -77,8 +77,20 @@ A command an agent left running in the background of a hosted session: started t
 _Avoid_: Background shell, task (the CLI's word), server (not all of them are servers)
 
 **Processes tab**:
-The tab beside Chat, Agents and Media that lists a session's background processes, running ones first. Each one shows its status, command, the tail of its output and any local port it serves, with a Stop button.
+The tab beside Chat, Agents and Media that lists a session's background processes, running ones first. Each one shows its status, command, its output in the terminal look and any local port it serves, with a Stop button.
 _Avoid_: Shells tab (the Shell drawer is your own terminal)
+
+**Terminal**:
+A shell, or one command, that the app runs for Andreas in a workspace's folder and that he can type into. It is Running until it exits, then Exited with its code, and it stays listed until he closes it. The Shell drawer and the Processes view show the same terminals.
+_Avoid_: Shell (only the drawer's name), console, tab
+
+**Processes view**:
+The view (Ctrl+5) that shows every background process and every terminal across all workspaces, grouped by workspace with running ones first, beside the selected one's output in a terminal.
+_Avoid_: Process manager, task manager, servers view
+
+**Run it myself**:
+Stopping one of Claude's background processes and starting the same command, in the same workspace folder, as Andreas's own terminal. Claude no longer sees its output afterwards.
+_Avoid_: Take over (that moves a VS Code session), adopt, detach
 
 **Ended (no final report)**:
 A subagent no live process reports any more (a resumed, old or VS Code chat) that stopped writing for 10 minutes, with nothing of its own still writing, without handing back a report or being interrupted. It never counts as working. An agent the chat's live process still reports stays working however quiet, as a long build writes nothing until it returns.
@@ -112,6 +124,10 @@ _Avoid_: Peek, side panel, quick reply
 **Work view**:
 The view with one list of every session across all workspaces beside the open session, or two sessions side by side.
 _Avoid_: Sessions view, chat view, workspace view
+
+**Shell drawer**:
+The panel at the bottom of Work (Ctrl+`) that shows terminals as tabs. Opening a tab there and in the Processes view shows the same terminal.
+_Avoid_: Terminal panel, console
 
 **Context view**:
 The view that shows, per workspace, everything Claude is configured to use there (CLAUDE.md files, memory, skills, agents, commands, MCP servers, plugins, settings and hooks) as context layers, with an editor beside them. It reads files; it does not ask Claude.
