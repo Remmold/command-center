@@ -1,0 +1,22 @@
+{
+  "turns": [
+    {
+      "match": "^You are the main chat of Command Center",
+      "events": [
+        {
+          "type": "text",
+          "text": "Agreed. Here is the feature.\n\n````feature-proposal\nworkspace: proposal-repo\nname: add-export\ndescription: Export the report as CSV\nbrief:\nExport the report as CSV from the report page.\n\n```ts\nexportCsv(report)\n```\n````\n\nPress Go on the card to start it."
+        }
+      ]
+    },
+    {
+      "match": "^\\[Command Center\\]",
+      "events": [{ "type": "text", "text": "Started. Continue in the feature session." }]
+    },
+    {
+      "match": "",
+      "repeat": true,
+      "events": [{ "type": "text", "text": "Hello! This is a scripted reply from the fake Claude." }]
+    }
+  ]
+}

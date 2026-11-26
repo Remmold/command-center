@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { connect } from 'node:net'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RendererApi } from '../src/shared/types'
-import { expect, sessionList, test } from './harness'
+import { chatPane, expect, sessionList, test, useScript } from './harness'
 
 function repoAt(path: string, files: Record<string, string> = {}): string {
   mkdirSync(path, { recursive: true })
@@ -159,4 +159,46 @@ test('Test boots the feature server and opens the pair on its page; every step P
   expect(await accepts(reportsPort)).toBe(true)
   expect(app.windows().some((w) => w.url().includes('feature=export-reports'))).toBe(true)
   await expect(rowOf('export-reports')).toContainText('Testing')
+})
+
+test('The main chat proposes a feature; Go on the card starts it with brief.md in its worktree and a first prompt that names it, while the main chat keeps only the read tools', async ({ launched }) => {
+  const { page, app, root, configDir, log } = launched
+  mkdirSync(join(configDir, 'skills', 'flow'), { recursive: true })
+  writeFileSync(join(configDir, 'skills', 'flow', 'SKILL.md'), '# flow')
+  const repo = repoAt(join(root, 'proposal-repo'))
+  await useScript(app, 'proposal')
+  await page.evaluate(async (path) => {
+    const { api } = globalThis as unknown as { api: RendererApi }
+    const added = await api.workspaces.addPath(path)
+    if (!added.ok) throw new Error('workspace not added')
+  }, repo)
+  await page.reload()
+  await page.waitForLoadState('domcontentloaded')
+  await page.keyboard.press('Control+2')
+
+  await sessionList(page).getByRole('button', { name: /Main chat/ }).click()
+  const card = chatPane(page).locator('[data-proposal-card]')
+  await expect(card).toHaveAttribute('data-proposal-state', 'live')
+  const field = (name: string) => card.locator(`[data-proposal-field="${name}"]`)
+  await expect(field('workspace')).toHaveText('proposal-repo')
+  await expect(field('name')).toHaveText('add-export')
+  await expect(field('description')).toHaveText('Export the report as CSV')
+  await expect(field('starting brief')).toContainText('exportCsv(report)')
+
+  await card.getByRole('button', { name: 'Go' }).click()
+  await expect(card).toHaveAttribute('data-proposal-state', 'started')
+  await expect(card.getByRole('button', { name: 'Open session' })).toBeVisible()
+  await expect(card.locator('[data-proposal-error]')).toHaveCount(0)
+
+  const worktree = join(root, 'proposal-repo-worktrees', 'add-export')
+  const brief = join(worktree, '.scratch', 'add-export', 'brief.md')
+  expect(existsSync(brief)).toBe(true)
+  expect(readFileSync(brief, 'utf-8')).toContain('exportCsv(report)')
+  await expect.poll(() => log.userTexts().some((t) => t.startsWith('/flow Export the report as CSV') && t.includes('Starting brief:') && t.includes(brief))).toBe(true)
+  await expect.poll(() => log.userTexts().some((t) => t.startsWith('[Command Center] The feature add-export started in its own session.'))).toBe(true)
+
+  const mainArgs = log.entries().find((e) => e.kind === 'argv' && (e.argv as string[]).some((a) => a.startsWith('--append-system-prompt=')))
+  const args = mainArgs?.argv as string[]
+  expect(args).toContain('--tools=Read,Grep,Glob')
+  expect(args).toContain('--strict-mcp-config')
 })
