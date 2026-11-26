@@ -52,6 +52,7 @@ describe('finding a session test flow', () => {
     expect(picks(items, 'continuum')).toEqual([
       { path: 'C:\\projects\\test-flows\\Continuum-1012.MD', source: 'session' },
       { path: 'C:\\projects\\test-flows\\continuum-1220.md', source: 'session' },
+      { path: 'C:\\projects\\test-flows\\continuum\\', source: 'repo' },
       { path: 'C:\\projects\\test-flows\\continuum.md', source: 'repo' }
     ])
   })
@@ -63,18 +64,35 @@ describe('finding a session test flow', () => {
     ]
     expect(picks(items)).toEqual([
       { path: 'C:\\projects\\test-flows\\command-center-test-flow.md', source: 'session' },
-      { path: 'C:\\projects\\test-flows\\command-center.md', source: 'session' }
+      { path: 'C:\\projects\\test-flows\\command-center.md', source: 'session' },
+      { path: 'C:\\projects\\test-flows\\command-center\\', source: 'repo' }
     ])
   })
 
-  it('ignores command lists, other file types, and files outside the folder or in a subfolder', () => {
+  it('takes a per-feature file one subfolder down, by Write, Edit or a shell command, newest first', () => {
+    const items = [
+      call('a', 'Write', { file_path: 'C:\\projects\\test-flows\\command-center.md' }),
+      call('b', 'Write', { file_path: 'C:\\projects\\test-flows\\command-center\\context-analysis.md' }),
+      call('c', 'Bash', { command: 'python C:/projects/tools/render_test_flow.py /c/projects/test-flows/darkfall64/tablet-merchant.md' }),
+      call('d', 'Edit', { file_path: 'c:/projects/test-flows/command-center/Context-Analysis.md' })
+    ]
+    expect(picks(items)).toEqual([
+      { path: 'C:\\projects\\test-flows\\command-center\\Context-Analysis.md', source: 'session' },
+      { path: 'C:\\projects\\test-flows\\darkfall64\\tablet-merchant.md', source: 'session' },
+      { path: 'C:\\projects\\test-flows\\command-center.md', source: 'session' },
+      { path: 'C:\\projects\\test-flows\\command-center\\', source: 'repo' }
+    ])
+  })
+
+  it('ignores command lists, other file types, and files outside the folder or two subfolders down', () => {
     const items = [
       call('a', 'Write', { file_path: 'C:\\projects\\test-flows\\run.md' }),
       call('b', 'Write', { file_path: 'C:\\projects\\test-flows\\command-center-commands.md' }),
       call('c', 'Bash', { command: 'python render_test_flow.py C:\\projects\\test-flows\\command-center-commands.md' }),
       call('d', 'Write', { file_path: 'C:\\projects\\test-flows\\notes.txt' }),
-      call('e', 'Write', { file_path: 'C:\\projects\\test-flows\\old\\archived.md' }),
-      call('f', 'Bash', { command: 'cat C:/projects/test-flows/old/archived.md' }),
+      call('e', 'Write', { file_path: 'C:\\projects\\test-flows\\old\\2025\\archived.md' }),
+      call('f', 'Bash', { command: 'cat C:/projects/test-flows/old/2025/archived.md' }),
+      call('i', 'Write', { file_path: 'C:\\projects\\test-flows\\command-center\\..\\..\\escape.md' }),
       call('g', 'Write', { file_path: 'C:\\projects\\test-flows-backup\\run2.md' }),
       call('h', 'Write', { file_path: 'C:\\projects\\personal\\command-center\\README.md' })
     ]
@@ -89,8 +107,9 @@ describe('finding a session test flow', () => {
     })
   })
 
-  it('falls back to the file named after the repo when the session wrote none', () => {
+  it('falls back to the repo folder (its newest feature file), then the file named after the repo, when the session wrote none', () => {
     expect(picks([call('a', 'Read', { file_path: 'C:\\projects\\test-flows\\darkfall64.md' })])).toEqual([
+      { path: 'C:\\projects\\test-flows\\command-center\\', source: 'repo' },
       { path: 'C:\\projects\\test-flows\\command-center.md', source: 'repo' }
     ])
     expect(picks([], '')).toEqual([])

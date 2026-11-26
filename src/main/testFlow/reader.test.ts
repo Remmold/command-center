@@ -44,12 +44,65 @@ describe('reading a test flow', () => {
     expect(await shown(join(folder, 'gone.md'))).toEqual({ found: false })
   })
 
-  it('refuses a path outside the folder, in a subfolder, or of another type', async () => {
+  it('shows a per-feature file one subfolder down, as its HTML twin with the subfolder in the page address', async () => {
+    await fs.mkdir(join(folder, 'command-center'))
+    await fs.writeFile(join(folder, 'command-center', 'context-analysis.md'), '# Run')
+    expect(await shown(join(folder, 'command-center', 'context-analysis.md'))).toEqual({ kind: 'md', name: 'context-analysis.md', text: '# Run' })
+    await fs.writeFile(join(folder, 'command-center', 'context-analysis.html'), '<h1>Run</h1>')
+    const view = await shown(join(folder, 'command-center', 'context-analysis.md'))
+    expect(view).toMatchObject({ kind: 'html', name: 'context-analysis.html' })
+    expect(view.kind === 'html' && view.url).toMatch(/^cc-test-flow:\/\/flow\/command-center\/context-analysis\.html\?v=\d+$/)
+  })
+
+  it('shows a repo folder candidate as its newest feature file, never a command list', async () => {
+    const repo = join(folder, 'command-center')
+    await fs.mkdir(repo)
+    await fs.writeFile(join(repo, 'older.md'), '# Older')
+    await fs.writeFile(join(repo, 'newer.md'), '# Newer')
+    await fs.writeFile(join(repo, 'newer.html'), '<h1>Newer</h1>')
+    await fs.writeFile(join(repo, 'command-center-commands.md'), '# Commands')
+    const now = Date.now() / 1000
+    await fs.utimes(join(repo, 'older.md'), now - 300, now - 300)
+    await fs.utimes(join(repo, 'newer.md'), now - 200, now - 200)
+    await fs.utimes(join(repo, 'newer.html'), now - 100, now - 100)
+    await fs.utimes(join(repo, 'command-center-commands.md'), now, now)
+    expect(await shown(`${repo}\\`, join(folder, 'command-center.md'))).toMatchObject({ kind: 'html', name: 'newer.html' })
+    await fs.utimes(join(repo, 'older.md'), now + 10, now + 10)
+    expect(await shown(`${repo}\\`)).toEqual({ kind: 'md', name: 'older.md', text: '# Older' })
+  })
+
+  it('passes over a missing or empty repo folder to the next candidate', async () => {
+    await fs.writeFile(join(folder, 'command-center.md'), '# Shared')
+    expect(await shown(`${join(folder, 'command-center')}\\`, join(folder, 'command-center.md'))).toMatchObject({ kind: 'md', name: 'command-center.md' })
+    await fs.mkdir(join(folder, 'command-center'))
+    expect(await shown(`${join(folder, 'command-center')}\\`, join(folder, 'command-center.md'))).toMatchObject({ kind: 'md', name: 'command-center.md' })
+  })
+
+  it('watches a repo folder candidate, whose stamp changes when a feature file is added', async () => {
+    const repo = join(folder, 'command-center')
+    await fs.mkdir(repo)
+    const before = await readTestFlow(folder, [`${repo}\\`])
+    expect(before.watch.map((w) => w.path)).toEqual([repo])
+    await fs.writeFile(join(repo, 'feature.md'), '# Feature')
+    const after = await readTestFlow(folder, [`${repo}\\`])
+    expect(after.view).toMatchObject({ kind: 'md', name: 'feature.md' })
+    expect(after.watch[0]).toMatchObject({ path: repo })
+    expect(after.watch[0].stamp).not.toBe(before.watch[0].stamp)
+  })
+
+  it('refuses a path outside the folder, two subfolders down, or of another type', async () => {
     await fs.writeFile(join(root, 'secret.md'), 'no')
-    await fs.mkdir(join(folder, 'old'))
-    await fs.writeFile(join(folder, 'old', 'run.md'), 'no')
+    await fs.mkdir(join(folder, 'old', '2025'), { recursive: true })
+    await fs.writeFile(join(folder, 'old', '2025', 'run.md'), 'no')
     await fs.writeFile(join(folder, 'notes.txt'), 'no')
-    for (const path of [join(root, 'secret.md'), join(folder, '..', 'secret.md'), join(folder, 'old', 'run.md'), join(folder, 'notes.txt'), 'run.md']) {
+    for (const path of [
+      join(root, 'secret.md'),
+      join(folder, '..', 'secret.md'),
+      join(folder, 'old', '..', '..', 'secret.md'),
+      join(folder, 'old', '2025', 'run.md'),
+      join(folder, 'notes.txt'),
+      'run.md'
+    ]) {
       expect(await shown(path)).toEqual({ found: false })
     }
   })
@@ -69,7 +122,7 @@ describe('reading the first candidate that exists', () => {
       shell('b', `test -f "${join(folder, 'command-center-test-flow.md')}" && echo yes`)
     ]
     const picks = findTestFlows({ items, folder, repoName: 'command-center' })
-    expect(picks.map((p) => p.path)).toEqual([join(folder, 'command-center-test-flow.md'), join(folder, 'command-center.md')])
+    expect(picks.map((p) => p.path)).toEqual([join(folder, 'command-center-test-flow.md'), join(folder, 'command-center.md'), `${join(folder, 'command-center')}\\`])
     expect(await shown(...picks.map((p) => p.path))).toMatchObject({ kind: 'html', name: 'command-center.html' })
   })
 
@@ -102,12 +155,25 @@ describe('serving a test flow page', () => {
     expect(policy).not.toMatch(/https?:|\*/)
   })
 
+  it('serves an HTML file one subfolder down', async () => {
+    await fs.mkdir(join(folder, 'command-center'))
+    await fs.writeFile(join(folder, 'command-center', 'run.html'), '<h1>Run</h1>')
+    const response = await serveTestFlow(folder, 'cc-test-flow://flow/command-center/run.html?v=1')
+    expect(response.status).toBe(200)
+    expect((await response.text()).startsWith('<h1>Run</h1>')).toBe(true)
+  })
+
   it('serves nothing else', async () => {
     await fs.writeFile(join(root, 'secret.html'), 'no')
     await fs.writeFile(join(folder, 'run.md'), 'no')
+    await fs.mkdir(join(folder, 'old', '2025'), { recursive: true })
+    await fs.writeFile(join(folder, 'old', '2025', 'deep.html'), 'no')
     for (const url of [
       'cc-test-flow://flow/..%2Fsecret.html',
       'cc-test-flow://flow/%2E%2E%5Csecret.html',
+      'cc-test-flow://flow/old/..%2F..%2Fsecret.html',
+      'cc-test-flow://flow/old%5C..%5C..%5Csecret.html',
+      'cc-test-flow://flow/old/2025/deep.html',
       `cc-test-flow://flow/${encodeURIComponent(join(root, 'secret.html'))}`,
       'cc-test-flow://flow/run.md',
       'cc-test-flow://flow/gone.html',
