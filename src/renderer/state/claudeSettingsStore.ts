@@ -71,7 +71,7 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
       const thisRead = ++readTurn
       const workspace = shownWorkspace(get(), useWorkspacesStore.getState().workspaces)
       try {
-        const read = await window.api.claudeSettings.read(get().layer === 'account' ? get().profileId : (workspace?.profileId ?? get().profileId), workspace?.id ?? null)
+        const read = await window.api.claudeSettings.read(workspace?.profileId ?? get().profileId, workspace?.id ?? null)
         if (thisRead === readTurn) set({ read, readError: null })
       } catch (err) {
         if (thisRead === readTurn) set({ readError: (err as Error).message })

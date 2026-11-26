@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] Repo and Local layers have a workspace picker. Repo says its file is committed and shared with everyone on the repo; Local says it applies only to Andreas in this folder.
 - [x] Each layer shows the path of the file it edits, with a button that opens the Context view on that workspace and file.
@@ -17,8 +17,9 @@
 
 ## Comments
 
-- The Account layer has no workspace picker; its effective value uses the chosen workspace when it is on that account, else the first workspace that is, and the file line names it ("Applies shows …"). Repo and Local read the chosen workspace's own account as their account layer.
+- The Account layer has no workspace picker; its effective value uses the chosen workspace when it is on that account, else the first workspace that is, and the file line names it ("What applies is shown for …"). Repo and Local read the chosen workspace's own account as their account layer.
 - Organisation: the account's `remote-settings.json` when it sets any key, else `C:\Program Files\ClaudeCode\managed-settings.json` (Claude uses the first managed source with a policy). An empty `{}` falls through.
 - An organisation value locks a row, except for the lists and objects that combine across layers (permission rules, hooks, env), where it shows as one of the sources.
 - The docs' "stricter value wins" exceptions are the catalog's `stricter` field: `useAutoModeDuringPlan`, `syncClaudeAiSkills`, `syncClaudeAiPlugins` (off from organisation, Local or Account) and `permissions.denyInsteadOfPrompting` (on from Account). Ticket 04 should mark the others the docs list (`disableClaudeAiConnectors`, `enableArtifact`, `permissions.blockReadsOutsideWorkingDirectories`/`blockWritesOutsideWorkingDirectories`, `remoteControlAtStartup`, `crossSessionInbound`, `maxEffortLevel`, `autoMode.classifyAllShell`) as it adds them.
 - The new rows (permission mode, the account-only and not-in-repo keys) are not advanced yet: there is no Show advanced until ticket 04.
+- Review (since da418e7): the module is `claudeSettingsEffective.ts` (the glossary avoids "merged"); an organisation file that does not parse shows a banner instead of being skipped; hook groups two layers share count once. Left as is: "Overridden by Local" also shows on Account when Account doesn't set the key (the change would not take effect); the `askUserQuestionTimeout` choices (`60s`, `5m`, `10m`, `never`) come from a summary of the docs, so ticket 04 should check them against the schema.

@@ -64,7 +64,6 @@ const NOT_REPO: readonly SettingsLayer[] = ['account', 'local']
 
 export const LAYER_NAMES: Record<SourceLayer, string> = { organisation: 'Organisation', account: 'Account', repo: 'Repo', local: 'Local' }
 
-/** Layer names joined for a sentence: "Account and Local". */
 export const layerList = (layers: readonly SourceLayer[]): string => {
   const names = layers.map((l) => LAYER_NAMES[l])
   return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`

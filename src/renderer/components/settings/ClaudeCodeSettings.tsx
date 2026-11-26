@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
 import { SETTINGS_CATALOG, SETTING_CATEGORIES, formatSettingValue, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
 import { changeCount, patchSize, withPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
-import { effectiveSetting, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsMerge'
+import { effectiveSetting, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
 import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
 import { pendingChanges, shownValue, type PendingFile } from '../../state/claudeSettingsPending'
 import { useContextStore } from '../../state/contextStore'
@@ -42,7 +42,6 @@ const LAYER_NOTES: Record<Exclude<SettingsLayer, 'account'>, string> = {
   local: 'Applies only to you, in this folder.'
 }
 
-/** The edited layer's file and its waiting changes. */
 function useEditedFile(): { file: SettingsLayerFile | null; pending: PendingFile | null } {
   const file = useClaudeSettingsStore((s) => s.read?.[s.layer] ?? null)
   const pending = useClaudeSettingsStore((s) => (file ? s.pending[file.path] : undefined)) ?? null
@@ -60,8 +59,8 @@ function layersWithPending(read: ClaudeSettingsRead | null, pending: Record<stri
 }
 
 function shownEffective(entry: SettingEntry, layers: LayerSettings, edited: SettingsLayer): ShownEffective {
-  const { value, locked } = effectiveSetting(entry, layers)
-  return { value, locked, badge: sourceBadge(entry, layers, edited) }
+  const effective = effectiveSetting(entry, layers)
+  return { value: effective.value, locked: effective.locked, badge: sourceBadge(effective, entry, layers, edited) }
 }
 
 /** Settings closes and Context opens on the file; nothing happens when unsaved changes are kept. */
@@ -121,7 +120,7 @@ function FileLine({ note }: { note: string }) {
       }
     >
       {file.path} · {note}
-      {layer === 'account' && workspace && ` Applies shows ${workspace.name}.`}
+      {layer === 'account' && workspace && ` What applies is shown for ${workspace.name}.`}
     </NoticeLine>
   )
 }
@@ -192,6 +191,11 @@ export function ClaudeCodeSettings() {
           <PageBody>
             <FileLine note={layer === 'account' ? accountNote(profile, defaultName) : LAYER_NOTES[layer]} />
             {read?.organisation && <NoticeLine tone="warning">Your organisation’s settings in {read.organisation.path} apply over every layer and can’t be changed here.</NoticeLine>}
+            {read?.organisation?.snapshot.error && (
+              <Banner label="Organisation settings not read">
+                Your organisation’s settings file is {read.organisation.snapshot.error}, so this page can’t show what it sets.
+              </Banner>
+            )}
             {noWorkspace && <Banner label="No workspace">Add a workspace to edit its Repo and Local settings.</Banner>}
             {readError && <Banner label="Settings not read">Could not read the settings: {readError}</Banner>}
             {unreadable && (

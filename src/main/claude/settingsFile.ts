@@ -61,17 +61,17 @@ export async function readSettingsFile(file: string): Promise<SettingsSnapshot> 
   return parsed.ok ? { value: parsed.value, text: read.text, mtime: read.mtime } : { value: null, text: read.text, mtime: read.mtime, error: parsed.error }
 }
 
-/** Where an organisation's settings file sits on Windows. */
 export const MANAGED_SETTINGS_FILE = 'C:\\Program Files\\ClaudeCode\\managed-settings.json'
 
 /**
  * The organisation's settings, read only: the account's cached remote settings, else the managed file.
- * Claude uses only the first of them that sets any key, so an empty `{}` cache falls through.
+ * Claude uses only the first of them that sets any key, so an empty `{}` cache falls through. A file
+ * that does not parse comes back with its error, as the page can't tell what it enforces.
  */
 export async function readOrganisationLayer(remoteFile: string, managedFile: string): Promise<OrganisationFile | null> {
   for (const path of [remoteFile, managedFile]) {
     const snapshot = await readSettingsFile(path)
-    if (snapshot.value && Object.keys(snapshot.value).length > 0) return { path, snapshot }
+    if (!snapshot.value ? snapshot.text !== null : Object.keys(snapshot.value).length > 0) return { path, snapshot }
   }
   return null
 }

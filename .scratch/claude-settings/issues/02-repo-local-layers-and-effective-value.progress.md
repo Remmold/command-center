@@ -1,3 +1,3 @@
-Done: merge + badge (shared/claudeSettingsMerge.ts), catalog layer rules and named keys, organisation read, store layer/workspace, page rows with effective value, Reset, Open in Context view; build + quick green, nothing committed yet.
-Next: pnpm e2e e2e/claudeSettings.spec.ts, commit, then code review since da418e7.
+Done: ticket 02 resolved in ca4fb00 plus the review-fix commit; build, quick and e2e/claudeSettings.spec.ts green.
+Next: none for 02; tickets 03 and 04 can start.
 Open reds: none.

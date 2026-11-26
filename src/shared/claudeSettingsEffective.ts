@@ -16,13 +16,13 @@ const COMBINED_LISTS = new Set(['permissions.allow', 'permissions.ask', 'permiss
 
 const union = (lists: unknown[][]): unknown[] => lists.flat().filter((item, i, all) => all.findIndex((other) => sameValue(other, item)) === i)
 
-/** Per key, the highest layer's value wins; the hook lists of one event add up. */
+/** Per key, the highest layer's value wins; the hook lists of one event add up, without repeats. */
 function combineObjects(key: string, objects: SettingsObject[]): SettingsObject {
   const combined: SettingsObject = {}
   for (const object of objects) {
     for (const [name, value] of Object.entries(object)) {
       if (!(name in combined)) combined[name] = value
-      else if (key === 'hooks' && Array.isArray(combined[name]) && Array.isArray(value)) combined[name] = [...(combined[name] as unknown[]), ...value]
+      else if (key === 'hooks' && Array.isArray(combined[name]) && Array.isArray(value)) combined[name] = union([combined[name] as unknown[], value])
     }
   }
   return combined
@@ -52,8 +52,7 @@ export function effectiveSetting(entry: SettingEntry, layers: LayerSettings): Ef
 const above = (a: SourceLayer, b: SourceLayer): boolean => SOURCE_ORDER.indexOf(a) < SOURCE_ORDER.indexOf(b)
 
 /** Where the effective value comes from, as seen from the layer being edited; null when no layer sets it. */
-export function sourceBadge(entry: SettingEntry, layers: LayerSettings, edited: SettingsLayer): string | null {
-  const { sources, locked } = effectiveSetting(entry, layers)
+export function sourceBadge({ sources, locked }: EffectiveSetting, entry: SettingEntry, layers: LayerSettings, edited: SettingsLayer): string | null {
   if (sources.length === 0) return null
   if (locked) return 'Set by your organisation'
   if (sources.length > 1) return `Combined from ${layerList(sources)}`

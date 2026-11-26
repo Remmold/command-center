@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SETTINGS_CATALOG, entryFor, type SettingEntry } from './claudeSettingsCatalog'
 import type { SettingsLayer } from './claudeSettings'
-import { effectiveSetting, sourceBadge, type LayerSettings } from './claudeSettingsMerge'
+import { effectiveSetting, sourceBadge, type LayerSettings } from './claudeSettingsEffective'
 
 const entry = (key: string): SettingEntry => {
   const found = SETTINGS_CATALOG.find((e) => e.key === key)
@@ -41,11 +41,11 @@ describe('the effective value', () => {
     ).toEqual({ value: ['WebFetch', 'Bash(git status)', 'Edit', 'Read'], sources: ['organisation', 'local', 'account'], locked: false })
   })
 
-  it('combines hooks per event across layers', () => {
+  it('combines hooks per event across layers, a group two layers share once', () => {
     const local = { matcher: 'Bash', hooks: [{ type: 'command', command: 'lint' }] }
     const account = { matcher: '', hooks: [{ type: 'command', command: 'log' }] }
     const repo = { hooks: [{ type: 'command', command: 'notify' }] }
-    expect(effectiveSetting(entryFor('hooks'), layers({ account: { hooks: { PreToolUse: [account] } }, repo: { hooks: { Stop: [repo] } }, local: { hooks: { PreToolUse: [local] } } }))).toEqual({
+    expect(effectiveSetting(entryFor('hooks'), layers({ account: { hooks: { PreToolUse: [local, account] } }, repo: { hooks: { Stop: [repo] } }, local: { hooks: { PreToolUse: [local] } } }))).toEqual({
       value: { PreToolUse: [local, account], Stop: [repo] },
       sources: ['local', 'repo', 'account'],
       locked: false
@@ -105,7 +105,8 @@ describe('the effective value', () => {
 
 describe('the badge naming where the effective value comes from', () => {
   const model = entry('model')
-  const badge = (given: Partial<LayerSettings>, edited: SettingsLayer) => sourceBadge(model, layers(given), edited)
+  const badgeOf = (setting: SettingEntry, given: LayerSettings, edited: SettingsLayer) => sourceBadge(effectiveSetting(setting, given), setting, given, edited)
+  const badge = (given: Partial<LayerSettings>, edited: SettingsLayer) => badgeOf(model, layers(given), edited)
 
   it('says From the layer when the value comes from the edited layer or one below it', () => {
     expect(badge({ account: { model: 'opus' } }, 'account')).toBe('From Account')
@@ -120,13 +121,13 @@ describe('the badge naming where the effective value comes from', () => {
 
   it('says Overridden when a stricter value below beats the edited layer', () => {
     const plan = entry('useAutoModeDuringPlan')
-    expect(sourceBadge(plan, layers({ account: { useAutoModeDuringPlan: false }, local: { useAutoModeDuringPlan: true } }), 'local')).toBe('Overridden by Account')
+    expect(badgeOf(plan, layers({ account: { useAutoModeDuringPlan: false }, local: { useAutoModeDuringPlan: true } }), 'local')).toBe('Overridden by Account')
   })
 
   it('names the organisation, and every layer of a combined value', () => {
     expect(badge({ organisation: { model: 'opus' }, local: { model: 'haiku' } }, 'local')).toBe('Set by your organisation')
     const allow = entryFor('permissions.allow')
-    expect(sourceBadge(allow, layers({ account: { permissions: { allow: ['Read'] } }, local: { permissions: { allow: ['Edit'] } } }), 'repo')).toBe('Combined from Local and Account')
+    expect(badgeOf(allow, layers({ account: { permissions: { allow: ['Read'] } }, local: { permissions: { allow: ['Edit'] } } }), 'repo')).toBe('Combined from Local and Account')
   })
 
   it('is null when no layer sets it', () => {

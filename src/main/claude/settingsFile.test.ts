@@ -119,6 +119,12 @@ describe('the organisation layer', () => {
     await fs.writeFile(remote, '{"model":"haiku"}')
     expect(await readOrganisationLayer(remote, managed)).toMatchObject({ path: remote, snapshot: { value: { model: 'haiku' } } })
   })
+
+  it('is a file that does not parse, with its parse message, so the page can say so', async () => {
+    const remote = join(dir, 'remote-settings.json')
+    await fs.writeFile(remote, '{ broken')
+    expect(await readOrganisationLayer(remote, join(dir, 'managed-settings.json'))).toMatchObject({ path: remote, snapshot: { value: null, error: expect.stringContaining('not valid JSON') } })
+  })
 })
 
 describe('settingsTargetProblem', () => {
