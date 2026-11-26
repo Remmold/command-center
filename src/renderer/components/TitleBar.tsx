@@ -8,7 +8,7 @@ import { UsageStrip } from './UsageStrip'
 import { UpdatePill } from './UpdatePill'
 import { ApprovalsPill } from './ApprovalsPill'
 
-const VIEW_LABELS: Record<AppView, string> = { dashboard: 'Dashboard', work: 'Work', board: 'Board', context: 'Context' }
+const VIEW_LABELS: Record<AppView, string> = { dashboard: 'Dashboard', work: 'Work', board: 'Board', context: 'Context', processes: 'Processes' }
 
 const VIEW_OPTIONS = APP_VIEWS.map((value, i) => ({
   value,

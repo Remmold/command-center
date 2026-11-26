@@ -339,6 +339,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.on(IPC.TERMINALS_RESIZE, (_e, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows))
   ipcMain.on(IPC.TERMINALS_RENAME, (_e, id: string, label: string) => terminals.rename(id, label))
   ipcMain.handle(IPC.TERMINALS_RESTART, (_e, id: string) => terminals.restart(id))
+  ipcMain.handle(IPC.TERMINALS_STOP, (_e, id: string) => terminals.stop(id))
   ipcMain.on(IPC.TERMINALS_CLOSE, (_e, id: string) => void terminals.close(id))
 
   unsubscribers.push(

@@ -211,6 +211,49 @@ describe('TerminalRegistry', () => {
     expect(registry.list()).toEqual([])
   })
 
+  it('stops a terminal by killing its process tree, keeping it listed as exited with its tail', async () => {
+    create({ id: 't1', command: 'pnpm dev' })
+    const p = last()
+    p.emit('ready\r\n')
+    clock = 7000
+    await registry.stop('t1')
+    expect(p.killed).toBe(true)
+    expect(treeKilled).toEqual([p.pid])
+    expect(registry.list()).toEqual([
+      { id: 't1', workspaceId: 'ws1', cwd: 'C:\\repo', label: 'pnpm dev', command: 'pnpm dev', kind: 'pwsh', status: 'exited', startedAt: 1000, endedAt: 7000 }
+    ])
+    expect(changes.at(-1)).toEqual(registry.list())
+    expect(registry.attach('t1')?.tail).toBe('ready\r\n')
+    expect(registry.runningCount()).toBe(0)
+  })
+
+  it('leaves an exited terminal as it was on stop', async () => {
+    create({ id: 't1' })
+    last().exit(3)
+    const before = registry.list()
+    await registry.stop('t1')
+    await registry.stop('nope')
+    expect(registry.list()).toEqual(before)
+  })
+
+  it("lists the local servers a terminal's output names, even across chunks, and forgets them on restart", () => {
+    create({ id: 't1', command: 'pnpm dev' })
+    last().emit('\x1b[32m  Local: http://local')
+    last().emit('host:5173/\x1b[0m\r\n')
+    last().emit('again http://localhost:5173 and http://127.0.0.1:8080\r\n')
+    expect(registry.list()[0].servers).toEqual([
+      { port: 5173, url: 'http://localhost:5173' },
+      { port: 8080, url: 'http://127.0.0.1:8080' }
+    ])
+    expect(changes.at(-1)?.[0].servers).toHaveLength(2)
+    const pushes = changes.length
+    last().emit('http://localhost:5173 once more\r\n')
+    expect(changes.length).toBe(pushes)
+    last().exit(0)
+    registry.restart('t1')
+    expect(registry.list()[0].servers).toBeUndefined()
+  })
+
   it('renames a terminal', () => {
     create({ id: 't1' })
     registry.rename('t1', 'watcher')

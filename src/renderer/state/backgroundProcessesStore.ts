@@ -1,12 +1,15 @@
 import { create } from 'zustand'
 import type { BackgroundProcess } from '../../shared/backgroundProcesses'
 import { localServers, outputTail, type LocalServer } from '../../shared/localPorts'
+import { taskOutputOf, type TaskOutput } from './taskOutput'
 
 export const OUTPUT_LINES = 200
 
 export interface ProcessOutput {
   /** The last `OUTPUT_LINES` lines. */
   tail: string
+  /** The CLI's last answer as it came, for a terminal that shows it; absent when that fetch failed. */
+  raw?: TaskOutput
   /** Fetched after the process ended; no later fetch replaces it. */
   final: boolean
 }
@@ -103,13 +106,15 @@ export const useBackgroundProcessesStore = create<BackgroundProcessesState>((set
     inFlight.add(key)
     try {
       const res = await window.api.claude.control(paneId, 'get_task_output', { task_id: taskId })
-      const output = res.ok && typeof res.response.output === 'string' ? res.response.output : undefined
+      const raw = res.ok ? taskOutputOf(res.response) : undefined
+      const output = raw?.output
       if (output === undefined && !final) return
       set((s) => {
-        if (!processOf(s, paneId, taskId) || s.outputs[paneId]?.[taskId]?.final) return s
-        // A failed final fetch keeps the last tail, so an ended row is not asked again.
-        const tail = output === undefined ? (s.outputs[paneId]?.[taskId]?.tail ?? '') : outputTail(output, OUTPUT_LINES)
-        return { outputs: { ...s.outputs, [paneId]: { ...(s.outputs[paneId] ?? NO_OUTPUTS), [taskId]: { tail, final } } } }
+        const before = s.outputs[paneId]?.[taskId]
+        if (!processOf(s, paneId, taskId) || before?.final) return s
+        // A failed final fetch keeps the last output, so an ended row is not asked again.
+        const kept: ProcessOutput = raw ? { tail: outputTail(raw.output, OUTPUT_LINES), raw, final } : { tail: before?.tail ?? '', ...(before?.raw ? { raw: before.raw } : {}), final }
+        return { outputs: { ...s.outputs, [paneId]: { ...(s.outputs[paneId] ?? NO_OUTPUTS), [taskId]: kept } } }
       })
       if (final || output === undefined) return
       const confirmed = new Set((get().servers[paneId]?.[taskId] ?? []).map((server) => server.port))

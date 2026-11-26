@@ -1,11 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { Terminal as XTerm } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import '@xterm/xterm/css/xterm.css'
+import type { Terminal as XTerm } from '@xterm/xterm'
 import type { TerminalInfo } from '../../shared/types'
-import { monoFont, xtermTheme } from '../theme/theme'
 import { registerTerminalReader } from '../state/terminalBuffers'
 import { useTerminalsStore } from '../state/terminalsStore'
+import { openXterm } from './xterm'
 
 /** The extension's `getTerminalContents` limit. */
 const TERMINAL_MENTION_LINES = 100
@@ -19,7 +17,8 @@ function bufferText(term: XTerm): string {
 }
 
 function exitNotice(t: TerminalInfo): string {
-  return `\r\n\x1b[2m${t.command ?? t.kind} exited (${t.exitCode ?? '?'})\x1b[0m\r\n`
+  const how = t.exitCode === undefined ? 'stopped' : `exited (${t.exitCode})`
+  return `\r\n\x1b[2m${t.command ?? t.kind} ${how}\x1b[0m\r\n`
 }
 
 interface Props {
@@ -34,25 +33,15 @@ export function Terminal({ terminalId }: Props) {
     const container = containerRef.current
     if (!container) return
 
-    const term = new XTerm({
-      fontFamily: monoFont(),
-      fontSize: 13,
-      cursorBlink: true,
-      allowProposedApi: true,
-      theme: xtermTheme()
-    })
-    const fit = new FitAddon()
-    term.loadAddon(fit)
-    term.open(container)
-    try {
-      fit.fit()
-    } catch {
-      // container may not be measured yet
-    }
-
     let alive = true
     /** The run this view shows, by its start time; null until attached. */
     let shown: TerminalInfo | null = null
+    const xterm = openXterm(container, {
+      onFit: (cols, rows) => {
+        if (shown) window.api.terminals.resize(terminalId, cols, rows)
+      }
+    })
+    const term = xterm.term
     const unregister = registerTerminalReader(terminalId, () => bufferText(term))
     let unsubData = (): void => undefined
 
@@ -82,26 +71,13 @@ export function Terminal({ terminalId }: Props) {
       if (shown?.status === 'running') window.api.terminals.write(terminalId, data)
     })
 
-    const ro = new ResizeObserver(() => {
-      const rect = container.getBoundingClientRect()
-      if (rect.width === 0 || rect.height === 0) return
-      try {
-        fit.fit()
-        if (shown) window.api.terminals.resize(terminalId, term.cols, term.rows)
-      } catch {
-        // ignore
-      }
-    })
-    ro.observe(container)
-
     return () => {
       alive = false
       unregister()
-      ro.disconnect()
       dataDisposable.dispose()
       unsubData()
       unsubStore()
-      term.dispose()
+      xterm.dispose()
     }
   }, [terminalId])
 

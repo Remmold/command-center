@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { CreateTerminalRequest, CreateTerminalResult, TerminalAttachment, TerminalInfo } from '../../shared/types'
+import { localServers } from '../../shared/localPorts'
 import type { PtyManager } from './manager'
 
 /** How many bytes (UTF-8) of a terminal's latest raw output are kept for a view that attaches later. */
@@ -35,9 +36,14 @@ class OutputTail {
   }
 }
 
+/** Enough of the previous chunk to catch a URL split across two. */
+const SERVER_CARRY = 256
+
 interface Entry {
   info: TerminalInfo
   tail: OutputTail
+  /** The end of the output before the latest chunk. */
+  carry: string
 }
 
 function shellBase(kind: TerminalInfo['kind']): string {
@@ -58,7 +64,9 @@ export class TerminalRegistry {
       const entry = this.entries.get(id)
       if (!entry) return
       entry.tail.append(data)
+      const found = this.newServers(entry, data)
       for (const cb of this.dataListeners) cb(id, data)
+      if (found) this.changed()
     })
     ptys.onExit((id, exitCode) => {
       const entry = this.entries.get(id)
@@ -91,7 +99,7 @@ export class TerminalRegistry {
       status: 'running',
       startedAt: this.now()
     }
-    const entry: Entry = { info, tail: new OutputTail() }
+    const entry: Entry = { info, tail: new OutputTail(), carry: '' }
     this.entries.set(id, entry)
     return this.start(entry)
   }
@@ -121,10 +129,21 @@ export class TerminalRegistry {
     const entry = this.entries.get(id)
     if (!entry) return { ok: false, error: 'unknown terminal' }
     void this.ptys.kill(id)
-    const { exitCode: _code, endedAt: _ended, ...rest } = entry.info
+    const { exitCode: _code, endedAt: _ended, servers: _servers, ...rest } = entry.info
     entry.info = { ...rest, status: 'running', startedAt: this.now() }
     entry.tail = new OutputTail()
+    entry.carry = ''
     return this.start(entry)
+  }
+
+  /** Ends a running terminal's process tree; it stays listed as exited, with its output, so Restart can rerun it. */
+  stop(id: string): Promise<void> {
+    const entry = this.entries.get(id)
+    if (entry?.info.status !== 'running') return Promise.resolve()
+    const killed = this.ptys.kill(id)
+    entry.info = { ...entry.info, status: 'exited', endedAt: this.now() }
+    this.changed()
+    return killed
   }
 
   close(id: string): Promise<void> {
@@ -171,6 +190,17 @@ export class TerminalRegistry {
   private changed(): void {
     const list = this.list()
     for (const cb of this.changedListeners) cb(list)
+  }
+
+  /** Adds the servers this chunk names; true when there were new ones. */
+  private newServers(entry: Entry, data: string): boolean {
+    const text = entry.carry + data
+    entry.carry = text.slice(-SERVER_CARRY)
+    const known = entry.info.servers ?? []
+    const added = localServers(text).filter((s) => !known.some((k) => k.port === s.port))
+    if (added.length === 0) return false
+    entry.info = { ...entry.info, servers: [...known, ...added] }
+    return true
   }
 
   private ended(entry: Entry, exitCode: number): void {

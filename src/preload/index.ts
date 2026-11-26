@@ -214,6 +214,7 @@ const api: RendererApi = {
     resize: (id, cols, rows) => ipcRenderer.send(IPC.TERMINALS_RESIZE, id, cols, rows),
     rename: (id, label) => ipcRenderer.send(IPC.TERMINALS_RENAME, id, label),
     restart: (id) => ipcRenderer.invoke(IPC.TERMINALS_RESTART, id),
+    stop: (id) => ipcRenderer.invoke(IPC.TERMINALS_STOP, id),
     close: (id) => ipcRenderer.send(IPC.TERMINALS_CLOSE, id),
     onChanged: (cb) => {
       const handler = (_e: IpcRendererEvent, list: TerminalInfo[]) => cb(list)

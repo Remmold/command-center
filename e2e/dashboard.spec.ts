@@ -32,7 +32,7 @@ test('a waiting session opens in the Dashboard chat drawer, takes a reply there,
     await expect(row).toHaveAttribute('aria-current', 'true')
     await expect(asked('first question')).toBeVisible()
     await expect(prompt(page)).toBeFocused()
-    await expect(page.getByRole('tab', { name: 'Processes', exact: true })).toHaveCount(0)
+    await expect(chats.getByRole('tab', { name: 'Processes', exact: true })).toHaveCount(0)
     await prompt(page).click()
     await send(page, 'and one more')
     await expect.poll(() => log.userTexts()).toContain('and one more')

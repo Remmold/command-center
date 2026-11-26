@@ -8,6 +8,7 @@ import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
 import type { TestFlowFocus, TestFlowView } from './testFlow'
 import type { ZoomStep } from './zoom'
+import type { LocalServer } from './localPorts'
 import type { SidebarLayout } from './sidebarGroups'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
@@ -119,9 +120,12 @@ export interface TerminalInfo {
   /** Extra variables on top of the app's cleaned environment, e.g. an account's. */
   env?: Record<string, string>
   status: 'running' | 'exited'
+  /** None when the app stopped it. */
   exitCode?: number
   startedAt: number
   endedAt?: number
+  /** Local servers its output has named since it started, whether or not they answer; absent until one shows. */
+  servers?: LocalServer[]
 }
 
 export interface CreateTerminalRequest {
@@ -558,6 +562,8 @@ export interface RendererApi {
     resize: (id: string, cols: number, rows: number) => void
     rename: (id: string, label: string) => void
     restart: (id: string) => Promise<CreateTerminalResult>
+    /** Kills the terminal's process tree; it stays listed as exited, with its output. */
+    stop: (id: string) => Promise<void>
     /** Kills the terminal's process tree and removes it from the pool. */
     close: (id: string) => void
     onChanged: (cb: (list: TerminalInfo[]) => void) => () => void

@@ -11,6 +11,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
 import { ContextView } from './components/context/ContextView'
+import { ProcessesView } from './components/processes/ProcessesView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
 import { useBackgroundProcessesStore } from './state/backgroundProcessesStore'
 import { useTerminalsStore } from './state/terminalsStore'
@@ -148,6 +149,11 @@ export function App() {
         {appView === 'context' && (
           <div data-testid="view-context" className="absolute inset-0 z-30">
             <ContextView />
+          </div>
+        )}
+        {appView === 'processes' && (
+          <div data-testid="view-processes" className="absolute inset-0 z-30">
+            <ProcessesView />
           </div>
         )}
         <div

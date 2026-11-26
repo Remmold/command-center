@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { ExternalLink } from 'lucide-react'
 import type { BackgroundProcess, BackgroundProcessStatus } from '../../../shared/backgroundProcesses'
 import type { LocalServer } from '../../../shared/localPorts'
 import { useHostedChatOnScreen } from '../../hooks/useHostedChatOnScreen'
@@ -12,8 +11,8 @@ import {
   useStopErrors,
   type ProcessOutput
 } from '../../state/backgroundProcessesStore'
-import { useToastStore } from '../../state/toastStore'
 import { useViewStore } from '../../state/viewStore'
+import { ServerLink } from '../ServerLink'
 import { Button } from '../ui/Button'
 import { EmptyState } from '../ui/EmptyState'
 import { ListItem, ListRowLines, ListRowMeta } from '../ui/ListRow'
@@ -51,11 +50,6 @@ function useOutputRefresh(paneId: string, processes: readonly BackgroundProcess[
     if (!onScreen) return
     for (const p of processes) if (p.status !== 'running' && !outputs[p.taskId]?.final) void fetchOutput(paneId, p.taskId)
   }, [onScreen, processes, outputs, paneId, fetchOutput])
-}
-
-async function openServer(url: string): Promise<void> {
-  const error = await window.api.backgroundProcesses.openInBrowser(url)
-  if (error) useToastStore.getState().show(`Could not open ${url}: ${error}`)
 }
 
 /** The Processes tab: a hosted session's background processes, running ones first. */
@@ -118,10 +112,7 @@ function ProcessRow({ process, now, error, output, servers, onStop }: RowProps) 
         secondary={error && <span role="alert" className="min-w-0 truncate text-error">{error}</span>}
       />
       {servers.map((server) => (
-        <Button key={server.port} variant="link" label={`Open ${server.url}`} tooltip={`Open ${server.url} in the browser`} onClick={() => void openServer(server.url)}>
-          {server.url.replace(/^https?:\/\//, '')}
-          <ExternalLink size={12} aria-hidden />
-        </Button>
+        <ServerLink key={server.port} server={server} />
       ))}
       {process.status === 'running' && (
         <Button variant="danger" onClick={onStop}>
