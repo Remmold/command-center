@@ -75,6 +75,8 @@ export function createStageService(deps: StageServiceDeps) {
       await refresh()
       return current
     },
+    /** The last read without reading again; every change of it is pushed. */
+    snapshot: (): Record<string, FeatureStageView> => current,
     /** A feature file or record changed; the board's watch on every workspace's `.scratch` calls this. */
     changed: schedule,
     stop: (): void => {

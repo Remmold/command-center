@@ -4,10 +4,10 @@
 
 **Blocked by:** 02, 04, 05
 
-**Status:** ready-for-agent
+**Status:** in-progress — built, review pending
 
-- [ ] A pure digest writer renders every feature record into one markdown file in the app's data folder: name, workspace, stage, tickets done out of total, session status, the account's name, the last test result (ticket 05), the servers' state (ticket 04), and whether the account is rate limited, taken from the usage service the Dashboard already uses.
-- [ ] The file is rewritten on a change of any of those facts, never on a timer, and writes only when its text differs.
-- [ ] Writing the digest starts no Claude process and spends no tokens.
-- [ ] The digest lists features of every account, with the account's name on each line.
-- [ ] Vitest: the rendering for each stage, a rate-limited account, a failed test result, a feature with servers failed; no write when nothing changed.
+- [x] A pure digest writer renders every feature record into one markdown file in the app's data folder: name, workspace, stage, tickets done out of total, session status, the account's name, the last test result (ticket 05), the servers' state (ticket 04), and whether the account is rate limited, taken from the usage service the Dashboard already uses.
+- [x] The file is rewritten on a change of any of those facts, never on a timer, and writes only when its text differs.
+- [x] Writing the digest starts no Claude process and spends no tokens.
+- [x] The digest lists features of every account, with the account's name on each line.
+- [x] Vitest: the rendering for each stage, a rate-limited account, a failed test result, a feature with servers failed; no write when nothing changed.

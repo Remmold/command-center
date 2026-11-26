@@ -45,6 +45,8 @@ import { featureChecklistPath, repoNameFor } from '../shared/testFlow'
 import { sourceCandidates } from './features/source'
 import { createPreviewConfigStore } from './previewConfig/store'
 import { createStageService, type StageService } from './features/stageService'
+import { rateLimitOf, type DigestFeature } from './features/digest'
+import { createDigestWriter, type DigestWriter } from './features/digestWriter'
 import { readTestFlowsFolder } from './testFlow/settings'
 import { createFeature, discardFeature, type CreateDeps } from './features/create'
 import type { FeatureRecord, NewFeatureRequest } from '../shared/features'
@@ -63,7 +65,7 @@ import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
 import type { RateLimitInfo } from './usage/usageReply'
-import { userDataPath } from './util/paths'
+import { featureDigestFile, userDataPath } from './util/paths'
 import { setScreenFocus } from './sessions/screenFocus'
 import {
   DEFAULT_PROFILE_ID,
@@ -99,6 +101,7 @@ interface IpcDeps {
 
 export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void {
   let featureStages: StageService | undefined
+  let featureDigest: DigestWriter | undefined
   const board = new BoardService(workspaces.list, (model) => {
     featureStages?.changed()
     for (const win of BrowserWindow.getAllWindows()) {
@@ -171,6 +174,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   unsubscribers.push(() => discovery.stop())
 
   const workspacesChanged = (): void => {
+    featureDigest?.changed()
     void repoIdentities.detectMissing()
     void refreshBoard()
     void observed.workspacesChanged()
@@ -255,6 +259,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     listWorkspaces: workspaces.list,
     testFlowsFolder: readTestFlowsFolder,
     push: (stages) => {
+      featureDigest?.changed()
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) win.webContents.send(IPC.FEATURES_STAGES_CHANGED, stages)
       }
@@ -425,7 +430,11 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
 
   ipcMain.handle(IPC.PROFILES_LIST, () => profiles.list())
   ipcMain.handle(IPC.PROFILES_CREATE, (_e, name: string) => profiles.create(name))
-  ipcMain.handle(IPC.PROFILES_RENAME, (_e, id: string, name: string) => profiles.rename(id, name))
+  ipcMain.handle(IPC.PROFILES_RENAME, async (_e, id: string, name: string) => {
+    const renamed = await profiles.rename(id, name)
+    featureDigest?.changed()
+    return renamed
+  })
   ipcMain.handle(IPC.PROFILES_SUGGESTIONS, () => profiles.suggestions())
   const adopted = (result: AdoptResult): AdoptResult => {
     if (result.ok) usage.refresh()
@@ -452,6 +461,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.PROFILES_REMOVE, async (_e, id: string) => {
     const removed = await profiles.remove(id)
     if (removed) usage.refresh()
+    featureDigest?.changed()
     return removed
   })
 
@@ -460,9 +470,38 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     envFor: async (profileId) => (await profiles.prepareSession(profileId)).env,
     probe: probeUsage,
     probeDir: userDataPath('usage-probe'),
-    onChange: (all) => sendAll(IPC.USAGE_CHANGED, all)
+    onChange: (all) => {
+      featureDigest?.changed()
+      sendAll(IPC.USAGE_CHANGED, all)
+    }
   })
   usage.start()
+  featureDigest = createDigestWriter({
+    file: featureDigestFile(),
+    features: async (): Promise<DigestFeature[]> => {
+      const [features, allWorkspaces, allProfiles, stages] = await Promise.all([featureStore.list(), workspaces.list(), profiles.list(), featureStages?.snapshot() ?? {}])
+      const servers = serverRunner.all()
+      const statuses = sessionStatusTracker.list()
+      const limits = usage.list()
+      const now = Date.now()
+      return features.map((f) => {
+        const workspace = allWorkspaces.find((w) => w.id === f.workspaceId)
+        return {
+          name: f.name,
+          workspaceName: workspace?.name ?? null,
+          worktreePath: f.worktreePath,
+          completedAt: f.completedAt,
+          accountName: (workspace && allProfiles.find((p) => p.id === workspace.profileId)?.name) ?? null,
+          status: statuses.find((s) => s.paneId === f.sessionId)?.status ?? 'idle',
+          stage: stages[f.name],
+          servers: servers[f.name]?.servers ?? [],
+          rateLimit: workspace ? rateLimitOf(limits.find((u) => u.profileId === workspace.profileId), now) : null
+        }
+      })
+    }
+  })
+  unsubscribers.push(serverRunner.onChanged(() => featureDigest?.changed()), () => featureDigest?.stop())
+  featureDigest.changed()
   ipcMain.handle(IPC.USAGE_LIST, () => usage.list())
   ipcMain.on(IPC.USAGE_REFRESH, (_e, profileId?: unknown) => usage.refresh(typeof profileId === 'string' ? profileId : undefined))
   unsubscribers.push(
@@ -720,6 +759,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     }),
     () => agentSweep.stop(),
     sessionStatusTracker.onChange((entry) => {
+      featureDigest?.changed()
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) win.webContents.send(IPC.SESSION_STATUS_CHANGED, entry)
       }

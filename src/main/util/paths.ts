@@ -1,8 +1,14 @@
 import { app } from 'electron'
 import { join } from 'node:path'
+import { digestFileName } from '../features/digest'
 
 export function userDataPath(...parts: string[]): string {
   return join(app.getPath('userData'), ...parts)
+}
+
+/** The feature digest the main chat reads (ticket 10 gives this path to it). */
+export function featureDigestFile(): string {
+  return userDataPath(digestFileName)
 }
 
 export function projectsFile(): string {
