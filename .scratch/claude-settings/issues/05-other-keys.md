@@ -4,7 +4,7 @@
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** in-progress — built and committed in 8f6a55f; code review not yet applied
 
 - [ ] Every key without a control shows under Other keys in the edited layer, with its raw value in a small JSON box.
 - [ ] Editing parses the JSON before the change can be staged; invalid JSON shows the parse message.
