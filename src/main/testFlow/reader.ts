@@ -41,7 +41,7 @@ function inFolder(path: string, folder: string): boolean {
 }
 
 /** The file, when it is a regular file in the folder or one subfolder down and stays there once links are followed. */
-async function fileInFolder(folder: string, path: string): Promise<{ path: string; mtimeMs: number; size: number } | null> {
+export async function fileInFolder(folder: string, path: string): Promise<{ path: string; mtimeMs: number; size: number } | null> {
   if (!inFolder(path, folder)) return null
   try {
     const [real, realFolder] = await Promise.all([fs.realpath(path), fs.realpath(folder)])

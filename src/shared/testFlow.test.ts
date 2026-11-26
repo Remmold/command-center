@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AssistantMessageItem } from './chatItems'
-import { findTestFlows, repoNameFor } from './testFlow'
+import { featureChecklistPath, findTestFlows, repoNameFor } from './testFlow'
 
 const FOLDER = 'C:\\projects\\test-flows'
 
@@ -127,5 +127,20 @@ describe('the repo name a test flow falls back to', () => {
   it('is the folder name for a folder that is not a known workspace', () => {
     expect(repoNameFor(workspaces, 'C:\\projects\\scratch\\notes\\')).toBe('notes')
     expect(repoNameFor(workspaces, undefined)).toBe('')
+  })
+})
+
+describe('a feature session checklist', () => {
+  const feature = (name: string, worktreePath: string) => ({ name, worktreePath })
+  it('is the feature file in the repo folder, found by the session folder and not by its transcript', () => {
+    const features = [feature('login', 'C:\\wt\\login'), feature('cart', 'C:\\wt\\cart')]
+    expect(featureChecklistPath(features, 'c:/wt/cart/', FOLDER, 'shop')).toBe('C:\\projects\\test-flows\\shop\\cart.md')
+  })
+  it('is none for an ordinary session, or without a folder or repo name', () => {
+    const features = [feature('login', 'C:\\wt\\login')]
+    expect(featureChecklistPath(features, 'C:\\elsewhere', FOLDER, 'shop')).toBeNull()
+    expect(featureChecklistPath(features, 'C:\\wt\\login', '', 'shop')).toBeNull()
+    expect(featureChecklistPath(features, 'C:\\wt\\login', FOLDER, '')).toBeNull()
+    expect(featureChecklistPath(features, undefined, FOLDER, 'shop')).toBeNull()
   })
 })

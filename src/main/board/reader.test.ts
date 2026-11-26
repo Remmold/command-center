@@ -184,6 +184,15 @@ describe('board reader', () => {
     expect(tickets(model)[0].status).toBe('blocked')
   })
 
+  it('keeps a built ticket, waiting on a person at a running app, in In progress', async () => {
+    const root = fixture({
+      '.scratch/workspace-hub/issues/01-built.md': ticket('01: Built', ['**Status:** built — resume after restart'])
+    })
+    const model = await readBoard([workspace(root)], nodeFileReader)
+    expect(columns(model)).toEqual({ '01': 'in-progress' })
+    expect(tickets(model)[0]).toMatchObject({ status: 'built', statusNote: 'resume after restart', statusKnown: true })
+  })
+
   it('puts a claimed ticket, or one with its own progress file, in In progress', async () => {
     const root = fixture({
       '.scratch/workspace-hub/issues/01-claimed.md': ticket('01: Claimed', ['Status: claimed']),

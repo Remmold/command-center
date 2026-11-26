@@ -117,6 +117,8 @@ export interface TestFlowFocus {
   folder: string
   repoName: string
   title: string
+  /** The checklist of the feature the session belongs to, when it is a feature session. */
+  checklist?: string
 }
 
 /** The query flag that loads the renderer as the pop-out test-flow window. */
@@ -124,6 +126,22 @@ export const TEST_FLOW_WINDOW_QUERY = { mode: 'test-flow' } as const
 
 /** What the Test tab shows for a picked file; `name` is the file shown, the twin when there is one. */
 export type TestFlowView = { found: false; kind?: never } | { kind: 'html'; name: string; url: string } | { kind: 'md'; name: string; text: string }
+
+/**
+ * The checklist of the feature whose worktree is `cwd`: `<folder>/<repo>/<feature>.md`, named by the feature record so
+ * it never depends on the session's transcript. Null for an ordinary session.
+ */
+export function featureChecklistPath(
+  features: readonly { name: string; worktreePath: string }[],
+  cwd: string | undefined,
+  folder: string,
+  repoName: string
+): string | null {
+  if (!cwd || !folder.trim() || !repoName) return null
+  const key = comparable(cwd)
+  const feature = features.find((f) => comparable(f.worktreePath) === key)
+  return feature ? joinFolder(folder, `${repoName}/${feature.name}.md`) : null
+}
 
 /** The repo name a workspace's test flow is named after: its repo identity's, else its folder's. */
 export function repoNameFor(workspaces: readonly { path: string; repoName: string }[], cwd: string | undefined): string {

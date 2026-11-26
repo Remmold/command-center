@@ -13,6 +13,7 @@ const COLUMN_OF_WORD: Record<string, BoardColumn> = {
   complete: 'done',
   completed: 'done',
   closed: 'done',
+  built: 'in-progress',
   claimed: 'in-progress',
   doing: 'in-progress',
   wip: 'in-progress'

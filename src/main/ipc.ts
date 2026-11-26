@@ -1,11 +1,13 @@
 import { ipcMain, dialog, BrowserWindow, app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
 import { createSidebarGroupsStore } from './sidebarGroups/store'
 import { createChatHistoryStore } from './chatHistory/store'
+import { pathKey } from '../shared/findings'
 import { isHistoryChange } from '../shared/chatHistory'
 import { liveConfigDir } from './observed/turn'
 import * as vscodeMatch from './profiles/vscodeMatch'
@@ -33,7 +35,26 @@ import { isTeleportedSession } from './claude/teleport'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { contextReport, readListedFile, startTotals, writeListedFile } from './context/service'
-import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
+import { addWorktree, branchTaken, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
+import { createFeatureStore } from './features/store'
+import { featureAccount } from './features/account'
+import { killRunningInstalls, runInstall } from './features/install'
+import { createPortReserver, portAccepts, portIsFree } from './features/ports'
+import { createServerRunner } from './features/serverRunner'
+import { closeFeaturePair, openPair } from './features/pairWindows'
+import { commitsBeyond, completeFeature, removeFeatureWorktree, removeWorktreeOnly, reopenFeature } from './features/complete'
+import { testFeature } from './features/testPair'
+import { featureChecklistPath, repoNameFor } from '../shared/testFlow'
+import { sourceCandidates } from './features/source'
+import { createPreviewConfigStore } from './previewConfig/store'
+import { beginPreviewDraft, discardPreviewDraft, readPreviewDraftFile, sweepStalePreviewDrafts } from './previewConfig/draftFile'
+import { createStageService, type StageService } from './features/stageService'
+import { rateLimitOf, type DigestFeature } from './features/digest'
+import { createDigestWriter, type DigestWriter } from './features/digestWriter'
+import { readTestFlowsFolder } from './testFlow/settings'
+import { createFeature, discardFeature, type CreateDeps } from './features/create'
+import type { FeatureRecord, NewFeatureRequest } from '../shared/features'
+import type { PreviewConfig } from '../shared/previewConfig'
 import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
 import { MANAGED_SETTINGS_FILE, readOrganisationLayer, readSettingsFile, saveSettingsFile, settingsTargetProblem } from './claude/settingsFile'
@@ -48,11 +69,16 @@ import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
 import type { RateLimitInfo } from './usage/usageReply'
-import { userDataPath } from './util/paths'
+import { featureDigestFile, legacyFeatureDigestFile, mainChatDir, previewDraftsFolder, userDataPath } from './util/paths'
+import { realPathFrom } from './features/realPath'
+import { createMainChatStore } from './features/mainChatStore'
+import { MAIN_CHAT_PANE_ID, mainChatLaunch, mainChatReply, type MainChatInfo } from '../shared/mainChat'
 import { setScreenFocus } from './sessions/screenFocus'
 import {
   DEFAULT_PROFILE_ID,
+  DEFAULT_SHELL_KIND,
   type AddWorkspaceResult,
+  type Workspace,
   type AdoptResult,
   type ClaudeStartOptions,
   type UserContentBlock,
@@ -82,7 +108,10 @@ interface IpcDeps {
 }
 
 export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void {
+  let featureStages: StageService | undefined
+  let featureDigest: DigestWriter | undefined
   const board = new BoardService(workspaces.list, (model) => {
+    featureStages?.changed()
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send(IPC.BOARD_CHANGED, model)
     }
@@ -153,13 +182,17 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   unsubscribers.push(() => discovery.stop())
 
   const workspacesChanged = (): void => {
+    featureDigest?.changed()
     void repoIdentities.detectMissing()
     void refreshBoard()
     void observed.workspacesChanged()
     void discovery.rescan()
   }
 
-  ipcMain.handle(IPC.WORKSPACES_LIST, () => workspaces.list())
+  // The main chat's folder is a workspace record only so its sessions resolve an account and a transcript folder; no list shows it.
+  const isMainChatFolder = (w: Workspace): boolean => resolve(w.path).toLowerCase() === resolve(mainChatDir()).toLowerCase()
+  const listed = (all: Workspace[]): Workspace[] => all.filter((w) => !isMainChatFolder(w))
+  ipcMain.handle(IPC.WORKSPACES_LIST, async () => listed(await workspaces.list()))
 
   ipcMain.handle(IPC.WORKSPACES_ADD_PATH, async (_e, path: unknown): Promise<AddWorkspaceResult> => {
     if (typeof path !== 'string' || path.trim() === '') return { ok: false, error: 'No folder given' }
@@ -198,9 +231,195 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     return updated
   })
 
-  ipcMain.handle(IPC.WORKSPACES_REORDER, (_e, ids: unknown) =>
-    workspaces.reorder(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])
+  ipcMain.handle(IPC.WORKSPACES_REORDER, async (_e, ids: unknown) =>
+    listed(await workspaces.reorder(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []))
   )
+
+  const mainChatStore = createMainChatStore(userDataPath('main-chat.json'))
+  const mainChatInfo = async (): Promise<MainChatInfo> => {
+    const path = mainChatDir()
+    await fs.mkdir(path, { recursive: true })
+    const saved = await mainChatStore.get()
+    const profileId = saved.profileId && (await profiles.list()).some((p) => p.id === saved.profileId) ? saved.profileId : DEFAULT_PROFILE_ID
+    let workspace = (await workspaces.list()).find(isMainChatFolder) ?? (await workspaces.add(path, profileId))
+    if (workspace.profileId !== profileId) workspace = (await workspaces.setProfile(workspace.id, profileId)) ?? workspace
+    return { workspaceId: workspace.id, path, profileId, claudeSessionId: saved.claudeSessionId, digestFile: featureDigestFile() }
+  }
+  ipcMain.handle(IPC.MAIN_CHAT_INFO, mainChatInfo)
+  ipcMain.handle(IPC.MAIN_CHAT_SET_PROFILE, async (_e, profileId: unknown) => {
+    const before = await mainChatInfo()
+    if (typeof profileId === 'string' && profileId !== before.profileId && (await profiles.list()).some((p) => p.id === profileId)) await mainChatStore.setProfile(profileId)
+    return mainChatInfo()
+  })
+  ipcMain.handle(IPC.MAIN_CHAT_SET_CLAUDE_SESSION, (_e, claudeSessionId: unknown) =>
+    typeof claudeSessionId === 'string' && claudeSessionId !== '' ? mainChatStore.setClaudeSession(claudeSessionId) : undefined
+  )
+
+  const featureStore = createFeatureStore(userDataPath('features.json'))
+  const previewConfigs = createPreviewConfigStore(userDataPath('preview-configs.json'))
+  ipcMain.handle(IPC.PREVIEW_CONFIG_GET, (_e, workspaceId: unknown) => (typeof workspaceId === 'string' ? previewConfigs.get(workspaceId) : null))
+  ipcMain.handle(IPC.PREVIEW_CONFIG_SAVE, (_e, workspaceId: unknown, raw: unknown) =>
+    typeof workspaceId === 'string' ? previewConfigs.save(workspaceId, raw) : { ok: false, error: 'No workspace was named.' }
+  )
+  void fs.rm(legacyFeatureDigestFile(), { force: true })
+  void sweepStalePreviewDrafts(previewDraftsFolder(), Date.now())
+  ipcMain.handle(IPC.PREVIEW_DRAFT_BEGIN, () => beginPreviewDraft(previewDraftsFolder(), randomUUID()))
+  ipcMain.handle(IPC.PREVIEW_DRAFT_READ, (_e, file: unknown) => readPreviewDraftFile(previewDraftsFolder(), file))
+  ipcMain.handle(IPC.PREVIEW_DRAFT_DISCARD, (_e, file: unknown) => discardPreviewDraft(previewDraftsFolder(), file))
+  const featureDeps: CreateDeps = {
+    git: {
+      isRepo: isGitRepo,
+      mainBranch,
+      branchTaken,
+      addWorktree,
+      removeNewWorktree
+    },
+    workspaces: {
+      get: async (id) => (await workspaces.list()).find((w) => w.id === id),
+      add: workspaces.add,
+      remove: workspaces.remove
+    },
+    profile: async (profileId) => {
+      const { env } = await profiles.prepareSession(profileId)
+      return { ...(await profiles.get(profileId)), env }
+    },
+    features: featureStore,
+    installCommand: async (workspaceId) => (await previewConfigs.get(workspaceId))?.install ?? '',
+    hasPreviewBrowser: async (workspaceId) => ((await previewConfigs.get(workspaceId))?.servers.length ?? 0) > 0,
+    runInstall,
+    installing: (name, running) => sendAll(IPC.FEATURES_INSTALLING, { name, running }),
+    pathExists: (path) => fs.access(path).then(() => true, () => false),
+    now: () => Date.now()
+  }
+  featureStages = createStageService({
+    listFeatures: featureStore.list,
+    listWorkspaces: workspaces.list,
+    testFlowsFolder: readTestFlowsFolder,
+    push: (stages) => {
+      featureDigest?.changed()
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.FEATURES_STAGES_CHANGED, stages)
+      }
+    }
+  })
+  unsubscribers.push(() => featureStages?.stop())
+  ipcMain.handle(IPC.FEATURES_LIST, () => featureStore.list())
+  ipcMain.handle(IPC.FEATURES_STAGES, () => featureStages?.current() ?? {})
+  ipcMain.handle(IPC.FEATURES_CREATE, async (_e, request: NewFeatureRequest) => {
+    const result = await createFeature(featureDeps, request)
+    if (result.ok) workspacesChanged()
+    featureStages?.changed()
+    return result
+  })
+  const previewConfigFor = async (feature: FeatureRecord): Promise<PreviewConfig | null> => {
+    for (const id of sourceCandidates(feature, await workspaces.list())) {
+      const config = await previewConfigs.get(id)
+      if (config) return config
+    }
+    return null
+  }
+  const accountOfFeatureWork = (workspaceId: string) =>
+    featureAccount(
+      {
+        workspace: async (id) => (await workspaces.list()).find((w) => w.id === id),
+        hasProfile: async (id) => (await profiles.list()).some((p) => p.id === id),
+        prepare: profiles.prepareSession
+      },
+      workspaceId
+    )
+  const portReserver = createPortReserver({ list: featureStore.list, save: featureStore.setPorts, isFree: portIsFree })
+  const serverRunner = createServerRunner({
+    terminals,
+    feature: async (name) => (await featureStore.list()).find((f) => f.name === name),
+    config: previewConfigFor,
+    env: (workspaceId) => accountOfFeatureWork(workspaceId),
+    reservePorts: portReserver.reserve,
+    isReady: (port) => portAccepts(port),
+    shell: DEFAULT_SHELL_KIND
+  })
+  ipcMain.handle(IPC.FEATURES_TEST, (_e, name: unknown) =>
+    typeof name === 'string'
+      ? testFeature(
+          {
+            feature: async (n) => (await featureStore.list()).find((f) => f.name === n),
+            config: previewConfigFor,
+            runner: serverRunner,
+            flowFocus: async (feature) => {
+              const folder = await readTestFlowsFolder()
+              const repoName = (await workspaces.list()).find((w) => w.id === feature.workspaceId)?.repoName ?? repoNameFor([], feature.worktreePath)
+              const checklist = featureChecklistPath([feature], feature.worktreePath, folder, repoName)
+              return { picks: checklist ? [{ path: checklist, source: 'repo' }] : [], folder, repoName, title: feature.name, ...(checklist ? { checklist } : {}) }
+            },
+            open: openPair
+          },
+          name
+        )
+      : { ok: false, error: 'No feature was named.' }
+  )
+  unsubscribers.push(serverRunner.onChanged((name, view) => sendAll(IPC.FEATURES_SERVERS_CHANGED, { name, view })))
+  ipcMain.handle(IPC.FEATURES_SERVERS, () => serverRunner.all())
+  ipcMain.handle(IPC.FEATURES_SERVERS_START, (_e, name: unknown) =>
+    typeof name === 'string' ? serverRunner.start(name) : { ok: false, error: 'No feature was named.' }
+  )
+  ipcMain.handle(IPC.FEATURES_SERVERS_RETRY, (_e, name: unknown, server: unknown) =>
+    typeof name === 'string' && typeof server === 'string' ? serverRunner.retry(name, server) : { ok: false, error: 'No server was named.' }
+  )
+  ipcMain.handle(IPC.FEATURES_SERVERS_STOP, (_e, name: unknown) => (typeof name === 'string' ? serverRunner.stop(name) : undefined))
+  const featureNamed = async (n: string) => (await featureStore.list()).find((f) => f.name === n)
+  ipcMain.handle(IPC.FEATURES_COMPLETE, async (_e, name: unknown) => {
+    if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
+    const result = await serverRunner.lock.run(name, () =>
+      completeFeature({ feature: featureNamed, runner: serverRunner, closePair: closeFeaturePair, setPorts: featureStore.setPorts, setCompleted: featureStore.setCompleted, now: () => Date.now() }, name)
+    )
+    featureStages?.changed()
+    return result
+  })
+  ipcMain.handle(IPC.FEATURES_REOPEN, async (_e, name: unknown) => {
+    if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
+    const result = await serverRunner.lock.run(name, () =>
+      reopenFeature({ feature: featureNamed, config: previewConfigFor, reservePorts: portReserver.reserve, setPorts: featureStore.setPorts, setCompleted: featureStore.setCompleted }, name)
+    )
+    featureStages?.changed()
+    return result
+  })
+  ipcMain.handle(IPC.FEATURES_REMOVE_WORKTREE, async (_e, name: unknown) => {
+    if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
+    const result = await serverRunner.lock.run(name, () =>
+      removeFeatureWorktree(
+      {
+        feature: featureNamed,
+        repo: async (feature) => {
+          const all = await workspaces.list()
+          for (const id of sourceCandidates(feature, all)) {
+            const path = all.find((w) => w.id === id)?.path
+            const base = path ? await mainBranch(path) : null
+            if (path && base) return { path, base }
+          }
+          return null
+        },
+        commitsBeyond,
+        removeWorktree: removeWorktreeOnly,
+        forget: async (feature) => {
+          await featureStore.remove(feature.name)
+          await workspaces.remove(feature.workspaceId).catch(() => undefined)
+        }
+      },
+      name
+      )
+    )
+    if (result.ok) workspacesChanged()
+    featureStages?.changed()
+    return result
+  })
+  ipcMain.handle(IPC.FEATURES_SET_CLAUDE_SESSION, (_e, name: unknown, claudeSessionId: unknown) =>
+    typeof name === 'string' && typeof claudeSessionId === 'string' ? featureStore.setClaudeSessionId(name, claudeSessionId) : undefined
+  )
+  ipcMain.handle(IPC.FEATURES_DISCARD, async (_e, name: string, workspaceId: string) => {
+    const source = (await workspaces.list()).find((w) => w.id === workspaceId)
+    if (source) await discardFeature(featureDeps, name, source.path)
+    workspacesChanged()
+    featureStages?.changed()
+  })
 
   const sidebarGroups = createSidebarGroupsStore(app.getPath('userData'))
   ipcMain.handle(IPC.SIDEBAR_GROUPS_LOAD, () => sidebarGroups.load())
@@ -248,7 +467,11 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
 
   ipcMain.handle(IPC.PROFILES_LIST, () => profiles.list())
   ipcMain.handle(IPC.PROFILES_CREATE, (_e, name: string) => profiles.create(name))
-  ipcMain.handle(IPC.PROFILES_RENAME, (_e, id: string, name: string) => profiles.rename(id, name))
+  ipcMain.handle(IPC.PROFILES_RENAME, async (_e, id: string, name: string) => {
+    const renamed = await profiles.rename(id, name)
+    featureDigest?.changed()
+    return renamed
+  })
   ipcMain.handle(IPC.PROFILES_SUGGESTIONS, () => profiles.suggestions())
   const adopted = (result: AdoptResult): AdoptResult => {
     if (result.ok) usage.refresh()
@@ -275,6 +498,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.PROFILES_REMOVE, async (_e, id: string) => {
     const removed = await profiles.remove(id)
     if (removed) usage.refresh()
+    featureDigest?.changed()
     return removed
   })
 
@@ -283,9 +507,38 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     envFor: async (profileId) => (await profiles.prepareSession(profileId)).env,
     probe: probeUsage,
     probeDir: userDataPath('usage-probe'),
-    onChange: (all) => sendAll(IPC.USAGE_CHANGED, all)
+    onChange: (all) => {
+      featureDigest?.changed()
+      sendAll(IPC.USAGE_CHANGED, all)
+    }
   })
   usage.start()
+  featureDigest = createDigestWriter({
+    file: featureDigestFile(),
+    features: async (): Promise<DigestFeature[]> => {
+      const [features, allWorkspaces, allProfiles, stages] = await Promise.all([featureStore.list(), workspaces.list(), profiles.list(), featureStages?.snapshot() ?? {}])
+      const servers = serverRunner.all()
+      const statuses = sessionStatusTracker.list()
+      const limits = usage.list()
+      const now = Date.now()
+      return features.map((f) => {
+        const workspace = allWorkspaces.find((w) => w.id === f.workspaceId)
+        return {
+          name: f.name,
+          workspaceName: workspace?.name ?? null,
+          worktreePath: f.worktreePath,
+          completedAt: f.completedAt,
+          accountName: (workspace && allProfiles.find((p) => p.id === workspace.profileId)?.name) ?? null,
+          status: statuses.find((s) => s.paneId === f.sessionId)?.status ?? 'idle',
+          stage: stages[f.name],
+          servers: servers[f.name]?.servers ?? [],
+          rateLimit: workspace ? rateLimitOf(limits.find((u) => u.profileId === workspace.profileId), now) : null
+        }
+      })
+    }
+  })
+  unsubscribers.push(serverRunner.onChanged(() => featureDigest?.changed()), () => featureDigest?.stop())
+  featureDigest.changed()
   ipcMain.handle(IPC.USAGE_LIST, () => usage.list())
   ipcMain.on(IPC.USAGE_REFRESH, (_e, profileId?: unknown) => usage.refresh(typeof profileId === 'string' ? profileId : undefined))
   unsubscribers.push(
@@ -362,7 +615,13 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
 
   // Claude (stream-json subprocess)
   ipcMain.handle(IPC.CLAUDE_START, async (_e, options: ClaudeStartOptions) => {
+    if (options.paneId === MAIN_CHAT_PANE_ID) return startMainChat(options)
     const workspace = await workspaces.findByPath(options.cwd)
+    const ofFeature = (await featureStore.list()).find((f) => pathKey(f.worktreePath) === pathKey(options.cwd))
+    if (ofFeature) {
+      const account = await accountOfFeatureWork(ofFeature.workspaceId)
+      if (!account.ok) return { ok: false as const, error: account.error }
+    }
     if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
     const { profileId, env } = await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)
     const teleported = options.resumeSessionId ? await isTeleportedSession(await transcriptsDirForCwd(options.cwd), options.resumeSessionId) : false
@@ -371,6 +630,25 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const started = claudeManager.start({ ...options, promptSuggestions, profileEnv: env, profileId, teleported })
     return started.ok ? { ...started, profileId: claudeManager.profileOf(options.paneId) } : started
   })
+  // Read-only by construction: the process is given read tools only, and the app answers its permission requests itself.
+  const mainChatRoots = async (): Promise<string[]> => [dirname(featureDigestFile()), mainChatDir(), ...(await featureStore.list()).map((f) => f.worktreePath)]
+  const startMainChat = async (options: ClaudeStartOptions) => {
+    const info = await mainChatInfo()
+    const { env } = await profiles.prepareSession(info.profileId)
+    const launch = mainChatLaunch(featureDigestFile(), (await featureStore.list()).map((f) => f.worktreePath))
+    const started = claudeManager.start({
+      ...options,
+      cwd: info.path,
+      addDirs: launch.addDirs,
+      permissionMode: 'default',
+      allowBypass: false,
+      extraArgs: launch.cliArgs,
+      promptSuggestions: false,
+      profileEnv: env,
+      profileId: info.profileId
+    })
+    return started.ok ? { ...started, profileId: info.profileId } : started
+  }
   ipcMain.handle(IPC.CLAUDE_PROCESS_PROFILE, (_e, paneId: string) => (claudeManager.isAlive(paneId) ? claudeManager.profileOf(paneId) : null))
   ipcMain.handle(
     IPC.CLAUDE_CONTROL,
@@ -508,7 +786,14 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     })
   )
 
-  claudeManager.setIncomingHandlerFactory((paneId) => approvalBroker.handlerFor(paneId))
+  claudeManager.setIncomingHandlerFactory((paneId) => {
+    if (paneId !== MAIN_CHAT_PANE_ID) return approvalBroker.handlerFor(paneId)
+    return async (raw) => {
+      if (raw.subtype !== 'can_use_tool') throw new Error(`Unsupported control request: ${raw.subtype}`)
+      const input = typeof raw.input === 'object' && raw.input !== null ? (raw.input as Record<string, unknown>) : {}
+      return { ...(await mainChatReply(typeof raw.tool_name === 'string' ? raw.tool_name : '', input, await mainChatRoots(), realPathFrom(mainChatDir()))), toolUseID: raw.tool_use_id }
+    }
+  })
   unsubscribers.push(
     approvalBroker.onRaised((request) => {
       sessionStatusTracker.apply(request.paneId, { kind: 'permission-raised', requestId: request.requestId })
@@ -543,6 +828,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     }),
     () => agentSweep.stop(),
     sessionStatusTracker.onChange((entry) => {
+      featureDigest?.changed()
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) win.webContents.send(IPC.SESSION_STATUS_CHANGED, entry)
       }
@@ -571,6 +857,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   holdQuit(
     app,
     () => {
+      killRunningInstalls()
       const terminalsClosed = terminals.closeAll()
       const killed = claudeManager.stopAll()
       claudeManager.setIncomingHandlerFactory(null)

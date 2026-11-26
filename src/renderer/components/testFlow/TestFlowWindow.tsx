@@ -3,6 +3,7 @@ import type { TestFlowFocus } from '../../../shared/testFlow'
 import { EmptyState } from '../ui/EmptyState'
 import { TestFlowPanel } from './TestFlowPanel'
 import { useTestFlowView } from './useTestFlowView'
+import { useTestStepsView } from './useTestStepsView'
 
 /** The focused Work session's test flow as main forwards it; a push that lands first beats the initial ask. */
 function useTestFlowFocus(): TestFlowFocus | null {
@@ -31,10 +32,11 @@ export function TestFlowWindow() {
   const focus = useTestFlowFocus()
   const paths = useMemo(() => focus?.picks.map((p) => p.path) ?? [], [focus])
   const view = useTestFlowView(paths)
+  const steps = useTestStepsView(focus?.checklist ?? null)
   if (!focus) return <EmptyState>Open a session in Work to show its test flow here.</EmptyState>
   return (
     <div className="relative h-full">
-      <TestFlowPanel picks={focus.picks} view={view} folder={focus.folder} repoName={focus.repoName} session={focus.title} />
+      <TestFlowPanel picks={focus.picks} view={view} folder={focus.folder} repoName={focus.repoName} session={focus.title} steps={{ view: steps.view, onMark: steps.mark }} />
     </div>
   )
 }

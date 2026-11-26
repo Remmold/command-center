@@ -21,6 +21,9 @@ import { useModelStore } from './state/modelStore'
 import { closeSession, focusedTarget, initChatPair, paneOnScreen } from './state/sessionNavigation'
 import { pickPastSession, pickProject } from './state/launcherStore'
 import { SessionLauncher } from './components/work/SessionLauncher'
+import { NewFeatureDialogHost } from './components/work/NewFeatureDialog'
+import { followFeatureStages, useFeaturesStore } from './state/featuresStore'
+import { useMainChatStore } from './state/mainChatStore'
 import { Toasts } from './components/ui/Toasts'
 import { ApprovalInbox } from './components/inbox/ApprovalInbox'
 import { useApprovalInboxStore } from './state/approvalInboxStore'
@@ -63,6 +66,9 @@ export function App() {
   useEffect(() => {
     void loadWorkspaces()
     void loadProfiles()
+    void useFeaturesStore.getState().load()
+    void useMainChatStore.getState().load()
+    return followFeatureStages()
   }, [loadWorkspaces, loadProfiles])
 
   useEffect(() => {
@@ -166,6 +172,7 @@ export function App() {
         </div>
       </div>
       <SessionLauncher />
+      <NewFeatureDialogHost />
       <ApprovalInbox />
       <Toasts />
       {settingsSection && (

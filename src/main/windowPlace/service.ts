@@ -2,12 +2,12 @@ import { app, screen, type BrowserWindow } from 'electron'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { userDataPath } from '../util/paths'
-import { restorePlace, type DisplayInfo, type Placement, type SavedPlace } from './place'
+import { pairPlaceKey, restorePlace, type DisplayInfo, type Placement, type SavedPlace } from './place'
 
 const SAVE_DEBOUNCE_MS = 500
 
 /** Which window a place belongs to; the main window's file keeps its original name. */
-export type WindowKey = 'main' | 'test-flow'
+export type WindowKey = 'main' | 'test-flow' | ReturnType<typeof pairPlaceKey>
 
 function placeFile(key: WindowKey): string {
   return userDataPath(key === 'main' ? 'window-place.json' : `window-place-${key}.json`)

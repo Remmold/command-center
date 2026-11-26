@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { killTree } from '../util/killTree'
 import { portOpen } from '../util/portOpen'
 import type { AppActionResult, AppStatus, ManagedApp } from '../../shared/types'
 
@@ -73,7 +74,7 @@ class AppManager {
     const child = this.procs.get(app.id)
     if (child?.pid) {
       try {
-        spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true })
+        killTree(child.pid)
         acted = true
       } catch {
         /* already gone */

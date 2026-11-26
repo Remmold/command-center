@@ -9,7 +9,7 @@ const LOCAL_URL = /\b(https?):\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\
 const OPENS_AS_LOCALHOST = new Set(['0.0.0.0', '[::1]'])
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1'])
 
-function withoutAnsi(text: string): string {
+export function withoutAnsi(text: string): string {
   return text.replace(ANSI, '')
 }
 

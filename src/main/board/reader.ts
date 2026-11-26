@@ -168,7 +168,7 @@ async function listFileNames(dir: string, files: BoardFileReader): Promise<strin
   return (await files.listDir(dir)).filter((e) => !e.isDirectory).map((e) => e.name)
 }
 
-async function readTickets(issuesDir: string, files: BoardFileReader): Promise<ParsedTicket[]> {
+export async function readTickets(issuesDir: string, files: BoardFileReader): Promise<ParsedTicket[]> {
   const names = await listFileNames(issuesDir, files)
   const lowerNames = new Set(names.map((n) => n.toLowerCase()))
   const tickets: ParsedTicket[] = []

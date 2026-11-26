@@ -1,13 +1,13 @@
-import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { Workspace } from '../../shared/types'
 import { getCommonDir, listWorktreesPorcelain } from '../git/service'
 import { deriveRepoGroup } from '../workspaces/repoGroup'
 import { nodeFileReader } from './nodeFileReader'
 import { readBoard } from './reader'
+import { git, isolateGitEnv } from '../util/testGit'
 import { createWorktreeLister, parseWorktreeList, pickExtraWorktrees } from './worktrees'
 
 const PORCELAIN = [
@@ -72,23 +72,14 @@ describe('worktree list', () => {
   })
 })
 
+isolateGitEnv()
+
 describe('worktree lister on a real repo', () => {
   const roots: string[] = []
-  // The pre-commit hook exports GIT_INDEX_FILE and friends; inherited, they point the temp repo's git at this repo's index.
-  const hookGitEnv = Object.entries(process.env).filter(([k]) => k.startsWith('GIT_'))
-  beforeAll(() => {
-    for (const [k] of hookGitEnv) delete process.env[k]
-  })
-  afterAll(() => {
-    for (const [k, v] of hookGitEnv) process.env[k] = v
-  })
   afterEach(() => {
     for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true })
   })
 
-  const git = (cwd: string, ...args: string[]): void => {
-    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'core.autocrlf=false', ...args], { cwd, stdio: 'ignore' })
-  }
   const ticketAt = (dir: string, status: string): void => {
     const file = join(dir, '.scratch', 'combat', 'issues', '01-swing.md')
     mkdirSync(dirname(file), { recursive: true })

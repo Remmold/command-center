@@ -40,6 +40,8 @@ import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from '../shared/
 import type { RepoIdentityViews } from '../shared/repoIdentity'
 import type { SpeechModelStatus, VideoProgressEvent } from '../shared/video'
 import type { TestFlowFocus } from '../shared/testFlow'
+import type { FeatureStageView } from '../shared/featureStage'
+import type { FeatureServersView } from '../shared/featureServers'
 
 const api: RendererApi = {
   workspaces: {
@@ -50,6 +52,48 @@ const api: RendererApi = {
     setProfile: (id: string, profileId: string): Promise<Workspace | null> =>
       ipcRenderer.invoke(IPC.WORKSPACES_SET_PROFILE, id, profileId),
     reorder: (ids: string[]): Promise<Workspace[]> => ipcRenderer.invoke(IPC.WORKSPACES_REORDER, ids)
+  },
+  mainChat: {
+    info: () => ipcRenderer.invoke(IPC.MAIN_CHAT_INFO),
+    setProfile: (profileId) => ipcRenderer.invoke(IPC.MAIN_CHAT_SET_PROFILE, profileId),
+    setClaudeSession: (claudeSessionId) => ipcRenderer.invoke(IPC.MAIN_CHAT_SET_CLAUDE_SESSION, claudeSessionId)
+  },
+  features: {
+    list: () => ipcRenderer.invoke(IPC.FEATURES_LIST),
+    create: (request) => ipcRenderer.invoke(IPC.FEATURES_CREATE, request),
+    discard: (name, workspaceId) => ipcRenderer.invoke(IPC.FEATURES_DISCARD, name, workspaceId),
+    stages: () => ipcRenderer.invoke(IPC.FEATURES_STAGES),
+    setClaudeSession: (name, claudeSessionId) => ipcRenderer.invoke(IPC.FEATURES_SET_CLAUDE_SESSION, name, claudeSessionId),
+    onStagesChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, stages: Record<string, FeatureStageView>) => cb(stages)
+      ipcRenderer.on(IPC.FEATURES_STAGES_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.FEATURES_STAGES_CHANGED, handler)
+    },
+    onInstalling: (cb) => {
+      const handler = (_e: IpcRendererEvent, event: { name: string; running: boolean }) => cb(event.name, event.running)
+      ipcRenderer.on(IPC.FEATURES_INSTALLING, handler)
+      return () => ipcRenderer.off(IPC.FEATURES_INSTALLING, handler)
+    },
+    test: (name) => ipcRenderer.invoke(IPC.FEATURES_TEST, name),
+    complete: (name) => ipcRenderer.invoke(IPC.FEATURES_COMPLETE, name),
+    reopen: (name) => ipcRenderer.invoke(IPC.FEATURES_REOPEN, name),
+    removeWorktree: (name) => ipcRenderer.invoke(IPC.FEATURES_REMOVE_WORKTREE, name),
+    startServers: (name) => ipcRenderer.invoke(IPC.FEATURES_SERVERS_START, name),
+    retryServer: (name, server) => ipcRenderer.invoke(IPC.FEATURES_SERVERS_RETRY, name, server),
+    stopServers: (name) => ipcRenderer.invoke(IPC.FEATURES_SERVERS_STOP, name),
+    servers: () => ipcRenderer.invoke(IPC.FEATURES_SERVERS),
+    onServersChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, event: { name: string; view: FeatureServersView }) => cb(event.name, event.view)
+      ipcRenderer.on(IPC.FEATURES_SERVERS_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.FEATURES_SERVERS_CHANGED, handler)
+    }
+  },
+  previewConfig: {
+    get: (workspaceId) => ipcRenderer.invoke(IPC.PREVIEW_CONFIG_GET, workspaceId),
+    save: (workspaceId, raw) => ipcRenderer.invoke(IPC.PREVIEW_CONFIG_SAVE, workspaceId, raw),
+    draftBegin: () => ipcRenderer.invoke(IPC.PREVIEW_DRAFT_BEGIN),
+    draftRead: (file) => ipcRenderer.invoke(IPC.PREVIEW_DRAFT_READ, file),
+    draftDiscard: (file) => ipcRenderer.invoke(IPC.PREVIEW_DRAFT_DISCARD, file)
   },
   sidebarGroups: {
     load: () => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_LOAD),
@@ -196,6 +240,8 @@ const api: RendererApi = {
     popOut: () => ipcRenderer.invoke(IPC.TEST_FLOW_POP_OUT),
     publish: (focus) => ipcRenderer.send(IPC.TEST_FLOW_PUBLISH, focus),
     focus: () => ipcRenderer.invoke(IPC.TEST_FLOW_FOCUS_GET),
+    showSteps: (watcher, path) => ipcRenderer.invoke(IPC.TEST_STEPS_SHOW, watcher, path),
+    markStep: (path, hash, mark, note) => ipcRenderer.invoke(IPC.TEST_STEPS_MARK, path, hash, mark, note),
     onFocus: (cb) => {
       const handler = (_e: IpcRendererEvent, focus: TestFlowFocus) => cb(focus)
       ipcRenderer.on(IPC.TEST_FLOW_FOCUS, handler)
