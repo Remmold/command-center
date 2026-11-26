@@ -44,9 +44,10 @@ function savedAutoRestart(): boolean {
   }
 }
 
-export function startUpdates(): UpdateController {
+export function startUpdates(options: { confirmRestart: () => Promise<boolean> }): UpdateController {
   const { updater, idleMs } = pickUpdater()
   const controller = createUpdateController({
+    confirmRestart: options.confirmRestart,
     updater,
     idleMs,
     checkEveryMs: CHECK_EVERY_MS,

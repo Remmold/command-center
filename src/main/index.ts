@@ -1,5 +1,7 @@
 import { app, BrowserWindow, dialog, protocol, session } from 'electron'
-import { registerIpc } from './ipc'
+import { registerIpc, terminals } from './ipc'
+import { terminalQuitQuestion, type QuitKind } from './quitConfirm'
+import { routeMenuQuit } from './menuQuit'
 import { removeLegacyHook } from './permission/legacyHook'
 import { sessionStatusTracker } from './sessions/tracker'
 import * as workspaces from './workspaces/store'
@@ -39,31 +41,45 @@ const ICON_SEARCH_DELAY_MS = 3000
 let confirmingQuit = false
 
 async function confirmAndQuit(): Promise<void> {
-  if (confirmingQuit) return
+  if (await confirmQuit('quit')) app.quit()
+}
+
+/** One question at a time; a quit asked for while one is showing is dropped. */
+async function confirmQuit(kind: QuitKind): Promise<boolean> {
+  if (confirmingQuit) return false
   confirmingQuit = true
   try {
-    if (await quitConfirmed()) app.quit()
+    // The update restart asks about busy sessions itself, in the update pill.
+    if (kind === 'quit' && !(await sessionsQuitConfirmed())) return false
+    return await terminalsQuitConfirmed(kind)
   } finally {
     confirmingQuit = false
   }
 }
 
-async function quitConfirmed(): Promise<boolean> {
+async function sessionsQuitConfirmed(): Promise<boolean> {
   const running = sessionStatusTracker.list().filter((e) => e.status === 'running').length
-  if (running > 0) {
-    const { response } = await dialog.showMessageBox({
-      type: 'warning',
-      title: 'Quit Command Center',
-      message: running === 1 ? '1 session is running.' : `${running} sessions are running.`,
-      detail: 'Quitting stops them mid-turn.',
-      buttons: ['Quit', 'Cancel'],
-      defaultId: 1,
-      cancelId: 1,
-      noLink: true
-    })
-    return response === 0
-  }
-  return true
+  if (running === 0) return true
+  return askQuit(running === 1 ? '1 session is running.' : `${running} sessions are running.`, 'Quitting stops them mid-turn.')
+}
+
+function terminalsQuitConfirmed(kind: QuitKind): Promise<boolean> {
+  const question = terminalQuitQuestion(terminals.runningCount(), kind)
+  return question === null ? Promise.resolve(true) : askQuit(question, 'Quitting ends them.')
+}
+
+async function askQuit(message: string, detail: string): Promise<boolean> {
+  const { response } = await dialog.showMessageBox({
+    type: 'warning',
+    title: 'Quit Command Center',
+    message,
+    detail,
+    buttons: ['Quit', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true
+  })
+  return response === 0
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -101,8 +117,9 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc({ repoIdentities, startWithWindows })
     handleMediaScheme()
     handleTestFlowScheme()
-    startUpdates()
+    startUpdates({ confirmRestart: () => confirmQuit('update-restart') })
     routeMenuZoom()
+    routeMenuQuit(() => void confirmAndQuit())
     const win = createMainWindow({ show: !startsHidden(process.argv) })
 
     const tray = createAppTray({
