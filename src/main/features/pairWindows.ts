@@ -93,20 +93,21 @@ function flipPair(feature: string, from: PairRole): void {
 
 /** Navigation, new windows and redirects follow the rule: the feature's own ports load, other http(s) addresses open in the default browser. */
 function guardPreview(win: BrowserWindow, feature: string): void {
-  const judge = (url: string): boolean => {
+  /** Only the page itself may send the user to the default browser; an embedded frame is just blocked. */
+  const judge = (url: string, mainFrame: boolean): boolean => {
     const verdict = previewNavigation(url, pairs.get(feature)?.ports ?? [])
-    if (verdict === 'external') void shell.openExternal(url)
+    if (verdict === 'external' && mainFrame) void shell.openExternal(url)
     return verdict === 'allow'
   }
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (judge(url)) void win.loadURL(url)
+    if (judge(url, true)) void win.loadURL(url)
     return { action: 'deny' }
   })
   win.webContents.on('will-frame-navigate', (event) => {
-    if (!judge(event.url)) event.preventDefault()
+    if (!judge(event.url, event.isMainFrame)) event.preventDefault()
   })
   win.webContents.on('will-redirect', (event) => {
-    if (!judge(event.url)) event.preventDefault()
+    if (!judge(event.url, event.isMainFrame)) event.preventDefault()
   })
 }
 

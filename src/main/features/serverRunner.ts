@@ -166,7 +166,12 @@ export function createServerRunner(deps: RunnerDeps) {
     if (only && !config.servers.some((s) => s.name === only)) return { ok: false, error: `${name} has no server called ${only}.` }
     const reserved = await deps.reservePorts(name, config.servers.map((s) => s.name))
     if (!reserved.ok) return reserved
-    const account = await deps.env(feature.workspaceId).catch(() => null)
+    let account: Record<string, string> | null
+    try {
+      account = await deps.env(feature.workspaceId)
+    } catch (err) {
+      return { ok: false, error: `The account of ${name} could not be prepared: ${err instanceof Error ? err.message : String(err)}` }
+    }
     if (!account) return { ok: false, error: `The workspace of ${name} was removed, so its servers would run on the default account; they were not started.` }
     const launches: Promise<void>[] = []
     for (const [i, server] of config.servers.entries()) {
