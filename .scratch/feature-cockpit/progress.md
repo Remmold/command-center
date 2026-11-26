@@ -13,4 +13,4 @@ Branch: feat/feature-cockpit
 - 08 resolved: Complete (servers stopped and forgotten, pair and browser store closed, ports freed, marked Completed), Re-open with fresh ports, Remove worktree refused on unmerged work; UI scenario 17 of 20 â€” a815a58
 - 09 resolved: feature digest (pure renderer, change-only debounced writer in userData, wired to stage/server/session/usage/profile changes) â€” 78ea9cd
 - 10 in-progress: main chat pinned above Work, tools restricted to Read/Grep/Glob with deny-by-default approvals, account picker in Settings; resume-after-restart not yet seen live â€” 6ab19dd
-- 07 in-progress: Set up preview button in Settings starts a session that writes a draft JSON file the editor loads unsaved; no-browser outcome; not yet seen live — HASH
+- 07 in-progress: Set up preview button in Settings starts a session that writes a draft JSON file the editor loads unsaved; no-browser outcome; not yet seen live — 06aefab
