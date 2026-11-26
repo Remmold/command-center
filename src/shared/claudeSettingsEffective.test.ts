@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SETTINGS_CATALOG, entryFor, type SettingEntry } from './claudeSettingsCatalog'
 import type { SettingsLayer } from './claudeSettings'
-import { effectiveSetting, sourceBadge, type LayerSettings } from './claudeSettingsEffective'
+import { effectiveSetting, ruleSources, sourceBadge, type LayerSettings } from './claudeSettingsEffective'
 
 const entry = (key: string): SettingEntry => {
   const found = SETTINGS_CATALOG.find((e) => e.key === key)
@@ -39,6 +39,15 @@ describe('the effective value', () => {
         layers({ organisation: { permissions: { allow: ['WebFetch'] } }, account: { permissions: { allow: ['Read', 'Bash(git status)'] } }, local: { permissions: { allow: ['Bash(git status)', 'Edit'] } } })
       )
     ).toEqual({ value: ['WebFetch', 'Bash(git status)', 'Edit', 'Read'], sources: ['organisation', 'local', 'account'], locked: false })
+  })
+
+  it('names, for each combined permission rule, every layer that has it, highest first', () => {
+    const given = layers({ organisation: { permissions: { deny: ['Read(./.env)'] } }, account: { permissions: { deny: ['Bash(rm *)', 'Read(./.env)'] } }, repo: { permissions: { deny: 'oops' } } })
+    expect(ruleSources('deny', given)).toEqual([
+      { rule: 'Read(./.env)', layers: ['organisation', 'account'] },
+      { rule: 'Bash(rm *)', layers: ['account'] }
+    ])
+    expect(ruleSources('allow', given)).toEqual([])
   })
 
   it('combines hooks per event across layers, a group two layers share once', () => {

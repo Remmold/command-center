@@ -13,10 +13,12 @@ interface Props {
   /** Called with the trimmed text on Enter; empty text is ignored. */
   onSubmit: (value: string) => void
   onCancel?: () => void
+  /** Called with the text on every keystroke, for a caller that shows what it will do. */
+  onChange?: (value: string) => void
 }
 
 /** A one-line input that submits on Enter and cancels on Escape. */
-export function TextField({ label, placeholder, initialValue = '', autoFocus, submitOnBlur, keepOnSubmit = false, disabled = false, onSubmit, onCancel }: Props) {
+export function TextField({ label, placeholder, initialValue = '', autoFocus, submitOnBlur, keepOnSubmit = false, disabled = false, onSubmit, onCancel, onChange }: Props) {
   const [value, setValue] = useState(initialValue)
   // Enter and Escape unmount the field in most callers; the blur that follows must not act again.
   const settled = useRef(false)
@@ -30,6 +32,7 @@ export function TextField({ label, placeholder, initialValue = '', autoFocus, su
       onChange={(e) => {
         settled.current = false
         setValue(e.target.value)
+        onChange?.(e.target.value)
       }}
       onFocus={submitOnBlur ? (e) => e.target.select() : undefined}
       onBlur={

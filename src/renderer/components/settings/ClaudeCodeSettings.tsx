@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
-import { SETTINGS_CATALOG, SETTING_CATEGORIES, entryFor, entryOf, formatSettingValue, matchesSearch, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { SETTINGS_CATALOG, SETTING_CATEGORIES, changeText, entryFor, entryOf, formatSettingValue, matchesSearch, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
 import { changeCount, getAt, pathKeys, patchSize, sameValue, withPatch, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
-import { effectiveSetting, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
+import { effectiveSetting, ruleSources, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
+import { RULE_LISTS, ruleListKey, ruleListOf, type RuleList } from '../../../shared/permissionRules'
 import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
 import { conflicts, pendingChanges, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
 import { useContextStore } from '../../state/contextStore'
@@ -25,6 +26,7 @@ import { Select } from '../ui/Select'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { Toolbar } from '../ui/Toolbar'
 import { OtherKeysList } from './OtherKeysList'
+import { PermissionRuleList } from './PermissionRuleList'
 import { otherKeyRows, otherKeysNotice } from './otherKeysView'
 import { SettingField, type ShownEffective } from './SettingField'
 
@@ -99,7 +101,8 @@ function ReviewDialog({ onClose }: { onClose: () => void }) {
   const save = useClaudeSettingsStore((s) => s.save)
   const entries = pendingChanges(pending).map(({ key, before, after }): [string, string] => {
     const { label, format } = settingWords(key)
-    return [label, `${format(before)} → ${format(after)}`]
+    const entry = entryOf(key)
+    return [label, entry?.key === key ? changeText(entry, before, after) : `${format(before)} → ${format(after)}`]
   })
   return (
     <Dialog title="Review changes" onClose={onClose}>
@@ -244,6 +247,11 @@ export function ClaudeCodeSettings() {
     return searching ? rows.filter((row) => matchesSearch(entryFor(row.path), query)) : rows
   }, [snapshot, layers, layer, pending, searching, query])
   const showOtherKeys = searching ? otherRows.length > 0 : category === OTHER_KEYS_CATEGORY
+  const ruleLists = useMemo(() => Object.fromEntries(RULE_LISTS.map((list) => [list, getAt(layers[layer], ruleListKey(list))])) as Record<RuleList, unknown>, [layers, layer])
+  const rulesEditor = (entry: SettingEntry) => {
+    const list = ruleListOf(entry.key)
+    return list && <PermissionRuleList list={list} lists={ruleLists} sources={ruleSources(list, layers)} layer={layer} disabled={!snapshot || unreadable || saving} onStage={stage} />
+  }
   const noWorkspace = layer !== 'account' && workspaces.length === 0
 
   return (
@@ -325,6 +333,7 @@ export function ClaudeCodeSettings() {
                       disabled={!snapshot || unreadable || saving}
                       onStage={stage}
                       onUnparsed={markUnparsed}
+                      editor={rulesEditor(entry)}
                     />
                   ))}
                 </div>

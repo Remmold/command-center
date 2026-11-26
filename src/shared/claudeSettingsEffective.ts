@@ -1,5 +1,6 @@
 import { SOURCE_ORDER, getAt, isSettingsObject, sameValue, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
 import { LAYER_NAMES, countsIn, layerList, type SettingEntry } from './claudeSettingsCatalog'
+import { ruleListKey, type RuleList } from './permissionRules'
 
 /** Each layer's settings for one workspace; null where the layer has no file. */
 export type LayerSettings = Record<SourceLayer, SettingsObject | null>
@@ -73,4 +74,26 @@ export function sourceBadge({ sources, locked }: EffectiveSetting, entry: Settin
   const editedValue = getAt(layers[edited], entry.key)
   const editedCounts = editedValue !== undefined && countsIn(entry, edited, editedValue)
   return source !== edited && (above(source, edited) || editedCounts) ? `Overridden by ${LAYER_NAMES[source]}` : `From ${LAYER_NAMES[source]}`
+}
+
+export interface RuleSource {
+  rule: string
+  /** Every layer whose list has the rule, highest first. */
+  layers: SourceLayer[]
+}
+
+/** The rules a permission list combines to, each with the layers it comes from; a layer whose list isn't a list adds nothing. */
+export function ruleSources(list: RuleList, layers: LayerSettings): RuleSource[] {
+  const sources: RuleSource[] = []
+  for (const layer of SOURCE_ORDER) {
+    const rules = getAt(layers[layer], ruleListKey(list))
+    if (!Array.isArray(rules)) continue
+    for (const rule of rules) {
+      if (typeof rule !== 'string') continue
+      const known = sources.find((s) => s.rule === rule)
+      if (!known) sources.push({ rule, layers: [layer] })
+      else if (!known.layers.includes(layer)) known.layers.push(layer)
+    }
+  }
+  return sources
 }

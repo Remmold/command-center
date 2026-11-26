@@ -1,5 +1,6 @@
+import type { ReactNode } from 'react'
 import type { SettingsLayer } from '../../../shared/claudeSettings'
-import { defaultText, formatSettingValue, isModelEffort, isRawJson, layerRule, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { defaultText, formatSettingValue, isModelEffort, isRawJson, isRuleListEntry, layerRule, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -30,6 +31,8 @@ interface Props {
   onStage: (key: string, value: unknown) => void
   /** Told whether the row's raw JSON box holds text not yet taken as its value. */
   onUnparsed: (key: string, unparsed: boolean) => void
+  /** A purpose-built editor the page gives the row, shown under it. */
+  editor?: ReactNode
 }
 
 const NOT_SET = ''
@@ -95,12 +98,12 @@ function Control({ entry, layer, value, disabled, onChange }: Pick<Props, 'entry
         />
       )
     case 'editor':
-      return isModelEffort(entry) || isRawJson(entry) ? null : <span className="text-muted">{formatSettingValue(entry, value)}</span>
+      return isModelEffort(entry) || isRawJson(entry) || isRuleListEntry(entry) ? null : <span className="text-muted">{formatSettingValue(entry, value)}</span>
   }
 }
 
 /** One catalog setting as a row: its words, raw key, control, default and the value that applies. */
-export function SettingField({ entry, layer, value, effective, changed, fileValue, disabled, onStage, onUnparsed }: Props) {
+export function SettingField({ entry, layer, value, effective, changed, fileValue, disabled, onStage, onUnparsed, editor }: Props) {
   const notHere = layerRule(entry, layer)
   const ignoredValue = notHere === null && value !== undefined ? layerRule(entry, layer, value) : null
   const risk = entry.risk?.(value) ?? null
@@ -141,6 +144,7 @@ export function SettingField({ entry, layer, value, effective, changed, fileValu
       }
       control={<Control entry={entry} layer={layer} value={value} disabled={readOnly} onChange={(next) => onStage(entry.key, next)} />}
     >
+      {editor}
       {isModelEffort(entry) && <ModelEffortList value={value} disabled={readOnly} onStage={onStage} />}
       {isRawJson(entry) && (
         <JsonField

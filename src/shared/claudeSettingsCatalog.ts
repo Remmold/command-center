@@ -1,4 +1,5 @@
-import { isSettingsObject, keyPath, pathKeys, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
+import { isSettingsObject, keyPath, pathKeys, sameValue, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
+import { isRuleList, ruleRisk } from './permissionRules'
 
 export const SETTING_CATEGORIES = [
   'Model & thinking',
@@ -201,6 +202,12 @@ const MODEL_AND_THINKING: SettingEntry[] = [
   model('ultracode', 'Start with ultracode', 'Claude plans a workflow for each larger task without being asked.', TOGGLE, { default: false, newChatsOnly: true, advanced: true })
 ]
 
+const RULES: SettingControl = { kind: 'editor', editor: 'permissions' }
+/** A list the rules editor can't show goes whole to Other keys. */
+const notRules = (value: unknown): string[][] => (isRuleList(value) ? [] : [[]])
+const RULE_LIST: Details = { defaultLabel: 'none', leavesOut: notRules }
+const riskyAllowRule = (value: unknown): string | null => (Array.isArray(value) ? (value.map((rule) => (typeof rule === 'string' ? ruleRisk(rule) : null)).find(Boolean) ?? null) : null)
+
 const permission = inCategory('Permissions')
 const PERMISSIONS: SettingEntry[] = [
   permission(
@@ -224,9 +231,9 @@ const PERMISSIONS: SettingEntry[] = [
       risk: (value) => (value === 'bypassPermissions' ? 'Claude runs every tool without asking, including commands that delete or overwrite files.' : null)
     }
   ),
-  permission('permissions.allow', 'Always allowed', 'Tool uses Claude runs without asking you.', { kind: 'editor', editor: 'permissions' }, { defaultLabel: 'none' }),
-  permission('permissions.ask', 'Always ask', 'Tool uses that ask you first, even in a mode that would allow them.', { kind: 'editor', editor: 'permissions' }, { defaultLabel: 'none' }),
-  permission('permissions.deny', 'Never allowed', 'Tool uses Claude may never make, such as reading files that hold secrets.', { kind: 'editor', editor: 'permissions' }, { defaultLabel: 'none' }),
+  permission('permissions.allow', 'Always allowed', 'Tool uses Claude runs without asking you.', RULES, { ...RULE_LIST, risk: riskyAllowRule }),
+  permission('permissions.ask', 'Always ask', 'Tool uses that ask you first, even in a mode that would allow them.', RULES, RULE_LIST),
+  permission('permissions.deny', 'Never allowed', 'Tool uses Claude may never make, such as reading files that hold secrets.', RULES, RULE_LIST),
   permission('permissions.additionalDirectories', 'Extra folders', 'Folders outside the workspace Claude may read and edit.', LIST, { defaultLabel: 'none' }),
   permission('permissions.blockReadsOutsideWorkingDirectories', 'Block reads outside the workspace', "Claude's file tools refuse to read outside the workspace folders, in every mode. On in any layer wins.", TOGGLE, {
     default: false,
@@ -660,6 +667,8 @@ export function savedEfforts(value: unknown): [model: string, level: string][] {
   return Object.entries(value).flatMap(([model, settings]) => (isSettingsObject(settings) && typeof settings.effortLevel === 'string' ? [[model, settings.effortLevel]] : []))
 }
 
+export const isRuleListEntry = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'permissions'
+
 export const isModelEffort = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'modelEffort'
 
 /** A setting edited as raw JSON, as the page has no plainer control for it. */
@@ -676,8 +685,23 @@ export function formatSettingValue(entry: SettingEntry, value: unknown): string 
     const pairs = savedEfforts(value).map(([model, level]) => `${model}: ${optionLabel(EFFORT_OPTIONS, level) ?? level}`)
     return pairs.length === 0 ? 'none' : pairs.join(', ')
   }
+  if (isRuleListEntry(entry) && Array.isArray(value)) return value.length === 0 ? 'none' : `${value.length} ${value.length === 1 ? 'rule' : 'rules'}`
   if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return value.length === 0 ? 'none' : value.join(', ')
   return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
+const missingFrom = (items: unknown[], from: unknown[]): unknown[] => items.filter((item) => !from.some((other) => sameValue(other, item)))
+const listed = (items: unknown[]): string => items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join(', ')
+
+/** A change as Review shows it: a rule list's rules added and removed, any other value as before → after. */
+export function changeText(entry: SettingEntry, before: unknown, after: unknown): string {
+  if (isRuleListEntry(entry) && isRuleList(before) && isRuleList(after)) {
+    const added = missingFrom(after ?? [], before ?? [])
+    const removed = missingFrom(before ?? [], after ?? [])
+    const parts = [added.length > 0 && `Added ${listed(added)}`, removed.length > 0 && `Removed ${listed(removed)}`].filter(Boolean)
+    return parts.length > 0 ? parts.join(' · ') : 'Same rules, new order'
+  }
+  return `${formatSettingValue(entry, before)} → ${formatSettingValue(entry, after)}`
 }
 
 export function defaultText(entry: SettingEntry): string {

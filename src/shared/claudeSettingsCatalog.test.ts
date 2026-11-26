@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import schema from './fixtures/claude-code-settings.schema.json'
-import { SETTINGS_CATALOG, SETTING_CATEGORIES, defaultText, entryFor, formatSettingValue, otherKeys, shownSettings, type SettingsFilter } from './claudeSettingsCatalog'
+import { SETTINGS_CATALOG, SETTING_CATEGORIES, changeText, defaultText, entryFor, formatSettingValue, otherKeys, shownSettings, type SettingsFilter } from './claudeSettingsCatalog'
 
 /** Schema keys the catalog leaves out on purpose, and why. */
 const SKIPPED: Record<string, string> = {
@@ -84,6 +84,22 @@ describe('the settings catalog', () => {
   it('shows each model’s saved effort as model and level', () => {
     expect(formatSettingValue(entryFor('modelSettings'), { 'claude-opus-5-5': { effortLevel: 'high' }, 'claude-haiku-5': { autoCompactWindow: 'auto' } })).toBe('claude-opus-5-5: High')
   })
+
+  it('counts the rules of a permission list, and shows a change to one as the rules added and removed', () => {
+    const allow = entryFor('permissions.allow')
+    expect(formatSettingValue(allow, ['Read', 'Bash(git status *)'])).toBe('2 rules')
+    expect(formatSettingValue(allow, ['Read'])).toBe('1 rule')
+    expect(formatSettingValue(allow, [])).toBe('none')
+    expect(changeText(allow, ['Read', 'Edit'], ['Edit', 'Bash(git status *)'])).toBe('Added Bash(git status *) · Removed Read')
+    expect(changeText(allow, undefined, ['Read'])).toBe('Added Read')
+    expect(changeText(entryFor('model'), 'sonnet', 'opus')).toBe('Sonnet → Opus')
+  })
+
+  it('warns for an Allow list with a rule that lets every shell command through, not for Ask or Deny', () => {
+    expect(entryFor('permissions.allow').risk?.(['Read', 'PowerShell'])).toMatch(/PowerShell/)
+    expect(entryFor('permissions.allow').risk?.(['Read', 'Bash(git status:*)'])).toBeNull()
+    expect(entryFor('permissions.ask').risk?.(['Bash'])).toBeFalsy()
+  })
 })
 
 describe('the settings shown', () => {
@@ -139,6 +155,10 @@ describe('the other keys of a file', () => {
     ])
     expect(otherKeys({ modelSettings: 'nope' })).toEqual(['modelSettings'])
     expect(otherKeys({ modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } } })).toEqual([])
+  })
+
+  it('include a permission list holding something other than text rules, which the rules editor can’t show', () => {
+    expect(otherKeys({ permissions: { allow: ['Read', { tool: 'Bash' }], ask: ['Bash'], deny: 'Read' } })).toEqual(['permissions.allow', 'permissions.deny'])
   })
 
   it('take a split object whole when it is not an object, so its value is still shown', () => {
