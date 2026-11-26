@@ -8,3 +8,4 @@ Branch: feat/feature-cockpit
 - 03 review fixes: shared env/killTree, tolerant store, Settings load guard — dce36c2 -> b61ad9a
 - 04 resolved: ports in 4100-4999 reserved per feature and kept, servers boot as terminals with Starting/Ready/Failed, Start/Stop/Retry on the row, install on the feature account — 1ae776b
 - 04 review fixes: a Stop during a relaunch no longer leaves an untracked server; a restart no longer fails sibling servers on the old terminal's exit; the ready check also sees IPv6-only localhost listeners — ceb631e
+- 05 resolved: test steps checklist with Pass/Fail marks and Fail notes in a results file, counter in the Test tab and last result on the feature row — PENDING

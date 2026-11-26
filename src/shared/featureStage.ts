@@ -1,3 +1,4 @@
+import type { StepCounter } from './testSteps'
 import { wordColumn } from './ticketWords'
 
 export type FeatureStage = 'Grilling' | 'Spec' | 'Tickets' | 'Building' | 'Testing' | 'Completed'
@@ -16,8 +17,8 @@ export interface FeatureStageResult {
   total: number
 }
 
-/** A feature as the Features group shows it: its stage and tickets, or that its worktree folder is gone. */
-export type FeatureStageView = ({ missing: false } & FeatureStageResult) | { missing: true }
+/** A feature as the Features group shows it: its stage and tickets, its test steps' counter once a checklist exists, or that its worktree folder is gone. */
+export type FeatureStageView = ({ missing: false; tests?: StepCounter } & FeatureStageResult) | { missing: true }
 
 export function featureStage(facts: FeatureFacts): FeatureStageResult {
   const columns = facts.tickets.map((t) => wordColumn(t.status))

@@ -7,6 +7,7 @@ import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval
 import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
 import type { TestFlowFocus, TestFlowView } from './testFlow'
+import type { Mark, StepsView } from './testSteps'
 import type { ZoomStep } from './zoom'
 import type { LocalServer } from './localPorts'
 import type { SidebarLayout } from './sidebarGroups'
@@ -652,6 +653,10 @@ export interface RendererApi {
     /** The last published focus, null before the first. */
     focus: () => Promise<TestFlowFocus | null>
     onFocus: (cb: (focus: TestFlowFocus) => void) => () => void
+    /** A feature's checklist with its marks; main watches the checklist and results file for `watcher` (changes arrive on `onChanged`). Not found outside the test-flows folder. */
+    showSteps: (watcher: string, path: string) => Promise<StepsView>
+    /** Sets (or with null clears) one step's mark and a Fail's note in the results file; resolves to the checklist as it now stands. */
+    markStep: (path: string, hash: string, mark: Mark | null, note: string) => Promise<StepsView>
   }
   files: {
     /** Where a file link in a chat points, or null when nothing is there. */

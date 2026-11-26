@@ -141,6 +141,8 @@ export const IPC = {
   TEST_FLOW_PUBLISH: 'testFlow:publish',
   TEST_FLOW_FOCUS_GET: 'testFlow:focusGet',
   TEST_FLOW_FOCUS: 'testFlow:focus',
+  TEST_STEPS_SHOW: 'testFlow:stepsShow',
+  TEST_STEPS_MARK: 'testFlow:stepsMark',
   VIDEO_PREPARE: 'video:prepare',
   VIDEO_TRANSCRIBE: 'video:transcribe',
   VIDEO_RELEASE: 'video:release',

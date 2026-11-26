@@ -1,9 +1,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { EOL, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { nodeFileReader } from '../board/nodeFileReader'
 import type { FeatureRecord } from '../../shared/features'
+import { stepHash } from '../../shared/testSteps'
 import { readFeatureStage } from './stage'
 
 let root: string
@@ -53,6 +54,21 @@ describe('readFeatureStage', () => {
     write(join(r.worktreePath, '.scratch', 'c', 'spec.md'), '# spec')
     write(join(root, 'flows', 'repo', 'c.md'), '- [ ] step')
     expect((await read(r)) as object).toMatchObject({ stage: 'Testing' })
+  })
+
+  it('carries the counter of the checklist and its results file, and none for an HTML-only test flow', async () => {
+    const r = record('e')
+    write(join(r.worktreePath, '.scratch', 'e', 'spec.md'), '# spec')
+    write(join(root, 'flows', 'repo', 'e.md'), ['- [ ] one', '- [ ] two', '- [ ] three'].join(EOL))
+    expect(await read(r)).toMatchObject({ stage: 'Testing', tests: { pass: 0, fail: 0, waiting: 3 } })
+    write(join(root, 'flows', 'repo', 'e.results.txt'), [`PASS ${stepHash('one')} one`, `FAIL ${stepHash('two')} two`].join(EOL))
+    expect(await read(r)).toMatchObject({ tests: { pass: 1, fail: 1, waiting: 1 } })
+    const h = record('h')
+    write(join(root, 'flows', 'repo', 'h.html'), '<p>x</p>')
+    mkdirSync(h.worktreePath, { recursive: true })
+    const view = await read(h)
+    expect(view).toMatchObject({ stage: 'Testing' })
+    expect('tests' in view).toBe(false)
   })
 
   it('is Completed for a completed record', async () => {

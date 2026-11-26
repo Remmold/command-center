@@ -1,5 +1,6 @@
 import type { FeatureStageView } from '../../shared/featureStage'
 import type { FeatureRecord } from '../../shared/features'
+import { lastResultNote } from '../../shared/testSteps'
 import type { AccountProfile, SessionStatus, SessionStatusEntry, Workspace } from '../../shared/types'
 
 export interface FeatureRow {
@@ -62,10 +63,12 @@ export function accountNote(row: Pick<FeatureRow, 'accountName' | 'workspace'>):
   return row.accountName ?? 'account removed'
 }
 
-/** The stage with tickets done out of total; a plain note when the worktree folder is gone; empty before it is read. */
+/** The stage with tickets done out of total and the last test result once a checklist exists; a plain note when the worktree folder is gone; empty before it is read. */
 export function stageNote(row: Pick<FeatureRow, 'stage'>): string {
   const { stage } = row
   if (!stage) return ''
   if (stage.missing) return 'worktree missing'
-  return stage.total > 0 ? `${stage.stage} · ${stage.done}/${stage.total}` : stage.stage
+  const base = stage.total > 0 ? `${stage.stage} · ${stage.done}/${stage.total}` : stage.stage
+  const result = stage.tests ? lastResultNote(stage.tests) : ''
+  return result ? `${base} · ${result}` : base
 }

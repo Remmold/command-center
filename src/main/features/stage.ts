@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import type { FeatureRecord } from '../../shared/features'
 import { featureStage, type FeatureStageView } from '../../shared/featureStage'
+import { buildStepsView, resultsPathFor } from '../../shared/testSteps'
 import { readTickets, type BoardFileReader } from '../board/reader'
 
 export interface StageSources {
@@ -22,12 +23,15 @@ export async function readFeatureStage(record: FeatureRecord, { files, testFlows
   const tickets = await readTickets(join(dir, 'issues'), files)
   const spec = await exists(join(dir, 'spec.md'), files)
   const stepsDir = join(testFlowsFolder, repoName)
-  const testSteps = (await Promise.all(['.md', '.html'].map((ext) => exists(join(stepsDir, `${record.name}${ext}`), files)))).some(Boolean)
+  const checklistPath = join(stepsDir, `${record.name}.md`)
+  const checklist = await files.readFile(checklistPath)
+  const testSteps = checklist !== null || (await exists(join(stepsDir, `${record.name}.html`), files))
+  const steps = checklist === null ? null : buildStepsView(record.name, checklist, await files.readFile(resultsPathFor(checklistPath)))
   const result = featureStage({
     spec,
     tickets: tickets.map((t) => ({ status: t.status.status, hasProgress: t.progressPath !== null })),
     testSteps,
     completed: record.completedAt !== null
   })
-  return { missing: false, ...result }
+  return steps?.found ? { missing: false, ...result, tests: steps.counter } : { missing: false, ...result }
 }

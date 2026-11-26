@@ -228,6 +228,8 @@ const api: RendererApi = {
     popOut: () => ipcRenderer.invoke(IPC.TEST_FLOW_POP_OUT),
     publish: (focus) => ipcRenderer.send(IPC.TEST_FLOW_PUBLISH, focus),
     focus: () => ipcRenderer.invoke(IPC.TEST_FLOW_FOCUS_GET),
+    showSteps: (watcher, path) => ipcRenderer.invoke(IPC.TEST_STEPS_SHOW, watcher, path),
+    markStep: (path, hash, mark, note) => ipcRenderer.invoke(IPC.TEST_STEPS_MARK, path, hash, mark, note),
     onFocus: (cb) => {
       const handler = (_e: IpcRendererEvent, focus: TestFlowFocus) => cb(focus)
       ipcRenderer.on(IPC.TEST_FLOW_FOCUS, handler)

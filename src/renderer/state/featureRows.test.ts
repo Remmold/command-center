@@ -43,6 +43,13 @@ describe('featureRows', () => {
     expect(rows.map((r) => stageNote(r))).toEqual(['Building · 2/5', 'worktree missing', ''])
   })
 
+  it('adds the last test result once a checklist exists, and leaves the stage alone before', () => {
+    const t = (tests?: { pass: number; fail: number; waiting: number }): FeatureStageView => ({ missing: false, stage: 'Testing', done: 3, total: 3, tests })
+    const stages: Record<string, FeatureStageView> = { a: t({ pass: 1, fail: 2, waiting: 0 }), b: t({ pass: 0, fail: 0, waiting: 4 }), c: t({ pass: 4, fail: 0, waiting: 0 }), d: t() }
+    const rows = featureRows(['a', 'b', 'c', 'd'].map((n) => feature(n, 'w1')), workspaces, profiles, {}, stages)
+    expect(rows.map((r) => stageNote(r))).toEqual(['Testing · 3/3 · 2 failed', 'Testing · 3/3 · 4 waiting', 'Testing · 3/3 · all Pass', 'Testing · 3/3'])
+  })
+
   it('lists completed features separately, and a completed record keeps its row out of the active group', () => {
     const all = [feature('x', 'w1'), feature('y', 'w1', 9)]
     expect(featureRows(all, workspaces, profiles, {}, {}).map((r) => r.name)).toEqual(['x'])
