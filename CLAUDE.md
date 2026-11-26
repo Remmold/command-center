@@ -29,5 +29,6 @@ Package manager is pnpm (`pnpm install`).
 - Releasing: follow `docs/agents/release.md` (UI suite once through `pnpm e2e:gate`, failed tests rerun only; a test audit every 5th release).
 - Every commit that touches a non-`.md` file runs `pnpm quick` through `.githooks/pre-commit` (wired by `pnpm install`). A red quick tier blocks the commit; fix it, never `--no-verify`.
 - Fake CLI for zero-token tests: set `CC_CLAUDE_BIN` to `tools/fake-claude/fake-claude.mjs` (scripts, log and variables in `tools/fake-claude/README.md`). Its replies are cloned from the recordings in `src/main/claude/fixtures/`.
+- Line endings: about 30 tracked files are CRLF (`git ls-files --eol | grep -c "w/crlf"`), including some sources. Edit them with CRLF-aware tools; a plain rewrite converts the whole file to LF.
 
 `node-pty` loads its prebuilt N-API binaries in Electron, so no rebuild is needed. Its install script must still run (allowed in `pnpm.onlyBuiltDependencies`): it copies `conpty.dll` into place.
