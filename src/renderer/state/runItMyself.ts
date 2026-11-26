@@ -1,36 +1,19 @@
 import { DEFAULT_SHELL_KIND } from '../../shared/types'
-import { useBackgroundProcessesStore } from './backgroundProcessesStore'
+import { processOf, useBackgroundProcessesStore } from './backgroundProcessesStore'
 import { terminalRowKey } from './processesList'
 import { useProcessesViewStore } from './processesViewStore'
-import { useProjectViewsStore } from './projectViewsStore'
+import { useProjectViewsStore, viewOfSession } from './projectViewsStore'
 import { useTerminalsStore } from './terminalsStore'
 
-interface RunItMyselfTarget {
-  command: string
-  workspaceId: string
-  /** The session's workspace folder, where the terminal runs. */
-  cwd: string
-}
-
-/** The command and folder a Claude background process would rerun in; null once its session or process is gone. */
-function runItMyselfTarget(paneId: string, taskId: string): RunItMyselfTarget | null {
-  const process = useBackgroundProcessesStore.getState().byPane[paneId]?.find((p) => p.taskId === taskId)
-  const view = Object.values(useProjectViewsStore.getState().views).find((v) => v.claudeSessions.some((c) => c.id === paneId))
-  if (!process || !view) return null
-  return { command: process.command, workspaceId: view.projectId, cwd: view.projectPath }
-}
-
-/**
- * Stops Claude's copy (unless it already ended), then starts the same command as Andreas's own terminal in the
- * session's workspace folder and selects it. A failed stop of a process still running starts nothing.
- */
+/** Reruns a Claude background process's command as Andreas's own terminal in its session's workspace folder, and selects it. */
 export async function runItMyself(paneId: string, taskId: string): Promise<void> {
-  const target = runItMyselfTarget(paneId, taskId)
-  if (!target) return
-  const running = (): boolean => useBackgroundProcessesStore.getState().byPane[paneId]?.find((p) => p.taskId === taskId)?.status === 'running'
-  // A stop that failed because the process ended meanwhile still goes on.
+  const process = processOf(useBackgroundProcessesStore.getState(), paneId, taskId)
+  const view = viewOfSession(useProjectViewsStore.getState().views, paneId)
+  if (!process || !view) return
+  const running = (): boolean => processOf(useBackgroundProcessesStore.getState(), paneId, taskId)?.status === 'running'
+  // Two copies of a server would fight over its port, so a failed stop starts nothing, unless it failed because the process ended meanwhile.
   if (running() && !(await useBackgroundProcessesStore.getState().stop(paneId, taskId)) && running()) return
   const id = crypto.randomUUID()
   useProcessesViewStore.getState().select(terminalRowKey(id))
-  await useTerminalsStore.getState().create({ id, workspaceId: target.workspaceId, cwd: target.cwd, kind: DEFAULT_SHELL_KIND, command: target.command, label: target.command })
+  await useTerminalsStore.getState().create({ id, workspaceId: view.projectId, cwd: view.projectPath, kind: DEFAULT_SHELL_KIND, command: process.command, label: process.command })
 }

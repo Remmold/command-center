@@ -1,19 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { useBackgroundProcessesStore } from '../state/backgroundProcessesStore'
 import { outputStep, type TaskOutput } from '../state/taskOutput'
+import { TerminalFrame, type TerminalFrameSize } from './ui/TerminalFrame'
 import { openXterm } from './xterm'
 
 interface Props {
   paneId: string
   taskId: string
   label?: string
-  /** `fill` takes its container's height; `inline` is a fixed-height box inside a list. */
-  size?: 'fill' | 'inline'
-}
-
-const SIZES: Record<NonNullable<Props['size']>, string> = {
-  fill: 'h-full w-full',
-  inline: 'h-48 w-full overflow-hidden rounded border border-subtle px-1.5 py-1'
+  size?: TerminalFrameSize
 }
 
 /** A Claude background process's output in a read-only terminal, following what its session's fetches bring. */
@@ -40,5 +35,9 @@ export function ProcessOutputTerminal({ paneId, taskId, label = 'Process output'
     }
   }, [paneId, taskId])
 
-  return <div ref={containerRef} aria-label={label} className={`bg-editor ${SIZES[size]}`} />
+  return (
+    <TerminalFrame size={size}>
+      <div ref={containerRef} aria-label={label} className="h-full w-full" />
+    </TerminalFrame>
+  )
 }

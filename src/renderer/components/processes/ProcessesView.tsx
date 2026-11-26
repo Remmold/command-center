@@ -4,7 +4,7 @@ import { useTicking } from '../../hooks/useTicking'
 import { useBackgroundProcessesStore } from '../../state/backgroundProcessesStore'
 import { processesList, selectedRowKey, terminalRowKey, type ClaudeProcessRow, type ProcessGroup, type ProcessRow, type TerminalRow } from '../../state/processesList'
 import { useProcessesViewStore } from '../../state/processesViewStore'
-import { useProjectViewsStore } from '../../state/projectViewsStore'
+import { useProjectViewsStore, viewOfSession } from '../../state/projectViewsStore'
 import { useRepoIdentitiesStore } from '../../state/repoIdentitiesStore'
 import { runItMyself } from '../../state/runItMyself'
 import { openTerminalInDrawer } from '../../state/sessionNavigation'
@@ -204,7 +204,7 @@ function RowActions({ row, onRename }: { row: ProcessRow; onRename: () => void }
 /** Stops Claude's copy and reruns its command as Andreas's own terminal, after a confirm. */
 function RunItMyself({ row }: { row: ClaudeProcessRow }) {
   const [confirming, setConfirming] = useState(false)
-  const cwd = useProjectViewsStore((s) => Object.values(s.views).find((v) => v.claudeSessions.some((c) => c.id === row.paneId))?.projectPath)
+  const cwd = useProjectViewsStore((s) => viewOfSession(s.views, row.paneId)?.projectPath)
   if (cwd === undefined) return null
   const run = (): void => {
     setConfirming(false)

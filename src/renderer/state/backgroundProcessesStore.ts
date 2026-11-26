@@ -33,7 +33,7 @@ const NO_SERVERS: Record<string, LocalServer[]> = {}
 
 const inFlight = new Set<string>()
 
-function processOf(s: BackgroundProcessesState, paneId: string, taskId: string): BackgroundProcess | undefined {
+export function processOf(s: Pick<BackgroundProcessesState, 'byPane'>, paneId: string, taskId: string): BackgroundProcess | undefined {
   return s.byPane[paneId]?.find((p) => p.taskId === taskId)
 }
 

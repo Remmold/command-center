@@ -229,9 +229,14 @@ function profileOf(workspaceId: string): string {
   return useWorkspacesStore.getState().workspaces.find((w) => w.id === workspaceId)?.profileId ?? DEFAULT_PROFILE_ID
 }
 
+/** The project view a chat session belongs to. */
+export function viewOfSession(views: Record<string, ProjectView>, paneId: string): ProjectView | undefined {
+  return Object.values(views).find((v) => v.claudeSessions.some((c) => c.id === paneId))
+}
+
 /** The terminals in the Shell drawer of the workspace a chat session belongs to. */
 export function shellTabsOfSession(paneId: string): TerminalInfo[] {
-  const view = Object.values(useProjectViewsStore.getState().views).find((v) => v.claudeSessions.some((c) => c.id === paneId))
+  const view = viewOfSession(useProjectViewsStore.getState().views, paneId)
   const { byId } = useTerminalsStore.getState()
   return (view?.shellTabs ?? []).flatMap((id) => (byId[id] ? [byId[id]] : []))
 }

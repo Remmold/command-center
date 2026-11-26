@@ -30,6 +30,14 @@ describe("a Claude process's output in a terminal", () => {
     expect(outputStep(written, out('GET /a 200\nGET /b 200\n', true, 90_011))).toEqual({ kind: 'append', text: 'GET /b 200\n' })
   })
 
+  it('appends the new line of a repeating log by the bytes added, not the longest match', () => {
+    expect(outputStep(out('GET / 200\nGET / 200\n', true, 100), out('GET / 200\nGET / 200\n', true, 110))).toEqual({ kind: 'append', text: 'GET / 200\n' })
+  })
+
+  it('rewrites when only a stray character lines up with what was written', () => {
+    expect(outputStep(out('abc\n', true, 50), out('\nxyz\n', true, 100))).toEqual({ kind: 'rewrite', text: '\nxyz\n' })
+  })
+
   it('appends the rest when the output was first cut between polls', () => {
     expect(outputStep(out('one\ntwo\n'), out('two\nthree\n', true, 14))).toEqual({ kind: 'append', text: 'three\n' })
   })
