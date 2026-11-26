@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { applyPatch, readSettingsFile, saveSettingsFile, settingsTargetProblem } from './settingsFile'
+import { applyPatch, readOrganisationLayer, readSettingsFile, saveSettingsFile, settingsTargetProblem } from './settingsFile'
 
 const text = (value: unknown): string => JSON.stringify(value, null, 2) + '\n'
 
@@ -90,6 +90,34 @@ describe('saving a settings file', () => {
     await fs.writeFile(file, '{"model":"haiku"}')
     expect(await saveSettingsFile(file, value, { set: { model: 'opus' }, remove: [] })).toEqual({ ok: false, conflicts: ['model'] })
     expect(await fs.readFile(file, 'utf-8')).toBe('{"model":"haiku"}')
+  })
+})
+
+describe('the organisation layer', () => {
+  let dir: string
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(join(tmpdir(), 'cc-settings-org-'))
+  })
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  it('is absent when neither file exists, or the cached remote settings are empty and there is no managed file', async () => {
+    const remote = join(dir, 'remote-settings.json')
+    const managed = join(dir, 'ClaudeCode', 'managed-settings.json')
+    expect(await readOrganisationLayer(remote, managed)).toBeNull()
+    await fs.writeFile(remote, '{}')
+    expect(await readOrganisationLayer(remote, managed)).toBeNull()
+  })
+
+  it('is the remote settings when they set anything, else the managed file, as only the first source with a policy counts', async () => {
+    const remote = join(dir, 'remote-settings.json')
+    const managed = join(dir, 'managed-settings.json')
+    await fs.writeFile(remote, '{}')
+    await fs.writeFile(managed, '{"model":"sonnet"}')
+    expect(await readOrganisationLayer(remote, managed)).toMatchObject({ path: managed, snapshot: { value: { model: 'sonnet' } } })
+    await fs.writeFile(remote, '{"model":"haiku"}')
+    expect(await readOrganisationLayer(remote, managed)).toMatchObject({ path: remote, snapshot: { value: { model: 'haiku' } } })
   })
 })
 

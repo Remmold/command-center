@@ -484,7 +484,7 @@ export interface RendererApi {
     writeFile: (workspaceId: string, path: string, content: string) => Promise<ContextFileResult>
   }
   claudeSettings: {
-    /** The account's settings.json and, with a workspace, its repo and local settings files, read from disk. */
+    /** The account's settings.json, with a workspace its repo and local settings files, and the organisation's settings, read from disk. */
     read: (profileId: string, workspaceId: string | null) => Promise<ClaudeSettingsRead>
     /** Writes the patch onto the file as it is on disk (ADR 0006); only account and workspace settings files are allowed. */
     save: (path: string, base: SettingsObject, patch: SettingsPatch) => Promise<SettingsSaveResult>

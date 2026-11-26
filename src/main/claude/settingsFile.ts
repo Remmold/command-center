@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { samePath } from '../profiles/linker'
-import { getAt, isSettingsObject, pathKeys, sameValue, type SettingsObject, type SettingsPatch, type SettingsSaveResult, type SettingsSnapshot } from '../../shared/claudeSettings'
+import { getAt, isSettingsObject, sameValue, withPatch, type OrganisationFile, type SettingsObject, type SettingsPatch, type SettingsSaveResult, type SettingsSnapshot } from '../../shared/claudeSettings'
 
 export type ParsedSettings = { ok: true; value: SettingsObject } | { ok: false; error: string }
 
@@ -16,28 +16,6 @@ export function parseSettings(text: string | null): ParsedSettings {
     return { ok: false, error: `not valid JSON: ${(err as Error).message}` }
   }
   return isSettingsObject(value) ? { ok: true, value } : { ok: false, error: 'not a JSON object' }
-}
-
-function setAt(settings: SettingsObject, path: string, value: unknown): void {
-  const segments = pathKeys(path)
-  const last = segments.pop() as string
-  let at = settings
-  for (const segment of segments) {
-    if (!isSettingsObject(at[segment])) at[segment] = {}
-    at = at[segment] as SettingsObject
-  }
-  at[last] = value
-}
-
-function removeAt(settings: SettingsObject, path: string): void {
-  const segments = pathKeys(path)
-  const last = segments.pop() as string
-  let at: unknown = settings
-  for (const segment of segments) {
-    if (!isSettingsObject(at)) return
-    at = at[segment]
-  }
-  if (isSettingsObject(at)) delete at[last]
 }
 
 /**
@@ -58,12 +36,7 @@ export function applyPatch(text: string | null, base: SettingsObject | null, pat
   return { ok: true, text: patchedText(parsed.value, patch) }
 }
 
-function patchedText(value: SettingsObject, patch: SettingsPatch): string {
-  const settings = structuredClone(value)
-  for (const [path, set] of Object.entries(patch.set)) setAt(settings, path, set)
-  for (const path of patch.remove) removeAt(settings, path)
-  return JSON.stringify(settings, null, 2) + '\n'
-}
+const patchedText = (value: SettingsObject, patch: SettingsPatch): string => JSON.stringify(withPatch(value, patch), null, 2) + '\n'
 
 /** Applies the patch over whatever the text holds, with no conflict check. */
 export function patchText(text: string | null, patch: SettingsPatch): { ok: true; text: string } | { ok: false; error: string } {
@@ -86,6 +59,21 @@ export async function readSettingsFile(file: string): Promise<SettingsSnapshot> 
   if (!read) return { value: {}, text: null, mtime: null }
   const parsed = parseSettings(read.text)
   return parsed.ok ? { value: parsed.value, text: read.text, mtime: read.mtime } : { value: null, text: read.text, mtime: read.mtime, error: parsed.error }
+}
+
+/** Where an organisation's settings file sits on Windows. */
+export const MANAGED_SETTINGS_FILE = 'C:\\Program Files\\ClaudeCode\\managed-settings.json'
+
+/**
+ * The organisation's settings, read only: the account's cached remote settings, else the managed file.
+ * Claude uses only the first of them that sets any key, so an empty `{}` cache falls through.
+ */
+export async function readOrganisationLayer(remoteFile: string, managedFile: string): Promise<OrganisationFile | null> {
+  for (const path of [remoteFile, managedFile]) {
+    const snapshot = await readSettingsFile(path)
+    if (snapshot.value && Object.keys(snapshot.value).length > 0) return { path, snapshot }
+  }
+  return null
 }
 
 let queue: Promise<unknown> = Promise.resolve()

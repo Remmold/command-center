@@ -35,7 +35,7 @@ import { contextReport, readListedFile, startTotals, writeListedFile } from './c
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
-import { readSettingsFile, saveSettingsFile, settingsTargetProblem } from './claude/settingsFile'
+import { MANAGED_SETTINGS_FILE, readOrganisationLayer, readSettingsFile, saveSettingsFile, settingsTargetProblem } from './claude/settingsFile'
 import { isSettingsObject, isSettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../shared/claudeSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
@@ -401,12 +401,13 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.CLAUDE_SETTINGS_READ, async (_e, profileId: string, workspaceId: string | null): Promise<ClaudeSettingsRead> => {
     const profile = await profiles.get(profileId)
     const workspace = workspaceId ? (await workspaces.list()).find((w) => w.id === workspaceId) : undefined
-    const [account, repo, local] = await Promise.all([
+    const [account, repo, local, organisation] = await Promise.all([
       layerFile('account', join(profile.configDir, 'settings.json')),
       workspace ? layerFile('repo', join(workspace.path, '.claude', 'settings.json')) : null,
-      workspace ? layerFile('local', join(workspace.path, '.claude', 'settings.local.json')) : null
+      workspace ? layerFile('local', join(workspace.path, '.claude', 'settings.local.json')) : null,
+      readOrganisationLayer(join(profile.configDir, 'remote-settings.json'), MANAGED_SETTINGS_FILE)
     ])
-    return { account: { ...account, profileId: profile.id }, repo, local }
+    return { account: { ...account, profileId: profile.id }, repo, local, organisation }
   })
   ipcMain.handle(IPC.CLAUDE_SETTINGS_SAVE, async (_e, path: unknown, base: unknown, patch: unknown) => {
     if (typeof path !== 'string' || !isSettingsObject(base) || !isSettingsPatch(patch)) return { ok: false, error: 'malformed save' }

@@ -1,30 +1,34 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
-import { SETTINGS_CATALOG, SETTING_CATEGORIES, formatSettingValue, type SettingCategory } from '../../../shared/claudeSettingsCatalog'
-import { changeCount, patchSize, type SettingsLayer } from '../../../shared/claudeSettings'
-import { useClaudeSettingsStore } from '../../state/claudeSettingsStore'
+import { SETTINGS_CATALOG, SETTING_CATEGORIES, formatSettingValue, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { changeCount, patchSize, withPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
+import { effectiveSetting, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsMerge'
+import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
 import { pendingChanges, shownValue, type PendingFile } from '../../state/claudeSettingsPending'
+import { useContextStore } from '../../state/contextStore'
 import { useProfilesStore } from '../../state/profilesStore'
-import { setSettingsLeaveGuard } from '../../state/viewStore'
+import { setSettingsLeaveGuard, useViewStore } from '../../state/viewStore'
+import { useWorkspacesStore } from '../../state/workspacesStore'
 import { Banner } from '../ui/Banner'
 import { Button } from '../ui/Button'
 import { Dialog, DialogActions } from '../ui/Dialog'
 import { ListRow, ListRowText } from '../ui/ListRow'
-import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
+import { NoticeLine } from '../ui/NoticeLine'
+import { Page, PageBody, PageGroup, PageHeader } from '../ui/Page'
 import { PropertyList } from '../ui/PropertyList'
 import { SaveBar } from '../ui/SaveBar'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { Toolbar } from '../ui/Toolbar'
-import { SettingField } from './SettingField'
+import { SettingField, type ShownEffective } from './SettingField'
 
 const CATEGORIES = SETTING_CATEGORIES.filter((c) => SETTINGS_CATALOG.some((e) => e.category === c))
 
-const LAYERS: { value: SettingsLayer; label: string; title?: string; disabled?: boolean }[] = [
-  { value: 'account', label: 'Account' },
-  { value: 'repo', label: 'Repo', title: 'Coming soon: the workspace’s committed .claude/settings.json', disabled: true },
-  { value: 'local', label: 'Local', title: 'Coming soon: the workspace’s .claude/settings.local.json', disabled: true }
+const LAYERS: { value: SettingsLayer; label: string; title: string }[] = [
+  { value: 'account', label: 'Account', title: 'The account’s settings.json, for every workspace on that account' },
+  { value: 'repo', label: 'Repo', title: 'The workspace’s committed .claude/settings.json' },
+  { value: 'local', label: 'Local', title: 'The workspace’s .claude/settings.local.json' }
 ]
 
 function accountNote(profile: AccountProfile | undefined, defaultName: string): string {
@@ -33,13 +37,41 @@ function accountNote(profile: AccountProfile | undefined, defaultName: string): 
   return `Shares ${defaultName}’s settings file: a change here reaches ${defaultName} too.`
 }
 
-/** The account file's waiting changes; null when there are none. */
-function usePendingOnScreen(): PendingFile | null {
-  return useClaudeSettingsStore((s) => (s.read ? s.pending[s.read.account.path] : undefined)) ?? null
+const LAYER_NOTES: Record<Exclude<SettingsLayer, 'account'>, string> = {
+  repo: 'Committed with the repo: everyone who works on it gets these settings.',
+  local: 'Applies only to you, in this folder.'
+}
+
+/** The edited layer's file and its waiting changes. */
+function useEditedFile(): { file: SettingsLayerFile | null; pending: PendingFile | null } {
+  const file = useClaudeSettingsStore((s) => s.read?.[s.layer] ?? null)
+  const pending = useClaudeSettingsStore((s) => (file ? s.pending[file.path] : undefined)) ?? null
+  return { file, pending }
+}
+
+/** Each layer as it would be with its waiting changes saved. */
+function layersWithPending(read: ClaudeSettingsRead | null, pending: Record<string, PendingFile>): LayerSettings {
+  const layer = (file: SettingsLayerFile | null) => {
+    const value = file?.snapshot.value ?? null
+    const waiting = file ? pending[file.path] : undefined
+    return value && waiting ? withPatch(value, waiting.patch) : value
+  }
+  return { organisation: read?.organisation?.snapshot.value ?? null, local: layer(read?.local ?? null), repo: layer(read?.repo ?? null), account: layer(read?.account ?? null) }
+}
+
+function shownEffective(entry: SettingEntry, layers: LayerSettings, edited: SettingsLayer): ShownEffective {
+  const { value, locked } = effectiveSetting(entry, layers)
+  return { value, locked, badge: sourceBadge(entry, layers, edited) }
+}
+
+/** Settings closes and Context opens on the file; nothing happens when unsaved changes are kept. */
+function openInContext(workspaceId: string, path: string): void {
+  useViewStore.getState().setView('context')
+  if (useViewStore.getState().settings === null) useContextStore.getState().showFile(workspaceId, path)
 }
 
 function ReviewDialog({ onClose }: { onClose: () => void }) {
-  const pending = usePendingOnScreen()
+  const { pending } = useEditedFile()
   const save = useClaudeSettingsStore((s) => s.save)
   const entries = pendingChanges(pending).map(({ key, before, after }): [string, string] => {
     const entry = SETTINGS_CATALOG.find((e) => e.key === key)
@@ -66,16 +98,48 @@ function ReviewDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
+function FileLine({ note }: { note: string }) {
+  const { file } = useEditedFile()
+  const layer = useClaudeSettingsStore((s) => s.layer)
+  const profileId = useClaudeSettingsStore((s) => s.profileId)
+  const workspaceId = useClaudeSettingsStore((s) => s.workspaceId)
+  const workspaces = useWorkspacesStore((s) => s.workspaces)
+  if (!file) return null
+  const workspace = shownWorkspace({ layer, profileId, workspaceId }, workspaces)
+  const missing = file.snapshot.text === null
+  return (
+    <NoticeLine
+      action={
+        <Button
+          variant="link"
+          disabled={!workspace || missing}
+          tooltip={missing ? 'Not there yet: Save makes it' : !workspace ? 'No workspace uses this account' : undefined}
+          onClick={() => workspace && openInContext(workspace.id, file.path)}
+        >
+          Open in Context view
+        </Button>
+      }
+    >
+      {file.path} · {note}
+      {layer === 'account' && workspace && ` Applies shows ${workspace.name}.`}
+    </NoticeLine>
+  )
+}
+
 export function ClaudeCodeSettings() {
   const profiles = useProfilesStore((s) => s.profiles)
   const loadProfiles = useProfilesStore((s) => s.load)
+  const workspaces = useWorkspacesStore((s) => s.workspaces)
+  const layer = useClaudeSettingsStore((s) => s.layer)
   const profileId = useClaudeSettingsStore((s) => s.profileId)
+  const workspaceId = useClaudeSettingsStore((s) => s.workspaceId)
   const read = useClaudeSettingsStore((s) => s.read)
+  const allPending = useClaudeSettingsStore((s) => s.pending)
   const readError = useClaudeSettingsStore((s) => s.readError)
   const saving = useClaudeSettingsStore((s) => s.saving)
   const saveError = useClaudeSettingsStore((s) => s.saveError)
-  const { load, selectProfile, stage, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
-  const pending = usePendingOnScreen()
+  const { load, selectLayer, selectProfile, selectWorkspace, stage, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
+  const { file, pending } = useEditedFile()
   const [category, setCategory] = useState<SettingCategory>(CATEGORIES[0])
   const [reviewing, setReviewing] = useState(false)
 
@@ -89,21 +153,26 @@ export function ClaudeCodeSettings() {
     }
   }, [loadProfiles, load, confirmLeave, dropAll])
 
-  const account = read?.account
-  const snapshot = account?.snapshot
+  const snapshot = file?.snapshot
   const profile = profiles.find((p) => p.id === profileId)
   const defaultName = profiles.find((p) => p.id === DEFAULT_PROFILE_ID)?.name ?? 'Personal'
   const rows = useMemo(() => SETTINGS_CATALOG.filter((e) => e.category === category && !e.advanced), [category])
+  const layers = useMemo(() => layersWithPending(read, allPending), [read, allPending])
   const count = pending ? patchSize(pending.patch) : 0
   const unreadable = snapshot?.value === null
+  const noWorkspace = layer !== 'account' && workspaces.length === 0
 
   return (
     <Page label="Claude Code">
       <PageHeader title="Claude Code" description="The settings Claude Code reads from its settings files, as plain controls." />
       <Toolbar>
         <div className="flex items-center gap-2">
-          <SegmentedControl label="Layer" options={LAYERS} value="account" onChange={() => undefined} />
-          <Select label="Account" options={profiles.map((p) => ({ value: p.id, label: p.name }))} value={profileId} onChange={selectProfile} />
+          <SegmentedControl label="Layer" options={LAYERS} value={layer} onChange={selectLayer} />
+          {layer === 'account' ? (
+            <Select label="Account" options={profiles.map((p) => ({ value: p.id, label: p.name }))} value={profileId} onChange={selectProfile} />
+          ) : (
+            <Select label="Workspace" options={workspaces.map((w) => ({ value: w.id, label: w.name }))} value={workspaceId ?? ''} onChange={selectWorkspace} />
+          )}
         </div>
       </Toolbar>
       <div className="min-h-0 flex-1">
@@ -121,11 +190,9 @@ export function ClaudeCodeSettings() {
           }
         >
           <PageBody>
-            {account && (
-              <PageNote>
-                {account.path} · {accountNote(profile, defaultName)}
-              </PageNote>
-            )}
+            <FileLine note={layer === 'account' ? accountNote(profile, defaultName) : LAYER_NOTES[layer]} />
+            {read?.organisation && <NoticeLine tone="warning">Your organisation’s settings in {read.organisation.path} apply over every layer and can’t be changed here.</NoticeLine>}
+            {noWorkspace && <Banner label="No workspace">Add a workspace to edit its Repo and Local settings.</Banner>}
             {readError && <Banner label="Settings not read">Could not read the settings: {readError}</Banner>}
             {unreadable && (
               <Banner label="Settings file does not parse">
@@ -138,10 +205,13 @@ export function ClaudeCodeSettings() {
                   <SettingField
                     key={entry.key}
                     entry={entry}
+                    layer={layer}
                     value={shownValue(pending, snapshot?.value ?? null, entry.key)}
+                    effective={shownEffective(entry, layers, layer)}
                     changed={pending !== null && (entry.key in pending.patch.set || pending.patch.remove.includes(entry.key))}
                     disabled={!snapshot || unreadable || saving}
                     onChange={(value) => stage(entry.key, value)}
+                    onReset={() => stage(entry.key, undefined)}
                   />
                 ))}
               </div>

@@ -27,6 +27,11 @@ export const changeCount = (n: number): string => `${n} ${n === 1 ? 'change' : '
 
 export type SettingsLayer = 'account' | 'repo' | 'local'
 
+/** Where an effective value can come from, highest first. */
+export const SOURCE_ORDER = ['organisation', 'local', 'repo', 'account'] as const
+
+export type SourceLayer = (typeof SOURCE_ORDER)[number]
+
 export interface SettingsLayerFile {
   layer: SettingsLayer
   path: string
@@ -38,6 +43,13 @@ export interface ClaudeSettingsRead {
   /** Null without a workspace. */
   repo: SettingsLayerFile | null
   local: SettingsLayerFile | null
+  /** Read only; null when the organisation sets nothing. */
+  organisation: OrganisationFile | null
+}
+
+export interface OrganisationFile {
+  path: string
+  snapshot: SettingsSnapshot
 }
 
 export const isSettingsObject = (value: unknown): value is SettingsObject =>
@@ -55,6 +67,36 @@ export function getAt(settings: SettingsObject | null, path: string): unknown {
     at = at[segment]
   }
   return at
+}
+
+function setAt(settings: SettingsObject, path: string, value: unknown): void {
+  const segments = pathKeys(path)
+  const last = segments.pop() as string
+  let at = settings
+  for (const segment of segments) {
+    if (!isSettingsObject(at[segment])) at[segment] = {}
+    at = at[segment] as SettingsObject
+  }
+  at[last] = value
+}
+
+function removeAt(settings: SettingsObject, path: string): void {
+  const segments = pathKeys(path)
+  const last = segments.pop() as string
+  let at: unknown = settings
+  for (const segment of segments) {
+    if (!isSettingsObject(at)) return
+    at = at[segment]
+  }
+  if (isSettingsObject(at)) delete at[last]
+}
+
+/** A copy of the settings with the patch applied; new keys go at the end. */
+export function withPatch(settings: SettingsObject, patch: SettingsPatch): SettingsObject {
+  const patched = structuredClone(settings)
+  for (const [path, value] of Object.entries(patch.set)) setAt(patched, path, value)
+  for (const path of patch.remove) removeAt(patched, path)
+  return patched
 }
 
 export function sameValue(a: unknown, b: unknown): boolean {

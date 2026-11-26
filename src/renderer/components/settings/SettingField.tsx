@@ -1,16 +1,29 @@
-import { defaultText, formatSettingValue, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import type { SettingsLayer } from '../../../shared/claudeSettings'
+import { defaultText, formatSettingValue, layerRule, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
 import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { FormRow } from '../ui/FormRow'
 import { Select } from '../ui/Select'
 import { TextField } from '../ui/TextField'
 
+/** What a row shows of the value that applies in the workspace. */
+export interface ShownEffective {
+  value: unknown
+  /** "From Account", "Overridden by Local", …; null when no layer sets it. */
+  badge: string | null
+  locked: boolean
+}
+
 interface Props {
   entry: SettingEntry
+  layer: SettingsLayer
   value: unknown
+  effective: ShownEffective
   changed: boolean
   disabled: boolean
   onChange: (value: unknown) => void
+  onReset: () => void
 }
 
 const NOT_SET = ''
@@ -24,7 +37,7 @@ function parseInput(entry: SettingEntry, text: string): unknown {
   return text
 }
 
-function Control({ entry, value, disabled, onChange }: Omit<Props, 'changed'>) {
+function Control({ entry, layer, value, disabled, onChange }: Pick<Props, 'entry' | 'layer' | 'value' | 'disabled' | 'onChange'>) {
   const { control } = entry
   switch (control.kind) {
     case 'toggle':
@@ -38,7 +51,7 @@ function Control({ entry, value, disabled, onChange }: Omit<Props, 'changed'>) {
       const known = control.options.some((o) => o.value === current)
       const options = [
         { value: NOT_SET, label: 'Not set' },
-        ...control.options,
+        ...control.options.filter((o) => !o.layers || o.layers.includes(layer) || o.value === current),
         ...(current !== NOT_SET && !known ? [{ value: current, label: current }] : [])
       ]
       return <Select label={entry.label} options={options} value={current} disabled={disabled} onChange={(v) => onChange(v === NOT_SET ? undefined : v)} />
@@ -66,8 +79,11 @@ function Control({ entry, value, disabled, onChange }: Omit<Props, 'changed'>) {
   }
 }
 
-/** One catalog setting as a row: its words, raw key, control and default. */
-export function SettingField({ entry, value, changed, disabled, onChange }: Props) {
+/** One catalog setting as a row: its words, raw key, control, default and the value that applies. */
+export function SettingField({ entry, layer, value, effective, changed, disabled, onChange, onReset }: Props) {
+  const notHere = layerRule(entry, layer)
+  const ignoredValue = notHere === null && value !== undefined ? layerRule(entry, layer, value) : null
+  const risk = entry.risk?.(value) ?? null
   return (
     <FormRow
       label={entry.label}
@@ -75,12 +91,26 @@ export function SettingField({ entry, value, changed, disabled, onChange }: Prop
       description={entry.description}
       notes={
         <>
-          {value === undefined && <span>{defaultText(entry)}</span>}
+          {effective.badge === null ? (
+            <span>{defaultText(entry)}</span>
+          ) : (
+            <span>
+              Applies: {formatSettingValue(entry, effective.value)} <Badge tone={effective.locked ? 'quiet-warning' : 'quiet'}>{effective.badge}</Badge>
+            </span>
+          )}
+          {notHere && <span>{notHere}</span>}
+          {ignoredValue && <Badge tone="quiet-warning">{ignoredValue}</Badge>}
+          {risk && <Badge tone="warning">{risk}</Badge>}
           {entry.newChatsOnly && <Badge tone="quiet">Applies to new chats</Badge>}
           {changed && <Badge tone="muted">Changed</Badge>}
+          {value !== undefined && (
+            <Button variant="link" disabled={disabled} tooltip="Remove it from this layer’s file" onClick={onReset}>
+              Reset
+            </Button>
+          )}
         </>
       }
-      control={<Control entry={entry} value={value} disabled={disabled} onChange={onChange} />}
+      control={<Control entry={entry} layer={layer} value={value} disabled={disabled || notHere !== null || effective.locked} onChange={onChange} />}
     />
   )
 }
