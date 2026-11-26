@@ -34,6 +34,7 @@ export function useFollowOutput(
     ownTop.current = el.scrollTop
   }, [scrollRef])
 
+  // The reader's own move wins over the next re-pin, which would otherwise land before its scroll event.
   const leave = useCallback(() => {
     following.current = false
     ownTop.current = undefined
@@ -68,7 +69,6 @@ export function useFollowOutput(
         ownTop.current = el.scrollTop
       }
     })
-    // The reader's own move wins over the next re-pin, which would otherwise land before its scroll event.
     const onWheel = (e: WheelEvent): void => {
       if (readerLeavesBottom({ kind: 'wheel', deltaY: e.deltaY })) leave()
     }

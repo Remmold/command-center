@@ -965,7 +965,7 @@ test.describe('chat rendering', () => {
     await expect(pane.getByText('End of the first part.').nth(1)).toBeVisible()
 
     await expect(strip).toBeVisible()
-    await expect(strip.getByRole('button')).toHaveText('a long answer')
+    await expect(strip.getByRole('button')).toHaveText('a long answer with a second line')
     const lastPrompt = pane.locator('[data-user-prompt]', { hasText: 'with a second line' })
     await expect(lastPrompt).not.toBeInViewport()
 

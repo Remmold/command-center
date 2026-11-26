@@ -5,11 +5,13 @@ import type { HeldPrompt } from './heldPrompts'
 import { lastPrompt } from '../../state/lastPrompt'
 import { SummaryStrip } from '../ui/SummaryStrip'
 
+/** The `prompt-flash` animation's length in index.css. */
 const FLASH_MS = 1500
 /** How long a smooth scroll may take before its landing is checked anyway. */
 const SETTLE_MS = 1200
 const FLASH_CLASS = 'prompt-flash'
 const NONE_HELD: readonly HeldPrompt[] = []
+const flashTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>()
 
 /** The prompt's row; chats saved before blocks were merged can repeat its id on other rows. */
 function promptRow(root: HTMLElement, id: string): HTMLElement | null {
@@ -27,8 +29,11 @@ function landed(root: HTMLElement, row: HTMLElement): boolean {
 /** Lazily rendered rows in between only have an estimated height, so the first landing can miss; one more scroll fixes it. */
 function jumpTo(root: HTMLElement, row: HTMLElement): void {
   row.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  clearTimeout(flashTimers.get(row))
+  row.classList.remove(FLASH_CLASS)
+  void row.offsetWidth // restarts the animation on a second click
   row.classList.add(FLASH_CLASS)
-  setTimeout(() => row.classList.remove(FLASH_CLASS), FLASH_MS)
+  flashTimers.set(row, setTimeout(() => row.classList.remove(FLASH_CLASS), FLASH_MS))
   const settle = (): void => {
     root.removeEventListener('scrollend', settle)
     clearTimeout(timer)
@@ -39,13 +44,13 @@ function jumpTo(root: HTMLElement, row: HTMLElement): void {
 }
 
 /** Whether the row is out of the box's view; a row not drawn yet counts as out of view. */
-function useOutOfView(scrollRef: RefObject<HTMLElement>, id: string | undefined, items: readonly ChatItem[]): boolean {
-  const [outOfView, setOutOfView] = useState(true)
+function useOutOfView(scrollRef: RefObject<HTMLElement>, id: string | undefined, itemCount: number): boolean {
+  // Starts hidden and keeps its last value until the observer reports, so opening a chat never flashes the strip.
+  const [outOfView, setOutOfView] = useState(false)
   useEffect(() => {
     const root = scrollRef.current
     if (!root || id === undefined) return
     const row = promptRow(root, id)
-    // Kept until the observer reports, so a re-render never flashes the strip.
     if (!row) {
       setOutOfView(true)
       return
@@ -53,7 +58,7 @@ function useOutOfView(scrollRef: RefObject<HTMLElement>, id: string | undefined,
     const observer = new IntersectionObserver(([entry]) => setOutOfView(!entry.isIntersecting), { root })
     observer.observe(row)
     return () => observer.disconnect()
-  }, [scrollRef, id, items])
+  }, [scrollRef, id, itemCount])
   return outOfView
 }
 
@@ -69,7 +74,7 @@ interface Props {
 /** The last prompt sent, at the top of the chat while it is scrolled out of view; a click scrolls back to it. */
 export function LastPromptStrip({ items, held = NONE_HELD, scrollRef, onLeaveBottom }: Props) {
   const prompt = useMemo(() => lastPrompt(items, held), [items, held])
-  const outOfView = useOutOfView(scrollRef, prompt?.id, items)
+  const outOfView = useOutOfView(scrollRef, prompt?.id, items.length)
   if (!prompt || !outOfView) return null
 
   const jump = (): void => {
@@ -79,6 +84,6 @@ export function LastPromptStrip({ items, held = NONE_HELD, scrollRef, onLeaveBot
     onLeaveBottom()
     jumpTo(root, row)
   }
-  const firstLine = prompt.text.split('\n', 1)[0] || 'Attachments only'
-  return <SummaryStrip label="Last prompt" icon={<CornerLeftUp size={13} strokeWidth={2} />} title={firstLine} onClick={jump} />
+  // One line by the strip's CSS ellipsis, its line breaks folded into spaces.
+  return <SummaryStrip label="Last prompt" icon={<CornerLeftUp size={13} strokeWidth={2} />} title={prompt.text || 'Attachments only'} onClick={jump} />
 }

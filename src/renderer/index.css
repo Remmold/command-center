@@ -113,7 +113,7 @@ code, kbd, pre, samp {
   }
 }
 
-/* The prompt the last prompt strip jumped to, ringed for a moment. */
+/* The prompt the last prompt strip jumped to, ringed for a moment; FLASH_MS in LastPromptStrip.tsx matches its length. */
 @layer utilities {
   .prompt-flash [data-user-prompt] {
     animation: prompt-flash 1.5s ease-out;

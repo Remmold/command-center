@@ -29,7 +29,7 @@ export function SummaryStrip({ label, icon, title, eyebrow, children, text, line
       <div className="flex min-w-0 items-center gap-2">
         {icon && <span className="shrink-0 text-muted">{icon}</span>}
         {onClick ? (
-          <button type="button" title={title} onClick={onClick} className="min-w-0 flex-1 truncate text-left font-medium text-fg hover:underline">
+          <button type="button" title={title} onClick={onClick} className="min-w-0 flex-1 truncate rounded-sm text-left font-medium text-fg hover:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus">
             {heading}
           </button>
         ) : (
