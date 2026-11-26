@@ -14,5 +14,6 @@
 - [ ] Test on a feature whose pair is open brings it to the front instead of opening a second.
 - [ ] Each window reopens where it was last put, per feature and role (monitor and size).
 - [ ] A workspace with no preview config opens only the test flow window.
+- [ ] Carried from ticket 04's review: a server whose workspace is missing fails with a plain reason and never starts on the default account (spec story 59); a feature's ports are kept per server name, so reordering or renaming servers in the preview config never swaps ports between them; a failure inside the ready wait is caught and shown as that server's Failed reason, never an unhandled rejection.
 - [ ] Vitest: the navigation rule (feature port allowed, another port, another host, a non-http scheme), window placement keys.
 - [ ] No new UI suite scenario (ticket 08 covers the path).

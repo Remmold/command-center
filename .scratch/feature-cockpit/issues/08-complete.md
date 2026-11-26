@@ -11,5 +11,6 @@
 - [ ] A separate Remove worktree action on a completed feature asks first, and refuses while the branch has commits beyond its base that are not merged. Complete never calls it.
 - [ ] A completed feature can be re-opened: it returns to its stage, gets ports again and can be tested again.
 - [ ] Features of different accounts and of one project run, test and complete at the same time without touching each other.
+- [ ] Complete removes the feature's entries from the server runner's tracked state and its terminals, so nothing of a completed feature is listed as running (ticket 04's review found these leak).
 - [ ] Vitest: Complete's effects in order with fakes (servers, windows, partition, ports, mark), re-open, the refusal of Remove worktree on unmerged work.
 - [ ] UI suite: one new scenario in `featureCockpit.spec.ts` on the fake CLI, a localhost fake server and two fake profiles: Test boots the server and the pair shows its page; marking every step Pass and pressing Complete stops the server and moves the feature under Completed. `pnpm e2e:count` after this ticket reads 17 of 20.
