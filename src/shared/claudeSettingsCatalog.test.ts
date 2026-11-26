@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import schema from './fixtures/claude-code-settings.schema.json'
-import { SETTINGS_CATALOG, SETTING_CATEGORIES, defaultText, entryFor, formatSettingValue, shownSettings, type SettingsFilter } from './claudeSettingsCatalog'
+import { SETTINGS_CATALOG, SETTING_CATEGORIES, defaultText, entryFor, formatSettingValue, otherKeys, shownSettings, type SettingsFilter } from './claudeSettingsCatalog'
 
 /** Schema keys the catalog leaves out on purpose, and why. */
 const SKIPPED: Record<string, string> = {
@@ -110,5 +110,34 @@ describe('the settings shown', () => {
     expect(keys({ query: 'secrets' })).toContain('permissions.deny')
     expect(keys({ query: 'effort cap' })).toEqual(['maxEffortLevel'])
     expect(shownSettings(filter({ query: 'worktree' })).map((g) => g.category)).toEqual(['Agents & worktrees'])
+  })
+})
+
+describe('the other keys of a file', () => {
+  it('are the keys no row shows, top level or inside an object the catalog splits into rows, in file order', () => {
+    const file = {
+      madeUpSetting: [1, 2],
+      model: 'opus',
+      attribution: { commit: 'x', madeUpPart: true },
+      permissions: { allow: ['Read'], disableAutoMode: 'disable' },
+      $schema: 'https://json.schemastore.org/claude-code-settings.json'
+    }
+    expect(otherKeys(file)).toEqual(['madeUpSetting', 'attribution.madeUpPart', 'permissions.disableAutoMode', '$schema'])
+  })
+
+  it('leave out everything inside a row that holds a whole object', () => {
+    expect(otherKeys({ env: { MADE_UP: '1' }, modelSettings: { 'claude-opus-5-5': { effortLevel: 'high', other: 1 } }, enabledPlugins: { a: true } })).toEqual([])
+  })
+
+  it('take a split object whole when it is not an object, so its value is still shown', () => {
+    expect(otherKeys({ worktree: 'nope', voice: { enabled: true } })).toEqual(['worktree'])
+  })
+
+  it('escape a dot in a key name, so the path leads back to the key', () => {
+    expect(otherKeys({ 'made.up': 1, attribution: { 'a.b': 2 } })).toEqual(['made~1up', 'attribution.a~1b'])
+  })
+
+  it('are none for a file that does not parse', () => {
+    expect(otherKeys(null)).toEqual([])
   })
 })

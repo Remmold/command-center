@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
-import { SETTINGS_CATALOG, SETTING_CATEGORIES, entryOf, formatSettingValue, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
-import { changeCount, getAt, pathKeys, patchSize, sameValue, withPatch, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
+import { SETTINGS_CATALOG, SETTING_CATEGORIES, entryFor, entryOf, formatSettingValue, matchesSearch, otherKeys, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { changeCount, getAt, pathKeys, patchSize, sameValue, withPatch, type SettingsObject, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
 import { effectiveSetting, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
 import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
 import { conflicts, pendingChanges, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
@@ -24,9 +24,12 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { Toolbar } from '../ui/Toolbar'
+import { OtherKeysList, type OtherKeyRow } from './OtherKeysList'
 import { SettingField, type ShownEffective } from './SettingField'
 
-const CATEGORIES = SETTING_CATEGORIES.filter((c) => SETTINGS_CATALOG.some((e) => e.category === c))
+const OTHER_KEYS: SettingCategory = 'Other keys'
+
+const CATEGORIES = SETTING_CATEGORIES.filter((c) => c === OTHER_KEYS || SETTINGS_CATALOG.some((e) => e.category === c))
 
 const LAYERS: { value: SettingsLayer; label: string; title: string }[] = [
   { value: 'account', label: 'Account', title: 'The account’s settings.json, for every workspace on that account' },
@@ -64,6 +67,24 @@ function layersWithPending(read: ClaudeSettingsRead | null, pending: Record<stri
 function shownEffective(entry: SettingEntry, layers: LayerSettings, edited: SettingsLayer): ShownEffective {
   const effective = effectiveSetting(entry, layers)
   return { value: effective.value, locked: effective.locked, badge: sourceBadge(effective, entry, layers, edited) }
+}
+
+/** The file's other keys with their waiting changes, a key waiting to be removed included. */
+function otherKeyRows(
+  disk: SettingsObject | null,
+  edited: SettingsObject | null,
+  pending: PendingFile | null,
+  fileChanged: ReadonlyMap<string, { value: unknown }>
+): OtherKeyRow[] {
+  const before = pending?.base ?? disk
+  const paths = [...new Set([...otherKeys(before), ...otherKeys(edited)])]
+  return paths.map((path) => ({
+    path,
+    value: getAt(edited, path),
+    before: getAt(before, path),
+    changed: pending !== null && (path in pending.patch.set || pending.patch.remove.includes(path)),
+    fileValue: fileChanged.get(path)
+  }))
 }
 
 /** Settings closes and Context opens on the file; nothing happens when unsaved changes are kept. */
@@ -227,6 +248,11 @@ export function ClaudeCodeSettings() {
   const count = pending ? patchSize(pending.patch) : 0
   const fileChanged = useMemo(() => new Map(conflicts(pending, snapshot?.value ?? null).map((c) => [entryOf(c.key)?.key ?? c.key, { value: c.theirs }])), [pending, snapshot])
   const unreadable = snapshot?.value === null
+  const otherRows = useMemo(() => {
+    const rows = otherKeyRows(snapshot?.value ?? null, layers[layer], pending, fileChanged)
+    return searching ? rows.filter((row) => matchesSearch(entryFor(row.path), query)) : rows
+  }, [snapshot, layers, layer, pending, fileChanged, searching, query])
+  const showOtherKeys = searching ? otherRows.length > 0 : category === OTHER_KEYS
   const noWorkspace = layer !== 'account' && workspaces.length === 0
 
   return (
@@ -292,7 +318,7 @@ export function ClaudeCodeSettings() {
                 This file is {snapshot?.error}. Fix it in the Context view or an editor; it can&apos;t be saved from this page until it parses.
               </Banner>
             )}
-            {searching && groups.length === 0 && <NoticeLine>No setting matches “{query.trim()}”.</NoticeLine>}
+            {searching && groups.length === 0 && !showOtherKeys && <NoticeLine>No setting matches “{query.trim()}”.</NoticeLine>}
             {groups.map((group) => (
               <PageGroup key={group.category} title={group.category}>
                 <div>
@@ -312,6 +338,14 @@ export function ClaudeCodeSettings() {
                 </div>
               </PageGroup>
             ))}
+            {showOtherKeys && (
+              <PageGroup title={OTHER_KEYS}>
+                <NoticeLine>
+                  {otherRows.length === 0 ? 'Every key in this file has its own setting above.' : 'Keys this page has no control for, as raw JSON. Leaving a box checks it before the change waits for Save.'}
+                </NoticeLine>
+                <OtherKeysList rows={otherRows} disabled={!snapshot || unreadable || saving} onStage={stage} />
+              </PageGroup>
+            )}
           </PageBody>
         </SidebarLayout>
       </div>

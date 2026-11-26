@@ -1,4 +1,4 @@
-import { isSettingsObject, type SettingsLayer, type SourceLayer } from './claudeSettings'
+import { isSettingsObject, keyPath, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
 
 export const SETTING_CATEGORIES = [
   'Model & thinking',
@@ -574,6 +574,19 @@ export const SETTINGS_CATALOG: readonly SettingEntry[] = [
 export const entryOf = (path: string): SettingEntry | undefined =>
   SETTINGS_CATALOG.find((e) => e.key === path) ?? SETTINGS_CATALOG.find((e) => path.startsWith(`${e.key}.`))
 
+const splitIntoRows = (path: string): boolean => SETTINGS_CATALOG.some((e) => e.key.startsWith(`${path}.`))
+
+/** The key paths in the settings that no catalog row shows, in file order. */
+export function otherKeys(settings: SettingsObject | null): string[] {
+  const walk = (value: SettingsObject, parent: string[]): string[] =>
+    Object.entries(value).flatMap(([key, inner]) => {
+      const path = keyPath(...parent, key)
+      if (entryOf(path)) return []
+      return splitIntoRows(path) && isSettingsObject(inner) ? walk(inner, [...parent, key]) : [path]
+    })
+  return settings ? walk(settings, []) : []
+}
+
 /** The catalog's entry for a key, else a plain one for a key the page has no control for. */
 export function entryFor(key: string): SettingEntry {
   return (
@@ -634,6 +647,9 @@ export function savedEfforts(value: unknown): [model: string, level: string][] {
 }
 
 export const isModelEffort = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'modelEffort'
+
+/** A setting edited as raw JSON, as the page has no plainer control for it. */
+export const isRawJson = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'otherKeys'
 
 export function formatSettingValue(entry: SettingEntry, value: unknown): string {
   if (value === undefined) return 'not set'

@@ -1,9 +1,10 @@
 import type { SettingsLayer } from '../../../shared/claudeSettings'
-import { defaultText, formatSettingValue, isModelEffort, layerRule, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { defaultText, formatSettingValue, isModelEffort, isRawJson, layerRule, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { FormRow } from '../ui/FormRow'
+import { JsonField } from '../ui/JsonField'
 import { Select } from '../ui/Select'
 import { TextField } from '../ui/TextField'
 import { ModelEffortList } from './ModelEffortList'
@@ -92,7 +93,7 @@ function Control({ entry, layer, value, disabled, onChange }: Pick<Props, 'entry
         />
       )
     case 'editor':
-      return isModelEffort(entry) ? null : <span className="text-muted">{formatSettingValue(entry, value)}</span>
+      return isModelEffort(entry) || isRawJson(entry) ? null : <span className="text-muted">{formatSettingValue(entry, value)}</span>
   }
 }
 
@@ -139,6 +140,7 @@ export function SettingField({ entry, layer, value, effective, changed, fileValu
       control={<Control entry={entry} layer={layer} value={value} disabled={readOnly} onChange={(next) => onStage(entry.key, next)} />}
     >
       {isModelEffort(entry) && <ModelEffortList value={value} disabled={readOnly} onStage={onStage} />}
+      {isRawJson(entry) && <JsonField label={`Value of ${entry.label}`} value={value} disabled={readOnly} onChange={(next) => onStage(entry.key, next)} />}
     </FormRow>
   )
 }
