@@ -54,13 +54,6 @@ export interface SettingEntry {
 
 const ALL_LAYERS: readonly SettingsLayer[] = ['account', 'repo', 'local']
 
-const EFFORT_OPTIONS: ChoiceOption[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'Extra high' }
-]
-
 const MODEL_OPTIONS: ChoiceOption[] = [
   { value: 'opus', label: 'Opus' },
   { value: 'sonnet', label: 'Sonnet' },
@@ -78,18 +71,6 @@ export const SETTINGS_CATALOG: readonly SettingEntry[] = [
     category: 'Model & thinking',
     control: { kind: 'choice', options: MODEL_OPTIONS },
     defaultLabel: "Claude's default for your plan",
-    layers: ALL_LAYERS,
-    terminalOnly: false,
-    newChatsOnly: true,
-    advanced: false
-  },
-  {
-    key: 'effortLevel',
-    label: 'Effort',
-    description: 'How hard Claude thinks in new chats, for a model with no effort of its own saved by the effort picker.',
-    category: 'Model & thinking',
-    control: { kind: 'choice', options: EFFORT_OPTIONS },
-    defaultLabel: "the model's default",
     layers: ALL_LAYERS,
     terminalOnly: false,
     newChatsOnly: true,

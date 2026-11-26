@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { samePath } from '../profiles/linker'
-import { getAt, isSettingsObject, sameValue, type SettingsObject, type SettingsPatch, type SettingsSaveResult, type SettingsSnapshot } from '../../shared/claudeSettings'
+import { getAt, isSettingsObject, pathKeys, sameValue, type SettingsObject, type SettingsPatch, type SettingsSaveResult, type SettingsSnapshot } from '../../shared/claudeSettings'
 
 export type ParsedSettings = { ok: true; value: SettingsObject } | { ok: false; error: string }
 
@@ -19,7 +19,7 @@ export function parseSettings(text: string | null): ParsedSettings {
 }
 
 function setAt(settings: SettingsObject, path: string, value: unknown): void {
-  const segments = path.split('.')
+  const segments = pathKeys(path)
   const last = segments.pop() as string
   let at = settings
   for (const segment of segments) {
@@ -30,7 +30,7 @@ function setAt(settings: SettingsObject, path: string, value: unknown): void {
 }
 
 function removeAt(settings: SettingsObject, path: string): void {
-  const segments = path.split('.')
+  const segments = pathKeys(path)
   const last = segments.pop() as string
   let at: unknown = settings
   for (const segment of segments) {
@@ -55,10 +55,20 @@ export function applyPatch(text: string | null, base: SettingsObject | null, pat
     })
     if (conflicts.length > 0) return { ok: false, conflicts }
   }
-  const settings = structuredClone(parsed.value)
-  for (const [path, value] of Object.entries(patch.set)) setAt(settings, path, value)
+  return { ok: true, text: patchedText(parsed.value, patch) }
+}
+
+function patchedText(value: SettingsObject, patch: SettingsPatch): string {
+  const settings = structuredClone(value)
+  for (const [path, set] of Object.entries(patch.set)) setAt(settings, path, set)
   for (const path of patch.remove) removeAt(settings, path)
-  return { ok: true, text: JSON.stringify(settings, null, 2) + '\n' }
+  return JSON.stringify(settings, null, 2) + '\n'
+}
+
+/** Applies the patch over whatever the text holds, with no conflict check. */
+export function patchText(text: string | null, patch: SettingsPatch): { ok: true; text: string } | { ok: false; error: string } {
+  const parsed = parseSettings(text)
+  return parsed.ok ? { ok: true, text: patchedText(parsed.value, patch) } : parsed
 }
 
 async function readText(file: string): Promise<{ text: string; mtime: number } | null> {

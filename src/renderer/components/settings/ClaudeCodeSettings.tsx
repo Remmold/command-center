@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
 import { SETTINGS_CATALOG, SETTING_CATEGORIES, formatSettingValue, type SettingCategory } from '../../../shared/claudeSettingsCatalog'
-import { patchSize, type SettingsLayer } from '../../../shared/claudeSettings'
+import { changeCount, patchSize, type SettingsLayer } from '../../../shared/claudeSettings'
 import { useClaudeSettingsStore } from '../../state/claudeSettingsStore'
 import { pendingChanges, shownValue, type PendingFile } from '../../state/claudeSettingsPending'
 import { useProfilesStore } from '../../state/profilesStore'
@@ -32,8 +32,6 @@ function accountNote(profile: AccountProfile | undefined, defaultName: string): 
   if (profile.adopted) return 'Its own folder. The app writes to it only when you press Save here.'
   return `Shares ${defaultName}’s settings file: a change here reaches ${defaultName} too.`
 }
-
-const changeCount = (n: number): string => `${n} ${n === 1 ? 'change' : 'changes'}`
 
 /** The account file's waiting changes; null when there are none. */
 function usePendingOnScreen(): PendingFile | null {
@@ -76,7 +74,7 @@ export function ClaudeCodeSettings() {
   const readError = useClaudeSettingsStore((s) => s.readError)
   const saving = useClaudeSettingsStore((s) => s.saving)
   const saveError = useClaudeSettingsStore((s) => s.saveError)
-  const { load, selectProfile, stage, discard, save, confirmLeave } = useClaudeSettingsStore.getState()
+  const { load, selectProfile, stage, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
   const pending = usePendingOnScreen()
   const [category, setCategory] = useState<SettingCategory>(CATEGORIES[0])
   const [reviewing, setReviewing] = useState(false)
@@ -85,8 +83,11 @@ export function ClaudeCodeSettings() {
     void loadProfiles()
     void load()
     setSettingsLeaveGuard(confirmLeave)
-    return () => setSettingsLeaveGuard(null)
-  }, [loadProfiles, load, confirmLeave])
+    return () => {
+      setSettingsLeaveGuard(null)
+      dropAll()
+    }
+  }, [loadProfiles, load, confirmLeave, dropAll])
 
   const account = read?.account
   const snapshot = account?.snapshot

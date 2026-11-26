@@ -24,6 +24,11 @@ describe('mergeModelDefaults', () => {
     })
   })
 
+  it('keeps a model id with a dot in it as one key', () => {
+    const result = mergeModelDefaults('{}', { effort: { resolvedModel: 'us.anthropic.claude-opus-5-5', level: 'low' } })
+    expect(result.ok && JSON.parse(result.text)).toEqual({ modelSettings: { 'us.anthropic.claude-opus-5-5': { effortLevel: 'low' } } })
+  })
+
   it('never saves Max, which applies to the current session only', () => {
     const result = mergeModelDefaults('{"theme":"dark"}', { effort: { resolvedModel: 'claude-opus-5-5', level: 'max' } })
     expect(result.ok && JSON.parse(result.text)).toEqual({ theme: 'dark' })

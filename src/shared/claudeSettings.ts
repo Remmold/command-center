@@ -9,7 +9,7 @@ export interface SettingsSnapshot {
   error?: string
 }
 
-/** Key paths are dot-separated, so a key containing a dot cannot be patched. */
+/** Key paths are dot-separated; build one from keys that may hold a dot with `keyPath`. */
 export interface SettingsPatch {
   set: Record<string, unknown>
   remove: string[]
@@ -19,6 +19,11 @@ export type SettingsSaveResult =
   | { ok: true; snapshot: SettingsSnapshot }
   | { ok: false; conflicts: string[] }
   | { ok: false; error: string }
+
+export const saveFailure = (result: Exclude<SettingsSaveResult, { ok: true }>): string =>
+  'error' in result ? result.error : `Claude changed ${result.conflicts.join(', ')} since this page read the file`
+
+export const changeCount = (n: number): string => `${n} ${n === 1 ? 'change' : 'changes'}`
 
 export type SettingsLayer = 'account' | 'repo' | 'local'
 
@@ -38,9 +43,14 @@ export interface ClaudeSettingsRead {
 export const isSettingsObject = (value: unknown): value is SettingsObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
+/** Joins keys into a key path, escaping `~` as `~0` and `.` as `~1` as JSON Pointer does with `/`. */
+export const keyPath = (...keys: string[]): string => keys.map((key) => key.replace(/~/g, '~0').replace(/\./g, '~1')).join('.')
+
+export const pathKeys = (path: string): string[] => path.split('.').map((key) => key.replace(/~1/g, '.').replace(/~0/g, '~'))
+
 export function getAt(settings: SettingsObject | null, path: string): unknown {
   let at: unknown = settings
-  for (const segment of path.split('.')) {
+  for (const segment of pathKeys(path)) {
     if (!isSettingsObject(at)) return undefined
     at = at[segment]
   }

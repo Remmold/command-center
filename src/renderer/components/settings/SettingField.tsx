@@ -55,8 +55,10 @@ function Control({ entry, value, disabled, onChange }: Omit<Props, 'changed'>) {
           disabled={disabled}
           submitOnBlur
           keepOnSubmit
-          onSubmit={(text) => onChange(parseInput(entry, text))}
-          onCancel={() => onChange(undefined)}
+          onSubmit={(text) => {
+            const parsed = parseInput(entry, text)
+            if (parsed !== undefined) onChange(parsed)
+          }}
         />
       )
     case 'editor':

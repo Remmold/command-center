@@ -14,7 +14,7 @@ test('Claude Code settings: a Model & thinking change waits in the save bar, and
   await expect(model).toHaveValue('sonnet')
 
   await model.selectOption('opus')
-  await page.getByRole('group', { name: 'Effort', exact: true }).getByRole('combobox', { name: 'Effort' }).selectOption('high')
+  await page.getByRole('group', { name: 'Extended thinking', exact: true }).getByRole('checkbox', { name: 'On' }).check()
   const bar = page.getByRole('region', { name: 'Unsaved Claude Code changes' })
   await expect(bar).toContainText('2 changes')
 
@@ -24,5 +24,5 @@ test('Claude Code settings: a Model & thinking change waits in the save bar, and
 
   await bar.getByRole('button', { name: 'Save' }).click()
   await expect(bar).toBeHidden()
-  expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({ model: 'opus', someKeyThePageDoesNotKnow: { keep: [1, 2] }, effortLevel: 'high' })
+  expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({ model: 'opus', someKeyThePageDoesNotKnow: { keep: [1, 2] }, alwaysThinkingEnabled: true })
 })
