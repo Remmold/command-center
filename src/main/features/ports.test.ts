@@ -106,6 +106,20 @@ describe('real sockets', () => {
     expect(await portIsFree(port)).toBe(false)
   })
 
+  it('sees a listener that holds only the IPv6 loopback as accepting', async (ctx) => {
+    const v6 = createServer()
+    const port = await new Promise<number>((resolve) => {
+      v6.once('error', () => resolve(0))
+      v6.listen(0, '::1', () => resolve((v6.address() as { port: number }).port))
+    })
+    if (port === 0) return ctx.skip()
+    try {
+      expect(await portAccepts(port)).toBe(true)
+    } finally {
+      await new Promise<void>((r) => v6.close(() => r()))
+    }
+  })
+
   it('sees a port nobody listens on as free and not accepting', async () => {
     const port = await listen()
     await new Promise<void>((r) => server!.close(() => r()))

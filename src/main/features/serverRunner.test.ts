@@ -13,6 +13,7 @@ class FakePool implements RunnerTerminals {
   created: CreateTerminalRequest[] = []
   output = new Map<string, string>()
   refuse: string | null = null
+  closeGate: Promise<void> | null = null
   private listeners: ((list: TerminalInfo[]) => void)[] = []
   create(request: CreateTerminalRequest): CreateTerminalResult {
     this.created.push(request)
@@ -28,6 +29,7 @@ class FakePool implements RunnerTerminals {
     this.emit()
   }
   async close(id: string): Promise<void> {
+    await this.closeGate
     this.terminals.delete(id)
     this.emit()
   }
@@ -201,6 +203,22 @@ describe('server runner', () => {
     await r.start('a')
     expect(pool.created.at(-1)!.env).toMatchObject({ PORT: '4101' })
     expect(pool.created.at(-2)!.env).toMatchObject({ PORT: '4100' })
+  })
+
+  it('leaves no process behind when Stop comes while the old terminal is still closing', async () => {
+    const r = runner()
+    await r.start('a')
+    await r.stop('a')
+    let open!: () => void
+    pool.closeGate = new Promise((resolve) => (open = resolve))
+    const created = pool.created.length
+    const again = r.start('a')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await r.stop('a')
+    open()
+    await again
+    expect(pool.created).toHaveLength(created)
+    expect(r.current('a').servers.map((s) => s.status)).toEqual(['stopped', 'stopped'])
   })
 
   it('gives two features started at once different ports', async () => {

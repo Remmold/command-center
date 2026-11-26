@@ -42,6 +42,8 @@ interface Tracked {
   view: FeatureServerView
   /** Bumped by every launch, so a wait that belongs to an earlier launch gives up. */
   run: number
+  /** False while an older terminal under the same id is still being closed; its exit is not this launch's. */
+  launched: boolean
 }
 
 const terminalId = (feature: string, server: string): string => `feature-server:${feature}:${server}`
@@ -111,7 +113,7 @@ export function createServerRunner(deps: RunnerDeps) {
   deps.terminals.onChanged((list) => {
     for (const [name, servers] of tracked) {
       for (const [server, t] of servers) {
-        if (t.view.status !== 'starting' && t.view.status !== 'ready') continue
+        if (!t.launched || (t.view.status !== 'starting' && t.view.status !== 'ready')) continue
         const info = list.find((i) => i.id === t.view.terminalId)
         if (info?.status !== 'exited') continue
         const code = info.exitCode === undefined ? '' : ` (exit ${info.exitCode})`
@@ -126,9 +128,12 @@ export function createServerRunner(deps: RunnerDeps) {
     const servers = tracked.get(feature.name) ?? new Map<string, Tracked>()
     tracked.set(feature.name, servers)
     const run = (servers.get(server.name)?.run ?? 0) + 1
-    servers.set(server.name, { run, view: { name: server.name, port, status: 'starting', terminalId: id } })
+    servers.set(server.name, { run, launched: false, view: { name: server.name, port, status: 'starting', terminalId: id } })
     changed(feature.name)
     if (deps.terminals.list().some((t) => t.id === id)) await deps.terminals.close(id)
+    // A Stop (or a newer launch) while the old terminal closed must not be followed by a process nobody tracks.
+    const mine = tracked.get(feature.name)?.get(server.name)
+    if (mine?.run !== run || mine.view.status !== 'starting') return
     const made = deps.terminals.create({
       id,
       workspaceId: feature.workspaceId,
@@ -138,6 +143,7 @@ export function createServerRunner(deps: RunnerDeps) {
       command: serverCommand(server.command, port),
       env: { ...account, PORT: String(port) }
     })
+    mine.launched = true
     if (!made.ok) {
       fail(feature.name, server.name, made.error ?? 'It could not start.')
       return

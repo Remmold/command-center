@@ -5,8 +5,7 @@ export const PORT_RANGE = { from: 4100, to: 4999 } as const
 
 export type PortsResult = { ok: true; ports: number[] } | { ok: false; error: string }
 
-/** Whether something accepts a connection on the port: the ready check, and one of the two "taken" tests. */
-export function portAccepts(port: number, host = '127.0.0.1', timeoutMs = 400): Promise<boolean> {
+function connects(port: number, host: string, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = connect({ port, host })
     const done = (accepted: boolean): void => {
@@ -17,6 +16,11 @@ export function portAccepts(port: number, host = '127.0.0.1', timeoutMs = 400): 
     socket.once('connect', () => done(true))
     socket.once('error', () => done(false))
   })
+}
+
+/** Whether something accepts a connection on the port: the ready check, and one of the two "taken" tests. A server bound to localhost may hold only IPv6. */
+export async function portAccepts(port: number, timeoutMs = 400): Promise<boolean> {
+  return (await connects(port, '127.0.0.1', timeoutMs)) || (await connects(port, '::1', timeoutMs))
 }
 
 function canBind(port: number, host?: string): Promise<boolean> {
