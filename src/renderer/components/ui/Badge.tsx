@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import type { AccountColor } from '../../state/accountColors'
+import { ACCENT_TAG } from './accountAccent'
 
 type Tone = 'neutral' | 'warning' | 'waiting' | 'muted' | 'quiet' | 'quiet-warning'
 
@@ -22,11 +24,13 @@ interface Props {
   tooltip?: string
   /** Names the badge for screen readers where its text means nothing alone, e.g. a bare count inside a row. */
   label?: string
+  /** Tints a pill in an account's accent, e.g. the account a guest session runs on. */
+  accent?: AccountColor | null
 }
 
-export function Badge({ children, tone = 'neutral', tooltip, label }: Props) {
+export function Badge({ children, tone = 'neutral', tooltip, label, accent }: Props) {
   return (
-    <span title={tooltip} role={label ? 'img' : undefined} aria-label={label} className={`px-1.5 py-px text-[10px] leading-4 ${TONES[tone]}`}>
+    <span title={tooltip} role={label ? 'img' : undefined} aria-label={label} className={`px-1.5 py-px text-[10px] leading-4 ${accent ? `${PILL} ${ACCENT_TAG[accent]}` : TONES[tone]}`}>
       {children}
     </span>
   )

@@ -3,7 +3,7 @@ import { accountOf, accountRank, type Account } from './accounts'
 import { repoDisplayName, type RepoIdentityViews } from '../../shared/repoIdentity'
 import { UNGROUPED, type SidebarLayout } from '../../shared/sidebarGroups'
 import { OBSERVED_STATUS_LABEL, type ObservedSession, type ObservedStatus, type SessionStatus, type SessionStatusEntry, type Workspace } from '../../shared/types'
-import { EMPTY_ACCOUNT, groupOrder, type AccountChats, type SeedRepo } from './sidebarGroups'
+import { chatHosts, EMPTY_ACCOUNT, groupOrder, type AccountChats, type SeedRepo } from './sidebarGroups'
 
 export interface HostedSessionInput {
   paneId: string
@@ -249,11 +249,8 @@ function listGroup(id: string, name: string, folded: boolean, ids: readonly stri
  * them; a row not placed yet shows at the top of Ungrouped. Ungrouped shows only with chats in it; while searching, so does every group.
  */
 export function accountSections(groups: readonly SessionGroup[], accounts: readonly Account[], layout: SidebarLayout, searching = false): AccountSection[] {
-  const host = new Map<string, string>()
-  for (const { profileId } of accounts) {
-    const a = layout.accounts[profileId]
-    if (a) for (const id of [...a.ungrouped, ...a.groups.flatMap((g) => g.chats)]) if (!host.has(id)) host.set(id, profileId)
-  }
+  const owner = new Map(groups.flatMap((g) => g.rows).map((r) => [r.placeId, rowAccount(r, accounts).profileId]))
+  const host = chatHosts(new Map(accounts.flatMap((a) => (layout.accounts[a.profileId] ? [[a.profileId, layout.accounts[a.profileId]] as const] : []))), (id) => owner.get(id))
   const sectionOf = (row: SessionRow) => host.get(row.placeId) ?? rowAccount(row, accounts).profileId
   return accountRows(groups, accounts, sectionOf).map(({ account, rows }) => {
     const a = layout.accounts[account.profileId] ?? EMPTY_ACCOUNT
@@ -276,14 +273,14 @@ export function guestAccount(row: SessionRow, section: Pick<AccountSection, 'acc
   return own.profileId === section.account.profileId ? null : own
 }
 
-export interface MoveTargets {
+export interface MoveTarget {
   account: Account
   /** Its own groups and Ungrouped, in their order. */
   groups: { id: string; name: string }[]
 }
 
 /** Where "Move to group" can send a chat: every account's own groups and Ungrouped, the account it sits under first. */
-export function moveTargets(layout: SidebarLayout, accounts: readonly Account[], current: string): MoveTargets[] {
+export function moveTargets(layout: SidebarLayout, accounts: readonly Account[], current: string): MoveTarget[] {
   const ordered = [...accounts.filter((a) => a.profileId === current), ...accounts.filter((a) => a.profileId !== current)]
   return ordered.map((account) => {
     const a = layout.accounts[account.profileId] ?? EMPTY_ACCOUNT

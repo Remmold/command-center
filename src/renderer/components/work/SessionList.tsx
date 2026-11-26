@@ -17,14 +17,13 @@ import {
   type AccountSection,
   type ListFold,
   type ListGroup,
-  type MoveTargets,
+  type MoveTarget,
   type SessionRow
 } from '../../state/sessionList'
 import { UNGROUPED } from '../../../shared/sidebarGroups'
 import { createGroup, deleteGroup, groupOf, moveChat, moveChatStep, moveChatToNextGroup, moveGroupBeside, renameGroup, setFolded } from '../../state/sidebarGroups'
 import { sectionTitle, type Account } from '../../state/accounts'
 import { useAccounts } from '../../state/useAccounts'
-import { ACCENT_TAG } from '../ui/accountAccent'
 import { headerUsage, type HeaderTone } from '../../state/usageModel'
 import { useChatPairStore } from '../../state/chatPairStore'
 import { usePaneProcesses, useProcessServers } from '../../state/backgroundProcessesStore'
@@ -348,7 +347,7 @@ interface SessionRowsProps {
   group: ListGroup
   section: AccountSection
   /** Every account's groups, for "Move to group". */
-  targets: MoveTargets[]
+  targets: MoveTarget[]
   accounts: readonly Account[]
   pair: ChatPair
   renaming: string | null
@@ -439,7 +438,7 @@ interface RowPlace {
   /** The chat shown below it in its group. */
   next: string | null
   section: AccountSection
-  targets: MoveTargets[]
+  targets: MoveTarget[]
 }
 
 /** Alt+↑/↓ steps the row within its group, Alt+Shift+↑/↓ moves it to the next or previous group, opening that group. */
@@ -486,7 +485,7 @@ function SessionListRow({ row, place, active, guest, onRename, onNewGroup }: Ses
     close()
     fn()
   }
-  const moveTo = (account: string, to: string) => changeLayout((layout) => moveChat(layout, account, row.placeId, { group: to, before: null }))
+  const moveTo = (to: MoveTarget['account'], group: string) => changeLayout((layout) => moveChat(layout, to.profileId, row.placeId, { group, before: null }))
   const onContextMenu = (e: MouseEvent) => {
     e.preventDefault()
     menu.show()
@@ -541,7 +540,7 @@ function SessionListRow({ row, place, active, guest, onRename, onNewGroup }: Ses
                         key={t.id}
                         label={t.name}
                         disabled={account.profileId === profileId && t.id === group.id}
-                        onClick={act(() => moveTo(account.profileId, t.id))}
+                        onClick={act(() => moveTo(account, t.id))}
                       />
                     ))}
                   </Fragment>
@@ -566,12 +565,10 @@ function SessionListRow({ row, place, active, guest, onRename, onNewGroup }: Ses
 
 /** Names the account a guest session runs on, in its colour. */
 function GuestTag({ account }: { account: Account }) {
-  const color = useAccountColor(account.profileId)
-  const tone = color ? ACCENT_TAG[color] : 'bg-list-selected text-muted'
   return (
-    <span title={`Runs on ${sectionTitle(account)}`} className={`shrink-0 whitespace-nowrap rounded px-1 text-[10px] leading-4 ${tone}`}>
+    <Badge tone="muted" accent={useAccountColor(account.profileId)} tooltip={`Runs on ${sectionTitle(account)}`}>
       {account.name}
-    </span>
+    </Badge>
   )
 }
 

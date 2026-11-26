@@ -4,6 +4,7 @@ import {
   createGroup,
   deleteGroup,
   groupOf,
+  hostOf,
   moveChat,
   moveChatStep,
   moveChatToNextGroup,
@@ -175,11 +176,13 @@ describe('placing guest chats', () => {
     expect(shape(placed, 'work')).toEqual(['Review: session:v', `${UNGROUPED}: `])
   })
 
-  it('ignores places under an account that is gone, so its chats show under their own', () => {
-    const layout = guest()
-    const placed = placeChats(layout, [{ profileId: 'home', chats: [{ id: 'pane:a' }, { id: 'pane:b', session: 's-b' }] }], TODAY)
+  it('ignores places under an account that is gone, so its chats show under their own, and drops them there to keep one place', () => {
+    const placed = placeChats(guest(), [{ profileId: 'home', chats: [{ id: 'pane:a' }, { id: 'pane:b', session: 's-b' }] }], TODAY)
     expect(shape(placed)).toEqual(['Today: pane:a', `${UNGROUPED}: pane:b`])
-    expect(placed.accounts.work).toBe(layout.accounts.work)
+    expect(shape(placed, 'work')).toEqual(['Review: session:v', `${UNGROUPED}: `])
+    expect(placed.accounts.work.known['pane:b']).toBeUndefined()
+    expect(hostOf(placed, 'pane:b')).toBe('home')
+    expect(placeChats(placed, [{ profileId: 'home', chats: [{ id: 'pane:a' }, { id: 'pane:b', session: 's-b' }] }], TODAY)).toBe(placed)
   })
 })
 

@@ -54,21 +54,21 @@ function placedIds(a: AccountLayout): Set<string> {
   return new Set([...a.ungrouped, ...a.groups.flatMap((g) => g.chats)])
 }
 
-/** Each chat id's account, one per id: an id saved under two keeps its own account's place, else the first. */
-function hostsOf(work: ReadonlyMap<string, AccountLayout>, owner: ReadonlyMap<string, string>): Map<string, string> {
+/** The account each chat id is placed under, one per id: an id saved under two keeps its own account's place, else the first. */
+export function chatHosts(layouts: ReadonlyMap<string, AccountLayout>, ownerOf: (chat: string) => string | undefined): Map<string, string> {
   const host = new Map<string, string>()
-  for (const [profileId, a] of work) for (const id of placedIds(a)) if (!host.has(id) || owner.get(id) === profileId) host.set(id, profileId)
+  for (const [profileId, a] of layouts) for (const id of placedIds(a)) if (!host.has(id) || ownerOf(id) === profileId) host.set(id, profileId)
   return host
 }
 
 /** The closed chat whose place a chat takes, own account first: the VS Code row it was taken over from, or an earlier pane of the same session. */
-function earlierPlace(chat: PlacedChat, accounts: readonly string[], work: ReadonlyMap<string, AccountLayout>, host: ReadonlyMap<string, string>, open: ReadonlyMap<string, PlacedChat>): string | null {
+function earlierPlace(chat: PlacedChat, accounts: readonly string[], draft: ReadonlyMap<string, AccountLayout>, host: ReadonlyMap<string, string>, open: ReadonlyMap<string, PlacedChat>): string | null {
   if (!chat.session) return null
   const free = (id: string, profileId?: string) => !open.has(id) && host.has(id) && (profileId === undefined || host.get(id) === profileId)
   const direct = `session:${chat.session}`
   if (free(direct)) return direct
   for (const profileId of accounts) {
-    const { known } = work.get(profileId)!
+    const { known } = draft.get(profileId)!
     const found = Object.keys(known).find((id) => known[id].session === chat.session && free(id, profileId))
     if (found) return found
   }
@@ -91,7 +91,8 @@ function settleAccount(a: AccountLayout, fresh: readonly string[], open: Readonl
 /**
  * Places every chat in the list, one place per chat across all accounts: a chat placed under any account stays there,
  * new ones go to the top of their own account's Ungrouped, resumed and taken-over ones where they were; prunes long-closed ones.
- * `accounts` are every account there is; places under one not listed are ignored and left as they are. Same layout back when nothing changed.
+ * `accounts` are every account there is; places under one not listed are ignored, and dropped there once the chat is placed under a listed one.
+ * Same layout back when nothing changed.
  */
 export function placeChats(layout: SidebarLayout, accounts: readonly AccountChats[], today: number): SidebarLayout {
   const live = accounts.map((a) => a.profileId)
@@ -103,26 +104,30 @@ export function placeChats(layout: SidebarLayout, accounts: readonly AccountChat
       owner.set(chat.id, profileId)
     }
   }
-  const work = new Map(live.map((p) => [p, layout.accounts[p] ?? EMPTY_ACCOUNT]))
-  const host = hostsOf(work, owner)
-  for (const [p, a] of work) if ([...placedIds(a)].some((id) => host.get(id) !== p)) work.set(p, mapChats(a, (list) => list.filter((id) => host.get(id) === p)))
+  const draft = new Map(live.map((p) => [p, layout.accounts[p] ?? EMPTY_ACCOUNT]))
+  const host = chatHosts(draft, (id) => owner.get(id))
+  for (const [p, a] of draft) if ([...placedIds(a)].some((id) => host.get(id) !== p)) draft.set(p, mapChats(a, (list) => list.filter((id) => host.get(id) === p)))
   const fresh = new Map<string, string[]>(live.map((p) => [p, []]))
   for (const [id, chat] of open) {
     if (host.has(id)) continue
     const own = owner.get(id)!
-    const earlier = earlierPlace(chat, [own, ...live.filter((p) => p !== own)], work, host, open)
+    const earlier = earlierPlace(chat, [own, ...live.filter((p) => p !== own)], draft, host, open)
     const at = earlier ? host.get(earlier)! : own
     if (earlier) {
-      work.set(at, mapChats(work.get(at)!, (list) => list.map((c) => (c === earlier ? id : c))))
+      draft.set(at, mapChats(draft.get(at)!, (list) => list.map((c) => (c === earlier ? id : c))))
       host.delete(earlier)
     } else fresh.get(own)!.push(id)
     host.set(id, at)
   }
   let next = layout
-  for (const [p, a] of work) {
+  const put = (p: string, after: AccountLayout) => {
     const before = layout.accounts[p]
-    const after = settleAccount(a, fresh.get(p)!, open, today)
     if (before ? !sameAccount(after, before) : !sameAccount(after, EMPTY_ACCOUNT)) next = { accounts: { ...next.accounts, [p]: after } }
+  }
+  for (const [p, a] of draft) put(p, settleAccount(a, fresh.get(p)!, open, today))
+  for (const [p, a] of Object.entries(layout.accounts)) {
+    if (draft.has(p) || ![...placedIds(a)].some((id) => host.has(id))) continue
+    put(p, { ...mapChats(a, (list) => list.filter((id) => !host.has(id))), known: Object.fromEntries(Object.entries(a.known).filter(([id]) => !host.has(id))) })
   }
   return next
 }

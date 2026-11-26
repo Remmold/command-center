@@ -1,3 +1,3 @@
-Done: guest sessions built and committed; build, pnpm quick, e2e sessions/accounts/app green; real layout (30 chats, 2 accounts) loads one place each, none lost.
-Next: code review since 259573d, fixes in a follow-up commit, ticket resolved.
-Open reds: none.
+Done: ticket 04 resolved (8695af8) plus review fixes: one shared host resolver, removed-account copies dropped, guest tag on Badge; quick, e2e sessions/accounts/app and real-layout check green.
+Next: none for 04; ticket 02 is next in the feature.
+Open reds: none (subagentWatch.test.ts flaked once in the pre-commit hook, unrelated, passes alone).

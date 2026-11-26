@@ -4,7 +4,7 @@
 
 **Blocked by:** 03
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] `moveChat` moves a chat id from wherever it is placed (any account's lists) into a target group of any account. The layout becomes the single source of truth: an id sits in at most one list across all accounts.
 - [x] `placeChats` / `placeAccount` treat an id placed under any account as placed, so they don't add it again as unplaced under its own account. The 30-day prune and the "known/seen" bookkeeping must work on guest ids too. A guest that closes and resumes, or is taken over, comes back to its guest spot.
