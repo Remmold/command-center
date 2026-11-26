@@ -1,5 +1,5 @@
 import { useEffect, type ComponentType } from 'react'
-import { AppWindow, FolderTree, KanbanSquare, Settings2, UserRound, X, type LucideIcon } from 'lucide-react'
+import { AppWindow, FolderTree, Bot, KanbanSquare, Settings2, UserRound, X, type LucideIcon } from 'lucide-react'
 import { useViewStore, type SettingsSection } from '../../state/viewStore'
 import { SETTINGS_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { AppsDashboard } from '../AppsDashboard'
@@ -10,6 +10,7 @@ import { SectionHeader } from '../ui/SectionHeader'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { AccountsSettings } from './AccountsSettings'
 import { BoardSettings } from './BoardSettings'
+import { ClaudeCodeSettings } from './ClaudeCodeSettings'
 import { GeneralSettings } from './GeneralSettings'
 import { WorkspacesSettings } from './WorkspacesSettings'
 
@@ -23,6 +24,7 @@ interface SectionEntry {
 const SECTIONS: SectionEntry[] = [
   { id: 'workspaces', label: 'Workspaces', icon: FolderTree, body: WorkspacesSettings },
   { id: 'accounts', label: 'Accounts', icon: UserRound, body: AccountsSettings },
+  { id: 'claude-code', label: 'Claude Code', icon: Bot, body: ClaudeCodeSettings },
   { id: 'apps', label: 'Apps', icon: AppWindow, body: AppsDashboard },
   { id: 'board', label: 'Board', icon: KanbanSquare, body: BoardSettings },
   { id: 'general', label: 'General', icon: Settings2, body: GeneralSettings }

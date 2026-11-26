@@ -66,6 +66,8 @@ export const IPC = {
   CLAUDE_READ_DEFAULTS: 'claude:readDefaults',
   CLAUDE_DEFAULT_PERMISSION_MODE: 'claude:defaultPermissionMode',
   CLAUDE_SAVE_DEFAULTS: 'claude:saveDefaults',
+  CLAUDE_SETTINGS_READ: 'claudeSettings:read',
+  CLAUDE_SETTINGS_SAVE: 'claudeSettings:save',
   CLAUDE_LIST_LOCAL_SESSIONS: 'claude:listLocalSessions',
   CLAUDE_RENAME_SESSION: 'claude:renameSession',
   SUBAGENTS_WATCH: 'subagents:watch',

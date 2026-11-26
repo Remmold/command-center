@@ -113,6 +113,10 @@ const api: RendererApi = {
     readFile: (workspaceId: string, path: string) => ipcRenderer.invoke(IPC.CONTEXT_READ_FILE, workspaceId, path),
     writeFile: (workspaceId: string, path: string, content: string) => ipcRenderer.invoke(IPC.CONTEXT_WRITE_FILE, workspaceId, path, content)
   },
+  claudeSettings: {
+    read: (profileId, workspaceId) => ipcRenderer.invoke(IPC.CLAUDE_SETTINGS_READ, profileId, workspaceId),
+    save: (path, base, patch) => ipcRenderer.invoke(IPC.CLAUDE_SETTINGS_SAVE, path, base, patch)
+  },
   driftChecks: {
     show: (workspaceId, fixing, live) => ipcRenderer.invoke(IPC.DRIFT_CHECKS_SHOW, workspaceId, fixing, live),
     release: () => ipcRenderer.invoke(IPC.DRIFT_CHECKS_RELEASE),

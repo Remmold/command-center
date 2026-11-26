@@ -11,6 +11,7 @@ import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
+import type { ClaudeSettingsRead, SettingsObject, SettingsPatch, SettingsSaveResult } from './claudeSettings'
 import type { DriftChecksView, FindingsRun, SkeletonResult } from './findings'
 import type { BackgroundProcess } from './backgroundProcesses'
 export type { AppView }
@@ -481,6 +482,12 @@ export interface RendererApi {
     readFile: (workspaceId: string, path: string) => Promise<ContextFileText>
     /** Guarded: only what the latest report listed and didn't mark read-only, or a missing creatable file; a `.json` file must parse. */
     writeFile: (workspaceId: string, path: string, content: string) => Promise<ContextFileResult>
+  }
+  claudeSettings: {
+    /** The account's settings.json and, with a workspace, its repo and local settings files, read from disk. */
+    read: (profileId: string, workspaceId: string | null) => Promise<ClaudeSettingsRead>
+    /** Writes the patch onto the file as it is on disk (ADR 0006); only account and workspace settings files are allowed. */
+    save: (path: string, base: SettingsObject, patch: SettingsPatch) => Promise<SettingsSaveResult>
   }
   driftChecks: {
     /**

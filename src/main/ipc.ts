@@ -35,6 +35,8 @@ import { contextReport, readListedFile, startTotals, writeListedFile } from './c
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
+import { readSettingsFile, saveSettingsFile, settingsTargetProblem } from './claude/settingsFile'
+import { isSettingsObject, isSettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../shared/claudeSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
 import { backgroundProcessTracker } from './sessions/backgroundProcesses'
@@ -395,6 +397,26 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     return readDefaultMode(join(profile.configDir, 'settings.json'))
   })
   ipcMain.handle(IPC.CLAUDE_SAVE_DEFAULTS, (_e, patch: ModelDefaultsPatch) => saveModelDefaults(userSettingsFile(), patch))
+  const layerFile = async (layer: SettingsLayer, path: string): Promise<SettingsLayerFile> => ({ layer, path, snapshot: await readSettingsFile(path) })
+  ipcMain.handle(IPC.CLAUDE_SETTINGS_READ, async (_e, profileId: string, workspaceId: string | null): Promise<ClaudeSettingsRead> => {
+    const profile = await profiles.get(profileId)
+    const workspace = workspaceId ? (await workspaces.list()).find((w) => w.id === workspaceId) : undefined
+    const [account, repo, local] = await Promise.all([
+      layerFile('account', join(profile.configDir, 'settings.json')),
+      workspace ? layerFile('repo', join(workspace.path, '.claude', 'settings.json')) : null,
+      workspace ? layerFile('local', join(workspace.path, '.claude', 'settings.local.json')) : null
+    ])
+    return { account: { ...account, profileId: profile.id }, repo, local }
+  })
+  ipcMain.handle(IPC.CLAUDE_SETTINGS_SAVE, async (_e, path: unknown, base: unknown, patch: unknown) => {
+    if (typeof path !== 'string' || !isSettingsObject(base) || !isSettingsPatch(patch)) return { ok: false, error: 'malformed save' }
+    const problem = await settingsTargetProblem(path, {
+      configDirs: (await profiles.list()).map((p) => p.configDir),
+      workspacePaths: (await workspaces.list()).map((w) => w.path)
+    })
+    if (problem) return { ok: false, error: problem }
+    return saveSettingsFile(path, base, patch)
+  })
   ipcMain.on(
     IPC.CLAUDE_SEND,
     (
