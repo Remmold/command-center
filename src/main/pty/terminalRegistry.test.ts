@@ -144,6 +144,15 @@ describe('TerminalRegistry', () => {
     expect(tail.endsWith('aaaEND')).toBe(true)
   })
 
+  it('counts the tail in bytes and never starts it mid-character', () => {
+    create({ id: 't1' })
+    for (let i = 0; i < 200; i++) last().emit('é'.repeat(1000))
+    const tail = registry.attach('t1')?.tail ?? ''
+    expect(Buffer.byteLength(tail)).toBeLessThanOrEqual(256 * 1024)
+    expect(tail.length).toBe(128 * 1024)
+    expect(tail.startsWith('é')).toBe(true)
+  })
+
   it('writes input to the running pty', () => {
     create({ id: 't1' })
     registry.write('t1', 'ls\r')

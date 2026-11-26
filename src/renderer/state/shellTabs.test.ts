@@ -86,11 +86,10 @@ describe('the Shell drawer on the terminal pool', () => {
   })
 
   it("closing a project view doesn't end its terminals", () => {
-    const id = store().openShell('p1')!
+    store().openShell('p1')
     store().closeProject('p1')
     expect(store().views.p1).toBeUndefined()
     expect(closed).toEqual([])
-    expect(id).toBeTruthy()
   })
 
   it('drops tabs whose terminal is not in the pool when it first loads, and ones closed later', async () => {

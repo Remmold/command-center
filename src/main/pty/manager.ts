@@ -74,10 +74,6 @@ export class PtyManager {
     return { ok: true }
   }
 
-  has(paneId: string): boolean {
-    return this.sessions.has(paneId)
-  }
-
   write(paneId: string, data: string): void {
     this.sessions.get(paneId)?.write(data)
   }
@@ -106,10 +102,6 @@ export class PtyManager {
           // already dead
         }
       })
-  }
-
-  killAll(): Promise<void> {
-    return Promise.all(Array.from(this.sessions.keys(), (id) => this.kill(id))).then(() => undefined)
   }
 
   onData(cb: DataCallback): () => void {

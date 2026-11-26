@@ -2,28 +2,36 @@ import { randomUUID } from 'node:crypto'
 import type { CreateTerminalRequest, CreateTerminalResult, TerminalAttachment, TerminalInfo } from '../../shared/types'
 import type { PtyManager } from './manager'
 
-/** How much of a terminal's latest raw output is kept for a view that attaches later. */
+/** How many bytes (UTF-8) of a terminal's latest raw output are kept for a view that attaches later. */
 export const TAIL_LIMIT = 256 * 1024
 
-/** The newest `TAIL_LIMIT` characters of a stream, kept as chunks so appending stays cheap. */
+interface Chunk {
+  text: string
+  bytes: number
+}
+
+/** The newest `TAIL_LIMIT` bytes of a stream, kept as chunks so appending stays cheap. */
 class OutputTail {
-  private chunks: string[] = []
+  private chunks: Chunk[] = []
   private size = 0
 
-  append(data: string): void {
-    this.chunks.push(data)
-    this.size += data.length
-    while (this.chunks.length > 1 && this.size - this.chunks[0].length >= TAIL_LIMIT) {
-      this.size -= this.chunks.shift()!.length
+  append(text: string): void {
+    const bytes = Buffer.byteLength(text)
+    this.chunks.push({ text, bytes })
+    this.size += bytes
+    while (this.chunks.length > 1 && this.size - this.chunks[0].bytes >= TAIL_LIMIT) {
+      this.size -= this.chunks.shift()!.bytes
     }
   }
 
   text(): string {
-    const all = this.chunks.join('')
-    if (all.length <= TAIL_LIMIT) return all
-    this.chunks = [all.slice(-TAIL_LIMIT)]
-    this.size = TAIL_LIMIT
-    return this.chunks[0]
+    const all = this.chunks.map((c) => c.text).join('')
+    if (this.size <= TAIL_LIMIT) return all
+    // A cut inside a multi-byte character decodes to U+FFFD; drop it.
+    const kept = Buffer.from(all).subarray(-TAIL_LIMIT).toString().replace(/^\uFFFD+/, '')
+    this.chunks = [{ text: kept, bytes: Buffer.byteLength(kept) }]
+    this.size = this.chunks[0].bytes
+    return kept
   }
 }
 

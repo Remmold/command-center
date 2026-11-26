@@ -39,6 +39,7 @@ function psEscape(path: string): string {
   return path.replace(/'/g, "''")
 }
 
+/** Quote for a POSIX shell: wraps in single quotes, each ' becoming '\''. */
 function shSingleQuote(text: string): string {
   return `'${text.replace(/'/g, `'\''`)}'`
 }

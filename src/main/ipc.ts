@@ -67,7 +67,7 @@ import { isZoomStep } from '../shared/zoom'
 
 let unsubscribers: Array<() => void> = []
 
-/** The app's one terminal pool; its `runningCount()` feeds the quit confirm. */
+/** The app's one terminal pool (ADR 0006). */
 export const terminals = new TerminalRegistry(createPtyManager())
 
 /** A stuck taskkill must never keep the app from quitting. */
@@ -531,12 +531,12 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   holdQuit(
     app,
     () => {
-      const shells = terminals.closeAll()
+      const terminalsClosed = terminals.closeAll()
       const killed = claudeManager.stopAll()
       claudeManager.setIncomingHandlerFactory(null)
       for (const u of unsubscribers) u()
       unsubscribers = []
-      return Promise.all([shells, killed]).then(() => undefined)
+      return Promise.all([terminalsClosed, killed]).then(() => undefined)
     },
     QUIT_KILL_LIMIT_MS
   )
