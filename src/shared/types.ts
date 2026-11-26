@@ -107,15 +107,50 @@ export interface ClaudeStartResult extends SpawnResult {
   profileId?: string
 }
 
-export interface PtyDataEvent {
-  paneId: string
-  data: string
+/** A shell, or one command, the app runs for Andreas in a pty; kept by main (ADR 0006). */
+export interface TerminalInfo {
+  id: string
+  workspaceId: string
+  cwd: string
+  label: string
+  /** Run through the shell's run-a-command form; without one it is the plain shell. */
+  command?: string
+  kind: PtyKind
+  /** Extra variables on top of the app's cleaned environment, e.g. an account's. */
+  env?: Record<string, string>
+  status: 'running' | 'exited'
+  exitCode?: number
+  startedAt: number
+  endedAt?: number
 }
 
-export interface PtyExitEvent {
-  paneId: string
-  exitCode: number
-  signal: number | null
+export interface CreateTerminalRequest {
+  /** Chosen by the caller so a drawer tab can name it before the reply; one is made otherwise. */
+  id?: string
+  workspaceId: string
+  cwd: string
+  kind: PtyKind
+  /** Defaults to the command, else the shell's name numbered within the workspace. */
+  label?: string
+  command?: string
+  env?: Record<string, string>
+}
+
+export interface CreateTerminalResult {
+  ok: boolean
+  error?: string
+  terminal?: TerminalInfo
+}
+
+/** What a view gets on attaching: the record and its recent output, before live data follows. */
+export interface TerminalAttachment {
+  terminal: TerminalInfo
+  tail: string
+}
+
+export interface TerminalDataEvent {
+  id: string
+  data: string
 }
 
 // Claude stream-json events. Only the fields we care about — the JSON
@@ -513,19 +548,20 @@ export interface RendererApi {
     onOutput: (cb: (event: AppOutputEvent) => void) => () => void
     onExit: (cb: (event: AppExitEvent) => void) => () => void
   }
-  pty: {
-    /** `env` adds variables on top of the app's cleaned environment. */
-    spawn: (
-      paneId: string,
-      kind: PtyKind,
-      cwd: string,
-      env?: Record<string, string>
-    ) => Promise<SpawnResult>
-    write: (paneId: string, data: string) => void
-    resize: (paneId: string, cols: number, rows: number) => void
-    kill: (paneId: string) => void
-    onData: (cb: (event: PtyDataEvent) => void) => () => void
-    onExit: (cb: (event: PtyExitEvent) => void) => () => void
+  /** The terminal pool in main (ADR 0006); views attach to replay a terminal's tail, then follow `onData`. */
+  terminals: {
+    list: () => Promise<TerminalInfo[]>
+    create: (request: CreateTerminalRequest) => Promise<CreateTerminalResult>
+    /** Null for an id the pool doesn't have. */
+    attach: (id: string) => Promise<TerminalAttachment | null>
+    write: (id: string, data: string) => void
+    resize: (id: string, cols: number, rows: number) => void
+    rename: (id: string, label: string) => void
+    restart: (id: string) => Promise<CreateTerminalResult>
+    /** Kills the terminal's process tree and removes it from the pool. */
+    close: (id: string) => void
+    onChanged: (cb: (list: TerminalInfo[]) => void) => () => void
+    onData: (cb: (event: TerminalDataEvent) => void) => () => void
   }
   video: {
     /** The file's path on disk, or '' for a pasted file that has none. */

@@ -5,7 +5,7 @@ import { useChatPairStore } from './chatPairStore'
 import { useChatItemsStore } from './chatItemsStore'
 import type { ChatItem } from '../components/chat/types'
 import { chatOnScreen, type ShellOptions } from './projectViewLayout'
-import { useProjectViewsStore, type ProjectView, type ShellTab } from './projectViewsStore'
+import { useProjectViewsStore, type ProjectView } from './projectViewsStore'
 import { useViewStore } from './viewStore'
 import { useObservedStore } from './observedStore'
 import { useRecentProjectsStore } from './recentProjectsStore'
@@ -238,11 +238,11 @@ export function openWorkspace(workspace: Workspace): void {
   if (!paneId || !openSession(paneId, { focus: false })) startSession(workspace)
 }
 
-/** Opens a new shell in the workspace's shell drawer, bringing the workspace on screen first. */
+/** Opens a new terminal in the workspace's Shell drawer, bringing the workspace on screen first; returns its id. */
 export function openShell(
   workspace: Workspace,
   options?: ShellOptions
-): ShellTab | null {
+): string | null {
   openWorkspace(workspace)
   return useProjectViewsStore.getState().openShell(workspace.id, options)
 }

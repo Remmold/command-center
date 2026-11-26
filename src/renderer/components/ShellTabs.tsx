@@ -3,7 +3,8 @@ import { ChevronDown, Plus, SplitSquareVertical, Terminal, Trash2 } from 'lucide
 import { Terminal as PtyTerminal } from './Terminal'
 import { useProjectViewsStore } from '../state/projectViewsStore'
 import type { ProjectView } from '../state/projectViewsStore'
-import type { PtyKind } from '../../shared/types'
+import { useTerminalsStore } from '../state/terminalsStore'
+import type { PtyKind, TerminalInfo } from '../../shared/types'
 
 interface Props {
   view: ProjectView
@@ -40,10 +41,16 @@ export function ShellTabs({ view }: Props) {
   const closeShellTab = useProjectViewsStore((s) => s.closeShellTab)
   const setActiveShellTab = useProjectViewsStore((s) => s.setActiveShellTab)
 
+  const byId = useTerminalsStore((s) => s.byId)
+
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  const activeTab = view.shellTabs.find((t) => t.id === view.activeShellTabId) ?? null
-  const showSidebar = view.shellTabs.length > 1
+  // A tab whose terminal main hasn't reported yet shows as a plain pwsh until it does.
+  const tabs: TerminalInfo[] = view.shellTabs.map(
+    (id) => byId[id] ?? { id, workspaceId: view.projectId, cwd: view.projectPath, label: '', kind: 'pwsh', status: 'running', startedAt: 0 }
+  )
+  const activeTab = tabs.find((t) => t.id === view.activeShellTabId) ?? null
+  const showSidebar = tabs.length > 1
 
   const handleAddDefault = () => {
     addShellTab(view.projectId, 'pwsh')
@@ -55,13 +62,8 @@ export function ShellTabs({ view }: Props) {
     setPickerOpen(false)
   }
 
-  const handleKillAll = () => {
-    if (view.shellTabs.length === 0) return
-    const ok = confirm(`Kill all ${view.shellTabs.length} shell(s)?`)
-    if (!ok) return
-    for (const tab of view.shellTabs) {
-      closeShellTab(view.projectId, tab.id)
-    }
+  const handleCloseAll = () => {
+    for (const tab of tabs) closeShellTab(view.projectId, tab.id)
   }
 
   return (
@@ -138,11 +140,11 @@ export function ShellTabs({ view }: Props) {
               <SplitSquareVertical size={13} strokeWidth={2} />
             </button>
           )}
-          {view.shellTabs.length > 0 && (
+          {tabs.length > 0 && (
             <button
-              onClick={handleKillAll}
+              onClick={handleCloseAll}
               className="rounded p-1 text-muted hover:bg-list-hover hover:text-red-400"
-              title="kill all shells"
+              title="close all tabs (the terminals keep running)"
             >
               <Trash2 size={13} strokeWidth={2} />
             </button>
@@ -153,23 +155,18 @@ export function ShellTabs({ view }: Props) {
       {/* body — terminal content (left) + shell list (right, when >1) */}
       <div className="flex min-h-0 flex-1">
         <div className="relative min-h-0 flex-1 bg-editor">
-          {view.shellTabs.map((tab) => {
+          {tabs.map((tab) => {
             const active = tab.id === view.activeShellTabId
             return (
               <div
                 key={tab.id}
                 className={'absolute inset-0 p-1 ' + (active ? '' : 'invisible')}
               >
-                <PtyTerminal
-                  paneId={tab.id}
-                  kind={tab.kind as PtyKind}
-                  cwd={view.projectPath}
-                  env={tab.env}
-                />
+                <PtyTerminal terminalId={tab.id} />
               </div>
             )
           })}
-          {view.shellTabs.length === 0 && (
+          {tabs.length === 0 && (
             <div className="flex h-full items-center justify-center text-xs text-faint">
               click + to spawn a terminal
             </div>
@@ -178,7 +175,7 @@ export function ShellTabs({ view }: Props) {
 
         {showSidebar && (
           <aside className="scrollbar-thin w-48 shrink-0 overflow-y-auto border-l border-subtle bg-sidebar">
-            {view.shellTabs.map((tab) => {
+            {tabs.map((tab) => {
               const active = tab.id === view.activeShellTabId
               return (
                 <div
@@ -216,8 +213,8 @@ export function ShellTabs({ view }: Props) {
                         closeShellTab(view.projectId, tab.id)
                       }}
                       className="rounded p-0.5 text-muted hover:bg-list-hover hover:text-red-400"
-                      title="shut down terminal"
-                      aria-label={`shut down ${tab.label}`}
+                      title="close tab (the terminal keeps running)"
+                      aria-label={`close ${tab.label}`}
                     >
                       <Trash2 size={11} strokeWidth={2.25} />
                     </button>

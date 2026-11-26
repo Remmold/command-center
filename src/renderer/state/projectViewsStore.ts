@@ -4,6 +4,7 @@ import { DEFAULT_PROFILE_ID, type PtyKind, type Workspace } from '../../shared/t
 import { useChatItemsStore } from './chatItemsStore'
 import {
   LAYOUT_VERSION,
+  dropShellTabs,
   migrateLayout,
   openShellTab,
   persistableView,
@@ -14,6 +15,7 @@ import { migratePermissionModes, unsetStoreDefault, type PermissionMode, type Sa
 import { migrateModelChoices, type SavedModelChoices } from './modelPicker'
 import { startingChoiceOn } from './modelStore'
 import { useWorkspacesStore } from './workspacesStore'
+import { createdInThisWindow, useTerminalsStore } from './terminalsStore'
 import { ATTACHED_MARKER } from '../components/chat/promptHistory'
 import {
   NEW_SESSION_TITLE,
@@ -23,7 +25,7 @@ import {
   titleAfterRename,
   type SessionTitle
 } from './sessionTitle'
-import type { LocalSessionInfo } from '../../shared/types'
+import type { LocalSessionInfo, TerminalInfo } from '../../shared/types'
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku' | string
 
@@ -40,13 +42,6 @@ export interface ClaudeChatSession extends SessionTitle {
   addDirs?: string[]
   /** session_id reported by claude in stream-json events; used for --resume */
   claudeSessionId?: string
-}
-
-export interface ShellTab {
-  id: string
-  label: string
-  kind: PtyKind
-  env?: Record<string, string>
 }
 
 export interface OpenFile {
@@ -74,7 +69,8 @@ export interface ProjectView {
   projectPath: string
   claudeSessions: ClaudeChatSession[]
   activeClaudeSessionId: string | null
-  shellTabs: ShellTab[]
+  /** Ids of the terminals this drawer shows; the terminals live in main (ADR 0006). */
+  shellTabs: string[]
   activeShellTabId: string | null
   openFiles: OpenFile[]
   activeFilePath: string | null
@@ -128,8 +124,10 @@ interface ProjectViewsState {
   duplicateSession: (projectId: string, sessionId: string) => ClaudeChatSession | null
   loadSessionFromLocal: (projectId: string, info: LocalSessionInfo, model?: ClaudeModel) => ClaudeChatSession | null
 
-  openShell: (projectId: string, options?: ShellOptions) => ShellTab | null
-  addShellTab: (projectId: string, kind?: PtyKind) => ShellTab | null
+  /** Starts a terminal in the workspace and shows it in the drawer; returns its id. */
+  openShell: (projectId: string, options?: ShellOptions) => string | null
+  addShellTab: (projectId: string, kind?: PtyKind) => string | null
+  /** Takes the tab off this drawer only; the terminal keeps running. */
   closeShellTab: (projectId: string, tabId: string) => void
   setActiveShellTab: (projectId: string, tabId: string) => void
 
@@ -229,11 +227,11 @@ function profileOf(workspaceId: string): string {
   return useWorkspacesStore.getState().workspaces.find((w) => w.id === workspaceId)?.profileId ?? DEFAULT_PROFILE_ID
 }
 
-/** The shell tabs of the workspace a chat session belongs to. */
-
-export function shellTabsOfSession(paneId: string): ShellTab[] {
+/** The terminals in the Shell drawer of the workspace a chat session belongs to. */
+export function shellTabsOfSession(paneId: string): TerminalInfo[] {
   const view = Object.values(useProjectViewsStore.getState().views).find((v) => v.claudeSessions.some((c) => c.id === paneId))
-  return view?.shellTabs ?? []
+  const { byId } = useTerminalsStore.getState()
+  return (view?.shellTabs ?? []).flatMap((id) => (byId[id] ? [byId[id]] : []))
 }
 
 export const useProjectViewsStore = create<ProjectViewsState>()(
@@ -285,7 +283,6 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           window.api.claude.stop(sess.id)
           useChatItemsStore.getState().deletePane(sess.id)
         }
-        for (const tab of view.shellTabs) window.api.pty.kill(tab.id)
         set((s) => {
           const nextViews = { ...s.views }
           delete nextViews[projectId]
@@ -486,36 +483,26 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
       openShell: (projectId, options) => {
         const v = get().views[projectId]
         if (!v) return null
-        const opened = openShellTab(v, {
-          id: makeId(),
+        const id = makeId()
+        set((s) => ({ views: { ...s.views, [projectId]: openShellTab(v, id) } }))
+        void useTerminalsStore.getState().create({
+          id,
+          workspaceId: projectId,
+          cwd: v.projectPath,
           kind: options?.kind ?? 'pwsh',
-          env: options?.env
+          ...(options?.env ? { env: options.env } : {})
         })
-        set((s) => ({ views: { ...s.views, [projectId]: opened } }))
-        return opened.shellTabs[opened.shellTabs.length - 1]
+        return id
       },
 
       addShellTab: (projectId, kind = 'pwsh') => get().openShell(projectId, { kind }),
 
-      closeShellTab: (projectId, tabId) => {
-        window.api.pty.kill(tabId)
+      closeShellTab: (projectId, tabId) =>
         set((s) => {
           const v = s.views[projectId]
           if (!v) return s
-          const remaining = v.shellTabs.filter((t) => t.id !== tabId)
-          const nextActive =
-            v.activeShellTabId === tabId
-              ? remaining[remaining.length - 1]?.id ?? null
-              : v.activeShellTabId
-          const nextView: ProjectView = {
-            ...v,
-            shellTabs: remaining,
-            activeShellTabId: nextActive,
-            shellDrawerOpen: remaining.length === 0 ? false : v.shellDrawerOpen
-          }
-          return { views: { ...s.views, [projectId]: nextView } }
-        })
-      },
+          return { views: { ...s.views, [projectId]: dropShellTabs(v, (id) => id === tabId) } }
+        }),
 
       setActiveShellTab: (projectId, tabId) =>
         set((s) => {
@@ -765,3 +752,28 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
     }
   )
 )
+
+/** Drops drawer tabs whose terminal left the pool: closed elsewhere, or gone with the app that ran it. */
+let shellTabsInitialised = false
+
+export function initShellTabs(): void {
+  if (shellTabsInitialised) return
+  shellTabsInitialised = true
+  useTerminalsStore.subscribe((t, prev) => {
+    if (!t.loaded || t.byId === prev.byId) return
+    const gone = prev.loaded
+      ? (id: string) => Boolean(prev.byId[id]) && !t.byId[id]
+      : (id: string) => !t.byId[id] && !createdInThisWindow(id)
+    useProjectViewsStore.setState((s) => {
+      let changed = false
+      const views = Object.fromEntries(
+        Object.entries(s.views).map(([id, v]) => {
+          const next = dropShellTabs(v, gone)
+          if (next !== v) changed = true
+          return [id, next]
+        })
+      )
+      return changed ? { views } : s
+    })
+  })
+}

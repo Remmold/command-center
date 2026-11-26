@@ -2,9 +2,10 @@ import { useEffect, useRef } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import type { PtyKind } from '../../shared/types'
+import type { TerminalInfo } from '../../shared/types'
 import { monoFont, xtermTheme } from '../theme/theme'
 import { registerTerminalReader } from '../state/terminalBuffers'
+import { useTerminalsStore } from '../state/terminalsStore'
 
 /** The extension's `getTerminalContents` limit. */
 const TERMINAL_MENTION_LINES = 100
@@ -17,17 +18,17 @@ function bufferText(term: XTerm): string {
   return lines.slice(-TERMINAL_MENTION_LINES).join('\n')
 }
 
-interface Props {
-  paneId: string
-  kind: PtyKind
-  cwd: string
-  /** Read once at spawn; a pane's environment never changes after its shell starts. */
-  env?: Record<string, string>
+function exitNotice(t: TerminalInfo): string {
+  return `\r\n\x1b[2m${t.command ?? t.kind} exited (${t.exitCode ?? '?'})\x1b[0m\r\n`
 }
 
-export function Terminal({ paneId, kind, cwd, env }: Props) {
+interface Props {
+  /** A terminal in main's pool; this view attaches to it and never ends it (ADR 0006). */
+  terminalId: string
+}
+
+export function Terminal({ terminalId }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const envRef = useRef(env)
 
   useEffect(() => {
     const container = containerRef.current
@@ -50,37 +51,35 @@ export function Terminal({ paneId, kind, cwd, env }: Props) {
     }
 
     let alive = true
-    let spawned = false
-    const unregister = registerTerminalReader(paneId, () => bufferText(term))
+    /** The run this view shows, by its start time; null until attached. */
+    let shown: TerminalInfo | null = null
+    const unregister = registerTerminalReader(terminalId, () => bufferText(term))
+    let unsubData = (): void => undefined
 
-    const spawn = async () => {
-      const res = await window.api.pty.spawn(paneId, kind, cwd, envRef.current)
-      if (!alive) return
-      if (!res.ok) {
-        term.write(`\r\n\x1b[31m${res.error}\x1b[0m\r\n`)
-        return
-      }
-      spawned = true
-      try {
-        window.api.pty.resize(paneId, term.cols, term.rows)
-      } catch {
-        // ignore
-      }
+    const follow = (t: TerminalInfo | undefined): void => {
+      // The store may still hold the run before the one attached to.
+      if (!shown || !t || t.startedAt < shown.startedAt) return
+      if (t.startedAt !== shown.startedAt) term.reset()
+      else if (shown.status === 'running' && t.status === 'exited') term.write(exitNotice(t))
+      shown = t
     }
-    void spawn()
+    const unsubStore = useTerminalsStore.subscribe((s) => follow(s.byId[terminalId]))
 
-    const unsubData = window.api.pty.onData((event) => {
-      if (event.paneId === paneId) term.write(event.data)
-    })
-    const unsubExit = window.api.pty.onExit((event) => {
-      if (event.paneId === paneId) {
-        term.write(`\r\n\x1b[2m${kind} exited (${event.exitCode})\x1b[0m\r\n`)
-        spawned = false
-      }
+    // Data sent after the attach reply is new; what came before is in the tail.
+    void window.api.terminals.attach(terminalId).then((attached) => {
+      if (!alive || !attached) return
+      shown = attached.terminal
+      term.write(attached.tail)
+      if (shown.status === 'exited') term.write(exitNotice(shown))
+      unsubData = window.api.terminals.onData((event) => {
+        if (event.id === terminalId) term.write(event.data)
+      })
+      follow(useTerminalsStore.getState().byId[terminalId])
+      window.api.terminals.resize(terminalId, term.cols, term.rows)
     })
 
     const dataDisposable = term.onData((data) => {
-      if (spawned) window.api.pty.write(paneId, data)
+      if (shown?.status === 'running') window.api.terminals.write(terminalId, data)
     })
 
     const ro = new ResizeObserver(() => {
@@ -88,7 +87,7 @@ export function Terminal({ paneId, kind, cwd, env }: Props) {
       if (rect.width === 0 || rect.height === 0) return
       try {
         fit.fit()
-        if (spawned) window.api.pty.resize(paneId, term.cols, term.rows)
+        if (shown) window.api.terminals.resize(terminalId, term.cols, term.rows)
       } catch {
         // ignore
       }
@@ -101,13 +100,10 @@ export function Terminal({ paneId, kind, cwd, env }: Props) {
       ro.disconnect()
       dataDisposable.dispose()
       unsubData()
-      unsubExit()
+      unsubStore()
       term.dispose()
-      // NOTE: we intentionally do not kill the pty here.
-      // PTYs are owned by the projectViewsStore lifetime, not the Terminal component's.
-      // This keeps sessions alive when switching projects.
     }
-  }, [paneId, kind, cwd])
+  }, [terminalId])
 
   return <div ref={containerRef} className="h-full w-full bg-editor" />
 }
