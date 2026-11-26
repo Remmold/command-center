@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] A **New terminal** button asks for a workspace and an optional command. The workspace's folder is the cwd, and the shell is the default shell kind.
 - [ ] A terminal with a command runs it and is named after it. A terminal without a command is a plain interactive shell named after the shell.

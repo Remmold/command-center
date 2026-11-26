@@ -145,7 +145,7 @@ describe('Processes view list', () => {
   it('carries what a row needs to act on it', () => {
     const list = processesList(input({ claude: { p1: [claude('srv', 'pnpm dev', 1)] }, terminals: [terminal('a', 'pwsh', 2)] }))
     expect(list[0].rows).toMatchObject([
-      { key: terminalRowKey('a'), source: 'terminal', terminalId: 'a', startedAt: 2 },
+      { key: terminalRowKey('a'), source: 'terminal', terminalId: 'a', workspaceId: 'cc', startedAt: 2 },
       { key: claudeRowKey('p1', 'srv'), source: 'claude', paneId: 'p1', taskId: 'srv', startedAt: 1 }
     ])
   })

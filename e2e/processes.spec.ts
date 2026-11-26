@@ -94,3 +94,51 @@ test.describe('background processes', () => {
     }
   })
 })
+
+test.describe('terminals in the Processes view', () => {
+  test('New terminal runs a command that stays alive and opens a plain shell that echoes typing; renamed, it shows in the Shell drawer, leaves it on closing the tab, and Close ends it', async ({ launched }) => {
+    const { page } = launched
+    const group = page.getByRole('list', { name: /e2e-workspace/ })
+    const row = (name: string) => group.getByRole('button').filter({ hasText: name })
+    const newTerminal = async (command: string): Promise<void> => {
+      await page.getByRole('button', { name: 'New terminal' }).click()
+      await page.getByRole('option', { name: /e2e-workspace/ }).click()
+      if (command) await page.getByRole('combobox', { name: 'New terminal' }).fill(command)
+      await page.keyboard.press('Enter')
+    }
+    await page.keyboard.press('Control+5')
+
+    await newTerminal("Write-Output ('cc-' + 'ready'); Start-Sleep -Seconds 600")
+    const server = page.getByRole('region', { name: /^Write-Output/ })
+    await expect(server.locator('.xterm-rows')).toContainText('cc-ready')
+    await expect(row('Write-Output')).toContainText('Running · You')
+
+    await newTerminal('')
+    const shell = page.getByRole('region', { name: 'pwsh' })
+    await expect(shell.getByRole('button', { name: 'Restart' })).toHaveCount(0)
+    await shell.locator('.xterm-helper-textarea').focus()
+    await page.keyboard.type("echo ('cc-' + 'typed')")
+    await page.keyboard.press('Enter')
+    await expect(shell.locator('.xterm-rows')).toContainText(')cc-typed')
+
+    await shell.getByRole('button', { name: 'Rename' }).click()
+    await page.getByRole('textbox', { name: 'Terminal name' }).fill('my shell')
+    await page.keyboard.press('Enter')
+    const mine = page.getByRole('region', { name: 'my shell' })
+    await expect(row('my shell')).toBeVisible()
+
+    await mine.getByRole('button', { name: 'Open in Shell drawer' }).click()
+    const drawer = page.locator('.xterm-rows:visible')
+    await expect(drawer).toHaveCount(1)
+    await expect(drawer).toContainText(')cc-typed')
+    await page.getByTitle('close all tabs (the terminals keep running)').click()
+    await expect(page.locator('.xterm-rows:visible')).toHaveCount(0)
+
+    await page.keyboard.press('Control+5')
+    await row('my shell').click()
+    await mine.getByRole('button', { name: 'Close', exact: true }).click()
+    await page.getByRole('dialog', { name: 'Close terminal' }).getByRole('button', { name: 'Close it' }).click()
+    await expect(row('my shell')).toHaveCount(0)
+    await expect(row('Write-Output')).toBeVisible()
+  })
+})

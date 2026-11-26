@@ -247,6 +247,12 @@ export function openShell(
   return useProjectViewsStore.getState().openShell(workspace.id, options)
 }
 
+/** Brings the workspace on screen in Work, as `openWorkspace` does, with its Shell drawer showing the terminal. */
+export function openTerminalInDrawer(workspace: Workspace, terminalId: string): void {
+  openWorkspace(workspace)
+  useProjectViewsStore.getState().showShellTab(workspace.id, terminalId)
+}
+
 function hostedExists(ref: ChatRef): boolean {
   return ref.kind === 'observed' || hostedSessions(useProjectViewsStore.getState().views).some((s) => s.paneId === ref.paneId)
 }

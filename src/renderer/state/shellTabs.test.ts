@@ -78,6 +78,14 @@ describe('the Shell drawer on the terminal pool', () => {
     expect(store().views.p1).toMatchObject({ shellTabs: [id], activeShellTabId: id, shellDrawerOpen: true })
   })
 
+  it('shows a terminal already in the pool as the open drawer\'s focused tab, once, without starting another', () => {
+    useProjectViewsStore.setState({ views: { p1: { ...view('p1', ['a']), shellDrawerOpen: false } } })
+    store().showShellTab('p1', 'b')
+    store().showShellTab('p1', 'b')
+    expect(created).toEqual([])
+    expect(store().views.p1).toMatchObject({ shellTabs: ['a', 'b'], activeShellTabId: 'b', shellDrawerOpen: true })
+  })
+
   it('closing a drawer tab removes it from that drawer only, and the terminal keeps running', () => {
     const id = store().openShell('p1')!
     store().closeShellTab('p1', id)

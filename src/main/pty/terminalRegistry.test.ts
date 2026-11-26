@@ -101,6 +101,17 @@ describe('TerminalRegistry', () => {
     expect(create({ kind: 'cmd' }).terminal?.label).toBe('cmd')
   })
 
+  it('treats a blank command as a plain shell named after the shell, and trims a command', () => {
+    const blank = create({ command: '   ' }).terminal
+    expect(blank?.label).toBe('pwsh')
+    expect(blank?.command).toBeUndefined()
+    expect(last().args).toEqual(['-NoLogo', '-WorkingDirectory', 'C:\\repo'])
+    const trimmed = create({ command: '  pnpm dev ' }).terminal
+    expect(trimmed?.label).toBe('pnpm dev')
+    expect(trimmed?.command).toBe('pnpm dev')
+    expect(last().args.slice(-2)).toEqual(['-Command', 'pnpm dev'])
+  })
+
   it("passes an account's environment to the shell and keeps it", () => {
     create({ id: 't1', env: { CLAUDE_CONFIG_DIR: 'C:\\p\\work' } })
     expect(last().env.CLAUDE_CONFIG_DIR).toBe('C:\\p\\work')

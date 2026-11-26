@@ -43,6 +43,7 @@ export interface ClaudeProcessRow extends RowBase {
 export interface TerminalRow extends RowBase {
   source: 'terminal'
   terminalId: string
+  workspaceId: string
   command?: string
 }
 
@@ -133,6 +134,7 @@ export function processesList(input: ProcessesListInput): ProcessGroup[] {
       source: 'terminal',
       key: terminalRowKey(t.id),
       terminalId: t.id,
+      workspaceId: t.workspaceId,
       name: t.label,
       ...(t.command !== undefined ? { command: t.command } : {}),
       owner: YOU,

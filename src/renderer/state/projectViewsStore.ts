@@ -6,6 +6,7 @@ import {
   LAYOUT_VERSION,
   dropShellTabs,
   migrateLayout,
+  DEFAULT_SHELL_KIND,
   openShellTab,
   persistableView,
   toggleIdePanels,
@@ -127,6 +128,8 @@ interface ProjectViewsState {
   /** Starts a terminal in the workspace and shows it in the drawer; returns its id. */
   openShell: (projectId: string, options?: ShellOptions) => string | null
   addShellTab: (projectId: string, kind?: PtyKind) => string | null
+  /** Shows a terminal already in the pool as the drawer's focused tab, opening the drawer. */
+  showShellTab: (projectId: string, terminalId: string) => void
   /** Takes the tab off this drawer only; the terminal keeps running. */
   closeShellTab: (projectId: string, tabId: string) => void
   setActiveShellTab: (projectId: string, tabId: string) => void
@@ -489,13 +492,20 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
           id,
           workspaceId: projectId,
           cwd: v.projectPath,
-          kind: options?.kind ?? 'pwsh',
+          kind: options?.kind ?? DEFAULT_SHELL_KIND,
           ...(options?.env ? { env: options.env } : {})
         })
         return id
       },
 
-      addShellTab: (projectId, kind = 'pwsh') => get().openShell(projectId, { kind }),
+      addShellTab: (projectId, kind = DEFAULT_SHELL_KIND) => get().openShell(projectId, { kind }),
+
+      showShellTab: (projectId, terminalId) =>
+        set((s) => {
+          const v = s.views[projectId]
+          if (!v) return s
+          return { views: { ...s.views, [projectId]: openShellTab(v, terminalId) } }
+        }),
 
       closeShellTab: (projectId, tabId) =>
         set((s) => {

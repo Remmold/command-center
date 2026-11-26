@@ -1,10 +1,12 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { useTicking } from '../../hooks/useTicking'
 import { useBackgroundProcessesStore } from '../../state/backgroundProcessesStore'
-import { processesList, selectedRowKey, type ProcessGroup, type ProcessRow } from '../../state/processesList'
+import { processesList, selectedRowKey, terminalRowKey, type ProcessGroup, type ProcessRow, type TerminalRow } from '../../state/processesList'
 import { useProcessesViewStore } from '../../state/processesViewStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { useRepoIdentitiesStore } from '../../state/repoIdentitiesStore'
+import { openTerminalInDrawer } from '../../state/sessionNavigation'
 import { useTerminalsStore } from '../../state/terminalsStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { duration } from '../chat/subagents'
@@ -13,14 +15,17 @@ import { RepoIcon } from '../RepoIcon'
 import { ServerLink } from '../ServerLink'
 import { Terminal } from '../Terminal'
 import { Button } from '../ui/Button'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { EmptyState } from '../ui/EmptyState'
 import { HeaderRow } from '../ui/HeaderRow'
 import { NoticeLine } from '../ui/NoticeLine'
 import { ListItem, ListRow, ListRowLabel, ListRowLines, ListRowMeta } from '../ui/ListRow'
 import { Pane } from '../ui/Pane'
 import { SidebarLayout } from '../ui/SidebarLayout'
+import { TextField } from '../ui/TextField'
 import { DotMark, type TimelineDot } from '../ui/Timeline'
 import { Toolbar } from '../ui/Toolbar'
+import { NewTerminalPicker } from './NewTerminalPicker'
 
 const REFRESH_MS = 1000
 const DOT: Record<ProcessRow['tone'], Exclude<TimelineDot, 'none' | 'neutral'>> = { running: 'progress', ok: 'success', failed: 'error' }
@@ -65,20 +70,34 @@ export function ProcessesView() {
     if (chosen === null && selectedKey !== null) select(selectedKey)
   }, [chosen, selectedKey, select])
   const now = useTicking(groups.length > 0)
+  const [picking, setPicking] = useState(false)
   useRefresh()
 
   return (
     <SidebarLayout
       width="wide"
       sidebar={
-        groups.length === 0 ? (
-          <EmptyState>Nothing is running.</EmptyState>
-        ) : (
-          groups.map((g) => <Group key={g.workspaceId} group={g} selectedKey={selectedKey} now={now} onSelect={select} />)
-        )
+        <>
+          <Toolbar
+            actions={
+              <Button variant="ghost" onClick={() => setPicking(true)} tooltip="Start a terminal in a workspace, with an optional command">
+                <Plus size={13} strokeWidth={2} />
+                New terminal
+              </Button>
+            }
+          >
+            <HeaderRow title="Processes" />
+          </Toolbar>
+          {groups.length === 0 ? (
+            <EmptyState>Nothing is running.</EmptyState>
+          ) : (
+            groups.map((g) => <Group key={g.workspaceId} group={g} selectedKey={selectedKey} now={now} onSelect={select} />)
+          )}
+        </>
       }
     >
       {selected ? <SelectedProcess key={selected.key} row={selected} /> : <EmptyState>Pick a process or terminal on the left.</EmptyState>}
+      {picking && <NewTerminalPicker onClose={() => setPicking(false)} onStarted={(id) => select(terminalRowKey(id))} />}
     </SidebarLayout>
   )
 }
@@ -128,10 +147,19 @@ function Group({ group, selectedKey, now, onSelect }: GroupProps) {
 
 function SelectedProcess({ row }: { row: ProcessRow }) {
   const stopError = useBackgroundProcessesStore((s) => (row.source === 'claude' ? s.stopErrors[row.paneId]?.[row.taskId] : undefined))
+  const [renaming, setRenaming] = useState(false)
+  const rename = (label: string): void => {
+    setRenaming(false)
+    if (row.source === 'terminal' && label !== row.name) window.api.terminals.rename(row.terminalId, label)
+  }
   return (
     <Pane label={row.name}>
-      <Toolbar actions={<RowActions row={row} />}>
-        <HeaderRow title={row.name} note={`${row.status} · ${row.owner}`} />
+      <Toolbar actions={renaming ? undefined : <RowActions row={row} onRename={() => setRenaming(true)} />}>
+        {renaming ? (
+          <TextField label="Terminal name" initialValue={row.name} autoFocus submitOnBlur onSubmit={rename} onCancel={() => setRenaming(false)} />
+        ) : (
+          <HeaderRow title={row.name} note={`${row.status} · ${row.owner}`} />
+        )}
       </Toolbar>
       {stopError && (
         <NoticeLine tone="warning" strip>
@@ -145,7 +173,7 @@ function SelectedProcess({ row }: { row: ProcessRow }) {
   )
 }
 
-function RowActions({ row }: { row: ProcessRow }) {
+function RowActions({ row, onRename }: { row: ProcessRow; onRename: () => void }) {
   const stop = (): void => {
     if (row.source === 'claude') void useBackgroundProcessesStore.getState().stop(row.paneId, row.taskId)
     else void window.api.terminals.stop(row.terminalId)
@@ -155,11 +183,51 @@ function RowActions({ row }: { row: ProcessRow }) {
       {row.servers.map((s) => (
         <ServerLink key={s.port} server={s} />
       ))}
+      {row.source === 'terminal' && <TerminalActions row={row} onRename={onRename} />}
       {row.running && (
         <Button variant="danger" onClick={stop}>
           Stop
         </Button>
       )}
     </span>
+  )
+}
+
+/** Rename, Open in Shell drawer, Restart once it has exited, and Close, which asks first while it runs. */
+function TerminalActions({ row, onRename }: { row: TerminalRow; onRename: () => void }) {
+  const workspace = useWorkspacesStore((s) => s.workspaces.find((w) => w.id === row.workspaceId))
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  const close = (): void => {
+    setConfirmingClose(false)
+    window.api.terminals.close(row.terminalId)
+  }
+  return (
+    <>
+      <Button variant="ghost" onClick={onRename}>
+        Rename
+      </Button>
+      {workspace && (
+        <Button variant="ghost" onClick={() => openTerminalInDrawer(workspace, row.terminalId)} tooltip="Show it in Work, in this workspace's Shell drawer">
+          Open in Shell drawer
+        </Button>
+      )}
+      {!row.running && (
+        <Button variant="secondary" onClick={() => void window.api.terminals.restart(row.terminalId)} tooltip="Run it again in the same place, on a cleared screen">
+          Restart
+        </Button>
+      )}
+      <Button variant="secondary" onClick={() => (row.running ? setConfirmingClose(true) : close())}>
+        Close
+      </Button>
+      {confirmingClose && (
+        <ConfirmDialog
+          title="Close terminal"
+          message={`${row.name} is still running. Closing it ends its process.`}
+          confirmLabel="Close it"
+          onConfirm={close}
+          onCancel={() => setConfirmingClose(false)}
+        />
+      )}
+    </>
   )
 }

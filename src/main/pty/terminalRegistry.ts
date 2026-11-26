@@ -88,12 +88,13 @@ export class TerminalRegistry {
     const id = request.id ?? randomUUID()
     const existing = this.entries.get(id)
     if (existing) return { ok: true, terminal: existing.info }
+    const command = request.command?.trim() || undefined
     const info: TerminalInfo = {
       id,
       workspaceId: request.workspaceId,
       cwd: request.cwd,
-      label: request.label ?? request.command ?? this.nextShellLabel(request.workspaceId, request.kind),
-      ...(request.command ? { command: request.command } : {}),
+      label: request.label?.trim() || command || this.nextShellLabel(request.workspaceId, request.kind),
+      ...(command ? { command } : {}),
       kind: request.kind,
       ...(request.env ? { env: request.env } : {}),
       status: 'running',

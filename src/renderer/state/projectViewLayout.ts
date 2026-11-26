@@ -42,6 +42,9 @@ export function persistableView(view: ProjectView): ProjectView {
   }
 }
 
+/** The shell a new terminal runs in unless one is picked. */
+export const DEFAULT_SHELL_KIND: PtyKind = 'pwsh'
+
 export interface ShellOptions {
   kind?: PtyKind
   /** Extra variables for the shell's process, on top of the app's own environment. */
