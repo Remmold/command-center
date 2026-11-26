@@ -7,13 +7,15 @@ const free = async (): Promise<boolean> => true
 interface Rec {
   name: string
   ports: number[]
+  portNames?: string[]
   completedAt: number | null
 }
 
 function reserverOver(all: Rec[], isFree: (p: number) => Promise<boolean> = free) {
   return createPortReserver({
     list: async () => all,
-    save: async (name, ports) => void (all.find((r) => r.name === name)!.ports = ports),
+    save: async (name, ports, portNames) =>
+      void Object.assign(all.find((r) => r.name === name)!, { ports, portNames }),
     isFree
   })
 }
@@ -45,14 +47,31 @@ describe('allocatePorts', () => {
 describe('createPortReserver', () => {
   it('keeps a feature its ports across calls', async () => {
     const reserver = reserverOver([{ name: 'a', ports: [], completedAt: null }])
-    const first = await reserver.reserve('a', 2)
+    const first = await reserver.reserve('a', ['web', 'api'])
     expect(first).toEqual({ ok: true, ports: [4100, 4101] })
-    expect(await reserver.reserve('a', 2)).toEqual(first)
+    expect(await reserver.reserve('a', ['web', 'api'])).toEqual(first)
   })
 
   it('adds ports when the config grew and keeps the old ones', async () => {
-    const reserver = reserverOver([{ name: 'a', ports: [4100], completedAt: null }])
-    expect(await reserver.reserve('a', 2)).toEqual({ ok: true, ports: [4100, 4101] })
+    const reserver = reserverOver([{ name: 'a', ports: [4100], portNames: ['web'], completedAt: null }])
+    expect(await reserver.reserve('a', ['web', 'api'])).toEqual({ ok: true, ports: [4100, 4101] })
+  })
+
+  it('keeps each port with its server when the servers are reordered', async () => {
+    const reserver = reserverOver([{ name: 'a', ports: [4100, 4101], portNames: ['web', 'api'], completedAt: null }])
+    expect(await reserver.reserve('a', ['api', 'web'])).toEqual({ ok: true, ports: [4101, 4100] })
+  })
+
+  it('gives a renamed server a new port instead of a neighbour port', async () => {
+    const all = [{ name: 'a', ports: [4100, 4101], portNames: ['web', 'api'], completedAt: null }]
+    const reserver = reserverOver(all)
+    expect(await reserver.reserve('a', ['web', 'backend'])).toEqual({ ok: true, ports: [4100, 4102] })
+    expect(await reserver.reserve('a', ['web', 'api'])).toEqual({ ok: true, ports: [4100, 4101] })
+  })
+
+  it('reads a record from before names were kept in config order', async () => {
+    const reserver = reserverOver([{ name: 'a', ports: [4100, 4101], completedAt: null }])
+    expect(await reserver.reserve('a', ['web', 'api'])).toEqual({ ok: true, ports: [4100, 4101] })
   })
 
   it('never gives two features the same port, even when started at once', async () => {
@@ -67,7 +86,7 @@ describe('createPortReserver', () => {
       ],
       slow
     )
-    const [a, b] = await Promise.all([reserver.reserve('a', 2), reserver.reserve('b', 2)])
+    const [a, b] = await Promise.all([reserver.reserve('a', ['web', 'api']), reserver.reserve('b', ['web', 'api'])])
     expect(a.ok && b.ok).toBe(true)
     const ports = [...(a.ok ? a.ports : []), ...(b.ok ? b.ports : [])]
     expect(new Set(ports).size).toBe(4)
@@ -78,11 +97,11 @@ describe('createPortReserver', () => {
       { name: 'done', ports: [4100], completedAt: 5 },
       { name: 'a', ports: [], completedAt: null }
     ])
-    expect(await reserver.reserve('a', 1)).toEqual({ ok: true, ports: [4100] })
+    expect(await reserver.reserve('a', ['web'])).toEqual({ ok: true, ports: [4100] })
   })
 
   it('refuses an unknown feature', async () => {
-    expect((await reserverOver([]).reserve('ghost', 1)).ok).toBe(false)
+    expect((await reserverOver([]).reserve('ghost', ['web'])).ok).toBe(false)
   })
 })
 

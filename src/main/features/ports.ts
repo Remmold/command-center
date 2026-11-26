@@ -1,4 +1,5 @@
 import { connect, createServer } from 'node:net'
+import { namedPorts } from '../../shared/features'
 
 /** The ports the app reserves for features' servers. */
 export const PORT_RANGE = { from: 4100, to: 4999 } as const
@@ -53,33 +54,38 @@ export async function allocatePorts(count: number, taken: ReadonlySet<number>, i
 interface PortRecord {
   name: string
   ports: number[]
+  portNames?: string[]
   completedAt: number | null
 }
 
 export interface PortReserverDeps {
   list: () => Promise<PortRecord[]>
-  save: (name: string, ports: number[]) => Promise<void>
+  save: (name: string, ports: number[], portNames: string[]) => Promise<void>
   isFree: (port: number) => Promise<boolean>
 }
 
 /**
- * Gives each feature its ports once and keeps them: the feature records are the only memory. Reservations run one at a
- * time and are saved before the next starts, so features started at once never share a port.
+ * Gives each feature's servers a port once and keeps it, by server name, so reordering or renaming servers in the
+ * preview config never swaps ports. The feature records are the only memory. Reservations run one at a time and are
+ * saved before the next starts, so features started at once never share a port. Returns the ports in the order of `servers`.
  */
 export function createPortReserver(deps: PortReserverDeps) {
   let queue: Promise<unknown> = Promise.resolve()
-  const reserve = (name: string, count: number): Promise<PortsResult> => {
+  const reserve = (name: string, servers: readonly string[]): Promise<PortsResult> => {
     const run = async (): Promise<PortsResult> => {
       const records = await deps.list()
       const own = records.find((r) => r.name === name)
       if (!own) return { ok: false, error: `The feature ${name} is not known.` }
-      if (own.ports.length >= count) return { ok: true, ports: own.ports.slice(0, count) }
-      const taken = new Set(records.filter((r) => r.completedAt === null).flatMap((r) => r.ports))
-      const more = await allocatePorts(count - own.ports.length, taken, deps.isFree)
-      if (!more.ok) return more
-      const ports = [...own.ports, ...more.ports]
-      await deps.save(name, ports)
-      return { ok: true, ports }
+      const kept = namedPorts(own, servers)
+      const missing = servers.filter((s) => !kept.has(s))
+      if (missing.length > 0) {
+        const taken = new Set(records.filter((r) => r.completedAt === null).flatMap((r) => r.ports))
+        const more = await allocatePorts(missing.length, taken, deps.isFree)
+        if (!more.ok) return more
+        missing.forEach((server, i) => kept.set(server, more.ports[i]))
+        await deps.save(name, [...kept.values()], [...kept.keys()])
+      }
+      return { ok: true, ports: servers.map((s) => kept.get(s)!) }
     }
     const next = queue.then(run, run)
     queue = next.catch(() => undefined)

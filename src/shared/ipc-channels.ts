@@ -12,6 +12,7 @@ export const IPC = {
   FEATURES_SET_CLAUDE_SESSION: 'features:setClaudeSession',
   FEATURES_STAGES_CHANGED: 'features:stagesChanged',
   FEATURES_INSTALLING: 'features:installing',
+  FEATURES_TEST: 'features:test',
   FEATURES_SERVERS_START: 'features:serversStart',
   FEATURES_SERVERS_STOP: 'features:serversStop',
   FEATURES_SERVERS_RETRY: 'features:serversRetry',

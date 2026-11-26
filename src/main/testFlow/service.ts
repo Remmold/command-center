@@ -2,6 +2,7 @@ import { ipcMain, webContents, type WebContents } from 'electron'
 import { IPC } from '../../shared/ipc-channels'
 import type { TestFlowView } from '../../shared/testFlow'
 import { getMainWindow } from '../window'
+import { pairFlowFocus } from '../features/pairWindows'
 import { openTestFlowWindow, publishTestFlowFocus, testFlowFocus } from './popOut'
 import { readTestFlow, stampOf } from './reader'
 import { markStepOnDisk, readSteps } from './steps'
@@ -92,6 +93,6 @@ export function registerTestFlowIpc(): () => void {
   ipcMain.on(IPC.TEST_FLOW_PUBLISH, (event, focus: unknown) => {
     if (event.sender === getMainWindow()?.webContents) publishTestFlowFocus(focus)
   })
-  ipcMain.handle(IPC.TEST_FLOW_FOCUS_GET, () => testFlowFocus())
+  ipcMain.handle(IPC.TEST_FLOW_FOCUS_GET, (event) => pairFlowFocus(event.sender.id) ?? testFlowFocus())
   return () => watches.dispose()
 }

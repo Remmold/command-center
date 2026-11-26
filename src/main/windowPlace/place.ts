@@ -99,3 +99,10 @@ function centreIn(bounds: Rect, area: Rect): Rect {
     height
   }
 }
+
+export type PairRole = 'flow' | 'preview'
+
+/** Which saved place a window of a feature's test pair belongs to: one per feature and role, so each reopens where it was put. */
+export function pairPlaceKey(feature: string, role: PairRole): `pair-${PairRole}-${string}` {
+  return `pair-${role}-${feature.replace(/[^a-zA-Z0-9-]/g, '_')}`
+}

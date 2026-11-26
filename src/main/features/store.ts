@@ -48,8 +48,8 @@ export function createFeatureStore(file: string) {
         if (!all.some((r) => r.name === name && r.claudeSessionId !== claudeSessionId)) return
         await writeAll(all.map((r) => (r.name === name ? { ...r, claudeSessionId } : r)))
       }),
-    setPorts: (name: string, ports: number[]): Promise<void> =>
-      serial(async () => writeAll((await readAll()).map((r) => (r.name === name ? { ...r, ports } : r)))),
+    setPorts: (name: string, ports: number[], portNames: string[]): Promise<void> =>
+      serial(async () => writeAll((await readAll()).map((r) => (r.name === name ? { ...r, ports, portNames } : r)))),
     remove: (name: string): Promise<void> => serial(async () => writeAll((await readAll()).filter((r) => r.name !== name)))
   }
 }

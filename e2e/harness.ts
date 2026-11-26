@@ -274,6 +274,8 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
           env: appEnv(dirs, script, env)
         })
         await app.context().route(/^https?:\/\//, (route) => {
+          // A feature's own servers on this machine are not the internet.
+          if (['localhost', '127.0.0.1'].includes(new URL(route.request().url()).hostname)) return route.continue()
           online.push(route.request().url())
           return route.abort()
         })

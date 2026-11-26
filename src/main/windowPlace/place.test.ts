@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { restorePlace, type DisplayInfo, type SavedPlace } from './place'
+import { pairPlaceKey, restorePlace, type DisplayInfo, type SavedPlace } from './place'
 
 const left: DisplayInfo = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1040 }, scaleFactor: 1 }
 const right: DisplayInfo = { id: 2, bounds: { x: 1920, y: 0, width: 2560, height: 1440 }, workArea: { x: 1920, y: 0, width: 2560, height: 1400 }, scaleFactor: 1.5 }
@@ -63,5 +63,17 @@ describe('the window reopens where it was', () => {
     const rescaled: DisplayInfo = { ...right, scaleFactor: 1 }
     const bounds = { x: 2100, y: 120, width: 1500, height: 1000 }
     expect(restorePlace(savedOn(right, bounds), [left, rescaled], left)?.bounds).toEqual(bounds)
+  })
+})
+
+describe('pairPlaceKey', () => {
+  it('is one key per feature and role', () => {
+    expect(pairPlaceKey('login', 'flow')).toBe('pair-flow-login')
+    expect(pairPlaceKey('login', 'preview')).toBe('pair-preview-login')
+    expect(pairPlaceKey('login-2', 'flow')).not.toBe(pairPlaceKey('login', 'flow'))
+  })
+
+  it('never lets a name leave the window-place file name', () => {
+    expect(pairPlaceKey('../x y', 'flow')).toBe('pair-flow-___x_y')
   })
 })

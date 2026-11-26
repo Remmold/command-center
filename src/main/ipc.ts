@@ -38,12 +38,16 @@ import { createFeatureStore } from './features/store'
 import { runInstall } from './features/install'
 import { createPortReserver, portAccepts, portIsFree } from './features/ports'
 import { createServerRunner } from './features/serverRunner'
+import { openPair } from './features/pairWindows'
+import { testFeature } from './features/testPair'
+import { featureChecklistPath, repoNameFor } from '../shared/testFlow'
 import { sourceCandidates } from './features/source'
 import { createPreviewConfigStore } from './previewConfig/store'
 import { createStageService, type StageService } from './features/stageService'
 import { readTestFlowsFolder } from './testFlow/settings'
 import { createFeature, discardFeature, type CreateDeps } from './features/create'
-import type { NewFeatureRequest } from '../shared/features'
+import type { FeatureRecord, NewFeatureRequest } from '../shared/features'
+import type { PreviewConfig } from '../shared/previewConfig'
 import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
 import { MANAGED_SETTINGS_FILE, readOrganisationLayer, readSettingsFile, saveSettingsFile, settingsTargetProblem } from './claude/settingsFile'
@@ -264,24 +268,44 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     featureStages?.changed()
     return result
   })
+  const previewConfigFor = async (feature: FeatureRecord): Promise<PreviewConfig | null> => {
+    for (const id of sourceCandidates(feature, await workspaces.list())) {
+      const config = await previewConfigs.get(id)
+      if (config) return config
+    }
+    return null
+  }
   const serverRunner = createServerRunner({
     terminals,
     feature: async (name) => (await featureStore.list()).find((f) => f.name === name),
-    config: async (feature) => {
-      for (const id of sourceCandidates(feature, await workspaces.list())) {
-        const config = await previewConfigs.get(id)
-        if (config) return config
-      }
-      return null
-    },
+    config: previewConfigFor,
     env: async (workspaceId) => {
       const workspace = (await workspaces.list()).find((w) => w.id === workspaceId)
-      return (await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)).env
+      return workspace ? (await profiles.prepareSession(workspace.profileId)).env : null
     },
     reservePorts: createPortReserver({ list: featureStore.list, save: featureStore.setPorts, isFree: portIsFree }).reserve,
     isReady: (port) => portAccepts(port),
     shell: DEFAULT_SHELL_KIND
   })
+  ipcMain.handle(IPC.FEATURES_TEST, (_e, name: unknown) =>
+    typeof name === 'string'
+      ? testFeature(
+          {
+            feature: async (n) => (await featureStore.list()).find((f) => f.name === n),
+            config: previewConfigFor,
+            runner: serverRunner,
+            flowFocus: async (feature) => {
+              const folder = await readTestFlowsFolder()
+              const repoName = (await workspaces.list()).find((w) => w.id === feature.workspaceId)?.repoName ?? repoNameFor([], feature.worktreePath)
+              const checklist = featureChecklistPath([feature], feature.worktreePath, folder, repoName)
+              return { picks: checklist ? [{ path: checklist, source: 'repo' }] : [], folder, repoName, title: feature.name, ...(checklist ? { checklist } : {}) }
+            },
+            open: openPair
+          },
+          name
+        )
+      : { ok: false, error: 'No feature was named.' }
+  )
   unsubscribers.push(serverRunner.onChanged((name, view) => sendAll(IPC.FEATURES_SERVERS_CHANGED, { name, view })))
   ipcMain.handle(IPC.FEATURES_SERVERS, () => serverRunner.all())
   ipcMain.handle(IPC.FEATURES_SERVERS_START, (_e, name: unknown) =>

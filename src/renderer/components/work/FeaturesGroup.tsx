@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { accountNote, completedFeatureRows, featureRows, stageNote, type FeatureRow } from '../../state/featureRows'
-import { retryFeatureServer, openFeatureSession, startFeatureServers, stopFeatureServers, useFeaturesStore } from '../../state/featuresStore'
+import { retryFeatureServer, openFeatureSession, startFeatureServers, stopFeatureServers, testFeature, useFeaturesStore } from '../../state/featuresStore'
 import { serversNote, serversRunning, type FeatureServerView } from '../../../shared/featureServers'
 import { Button } from '../ui/Button'
 import { useProfilesStore } from '../../state/profilesStore'
@@ -59,14 +59,24 @@ function FeatureListRow({ row }: { row: FeatureRow }) {
   const serverNote = serversNote(servers)
   const completed = useFeaturesStore((s) => s.features.find((f) => f.name === row.name)?.completedAt ?? null) !== null
   const failed = servers.filter((s) => s.status === 'failed')
-  const actions = completed ? undefined : serversRunning(servers) ? (
-    <Button variant="ghost" onClick={() => stopFeatureServers(row.name)} tooltip="Stop this feature's servers; it keeps its ports">
-      Stop servers
-    </Button>
-  ) : (
-    <Button variant="ghost" onClick={() => startFeatureServers(row.name)} tooltip="Boot this feature's servers from its workspace's preview config">
-      Start servers
-    </Button>
+  const hasTestSteps = row.stage !== undefined && !row.stage.missing && row.stage.stage === 'Testing'
+  const actions = completed ? undefined : (
+    <>
+      {hasTestSteps && (
+        <Button variant="secondary" onClick={() => testFeature(row.name)} tooltip="Boot the servers, then open the test steps and the preview browser side by side">
+          Test
+        </Button>
+      )}
+      {serversRunning(servers) ? (
+        <Button variant="ghost" onClick={() => stopFeatureServers(row.name)} tooltip="Stop this feature's servers; it keeps its ports">
+          Stop servers
+        </Button>
+      ) : (
+        <Button variant="ghost" onClick={() => startFeatureServers(row.name)} tooltip="Boot this feature's servers from its workspace's preview config">
+          Start servers
+        </Button>
+      )}
+    </>
   )
   return (
     <>

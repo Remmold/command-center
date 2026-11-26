@@ -89,6 +89,13 @@ export function startFeatureServers(name: string): void {
   })
 }
 
+/** The Test button: boots the servers and opens the test pair; a refusal or a failed server shows as a toast. */
+export function testFeature(name: string): void {
+  void window.api.features.test(name).then((r) => {
+    if (!r.ok) useToastStore.getState().show(r.error)
+  })
+}
+
 export function retryFeatureServer(name: string, server: string): void {
   void window.api.features.retryServer(name, server).then((r) => {
     if (!r.ok) useToastStore.getState().show(r.error)

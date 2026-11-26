@@ -26,9 +26,10 @@ export interface RunnerDeps {
   feature: (name: string) => Promise<FeatureRecord | undefined>
   /** The preview config the feature uses, through its source workspace; null when there is none. */
   config: (feature: FeatureRecord) => Promise<PreviewConfig | null>
-  /** The variables a process needs to run as the feature's account. */
-  env: (workspaceId: string) => Promise<Record<string, string>>
-  reservePorts: (name: string, count: number) => Promise<PortsResult>
+  /** The variables a process needs to run as the feature's account; null when its workspace no longer exists. */
+  env: (workspaceId: string) => Promise<Record<string, string> | null>
+  /** One port per server name, in the order given. */
+  reservePorts: (name: string, servers: string[]) => Promise<PortsResult>
   /** Whether something accepts a connection on the port. */
   isReady: (port: number) => Promise<boolean>
   shell: CreateTerminalRequest['kind']
@@ -95,18 +96,22 @@ export function createServerRunner(deps: RunnerDeps) {
       const t = tracked.get(name)?.get(server)
       return t?.run === run && t.view.status === 'starting'
     }
-    while (live()) {
-      if (await deps.isReady(port)) {
-        if (live()) set(name, server, { status: 'ready' })
-        return
+    try {
+      while (live()) {
+        if (await deps.isReady(port)) {
+          if (live()) set(name, server, { status: 'ready' })
+          return
+        }
+        if (Date.now() >= deadline) {
+          if (!live()) return
+          fail(name, server, `It did not answer on port ${port} within ${Math.round(timeout / 1000)} seconds.`)
+          await deps.terminals.stop(terminalId(name, server))
+          return
+        }
+        await new Promise((r) => setTimeout(r, poll))
       }
-      if (Date.now() >= deadline) {
-        if (!live()) return
-        fail(name, server, `It did not answer on port ${port} within ${Math.round(timeout / 1000)} seconds.`)
-        await deps.terminals.stop(terminalId(name, server))
-        return
-      }
-      await new Promise((r) => setTimeout(r, poll))
+    } catch (err) {
+      if (live()) fail(name, server, `The ready check failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -159,9 +164,10 @@ export function createServerRunner(deps: RunnerDeps) {
     const config = await deps.config(feature)
     if (!config || config.servers.length === 0) return { ok: false, error: `The workspace of ${name} has no preview servers; set them up in Settings, Preview.` }
     if (only && !config.servers.some((s) => s.name === only)) return { ok: false, error: `${name} has no server called ${only}.` }
-    const reserved = await deps.reservePorts(name, config.servers.length)
+    const reserved = await deps.reservePorts(name, config.servers.map((s) => s.name))
     if (!reserved.ok) return reserved
-    const account = await deps.env(feature.workspaceId)
+    const account = await deps.env(feature.workspaceId).catch(() => null)
+    if (!account) return { ok: false, error: `The workspace of ${name} was removed, so its servers would run on the default account; they were not started.` }
     const launches: Promise<void>[] = []
     for (const [i, server] of config.servers.entries()) {
       if (only && server.name !== only) continue

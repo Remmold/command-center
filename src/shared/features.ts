@@ -12,6 +12,8 @@ export interface FeatureRecord {
   claudeSessionId?: string
   /** Reserved server ports; empty until a feature boots servers. */
   ports: number[]
+  /** The server each port was reserved for, by position in `ports`; kept per name so editing the preview config never swaps ports. */
+  portNames?: string[]
   startedAt: number
   completedAt: number | null
 }
@@ -57,4 +59,15 @@ export function featureOpenPlan(
   if (worktreeMissing) return { kind: 'missing', reason: `The session of ${feature.name} was not found: its worktree folder is gone.` }
   if (!feature.claudeSessionId) return { kind: 'missing', reason: `The session of ${feature.name} was not found: it was closed before Claude gave it an id, so there is nothing to resume.` }
   return { kind: 'rehost', claudeSessionId: feature.claudeSessionId }
+}
+
+/** Each server's port by its name; a record from before names were kept is read against `legacyNames`, in order. */
+export function namedPorts(record: Pick<FeatureRecord, 'ports' | 'portNames'>, legacyNames: readonly string[] = []): Map<string, number> {
+  const names = record.portNames ?? legacyNames
+  const map = new Map<string, number>()
+  record.ports.forEach((port, i) => {
+    const name = names[i]
+    if (name !== undefined && !map.has(name)) map.set(name, port)
+  })
+  return map
 }

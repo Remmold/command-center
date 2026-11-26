@@ -62,6 +62,8 @@ let records: FeatureRecord[]
 let answering: Set<number>
 let held: Set<number>
 let currentConfig: PreviewConfig | null
+let missingWorkspace: string | null
+let readyThrows: boolean
 
 const record = (name: string, extra: Partial<FeatureRecord> = {}): FeatureRecord => ({
   name,
@@ -78,16 +80,19 @@ const record = (name: string, extra: Partial<FeatureRecord> = {}): FeatureRecord
 function runner(options: { readyTimeoutMs?: number } = {}) {
   const reserver = createPortReserver({
     list: async () => records,
-    save: async (name, ports) => void (records.find((r) => r.name === name)!.ports = ports),
+    save: async (name, ports, portNames) => void Object.assign(records.find((r) => r.name === name)!, { ports, portNames }),
     isFree: async (p) => !held.has(p)
   })
   return createServerRunner({
     terminals: pool,
     feature: async (name) => records.find((r) => r.name === name),
     config: async () => currentConfig,
-    env: async (workspaceId) => profileEnv({ id: workspaceId === 'ws-a' ? 'work' : 'default', configDir: `C:/cfg/${workspaceId}` }, null),
+    env: async (workspaceId) => workspaceId === missingWorkspace ? null : profileEnv({ id: workspaceId === 'ws-a' ? 'work' : 'default', configDir: `C:/cfg/${workspaceId}` }, null),
     reservePorts: reserver.reserve,
-    isReady: async (port) => answering.has(port),
+    isReady: async (port) => {
+      if (readyThrows) throw new Error('socket exploded')
+      return answering.has(port)
+    },
     shell: 'pwsh',
     pollMs: 5,
     ...options
@@ -100,6 +105,8 @@ beforeEach(() => {
   answering = new Set()
   held = new Set()
   currentConfig = config
+  missingWorkspace = null
+  readyThrows = false
 })
 
 const portOf = (view: { servers: { name: string; port: number }[] }, server: string): number => view.servers.find((s) => s.name === server)!.port
@@ -243,6 +250,33 @@ describe('server runner', () => {
     const r = runner()
     held = new Set(Array.from({ length: 900 }, (_, i) => 4100 + i))
     expect(await r.start('a')).toEqual({ ok: false, error: expect.stringMatching(/No free port left/) })
+  })
+
+  it('refuses a feature whose workspace is gone instead of starting it on the default account', async () => {
+    missingWorkspace = 'ws-a'
+    const r = runner()
+    expect(await r.start('a')).toEqual({ ok: false, error: expect.stringMatching(/workspace of a was removed.*not started/) })
+    expect(pool.created).toHaveLength(0)
+  })
+
+  it('shows a failure inside the ready check as the Failed reason of that server', async () => {
+    readyThrows = true
+    const r = runner()
+    await r.start('a')
+    const settled = await r.settled('a')
+    expect(settled.servers.map((s) => s.status)).toEqual(['failed', 'failed'])
+    expect(settled.servers[0].reason).toMatch(/ready check failed: socket exploded/)
+  })
+
+  it('keeps each server on its port when the config reorders or renames servers', async () => {
+    const r = runner()
+    await r.start('a')
+    await r.stop('a')
+    currentConfig = { ...config, servers: [config.servers[1], { ...config.servers[0], name: 'front' }] }
+    await r.start('a')
+    const again = pool.created.slice(-2)
+    expect(again.find((c) => c.command === 'node server.js')!.env).toMatchObject({ PORT: '4101' })
+    expect(again.find((c) => c.command === 'vite --port 4102')).toBeDefined()
   })
 
   it('tells listeners about every change', async () => {

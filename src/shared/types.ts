@@ -474,6 +474,8 @@ export interface RendererApi {
     onStagesChanged: (cb: (stages: Record<string, FeatureStageView>) => void) => () => void
     /** Told while New feature's install command runs (true) and when it ends (false), by feature name. */
     onInstalling: (cb: (name: string, running: boolean) => void) => () => void
+    /** The Test button: boots the servers, then opens the test pair once every one is Ready (or only the test flow without a preview config); an open pair is brought to the front. Resolves once the windows are open, or with why not. */
+    test: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
     /** Boots the feature's servers from its preview config on its own ports; resolves once they are launched, not ready. */
     startServers: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
     /** Runs one server again, e.g. after it Failed. */
