@@ -78,21 +78,6 @@ code, kbd, pre, samp {
       display: none;
     }
   }
-
-  /* An account badge keeps room for a few letters of its name and its bars. */
-  .account-badge-min {
-    min-width: 7.5rem;
-  }
-
-  @container (max-width: 19rem) {
-    .hide-in-tight-header {
-      display: none;
-    }
-
-    .account-badge-min {
-      min-width: 4rem;
-    }
-  }
 }
 
 /* Under 360 px the row titles were cut; the model text goes. */

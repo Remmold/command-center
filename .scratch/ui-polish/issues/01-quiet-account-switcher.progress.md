@@ -1,0 +1,3 @@
+- done: badge is quiet text (label drops "Claude ", ▾ on hosted, no meters/box), chatAccount test + e2e locators updated; build + pnpm quick green
+- next: run pnpm e2e e2e/accounts.spec.ts and the observed-session sessions.spec test, then commit, then code review since 2bf26cb
+- open reds: none

@@ -164,7 +164,7 @@ test.describe('session history and VS Code sessions in Work', () => {
       await expect(badge).toHaveAttribute('title', /Unknown account: no running VS Code session/)
       mkdirSync(join(launched.configDir, 'sessions'), { recursive: true })
       writeFileSync(join(launched.configDir, 'sessions', `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: OBSERVED_ID, status: 'idle', updatedAt: Date.now() }))
-      await expect(badge).toHaveAccessibleName('Account: Personal · Claude Ultra', { timeout: 15_000 })
+      await expect(badge).toHaveAccessibleName('Account: Personal · Ultra', { timeout: 15_000 })
       await expect(badge).toHaveAttribute('title', /From the running VS Code session/)
       const scroller = pane.locator('.overflow-y-auto').first()
       const fits = async (): Promise<boolean> => {

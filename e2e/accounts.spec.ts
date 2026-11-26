@@ -319,7 +319,7 @@ test('a VS Code profile’s folder is offered, adopted logged in, never written 
     await expect.poll(() => log.initializedIn(workspace)).toBe(true)
     await expect(workBadge).not.toContainText('pending')
     await delayClaudeStart(app, 0)
-    await expect(workBadge).toHaveAccessibleName('Account: Work · Claude Team')
+    await expect(workBadge).toHaveAccessibleName('Account: Work · Team')
     await expect(workBadge).toHaveAttribute('title', /Email: me@work\.example\nOrganization: Work AB\nConfig folder: .*claude-work\nReported by Claude/)
 
     const workPill = page.getByRole('button', { name: /^Account & usage for (Work|me@work\.example)$/ })
@@ -365,7 +365,7 @@ test('a VS Code profile’s folder is offered, adopted logged in, never written 
     await moveWorkspaceTo(configDir)
     await page.getByRole('button', { name: 'Restart on Personal' }).click()
     await expect.poll(() => resumedOn(configDir)).toBe(true)
-    await expect(page.getByRole('button', { name: 'Account: Personal · Claude Ultra' })).not.toContainText('pending')
+    await expect(page.getByRole('button', { name: 'Account: Personal · Ultra' })).not.toContainText('pending')
     await expect(page.getByText(/^Running on/)).toBeHidden()
 
     await moveWorkspaceTo(work)
