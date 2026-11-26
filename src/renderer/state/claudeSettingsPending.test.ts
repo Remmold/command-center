@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { changeHook, hookEventPath, readHookEvents, type HookGroup } from '../../shared/hooks'
 import { conflicts, pendingChanges, refreshed, settle, shownValue, stage, type PendingFile } from './claudeSettingsPending'
 
 const base = { model: 'sonnet', alwaysThinkingEnabled: true }
@@ -24,6 +25,12 @@ describe('staging Claude Code settings changes', () => {
     file = stage(file, base, 'model', 'sonnet')
     expect(file).toBeNull()
     expect(stage(null, base, 'effortLevel', undefined)).toBeNull()
+  })
+
+  it('drops the waiting changes inside a key that is staged whole, such as Reset on the hooks', () => {
+    const hooks = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'a' }] }] } }
+    const file = stage(stage(null, hooks, 'hooks.Stop', undefined), hooks, 'hooks', undefined)
+    expect(file?.patch).toEqual({ set: {}, remove: ['hooks'] })
   })
 
   it('keeps the base of the first change, so Save can tell what Claude changed since', () => {
@@ -88,5 +95,36 @@ describe('a settings file that changed on disk while changes wait', () => {
     expect(settledFile).toEqual({ base: disk, patch: { set: { model: 'opus' }, remove: ['alwaysThinkingEnabled'] } })
     expect(conflicts(settledFile, disk)).toEqual([])
     expect(settle(file, disk, { model: 'file', effortLevel: 'file', alwaysThinkingEnabled: 'file' })).toBeNull()
+  })
+})
+
+describe('staging a hook edit', () => {
+  const guard = { type: 'command', command: 'python guard.py', timeout: 10, statusMessage: 'Dev-mode check' }
+  const lint = { type: 'command', command: 'pnpm lint' }
+  const notify = { type: 'command', command: 'notify-send done' }
+  const base = {
+    model: 'opus',
+    hooks: {
+      PreToolUse: [
+        { matcher: 'Agent', hooks: [guard, lint] },
+        { matcher: 'Bash', hooks: [notify] }
+      ],
+      Stop: [{ hooks: [notify] }]
+    }
+  }
+
+  it('editing one hook stages only its event, with its other hooks and the other events unchanged', () => {
+    const groups = readHookEvents(base.hooks).find((e) => e.event === 'PreToolUse')?.groups as HookGroup[]
+    const edited = changeHook(groups, 0, 1, { ...lint, timeout: 30 })
+    const file = stage(null, base, hookEventPath('PreToolUse'), edited)
+    expect(file?.patch).toEqual({
+      set: {
+        'hooks.PreToolUse': [
+          { matcher: 'Agent', hooks: [guard, { ...lint, timeout: 30 }] },
+          { matcher: 'Bash', hooks: [notify] }
+        ]
+      },
+      remove: []
+    })
   })
 })

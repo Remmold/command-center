@@ -1,5 +1,7 @@
 import { ITEM_LISTS, isSettingsObject, keyPath, pathKeys, sameValue, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
+import { hooksLeftOut, readHookEvents } from './hooks'
 import { isRuleList, ruleRisk } from './permissionRules'
+import { statusLineLeftOut } from './statusLine'
 
 export const SETTING_CATEGORIES = [
   'Model & thinking',
@@ -274,7 +276,7 @@ const PERMISSIONS: SettingEntry[] = [
 
 const hook = inCategory('Hooks')
 const HOOKS: SettingEntry[] = [
-  hook('hooks', 'Hooks', 'Your own commands that run at set moments, such as before a tool runs or when a chat starts.', { kind: 'editor', editor: 'hooks' }, { defaultLabel: 'none' }),
+  hook('hooks', 'Hooks', 'Your own commands that run at set moments, such as before a tool runs or when a chat starts.', { kind: 'editor', editor: 'hooks' }, { defaultLabel: 'none', leavesOut: hooksLeftOut }),
   hook('disableAllHooks', 'Turn off all hooks', 'Stops every hook, the status line and a custom file suggestion command, without deleting them.', TOGGLE, {
     default: false,
     risk: (value) => (value === true ? 'Every hook stops, including the ones that check or guard what Claude does.' : null)
@@ -306,7 +308,7 @@ const INTERFACE: SettingEntry[] = [
     ...TERMINAL_ONLY
   }),
   ui('verbose', 'Full tool output', 'Shows everything each tool call took in and gave back, instead of a short summary.', TOGGLE, { default: false, ...TERMINAL_ONLY }),
-  ui('statusLine', 'Status line', 'A command whose output shows as a line under the input box.', { kind: 'editor', editor: 'statusLine' }, { defaultLabel: 'none', ...TERMINAL_ONLY }),
+  ui('statusLine', 'Status line', 'A command whose output shows as a line under the input box.', { kind: 'editor', editor: 'statusLine' }, { defaultLabel: 'none', leavesOut: statusLineLeftOut('statusLine'), ...TERMINAL_ONLY }),
   ui('showTurnDuration', 'Show how long each answer took', 'A line such as "Cooked for 1m 6s" after each answer.', TOGGLE, { default: true, ...TERMINAL_ONLY }),
   ui('spinnerTipsEnabled', 'Tips while Claude works', 'Short tips about Claude Code beside the spinner.', TOGGLE, { default: true, ...TERMINAL_ONLY }),
   ui('prefersReducedMotion', 'Reduce motion', 'Calms or stops animations such as the spinner and flashes.', TOGGLE, { default: false, ...TERMINAL_ONLY }),
@@ -377,7 +379,12 @@ const INTERFACE: SettingEntry[] = [
   ui('voice.autoSubmit', 'Send when you let go', 'In hold mode, letting go of the key sends the prompt.', TOGGLE, { default: false, advanced: true, ...TERMINAL_ONLY }),
   ui('voiceEnabled', 'Voice dictation (older setting)', 'The older on/off for dictation; Voice dictation above wins when both are set.', TOGGLE, { defaultLabel: 'off', advanced: true, ...TERMINAL_ONLY }),
   ui('vimInsertModeRemaps', 'Vim escape keys', 'Two-key sequences, such as jk, that act as Escape in vim mode.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...TERMINAL_ONLY }),
-  ui('subagentStatusLine', 'Subagent status line', 'A command whose output shows as the status line of subagents.', { kind: 'editor', editor: 'statusLine' }, { defaultLabel: 'none', advanced: true, ...TERMINAL_ONLY })
+  ui('subagentStatusLine', 'Subagent status line', 'A command whose output shows as the status line of subagents.', { kind: 'editor', editor: 'statusLine' }, {
+    defaultLabel: 'none',
+    advanced: true,
+    leavesOut: statusLineLeftOut('subagentStatusLine'),
+    ...TERMINAL_ONLY
+  })
 ]
 
 const memory = inCategory('Memory & context')
@@ -669,6 +676,12 @@ export function savedEfforts(value: unknown): [model: string, level: string][] {
 
 export const isRuleListEntry = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'permissions'
 
+export const isHooksEntry = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'hooks'
+
+export const isStatusLineEntry = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'statusLine'
+
+const counted = (n: number, one: string): string => (n === 0 ? 'none' : `${n} ${one}${n === 1 ? '' : 's'}`)
+
 export const isModelEffort = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'modelEffort'
 
 /** A setting edited as raw JSON, as the page has no plainer control for it. */
@@ -685,7 +698,9 @@ export function formatSettingValue(entry: SettingEntry, value: unknown): string 
     const pairs = savedEfforts(value).map(([model, level]) => `${model}: ${optionLabel(EFFORT_OPTIONS, level) ?? level}`)
     return pairs.length === 0 ? 'none' : pairs.join(', ')
   }
-  if (isRuleListEntry(entry) && Array.isArray(value)) return value.length === 0 ? 'none' : `${value.length} ${value.length === 1 ? 'rule' : 'rules'}`
+  if (isRuleListEntry(entry) && Array.isArray(value)) return counted(value.length, 'rule')
+  if (isHooksEntry(entry) && isSettingsObject(value)) return counted(readHookEvents(value).reduce((n, e) => n + e.groups.reduce((m, g) => m + g.hooks.length, 0), 0), 'hook')
+  if (isStatusLineEntry(entry) && isSettingsObject(value) && typeof value.command === 'string') return value.command
   if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return value.length === 0 ? 'none' : value.join(', ')
   return typeof value === 'string' ? value : JSON.stringify(value)
 }

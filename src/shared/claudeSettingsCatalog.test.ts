@@ -161,6 +161,15 @@ describe('the other keys of a file', () => {
     expect(otherKeys({ permissions: { allow: ['Read', { tool: 'Bash' }], ask: ['Bash'], deny: 'Read' } })).toEqual(['permissions.allow', 'permissions.deny'])
   })
 
+  it('include the hook events and status lines their editors can’t show', () => {
+    const file = {
+      hooks: { PreToolUse: [{ matcher: 'Agent', hooks: [{ type: 'command', command: 'guard', timeout: 10 }] }], PreModelSwitch: [{ hooks: [] }] },
+      statusLine: { type: 'command', command: 'node statusline.js', padding: 2 },
+      subagentStatusLine: { type: 'command', command: 'x', padding: 2 }
+    }
+    expect(otherKeys(file)).toEqual(['hooks.PreModelSwitch', 'subagentStatusLine'])
+  })
+
   it('take a split object whole when it is not an object, so its value is still shown', () => {
     expect(otherKeys({ worktree: 'nope', voice: { enabled: true } })).toEqual(['worktree'])
   })

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
-import { SETTINGS_CATALOG, SETTING_CATEGORIES, changeText, entryFor, entryOf, formatSettingValue, matchesSearch, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { SETTINGS_CATALOG, SETTING_CATEGORIES, changeText, entryFor, entryOf, formatSettingValue, isHooksEntry, matchesSearch, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
 import { changeCount, getAt, pathKeys, patchPaths, patchSize, sameValue, withPatch, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
 import { effectiveSetting, ruleSources, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
+import { hookChangeText, hookEvent } from '../../../shared/hooks'
+import { isStatusLineKey } from '../../../shared/statusLine'
 import { RULE_LISTS, ruleListKey, ruleListOf, type RuleList } from '../../../shared/permissionRules'
 import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
 import { conflicts, pendingChanges, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
@@ -25,10 +27,12 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { Toolbar } from '../ui/Toolbar'
+import { HooksEditor } from './HooksEditor'
 import { OtherKeysList } from './OtherKeysList'
 import { PermissionRuleList } from './PermissionRuleList'
 import { otherKeyRows, otherKeysNotice } from './otherKeysView'
 import { SettingField, type ShownEffective } from './SettingField'
+import { StatusLineEditor } from './StatusLineEditor'
 
 /** Names the boxes whose text Save would lose. */
 function unparsedNote(keys: readonly string[]): string {
@@ -90,6 +94,7 @@ const touches = (patch: SettingsPatch, entry: SettingEntry): boolean => patchPat
 function settingWords(key: string): { label: string; format: (value: unknown) => string } {
   const entry = entryOf(key)
   const inside = entry && entry.key !== key ? pathKeys(key.slice(entry.key.length + 1)) : []
+  if (entry && isHooksEntry(entry) && inside.length > 0) inside[0] = hookEvent(inside[0])?.label ?? inside[0]
   return {
     label: entry ? [entry.label, ...inside].join(' · ') : key,
     format: (value) => (entry ? formatSettingValue(entry, value) : value === undefined ? 'not set' : JSON.stringify(value))
@@ -102,7 +107,8 @@ function ReviewDialog({ onClose }: { onClose: () => void }) {
   const entries = pendingChanges(pending).map(({ key, before, after }): [string, string] => {
     const { label, format } = settingWords(key)
     const entry = entryOf(key)
-    return [label, entry?.key === key ? changeText(entry, before, after) : `${format(before)} → ${format(after)}`]
+    if (entry?.key === key) return [label, changeText(entry, before, after)]
+    return [label, entry && isHooksEntry(entry) && pathKeys(key).length === 2 ? hookChangeText(before, after) : `${format(before)} → ${format(after)}`]
   })
   return (
     <Dialog title="Review changes" onClose={onClose}>
@@ -248,9 +254,14 @@ export function ClaudeCodeSettings() {
   }, [snapshot, layers, layer, pending, searching, query])
   const showOtherKeys = searching ? otherRows.length > 0 : category === OTHER_KEYS_CATEGORY
   const ruleLists = useMemo(() => Object.fromEntries(RULE_LISTS.map((list) => [list, getAt(layers[layer], ruleListKey(list))])) as Record<RuleList, unknown>, [layers, layer])
-  const rulesEditor = (entry: SettingEntry) => {
+  const editorFor = (entry: SettingEntry) => {
+    if (unreadable) return null
+    const disabled = !snapshot || saving
     const list = ruleListOf(entry.key)
-    return list && !unreadable && <PermissionRuleList list={list} lists={ruleLists} sources={ruleSources(list, layers)} layer={layer} disabled={!snapshot || unreadable || saving} onStage={stage} />
+    if (list) return <PermissionRuleList list={list} lists={ruleLists} sources={ruleSources(list, layers)} layer={layer} disabled={disabled} onStage={stage} />
+    if (isHooksEntry(entry)) return <HooksEditor value={getAt(layers[layer], entry.key)} layers={layers} layer={layer} disabled={disabled} onStage={stage} onUnparsed={markUnparsed} />
+    if (isStatusLineKey(entry.key)) return <StatusLineEditor settingKey={entry.key} value={getAt(layers[layer], entry.key)} disabled={disabled} onStage={stage} />
+    return null
   }
   const noWorkspace = layer !== 'account' && workspaces.length === 0
 
@@ -334,7 +345,7 @@ export function ClaudeCodeSettings() {
                       disabled={!snapshot || unreadable || saving}
                       onStage={stage}
                       onUnparsed={markUnparsed}
-                      editor={rulesEditor(entry)}
+                      editor={editorFor(entry)}
                     />
                   ))}
                 </div>

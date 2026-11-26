@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { SettingsLayer } from '../../../shared/claudeSettings'
-import { defaultText, formatSettingValue, isModelEffort, isRawJson, isRuleListEntry, layerRule, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { defaultText, formatSettingValue, isHooksEntry, isModelEffort, isRawJson, isRuleListEntry, isStatusLineEntry, layerRule, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -98,7 +98,7 @@ function Control({ entry, layer, value, disabled, onChange }: Pick<Props, 'entry
         />
       )
     case 'editor':
-      return isModelEffort(entry) || isRawJson(entry) || isRuleListEntry(entry) ? null : <span className="text-muted">{formatSettingValue(entry, value)}</span>
+      return isModelEffort(entry) || isRawJson(entry) || isRuleListEntry(entry) || isHooksEntry(entry) || isStatusLineEntry(entry) ? null : <span className="text-muted">{formatSettingValue(entry, value)}</span>
   }
 }
 

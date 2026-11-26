@@ -15,14 +15,15 @@ export interface PendingChange {
 const isItemList = (key: string, ...values: unknown[]): boolean => ITEM_LISTS.includes(key) && values.every((v) => v === undefined || isStringList(v))
 
 /**
- * Stages `value` for `key`; undefined removes the key. An item list records the items added and removed
+ * Stages `value` for `key`, in place of any waiting change inside it; undefined removes the key. An item list records the items added and removed
  * instead, so Save keeps what Claude adds to the list meanwhile. Null once the file has no change left.
  */
 export function stage(file: PendingFile | null, base: SettingsObject, key: string, value: unknown): PendingFile | null {
   const from = file?.base ?? base
-  const { [key]: _old, ...set } = file?.patch.set ?? {}
-  const remove = (file?.patch.remove ?? []).filter((path) => path !== key)
-  const { [key]: _oldEdit, ...items } = file?.patch.items ?? {}
+  const kept = (path: string) => path !== key && !path.startsWith(`${key}.`)
+  const set = Object.fromEntries(Object.entries(file?.patch.set ?? {}).filter(([path]) => kept(path)))
+  const remove = (file?.patch.remove ?? []).filter(kept)
+  const items = Object.fromEntries(Object.entries(file?.patch.items ?? {}).filter(([path]) => kept(path)))
   const before = getAt(from, key)
   if (isItemList(key, before, value)) {
     const edit = itemEdit((before as string[] | undefined) ?? [], (value as string[] | undefined) ?? [])
