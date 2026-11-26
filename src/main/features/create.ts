@@ -17,13 +17,15 @@ export interface CreateDeps {
     add: (path: string, profileId: string) => Promise<Workspace>
     remove: (id: string) => Promise<void>
   }
-  /** The profile a workspace's sessions run on, its shared-item links repaired first. */
-  profile: (profileId: string) => Promise<{ id: string; name: string; configDir: string; adopted: boolean }>
+  /** The profile a workspace's sessions run on, its shared-item links repaired first, and the variables a process needs to run as it. */
+  profile: (profileId: string) => Promise<{ id: string; name: string; configDir: string; adopted: boolean; env: Record<string, string> }>
   features: { list: () => Promise<FeatureRecord[]>; add: (r: FeatureRecord) => Promise<void>; remove: (name: string) => Promise<void> }
   /** The install command saved for a workspace's preview config; empty when none. */
   installCommand: (workspaceId: string) => Promise<string>
-  /** Runs a command in a folder; rejects with the reason when it fails. */
-  runInstall: (cwd: string, command: string) => Promise<void>
+  /** Runs a command in a folder on an account's environment; rejects with the reason when it fails. */
+  runInstall: (cwd: string, command: string, env: Record<string, string>) => Promise<void>
+  /** Told when the install starts and when it ends, so the dialog can say one is running. */
+  installing?: (name: string, running: boolean) => void
   pathExists: (path: string) => Promise<boolean>
   now: () => number
 }
@@ -67,11 +69,19 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
     await deps.git.addWorktree(source.path, worktreePath, branch, base)
     madeWorktree = true
     const install = await deps.installCommand(source.id)
-    if (install) await deps.runInstall(worktreePath, install)
+    if (install) {
+      deps.installing?.(request.name, true)
+      try {
+        await deps.runInstall(worktreePath, install, profile.env)
+      } finally {
+        deps.installing?.(request.name, false)
+      }
+    }
     workspace = await deps.workspaces.add(worktreePath, profile.id)
     const feature: FeatureRecord = {
       name: request.name,
       workspaceId: workspace.id,
+      sourceWorkspaceId: source.id,
       worktreePath,
       branch,
       sessionId: request.sessionId,

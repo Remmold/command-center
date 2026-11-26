@@ -11,6 +11,7 @@ import type { ZoomStep } from './zoom'
 import type { LocalServer } from './localPorts'
 import type { SidebarLayout } from './sidebarGroups'
 import type { FeatureStageView } from './featureStage'
+import type { FeatureServersView } from './featureServers'
 import type { FeatureRecord, NewFeatureRequest, NewFeatureResult } from './features'
 import type { PreviewConfig } from './previewConfig'
 import type { HistoryChange } from './chatHistory'
@@ -470,6 +471,17 @@ export interface RendererApi {
     /** Keeps the feature session's Claude id on its record, so the session can be resumed once its chat is gone. */
     setClaudeSession: (name: string, claudeSessionId: string) => Promise<void>
     onStagesChanged: (cb: (stages: Record<string, FeatureStageView>) => void) => () => void
+    /** Told while New feature's install command runs (true) and when it ends (false), by feature name. */
+    onInstalling: (cb: (name: string, running: boolean) => void) => () => void
+    /** Boots the feature's servers from its preview config on its own ports; resolves once they are launched, not ready. */
+    startServers: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
+    /** Runs one server again, e.g. after it Failed. */
+    retryServer: (name: string, server: string) => Promise<{ ok: true } | { ok: false; error: string }>
+    /** Stops the feature's servers; it keeps its ports. */
+    stopServers: (name: string) => Promise<void>
+    /** Every started feature's servers by feature name. */
+    servers: () => Promise<Record<string, FeatureServersView>>
+    onServersChanged: (cb: (name: string, view: FeatureServersView) => void) => () => void
   }
   previewConfig: {
     /** The workspace's saved preview config; null when it has none (no browser, only the test flow). */

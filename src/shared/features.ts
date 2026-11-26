@@ -3,6 +3,8 @@ export interface FeatureRecord {
   name: string
   /** The feature worktree's workspace; it carries the feature's account profile. */
   workspaceId: string
+  /** The workspace picked in New feature, whose preview config the feature uses; absent on records made before ticket 04. */
+  sourceWorkspaceId?: string
   worktreePath: string
   branch: string
   sessionId: string

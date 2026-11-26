@@ -36,6 +36,9 @@ import { contextReport, readListedFile, startTotals, writeListedFile } from './c
 import { addWorktree, branchTaken, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
 import { createFeatureStore } from './features/store'
 import { runInstall } from './features/install'
+import { createPortReserver, portAccepts, portIsFree } from './features/ports'
+import { createServerRunner } from './features/serverRunner'
+import { sourceCandidates } from './features/source'
 import { createPreviewConfigStore } from './previewConfig/store'
 import { createStageService, type StageService } from './features/stageService'
 import { readTestFlowsFolder } from './testFlow/settings'
@@ -59,6 +62,7 @@ import { userDataPath } from './util/paths'
 import { setScreenFocus } from './sessions/screenFocus'
 import {
   DEFAULT_PROFILE_ID,
+  DEFAULT_SHELL_KIND,
   type AddWorkspaceResult,
   type AdoptResult,
   type ClaudeStartOptions,
@@ -231,12 +235,13 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       remove: workspaces.remove
     },
     profile: async (profileId) => {
-      await profiles.prepareSession(profileId)
-      return profiles.get(profileId)
+      const { env } = await profiles.prepareSession(profileId)
+      return { ...(await profiles.get(profileId)), env }
     },
     features: featureStore,
     installCommand: async (workspaceId) => (await previewConfigs.get(workspaceId))?.install ?? '',
     runInstall,
+    installing: (name, running) => sendAll(IPC.FEATURES_INSTALLING, { name, running }),
     pathExists: (path) => fs.access(path).then(() => true, () => false),
     now: () => Date.now()
   }
@@ -259,6 +264,33 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     featureStages?.changed()
     return result
   })
+  const serverRunner = createServerRunner({
+    terminals,
+    feature: async (name) => (await featureStore.list()).find((f) => f.name === name),
+    config: async (feature) => {
+      for (const id of sourceCandidates(feature, await workspaces.list())) {
+        const config = await previewConfigs.get(id)
+        if (config) return config
+      }
+      return null
+    },
+    env: async (workspaceId) => {
+      const workspace = (await workspaces.list()).find((w) => w.id === workspaceId)
+      return (await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)).env
+    },
+    reservePorts: createPortReserver({ list: featureStore.list, save: featureStore.setPorts, isFree: portIsFree }).reserve,
+    isReady: (port) => portAccepts(port),
+    shell: DEFAULT_SHELL_KIND
+  })
+  unsubscribers.push(serverRunner.onChanged((name, view) => sendAll(IPC.FEATURES_SERVERS_CHANGED, { name, view })))
+  ipcMain.handle(IPC.FEATURES_SERVERS, () => serverRunner.all())
+  ipcMain.handle(IPC.FEATURES_SERVERS_START, (_e, name: unknown) =>
+    typeof name === 'string' ? serverRunner.start(name) : { ok: false, error: 'No feature was named.' }
+  )
+  ipcMain.handle(IPC.FEATURES_SERVERS_RETRY, (_e, name: unknown, server: unknown) =>
+    typeof name === 'string' && typeof server === 'string' ? serverRunner.retry(name, server) : { ok: false, error: 'No server was named.' }
+  )
+  ipcMain.handle(IPC.FEATURES_SERVERS_STOP, (_e, name: unknown) => (typeof name === 'string' ? serverRunner.stop(name) : undefined))
   ipcMain.handle(IPC.FEATURES_SET_CLAUDE_SESSION, (_e, name: unknown, claudeSessionId: unknown) =>
     typeof name === 'string' && typeof claudeSessionId === 'string' ? featureStore.setClaudeSessionId(name, claudeSessionId) : undefined
   )

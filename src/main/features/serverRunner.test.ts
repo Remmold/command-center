@@ -1,0 +1,238 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import type { FeatureRecord } from '../../shared/features'
+import { serversNote } from '../../shared/featureServers'
+import { profileEnv } from '../../shared/profiles'
+import type { PreviewConfig } from '../../shared/previewConfig'
+import type { CreateTerminalRequest, CreateTerminalResult, TerminalInfo } from '../../shared/types'
+import { createPortReserver } from './ports'
+import { createServerRunner, type RunnerTerminals } from './serverRunner'
+
+/** A pool that records what it was asked and lets a test end a terminal. */
+class FakePool implements RunnerTerminals {
+  terminals = new Map<string, TerminalInfo>()
+  created: CreateTerminalRequest[] = []
+  output = new Map<string, string>()
+  refuse: string | null = null
+  private listeners: ((list: TerminalInfo[]) => void)[] = []
+  create(request: CreateTerminalRequest): CreateTerminalResult {
+    this.created.push(request)
+    if (this.refuse) return { ok: false, error: this.refuse }
+    const info: TerminalInfo = { id: request.id!, workspaceId: request.workspaceId, cwd: request.cwd, label: request.label ?? '', command: request.command, kind: request.kind, env: request.env, status: 'running', startedAt: 1 }
+    this.terminals.set(info.id, info)
+    this.emit()
+    return { ok: true, terminal: info }
+  }
+  async stop(id: string): Promise<void> {
+    const t = this.terminals.get(id)
+    if (t?.status === 'running') this.terminals.set(id, { ...t, status: 'exited' })
+    this.emit()
+  }
+  async close(id: string): Promise<void> {
+    this.terminals.delete(id)
+    this.emit()
+  }
+  list = (): TerminalInfo[] => [...this.terminals.values()]
+  attach = (id: string) => (this.terminals.has(id) ? { terminal: this.terminals.get(id)!, tail: this.output.get(id) ?? '' } : null)
+  onChanged(cb: (list: TerminalInfo[]) => void): () => void {
+    this.listeners.push(cb)
+    return () => undefined
+  }
+  die(id: string, exitCode = 1): void {
+    this.terminals.set(id, { ...this.terminals.get(id)!, status: 'exited', exitCode })
+    this.emit()
+  }
+  private emit(): void {
+    for (const cb of this.listeners) cb(this.list())
+  }
+}
+
+const config: PreviewConfig = {
+  install: '',
+  startPage: '/',
+  servers: [
+    { name: 'web', command: 'vite --port {port}', cwd: 'web', ready: 'port' },
+    { name: 'api', command: 'node server.js', cwd: '.', ready: 'port' }
+  ]
+}
+
+let pool: FakePool
+let records: FeatureRecord[]
+let answering: Set<number>
+let held: Set<number>
+let currentConfig: PreviewConfig | null
+
+const record = (name: string, extra: Partial<FeatureRecord> = {}): FeatureRecord => ({
+  name,
+  workspaceId: `ws-${name}`,
+  worktreePath: `C:/wt/${name}`,
+  branch: `feat/${name}`,
+  sessionId: 's',
+  ports: [],
+  startedAt: 1,
+  completedAt: null,
+  ...extra
+})
+
+function runner(options: { readyTimeoutMs?: number } = {}) {
+  const reserver = createPortReserver({
+    list: async () => records,
+    save: async (name, ports) => void (records.find((r) => r.name === name)!.ports = ports),
+    isFree: async (p) => !held.has(p)
+  })
+  return createServerRunner({
+    terminals: pool,
+    feature: async (name) => records.find((r) => r.name === name),
+    config: async () => currentConfig,
+    env: async (workspaceId) => profileEnv({ id: workspaceId === 'ws-a' ? 'work' : 'default', configDir: `C:/cfg/${workspaceId}` }, null),
+    reservePorts: reserver.reserve,
+    isReady: async (port) => answering.has(port),
+    shell: 'pwsh',
+    pollMs: 5,
+    ...options
+  })
+}
+
+beforeEach(() => {
+  pool = new FakePool()
+  records = [record('a'), record('b')]
+  answering = new Set()
+  held = new Set()
+  currentConfig = config
+})
+
+const portOf = (view: { servers: { name: string; port: number }[] }, server: string): number => view.servers.find((s) => s.name === server)!.port
+
+describe('server runner', () => {
+  it('starts each server as a terminal in its worktree folder on its own port, as PORT and as {port}, on the account environment', async () => {
+    const r = runner()
+    expect(await r.start('a')).toEqual({ ok: true })
+    const [web, api] = pool.created
+    expect(web).toMatchObject({ id: 'feature-server:a:web', workspaceId: 'ws-a', command: 'vite --port 4100', kind: 'pwsh' })
+    expect(web.cwd.replace(/\\/g, '/')).toBe('C:/wt/a/web')
+    expect(web.env).toEqual({ CLAUDE_CONFIG_DIR: 'C:/cfg/ws-a', PORT: '4100' })
+    expect(api).toMatchObject({ command: 'node server.js' })
+    expect(api.env).toMatchObject({ PORT: '4101' })
+  })
+
+  it('does not name the account when the feature is on the default account', async () => {
+    const r = runner()
+    await r.start('b')
+    expect(pool.created[0].env).toEqual({ PORT: '4100' })
+  })
+
+  it('is Starting, then Ready once the port answers', async () => {
+    const r = runner()
+    await r.start('a')
+    expect(serversNote(r.current('a').servers)).toBe('Starting')
+    answering.add(4100)
+    answering.add(4101)
+    const settled = await r.settled('a')
+    expect(settled.servers.map((s) => s.status)).toEqual(['ready', 'ready'])
+    expect(serversNote(settled.servers)).toBe('Ready')
+  })
+
+  it('fails with output and a reason when a server never answers within the limit, and stops it', async () => {
+    const r = runner({ readyTimeoutMs: 40 })
+    pool.output.set('feature-server:a:web', '\x1b[31mError: cannot find module\x1b[0m\r\n')
+    await r.start('a')
+    answering.add(4101)
+    const settled = await r.settled('a')
+    const web = settled.servers.find((s) => s.name === 'web')!
+    expect(web).toMatchObject({ status: 'failed', reason: expect.stringMatching(/did not answer on port 4100 within/), output: 'Error: cannot find module' })
+    expect(settled.servers.find((s) => s.name === 'api')!.status).toBe('ready')
+    expect(serversNote(settled.servers)).toBe('Failed')
+    expect(pool.terminals.get('feature-server:a:web')!.status).toBe('exited')
+  })
+
+  it('fails at once when the server cannot start', async () => {
+    pool.refuse = 'Could not find shell pwsh on PATH.'
+    const r = runner()
+    await r.start('a')
+    expect(r.current('a').servers.map((s) => [s.status, s.reason])).toEqual([
+      ['failed', 'Could not find shell pwsh on PATH.'],
+      ['failed', 'Could not find shell pwsh on PATH.']
+    ])
+  })
+
+  it('fails when the process ends before it answers, and when it dies after it was ready', async () => {
+    const r = runner()
+    await r.start('a')
+    pool.die('feature-server:a:web', 2)
+    expect(r.current('a').servers[0]).toMatchObject({ status: 'failed', reason: expect.stringMatching(/ended before it answered.*exit 2/) })
+    answering.add(4101)
+    await r.settled('a')
+    pool.die('feature-server:a:api', 0)
+    expect(r.current('a').servers[1]).toMatchObject({ status: 'failed', reason: expect.stringMatching(/stopped after it was ready/) })
+  })
+
+  it('retries only the failed server, on the same port', async () => {
+    const r = runner({ readyTimeoutMs: 30 })
+    answering.add(4101)
+    await r.start('a')
+    await r.settled('a')
+    expect(r.current('a').servers[0].status).toBe('failed')
+    const before = pool.created.length
+    answering.add(4100)
+    expect(await r.retry('a', 'web')).toEqual({ ok: true })
+    expect(pool.created).toHaveLength(before + 1)
+    expect(pool.created.at(-1)!.command).toBe('vite --port 4100')
+    const settled = await r.settled('a')
+    expect(settled.servers.map((s) => s.status)).toEqual(['ready', 'ready'])
+  })
+
+  it('leaves running servers alone when started again', async () => {
+    const r = runner()
+    await r.start('a')
+    await r.start('a')
+    expect(pool.created).toHaveLength(2)
+  })
+
+  it('stops every server, shows Stopped, and the feature keeps its ports', async () => {
+    const r = runner()
+    answering.add(4100)
+    answering.add(4101)
+    await r.start('a')
+    await r.settled('a')
+    await r.stop('a')
+    expect(r.current('a').servers.map((s) => s.status)).toEqual(['stopped', 'stopped'])
+    expect(serversNote(r.current('a').servers)).toBe('Stopped')
+    expect(records[0].ports).toEqual([4100, 4101])
+    expect([...pool.terminals.values()].map((t) => t.status)).toEqual(['exited', 'exited'])
+    await r.start('a')
+    expect(pool.created.at(-1)!.env).toMatchObject({ PORT: '4101' })
+    expect(pool.created.at(-2)!.env).toMatchObject({ PORT: '4100' })
+  })
+
+  it('gives two features started at once different ports', async () => {
+    const r = runner()
+    await Promise.all([r.start('a'), r.start('b')])
+    const ports = pool.created.map((c) => c.env!.PORT)
+    expect(new Set(ports).size).toBe(4)
+  })
+
+  it('refuses a feature without servers, an unknown one and a completed one, with a reason', async () => {
+    const r = runner()
+    currentConfig = null
+    expect(await r.start('a')).toEqual({ ok: false, error: expect.stringMatching(/no preview servers/) })
+    expect(await r.start('ghost')).toEqual({ ok: false, error: expect.stringMatching(/not known/) })
+    records[1].completedAt = 5
+    currentConfig = config
+    expect(await r.start('b')).toEqual({ ok: false, error: expect.stringMatching(/completed/) })
+    expect(pool.created).toHaveLength(0)
+  })
+
+  it('refuses with the allocator reason when the range is used up', async () => {
+    const r = runner()
+    held = new Set(Array.from({ length: 900 }, (_, i) => 4100 + i))
+    expect(await r.start('a')).toEqual({ ok: false, error: expect.stringMatching(/No free port left/) })
+  })
+
+  it('tells listeners about every change', async () => {
+    const r = runner()
+    const seen: string[] = []
+    r.onChanged((name, view) => seen.push(`${name}:${serversNote(view.servers)}`))
+    await r.start('a')
+    expect(seen.at(-1)).toBe('a:Starting')
+    expect(portOf(r.current('a'), 'api')).toBe(4101)
+  })
+})

@@ -4,10 +4,10 @@ import { killTree } from '../util/killTree'
 
 const TAIL_CHARS = 1500
 
-/** Runs a workspace's install command in a new worktree; rejects with the command's own last output when it fails. */
-export function runInstall(cwd: string, command: string, timeoutMs = 10 * 60_000): Promise<void> {
+/** Runs a workspace's install command in a new worktree, on the feature's account environment; rejects with the command's own last output when it fails. */
+export function runInstall(cwd: string, command: string, env: Record<string, string> = {}, timeoutMs = 10 * 60_000): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, { cwd, shell: true, windowsHide: true, env: childEnv(process.env) })
+    const child = spawn(command, { cwd, shell: true, windowsHide: true, env: childEnv(process.env, env) })
     let tail = ''
     const keep = (chunk: Buffer): void => {
       tail = (tail + chunk.toString()).slice(-TAIL_CHARS)

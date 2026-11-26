@@ -20,6 +20,7 @@ const FIELD = 'w-full rounded border border-strong bg-input px-1.5 py-1 text-xs 
 function NewFeatureDialog() {
   const close = useFeaturesStore((s) => s.closeDialog)
   const features = useFeaturesStore((s) => s.features)
+  const installing = useFeaturesStore((s) => s.installing)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const identities = useRepoIdentitiesStore((s) => s.identities)
   const options = useMemo(
@@ -80,6 +81,11 @@ function NewFeatureDialog() {
             }}
           />
         </label>
+        {busy && installing[shownName] && (
+          <p role="status" className="text-muted">
+            Installing the workspace's dependencies in the new worktree…
+          </p>
+        )}
         {(problem ?? error) && (
           <p role="alert" className="text-error">
             {problem ?? error}

@@ -1,16 +1,22 @@
 import { create } from 'zustand'
+import type { FeatureServersView } from '../../shared/featureServers'
 import type { FeatureStageView } from '../../shared/featureStage'
 import { featureFirstPrompt, featureOpenPlan, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
 import type { ChatItem } from '../components/chat/types'
 import { useChatItemsStore } from './chatItemsStore'
 import { hostedSessions, openSession, startSession } from './sessionNavigation'
 import { useProjectViewsStore } from './projectViewsStore'
+import { useToastStore } from './toastStore'
 import { useWorkspacesStore } from './workspacesStore'
 
 interface FeaturesState {
   features: FeatureRecord[]
   /** Each feature's stage by name, as main last read it from the files. */
   stages: Record<string, FeatureStageView>
+  /** Each started feature's servers by name. */
+  servers: Record<string, FeatureServersView>
+  /** Features whose New feature install command is running now, by name. */
+  installing: Record<string, boolean>
   dialogOpen: boolean
   load: () => Promise<void>
   openDialog: () => void
@@ -20,11 +26,13 @@ interface FeaturesState {
 export const useFeaturesStore = create<FeaturesState>((set) => ({
   features: [],
   stages: {},
+  servers: {},
+  installing: {},
   dialogOpen: false,
   load: async () => {
     try {
-      const [features, stages] = await Promise.all([window.api.features.list(), window.api.features.stages()])
-      set({ features, stages })
+      const [features, stages, servers] = await Promise.all([window.api.features.list(), window.api.features.stages(), window.api.features.servers()])
+      set({ features, stages, servers })
     } catch (err) {
       console.error('failed to load features', err)
     }
@@ -65,7 +73,30 @@ export async function startFeature(request: Omit<NewFeatureRequest, 'sessionId'>
 
 /** Follows stage changes from main; call once. */
 export function followFeatureStages(): () => void {
-  return window.api.features.onStagesChanged((stages) => useFeaturesStore.setState({ stages }))
+  const api = window.api.features
+  const unsubscribe = [
+    api.onStagesChanged((stages) => useFeaturesStore.setState({ stages })),
+    api.onServersChanged((name, view) => useFeaturesStore.setState((s) => ({ servers: { ...s.servers, [name]: view } }))),
+    api.onInstalling((name, running) => useFeaturesStore.setState((s) => ({ installing: { ...s.installing, [name]: running } })))
+  ]
+  return () => unsubscribe.forEach((u) => u())
+}
+
+/** Starts, retries or stops a feature's servers; a refusal shows as a toast. */
+export function startFeatureServers(name: string): void {
+  void window.api.features.startServers(name).then((r) => {
+    if (!r.ok) useToastStore.getState().show(r.error)
+  })
+}
+
+export function retryFeatureServer(name: string, server: string): void {
+  void window.api.features.retryServer(name, server).then((r) => {
+    if (!r.ok) useToastStore.getState().show(r.error)
+  })
+}
+
+export function stopFeatureServers(name: string): void {
+  void window.api.features.stopServers(name)
 }
 
 /** Keeps a feature session's Claude id on its record, which is what resumes it once its chat is gone. */

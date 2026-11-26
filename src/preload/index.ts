@@ -41,6 +41,7 @@ import type { RepoIdentityViews } from '../shared/repoIdentity'
 import type { SpeechModelStatus, VideoProgressEvent } from '../shared/video'
 import type { TestFlowFocus } from '../shared/testFlow'
 import type { FeatureStageView } from '../shared/featureStage'
+import type { FeatureServersView } from '../shared/featureServers'
 
 const api: RendererApi = {
   workspaces: {
@@ -62,6 +63,20 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, stages: Record<string, FeatureStageView>) => cb(stages)
       ipcRenderer.on(IPC.FEATURES_STAGES_CHANGED, handler)
       return () => ipcRenderer.off(IPC.FEATURES_STAGES_CHANGED, handler)
+    },
+    onInstalling: (cb) => {
+      const handler = (_e: IpcRendererEvent, event: { name: string; running: boolean }) => cb(event.name, event.running)
+      ipcRenderer.on(IPC.FEATURES_INSTALLING, handler)
+      return () => ipcRenderer.off(IPC.FEATURES_INSTALLING, handler)
+    },
+    startServers: (name) => ipcRenderer.invoke(IPC.FEATURES_SERVERS_START, name),
+    retryServer: (name, server) => ipcRenderer.invoke(IPC.FEATURES_SERVERS_RETRY, name, server),
+    stopServers: (name) => ipcRenderer.invoke(IPC.FEATURES_SERVERS_STOP, name),
+    servers: () => ipcRenderer.invoke(IPC.FEATURES_SERVERS),
+    onServersChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, event: { name: string; view: FeatureServersView }) => cb(event.name, event.view)
+      ipcRenderer.on(IPC.FEATURES_SERVERS_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.FEATURES_SERVERS_CHANGED, handler)
     }
   },
   previewConfig: {

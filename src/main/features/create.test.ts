@@ -24,7 +24,8 @@ let profileAdopted: boolean
 let failAddingWorkspace: boolean
 let profileRemoved: boolean
 let installCommand: string
-let installRuns: { cwd: string; command: string }[]
+let installRuns: { cwd: string; command: string; env: Record<string, string> }[]
+let installingCalls: string[]
 let installError: string | null
 
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf-8' })
@@ -46,17 +47,18 @@ function deps(): CreateDeps {
       },
       remove: async (id) => void (workspaces = workspaces.filter((w) => w.id !== id))
     },
-    profile: async (id) => ({ id: profileRemoved ? 'default' : id, name: 'Work', configDir, adopted: profileAdopted }),
+    profile: async (id) => ({ id: profileRemoved ? 'default' : id, name: 'Work', configDir, adopted: profileAdopted, env: profileEnv({ id, configDir }, null) }),
     features: {
       list: async () => records,
       add: async (r) => void records.push(r),
       remove: async (name) => void (records = records.filter((r) => r.name !== name))
     },
     installCommand: async (workspaceId) => (workspaceId === 'src' ? installCommand : ''),
-    runInstall: async (cwd, command) => {
-      installRuns.push({ cwd, command })
+    runInstall: async (cwd, command, env) => {
+      installRuns.push({ cwd, command, env })
       if (installError) throw new Error(installError)
     },
+    installing: (name, running) => void installingCalls.push(`${name}:${running}`),
     pathExists: async (p) => existsSync(p),
     now: () => 42
   }
@@ -82,6 +84,7 @@ beforeEach(() => {
   profileRemoved = false
   installCommand = ''
   installRuns = []
+  installingCalls = []
   installError = null
 })
 
@@ -95,7 +98,7 @@ describe('createFeature', () => {
     expect(existsSync(join(path, 'a.txt'))).toBe(true)
     expect(git(path, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe(featureBranch('login'))
     expect(records).toEqual([
-      { name: 'login', workspaceId: 'w2', worktreePath: path, branch: 'feat/login', sessionId: 's1', ports: [], startedAt: 42, completedAt: null }
+      { name: 'login', workspaceId: 'w2', sourceWorkspaceId: 'src', worktreePath: path, branch: 'feat/login', sessionId: 's1', ports: [], startedAt: 42, completedAt: null }
     ])
     const added = workspaces.find((w) => w.id === 'w2')
     expect(added?.profileId).toBe('work-profile')
@@ -153,13 +156,28 @@ describe('createFeature install step', () => {
     installCommand = 'pnpm install'
     const result = await createFeature(deps(), request)
     expect(result.ok).toBe(true)
-    expect(installRuns).toEqual([{ cwd: worktreePathFor(repo, 'login'), command: 'pnpm install' }])
+    expect(installRuns).toEqual([{ cwd: worktreePathFor(repo, 'login'), command: 'pnpm install', env: expect.anything() }])
+  })
+
+  it('runs the install on the feature account environment and says while it runs', async () => {
+    installCommand = 'pnpm install'
+    await createFeature(deps(), request)
+    expect(installRuns[0].env).toEqual({ CLAUDE_CONFIG_DIR: configDir })
+    expect(installingCalls).toEqual(['login:true', 'login:false'])
+  })
+
+  it('says the install ended even when it failed', async () => {
+    installCommand = 'pnpm install'
+    installError = 'boom'
+    await createFeature(deps(), request)
+    expect(installingCalls).toEqual(['login:true', 'login:false'])
   })
 
   it('runs nothing for a workspace without an install command, exactly as before', async () => {
     const result = await createFeature(deps(), request)
     expect(result.ok).toBe(true)
     expect(installRuns).toEqual([])
+    expect(installingCalls).toEqual([])
     expect(records).toHaveLength(1)
   })
 
