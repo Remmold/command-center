@@ -17,7 +17,7 @@ How an account profile is shown: its name and plan, e.g. "Work · Team". Each pr
 _Avoid_: Subscription, licence
 
 **Adopted folder**:
-An existing Claude config folder (such as one a VS Code profile uses) that an account profile runs on instead of a folder the app made. The app only reads it: no shared-item links, no writes, and removing the profile never deletes it.
+An existing Claude config folder (such as one a VS Code profile uses) that an account profile runs on instead of a folder the app made. The app only reads it: no shared-item links, no writes, and removing the profile never deletes it. The one exception is Claude Code settings: its settings.json and keybindings.json are written when Andreas presses Save there.
 _Avoid_: Imported profile
 
 **Hosted session**:
@@ -142,8 +142,24 @@ The estimated tokens every new chat in a workspace starts with from its context:
 _Avoid_: Context size, context usage (that is a live chat's, from /context)
 
 **Settings**:
-The full-window page for setup: Workspaces, Accounts, Apps, Board and General. It is not a view.
+The full-window page for setup: Workspaces, Accounts, Claude Code, Apps, Board and General. It is not a view.
 _Avoid_: Preferences, options
+
+**Claude Code settings**:
+The Settings section that shows every setting Claude Code reads from its settings files and key bindings as plain-language controls, one context layer at a time (account, repo or local), with the value that wins for the chosen workspace beside each one. Changes wait in a save bar until Andreas reviews and saves them.
+_Avoid_: Config editor, settings.json editor, Claude config
+
+**Effective value**:
+The value of a Claude Code setting that actually applies in a workspace once the account, repo and local layers (and anything the organisation sets) are combined.
+_Avoid_: Merged value, resolved value, final value
+
+**Terminal-only setting**:
+A Claude Code setting that changes only Claude run in a terminal (its theme, key bindings, spinner, vim mode), not the chats in the command center.
+_Avoid_: CLI setting, TUI setting
+
+**Other keys**:
+Entries in a Claude settings file that Claude Code settings has no control for. They are listed with their raw value, can be edited or removed, and are never dropped on save.
+_Avoid_: Unknown settings, extra keys
 
 ## Board
 
