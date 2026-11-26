@@ -4,3 +4,4 @@ Branch: feat/main-chat-starts-features
 Base commit: 5ac97ec69f34775c88d586dd62439e8ea22813d2 (main, Release 0.1.32)
 
 - 01 resolved: proposal block, card, appended instructions, digest Workspaces — 142f6bc, a2cb876 (real CLI accepts the multi-line --append-system-prompt: checked)
+- 02 resolved: Go starts the feature with brief.md, Started + Open session — 04f34e0, b0635f1
