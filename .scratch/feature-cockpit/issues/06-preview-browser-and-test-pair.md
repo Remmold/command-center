@@ -4,7 +4,7 @@
 
 **Blocked by:** 04, 05
 
-**Status:** resolved
+**Status:** built — needs a running app: cookies kept per feature, the F6 flip, window placement
 
 - [x] Test boots the feature's servers (ticket 04) and opens the pair once every server is Ready; a Failed server shows its output and Retry instead of an empty browser.
 - [x] The preview browser is one window per feature, titled with the feature's name, opening on the preview config's start page at the feature's port. It has its own persistent storage partition named after the feature.

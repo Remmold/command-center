@@ -4,7 +4,7 @@
 
 **Blocked by:** 09
 
-**Status:** in-progress — built and reviewed; first criterion (history after a restart) not yet seen live
+**Status:** built â€” needs a running app: resume with history after an app restart
 
 - [ ] A main chat hosted session in a fixed app-owned folder, pinned above the Work list. It is resumed after a restart with its history, as one continuous conversation.
 - [x] Its account is chosen in Settings, the default account until chosen. Features on other accounts are read through files, never through their sessions or logins.

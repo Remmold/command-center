@@ -42,6 +42,7 @@ Every ticket file has one status line near the top, `**Status:** <word>` (the bo
 | `ready-for-agent` | Fully specified; an agent can take it | to-tickets / triage |
 | `ready-for-human` | Needs Andreas | to-tickets / triage |
 | `in-progress` | An agent is working on it | the implementing agent, **before its first edit** |
+| `built` | Built and committed; waiting on a check only a person at a running app can make; the note says what | the implementing agent, **after its commit**, when any criterion is unticked for that reason |
 | `blocked` | Started but stuck; the note says why | the implementing agent |
 | `resolved` | Done and committed | the implementing agent, **after its commit** |
 | `wontfix` | Will not be done | Andreas |

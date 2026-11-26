@@ -4,7 +4,7 @@
 
 **Blocked by:** 03
 
-**Status:** in-progress — built and tested; the three behaviours not yet seen in a running app
+**Status:** built â€” needs a running app: the three live behaviours (session from the button, draft lands unsaved in the editor, the no-browser note)
 
 - [ ] A Set up preview action on a workspace without a preview config starts a hosted session in that workspace on its account, asking Claude to read the project (package manifest, scripts) and propose the install command, servers and start page in the preview config's shape.
 - [ ] The proposal arrives in the Settings editor of ticket 03 as an unsaved draft; nothing is saved until Andreas confirms with Save.
