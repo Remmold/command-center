@@ -111,6 +111,56 @@ _Avoid_: Moved session, foreign session
 The one-line strip at the top of a chat showing the last prompt Andreas sent there, shown while that prompt is scrolled out of view. Clicking it scrolls the chat back to the prompt.
 _Avoid_: Pinned message, sticky prompt
 
+## Features
+
+**Feature session**:
+The one hosted session that belongs to a feature, started by New feature and linked to the feature for good. It sits under Features in the Work list, not among the ordinary sessions.
+_Avoid_: Sub-session, feature chat
+
+**New feature**:
+The dialog that starts a feature: Andreas picks a workspace and describes the feature. The app makes the feature's worktree, starts its feature session and sends it `/flow` with the description.
+_Avoid_: Start flow, create ticket
+
+**Feature worktree**:
+The git worktree and branch made for one feature, so two features of one repo can run and be tested side by side. It is kept when the feature is completed.
+_Avoid_: Sandbox, checkout
+
+**Main chat**:
+The one permanent hosted session pinned at the top of Work, for asking general questions about every feature in progress. It answers only; it never starts, stops or completes anything.
+_Avoid_: Conductor, assistant, master session
+
+**Feature digest**:
+The file the app keeps up to date for the main chat: each feature with its stage, tickets done out of total, session status, test result and server state.
+_Avoid_: Status report, summary file
+
+**Feature stage**:
+Where a feature stands, read from its files: Grilling, Spec, Tickets, Building, Testing, Completed.
+_Avoid_: Phase, status (a ticket's word)
+
+**Preview config**:
+A workspace's saved recipe for booting its servers for testing: an install command, one or more server commands with their ready checks, and the page to open first. A workspace without one (a game, a native app) has no browser, only its test flow. Claude drafts it from the project and Andreas confirms it.
+_Avoid_: Run config, dev config
+
+**Feature port**:
+A free local port the app reserves for one of a feature's servers and hands to it, so features and projects never clash.
+_Avoid_: Assigned port
+
+**Preview browser**:
+The app's own browser window for one feature. It loads only that feature's servers on localhost, and keeps its own cookies and storage, apart from every other feature's.
+_Avoid_: Embedded browser, webview
+
+**Test pair**:
+A feature's test flow window and its preview browser, opened together by Test and flipped between with one hotkey. Several features can each have a pair open.
+_Avoid_: Test layout
+
+**Test step**:
+One line of a feature's test flow checklist: where to go, what to do, what should be seen. Andreas marks it Pass or Fail; a Fail is saved with a note for the feature session to read.
+_Avoid_: Test case, check
+
+**Complete**:
+What Andreas does when the feature's test steps pass: its servers stop, its windows close, the feature is marked Completed and its session moves under Completed. The worktree and branch stay.
+_Avoid_: Close, finish, archive
+
 ## Views
 
 **Dashboard**:
