@@ -1,4 +1,4 @@
-import type { SettingsLayer, SourceLayer } from './claudeSettings'
+import { isSettingsObject, type SettingsLayer, type SourceLayer } from './claudeSettings'
 
 export const SETTING_CATEGORIES = [
   'Model & thinking',
@@ -26,13 +26,15 @@ export interface ChoiceOption {
   layers?: readonly SettingsLayer[]
 }
 
+export type SettingEditor = 'permissions' | 'hooks' | 'environment' | 'statusLine' | 'keyBindings' | 'otherKeys' | 'modelEffort'
+
 export type SettingControl =
   | { kind: 'toggle' }
   | { kind: 'choice'; options: ChoiceOption[] }
   | { kind: 'number'; min?: number; max?: number }
   | { kind: 'text'; placeholder?: string }
   | { kind: 'stringList' }
-  | { kind: 'editor'; editor: 'permissions' | 'hooks' | 'environment' | 'statusLine' | 'keyBindings' | 'otherKeys' }
+  | { kind: 'editor'; editor: SettingEditor }
 
 export interface SettingEntry {
   /** Dot-separated path in the settings file. */
@@ -46,6 +48,7 @@ export interface SettingEntry {
   /** Shown as "Default: …" instead of the formatted default. */
   defaultLabel?: string
   layers: readonly SettingsLayer[]
+  /** Only Claude in a terminal reads it; the chats hosted here don't. */
   terminalOnly: boolean
   /** Claude reads it only when a chat starts. */
   newChatsOnly: boolean
@@ -54,13 +57,22 @@ export interface SettingEntry {
   risk?: (value: unknown) => string | null
   /** An object Claude takes whole from the highest layer that sets it, instead of combining it per key. */
   whole?: boolean
-  /** A stricter value that wins from any of these layers, over every other layer (the docs' exceptions). */
-  stricter?: { value: unknown; from: readonly SourceLayer[] }
+  /** The docs' exceptions: from the `from` layers, a value further along the ladder beats the value that would win. */
+  stricter?: {
+    /** Values from least to most strict; one value is enough when only it is the stricter one. */
+    ladder: readonly unknown[]
+    from: readonly SourceLayer[]
+    /** The `from` layers count only with a stricter value than the other layers give. */
+    onlyStricter?: boolean
+  }
 }
 
 const ALL_LAYERS: readonly SettingsLayer[] = ['account', 'repo', 'local']
 const ACCOUNT_ONLY: readonly SettingsLayer[] = ['account']
 const NOT_REPO: readonly SettingsLayer[] = ['account', 'local']
+const EVERY_SOURCE: readonly SourceLayer[] = ['organisation', 'local', 'repo', 'account']
+const NOT_REPO_SOURCES: readonly SourceLayer[] = ['organisation', 'local', 'account']
+const REPO_AND_LOCAL: readonly SourceLayer[] = ['local', 'repo']
 
 export const LAYER_NAMES: Record<SourceLayer, string> = { organisation: 'Organisation', account: 'Account', repo: 'Repo', local: 'Local' }
 
@@ -81,6 +93,31 @@ export function layerRule(entry: SettingEntry, layer: SettingsLayer, value?: unk
 /** Whether Claude reads `value` for this setting from the layer. */
 export const countsIn = (entry: SettingEntry, layer: SourceLayer, value: unknown): boolean => layer === 'organisation' || layerRule(entry, layer, value) === null
 
+const TOGGLE: SettingControl = { kind: 'toggle' }
+const LIST: SettingControl = { kind: 'stringList' }
+const TEXT: SettingControl = { kind: 'text' }
+const OTHER_KEYS: SettingControl = { kind: 'editor', editor: 'otherKeys' }
+const choice = (...options: [value: string, label: string][]): SettingControl => ({ kind: 'choice', options: options.map(([value, label]) => ({ value, label })) })
+/** A key whose only value is the string "disable". */
+const DISABLE = choice(['disable', 'Turned off'])
+
+type Details = Partial<Omit<SettingEntry, 'key' | 'label' | 'description' | 'category' | 'control'>>
+
+const inCategory =
+  (category: SettingCategory) =>
+  (key: string, label: string, description: string, control: SettingControl, details: Details = {}): SettingEntry => ({
+    key,
+    label,
+    description,
+    category,
+    control,
+    layers: ALL_LAYERS,
+    terminalOnly: false,
+    newChatsOnly: false,
+    advanced: false,
+    ...details
+  })
+
 const MODEL_OPTIONS: ChoiceOption[] = [
   { value: 'opus', label: 'Opus' },
   { value: 'sonnet', label: 'Sonnet' },
@@ -90,50 +127,74 @@ const MODEL_OPTIONS: ChoiceOption[] = [
   { value: 'opusplan', label: 'Opus to plan, Sonnet to build' }
 ]
 
-export const SETTINGS_CATALOG: readonly SettingEntry[] = [
-  {
-    key: 'model',
-    label: 'Model',
-    description: 'The model new chats start on. The model picker in a chat saves its pick here too.',
-    category: 'Model & thinking',
-    control: { kind: 'choice', options: MODEL_OPTIONS },
+export const EFFORT_OPTIONS: ChoiceOption[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'Extra high' }
+]
+
+const CACHE_TTL = choice(['5m', '5 minutes'], ['1h', '1 hour'])
+const QUESTION_WAIT = choice(['60s', '1 minute'], ['5m', '5 minutes'], ['10m', '10 minutes'], ['never', 'Never'])
+
+const model = inCategory('Model & thinking')
+const MODEL_AND_THINKING: SettingEntry[] = [
+  model('model', 'Model', 'The model new chats start on. The model picker in a chat saves its pick here too.', { kind: 'choice', options: MODEL_OPTIONS }, {
     defaultLabel: "Claude's default for your plan",
-    layers: ALL_LAYERS,
-    terminalOnly: false,
-    newChatsOnly: true,
-    advanced: false
-  },
-  {
-    key: 'alwaysThinkingEnabled',
-    label: 'Extended thinking',
-    description: 'Lets Claude think before it answers, in every chat.',
-    category: 'Model & thinking',
-    control: { kind: 'toggle' },
-    defaultLabel: "the model's default",
-    layers: ALL_LAYERS,
-    terminalOnly: false,
-    newChatsOnly: true,
-    advanced: false
-  },
-  {
-    key: 'modelPicker',
-    label: 'Model picker list',
-    description: 'Which models the model picker lists, in your order and with your labels.',
-    category: 'Model & thinking',
-    control: { kind: 'editor', editor: 'otherKeys' },
+    newChatsOnly: true
+  }),
+  model('effortLevel', 'Default effort for models with no saved level', 'How hard a model thinks when you have saved no effort for it. Higher is more thorough, slower and costs more.', { kind: 'choice', options: EFFORT_OPTIONS }, {
+    defaultLabel: "the model's own default",
+    newChatsOnly: true
+  }),
+  model('modelSettings', 'Effort per model', 'The effort saved for each model. The effort picker in a chat saves here.', { kind: 'editor', editor: 'modelEffort' }, {
+    defaultLabel: 'none saved',
+    newChatsOnly: true
+  }),
+  model('alwaysThinkingEnabled', 'Extended thinking', 'Lets Claude think before it answers, in every chat.', TOGGLE, { defaultLabel: "the model's default", newChatsOnly: true }),
+  model('fastMode', 'Fast mode', 'Faster answers at a higher price, on the models that offer it.', TOGGLE, { default: false }),
+  model('language', 'Reply language', 'The language Claude answers in, written as a word such as japanese or french.', TEXT, { defaultLabel: 'English' }),
+  model('outputStyle', 'Output style', "A saved set of instructions for Claude's tone and format, by name, such as Explanatory or Learning.", TEXT, { defaultLabel: 'the default style' }),
+  model('modelPicker', 'Model picker list', 'Which models the model picker lists, in your order and with your labels.', OTHER_KEYS, {
     defaultLabel: 'the built-in list',
     layers: ACCOUNT_ONLY,
-    terminalOnly: false,
-    newChatsOnly: false,
-    advanced: false,
+    advanced: true,
     whole: true
-  },
-  {
-    key: 'permissions.defaultMode',
-    label: 'Permission mode',
-    description: 'The permission mode new chats start in.',
-    category: 'Permissions',
-    control: {
+  }),
+  model('maxEffortLevel', 'Effort cap', 'The highest effort a chat may use; a higher pick runs at the cap. When several layers set a cap, the lowest applies.', choice(['max', 'Max (no cap)'], ['xhigh', 'Extra high'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']), {
+    defaultLabel: 'no cap',
+    advanced: true,
+    stricter: { ladder: ['max', 'xhigh', 'high', 'medium', 'low'], from: EVERY_SOURCE }
+  }),
+  model('advisorModel', 'Advisor model', 'The model Claude can ask for a second opinion. Not set turns the advisor off.', choice(['fable', 'Fable'], ['opus', 'Opus'], ['sonnet', 'Sonnet']), {
+    defaultLabel: 'no advisor',
+    advanced: true
+  }),
+  model('fallbackModel', 'Backup models', 'Models to try, in order, when the main model is overloaded or unavailable.', LIST, { defaultLabel: 'none', advanced: true }),
+  model('availableModels', 'Allowed models', 'Only these models can be picked, for chats, subagents and skills.', LIST, { defaultLabel: 'every model', advanced: true }),
+  model('enforceAvailableModels', 'Keep Default inside the allowed models', 'The Default model choice picks the first allowed model when it would land outside the list.', TOGGLE, { default: false, advanced: true }),
+  model('fastModePerSessionOptIn', 'Turn on fast mode in each chat', 'Fast mode no longer starts on by itself; you turn it on with /fast in each chat.', TOGGLE, { default: false, advanced: true }),
+  model('showThinkingSummaries', 'Full thinking summaries', 'Shows what Claude thought when you open its thinking, instead of a short collapsed line.', TOGGLE, { default: false, advanced: true }),
+  model('switchModelsOnFlag', 'Switch models when a message is flagged', 'When a safety check flags a request, Claude goes on with a backup model instead of pausing to ask you.', TOGGLE, {
+    defaultLabel: 'switch, sometimes asking first',
+    advanced: true
+  }),
+  model('promptCacheTtl', 'Conversation cache time', 'How long the conversation stays cached. An hour survives longer breaks; each cache write costs more.', CACHE_TTL, {
+    defaultLabel: "Claude's default",
+    advanced: true
+  }),
+  model('subagentPromptCacheTtl', 'Helper cache time', 'The same for subagents, workflows and the requests Claude makes in the background.', CACHE_TTL, { defaultLabel: "Claude's default", advanced: true }),
+  model('modelOverrides', 'Provider model ids', 'The id each model has at your cloud provider, such as Amazon Bedrock.', OTHER_KEYS, { defaultLabel: 'none', advanced: true }),
+  model('ultracode', 'Start with ultracode', 'Claude plans a workflow for each larger task without being asked.', TOGGLE, { default: false, newChatsOnly: true, advanced: true })
+]
+
+const permission = inCategory('Permissions')
+const PERMISSIONS: SettingEntry[] = [
+  permission(
+    'permissions.defaultMode',
+    'Permission mode',
+    'The permission mode new chats start in.',
+    {
       kind: 'choice',
       options: [
         { value: 'default', label: 'Ask before edits and commands' },
@@ -144,111 +205,375 @@ export const SETTINGS_CATALOG: readonly SettingEntry[] = [
         { value: 'bypassPermissions', label: 'Skip all permission prompts', layers: ACCOUNT_ONLY }
       ]
     },
-    default: 'default',
-    layers: ALL_LAYERS,
-    terminalOnly: false,
-    newChatsOnly: true,
-    advanced: false,
-    risk: (value) => (value === 'bypassPermissions' ? 'Claude runs every tool without asking, including commands that delete or overwrite files.' : null)
-  },
-  {
-    key: 'permissions.denyInsteadOfPrompting',
-    label: 'Deny instead of asking',
-    description: 'Refuses a tool call that would otherwise wait for your approval.',
-    category: 'Permissions',
-    control: { kind: 'toggle' },
+    {
+      default: 'default',
+      newChatsOnly: true,
+      risk: (value) => (value === 'bypassPermissions' ? 'Claude runs every tool without asking, including commands that delete or overwrite files.' : null)
+    }
+  ),
+  permission('permissions.allow', 'Always allowed', 'Tool uses Claude runs without asking you.', { kind: 'editor', editor: 'permissions' }, { defaultLabel: 'none' }),
+  permission('permissions.ask', 'Always ask', 'Tool uses that ask you first, even in a mode that would allow them.', { kind: 'editor', editor: 'permissions' }, { defaultLabel: 'none' }),
+  permission('permissions.deny', 'Never allowed', 'Tool uses Claude may never make, such as reading files that hold secrets.', { kind: 'editor', editor: 'permissions' }, { defaultLabel: 'none' }),
+  permission('permissions.additionalDirectories', 'Extra folders', 'Folders outside the workspace Claude may read and edit.', LIST, { defaultLabel: 'none' }),
+  permission('permissions.blockReadsOutsideWorkingDirectories', 'Block reads outside the workspace', "Claude's file tools refuse to read outside the workspace folders, in every mode. On in any layer wins.", TOGGLE, {
+    default: false,
+    stricter: { ladder: [true], from: EVERY_SOURCE }
+  }),
+  permission('permissions.blockWritesOutsideWorkingDirectories', 'Block writes outside the workspace', "Claude's file tools refuse to write outside the workspace folders, in every mode. On in any layer wins.", TOGGLE, {
+    default: false,
+    stricter: { ladder: [true], from: EVERY_SOURCE }
+  }),
+  permission('skipDangerousModePermissionPrompt', 'Skip the bypass-mode warning', 'Starts in "skip all permission prompts" mode without asking you to confirm first.', TOGGLE, {
+    default: false,
+    layers: NOT_REPO,
+    risk: (value) => (value === true ? 'Nothing asks before Claude starts with every permission prompt skipped.' : null)
+  }),
+  permission('permissions.denyInsteadOfPrompting', 'Deny instead of asking', 'Refuses a tool call that would otherwise wait for your approval.', TOGGLE, {
     default: false,
     layers: ACCOUNT_ONLY,
-    terminalOnly: false,
-    newChatsOnly: false,
-    advanced: false,
-    stricter: { value: true, from: ['account'] }
-  },
-  {
-    key: 'autoMode',
-    label: 'Auto mode rules',
-    description: 'Your own allow and deny rules for the auto mode classifier.',
-    category: 'Permissions',
-    control: { kind: 'editor', editor: 'otherKeys' },
-    defaultLabel: 'the built-in rules',
+    advanced: true,
+    stricter: { ladder: [true], from: ['account'] }
+  }),
+  permission('autoMode', 'Auto mode rules', 'Your own allow and deny rules for the auto mode safety check.', OTHER_KEYS, { defaultLabel: 'the built-in rules', layers: ACCOUNT_ONLY, advanced: true }),
+  permission('autoMode.classifyAllShell', 'Check every shell command in auto mode', 'In auto mode every Bash and PowerShell command goes through the safety check, and your shell allow rules pause.', TOGGLE, {
+    default: false,
     layers: ACCOUNT_ONLY,
-    terminalOnly: false,
-    newChatsOnly: false,
-    advanced: false
-  },
-  {
-    key: 'useAutoModeDuringPlan',
-    label: 'Auto mode while planning',
-    description: 'The classifier reviews shell commands in plan mode; off asks you instead.',
-    category: 'Permissions',
-    control: { kind: 'toggle' },
+    advanced: true,
+    stricter: { ladder: [true], from: ['account'] }
+  }),
+  permission('useAutoModeDuringPlan', 'Auto mode while planning', 'The safety check reviews shell commands in plan mode; off asks you instead.', TOGGLE, {
     default: true,
     layers: NOT_REPO,
-    terminalOnly: false,
-    newChatsOnly: false,
-    advanced: false,
-    stricter: { value: false, from: ['organisation', 'local', 'account'] }
-  },
-  {
-    key: 'skipDangerousModePermissionPrompt',
-    label: 'Skip the bypass-mode warning',
-    description: 'Starts in "skip all permission prompts" mode without asking you to confirm first.',
-    category: 'Permissions',
-    control: { kind: 'toggle' },
+    advanced: true,
+    stricter: { ladder: [false], from: NOT_REPO_SOURCES }
+  }),
+  permission('disableAutoMode', 'Turn off auto mode', 'Removes auto mode; a chat that would start in it starts asking as usual.', DISABLE, { defaultLabel: 'auto mode available', advanced: true }),
+  permission('permissions.disableBypassPermissionsMode', 'Turn off skip-all-prompts mode', 'Nobody can start Claude with every permission prompt skipped.', DISABLE, { defaultLabel: 'available', advanced: true }),
+  permission('skipAutoPermissionPrompt', 'Skip the auto mode notice', 'Skips the one-time explanation shown the first time you switch to auto mode.', TOGGLE, { default: false, layers: ACCOUNT_ONLY, advanced: true })
+]
+
+const hook = inCategory('Hooks')
+const HOOKS: SettingEntry[] = [
+  hook('hooks', 'Hooks', 'Your own commands that run at set moments, such as before a tool runs or when a chat starts.', { kind: 'editor', editor: 'hooks' }, { defaultLabel: 'none' }),
+  hook('disableAllHooks', 'Turn off all hooks', 'Stops every hook, the status line and a custom file suggestion command, without deleting them.', TOGGLE, {
     default: false,
-    layers: NOT_REPO,
-    terminalOnly: false,
-    newChatsOnly: false,
-    advanced: false,
-    risk: (value) => (value === true ? 'Nothing asks before Claude starts with every permission prompt skipped.' : null)
-  },
-  {
-    key: 'askUserQuestionTimeout',
-    label: 'Answer questions for me after',
-    description: 'A question Claude asks with no answer goes on with the options already picked after this long.',
-    category: 'Interface',
-    control: {
-      kind: 'choice',
-      options: [
-        { value: '60s', label: '1 minute' },
-        { value: '5m', label: '5 minutes' },
-        { value: '10m', label: '10 minutes' },
-        { value: 'never', label: 'Never' }
-      ]
-    },
+    risk: (value) => (value === true ? 'Every hook stops, including the ones that check or guard what Claude does.' : null)
+  }),
+  hook('enableWorkflows', 'Workflows', 'Lets Claude run a larger task as a workflow of several agents.', TOGGLE, { defaultLabel: 'on, except on the Pro plan' }),
+  hook('workflowSizeGuideline', 'Workflow size', 'How many agents Claude aims for in a workflow. It is advice to Claude, not a hard limit.', choice(['unrestricted', 'As many as the task needs'], ['small', 'Small, under 5'], ['medium', 'Medium, under 10'], ['large', 'Large, under 50']), {
+    defaultLabel: 'Medium (Small on the Pro plan)',
+    advanced: true
+  }),
+  hook('workflowKeywordTriggerEnabled', 'Start a workflow with the word ultracode', 'Typing ultracode in a prompt starts a workflow.', TOGGLE, { default: true, advanced: true }),
+  hook('disableWorkflows', 'Turn off workflows for everyone', 'Turns workflows off for everyone these settings reach, such as everyone on the repo.', TOGGLE, { default: false, advanced: true }),
+  hook('allowedHttpHookUrls', 'Addresses web hooks may call', 'Web hooks run only when their address matches one of these patterns.', LIST, { defaultLabel: 'any address', advanced: true }),
+  hook('httpHookAllowedEnvVars', 'Variables web hooks may send', 'Environment variables a web hook may put in its request.', LIST, { defaultLabel: "each hook's own list", advanced: true })
+]
+
+const ui = inCategory('Interface')
+const terminal: Details = { terminalOnly: true }
+const INTERFACE: SettingEntry[] = [
+  ui('theme', 'Theme', "Claude's colours in the terminal.", choice(['auto', 'Match the terminal'], ['dark', 'Dark'], ['light', 'Light'], ['dark-daltonized', 'Dark, colour-blind friendly'], ['light-daltonized', 'Light, colour-blind friendly'], ['dark-ansi', 'Dark, terminal colours only'], ['light-ansi', 'Light, terminal colours only']), {
+    default: 'dark',
+    ...terminal
+  }),
+  ui('promptSuggestionEnabled', 'Prompt suggestions', 'Greyed-out guesses of your next prompt in the input box.', TOGGLE, { default: true }),
+  ui('editorMode', 'Input keys', 'How the input box takes keys: as usual, or like the vim editor.', choice(['normal', 'Normal'], ['vim', 'Vim']), { default: 'normal', ...terminal }),
+  ui('tui', 'Screen mode', 'Full screen without flicker, or the classic scrolling terminal.', choice(['default', 'Classic'], ['fullscreen', 'Full screen']), { defaultLabel: 'Claude picks', ...terminal }),
+  ui('viewMode', 'Transcript view', 'How much of each step the transcript shows when Claude starts.', choice(['default', 'Short summaries'], ['verbose', 'Full tool output'], ['focus', 'Only your prompt and the answer']), {
+    defaultLabel: 'your last choice',
+    newChatsOnly: true,
+    ...terminal
+  }),
+  ui('verbose', 'Full tool output', 'Shows everything each tool call took in and gave back, instead of a short summary.', TOGGLE, { default: false, ...terminal }),
+  ui('statusLine', 'Status line', 'A command whose output shows as a line under the input box.', { kind: 'editor', editor: 'statusLine' }, { defaultLabel: 'none', ...terminal }),
+  ui('showTurnDuration', 'Show how long each answer took', 'A line such as "Cooked for 1m 6s" after each answer.', TOGGLE, { default: true, ...terminal }),
+  ui('spinnerTipsEnabled', 'Tips while Claude works', 'Short tips about Claude Code beside the spinner.', TOGGLE, { default: true, ...terminal }),
+  ui('prefersReducedMotion', 'Reduce motion', 'Calms or stops animations such as the spinner and flashes.', TOGGLE, { default: false, ...terminal }),
+  ui('defaultShell', 'Shell for ! commands', 'The shell that runs commands you type after ! in the input box.', choice(['bash', 'Bash'], ['powershell', 'PowerShell']), {
+    defaultLabel: 'Bash, or PowerShell on Windows without Bash',
+    ...terminal
+  }),
+  ui('respondToBashCommands', 'Reply after ! commands', 'Claude answers the output of a command you ran with !; off only adds the output.', TOGGLE, { default: true, ...terminal }),
+  ui('askUserQuestionTimeout', 'Answer questions for me after', 'A question Claude asks with no answer goes on with the options already picked after this long.', QUESTION_WAIT, {
     default: 'never',
     layers: ACCOUNT_ONLY,
-    terminalOnly: false,
-    newChatsOnly: false,
-    advanced: false
-  },
-  {
-    key: 'syncClaudeAiSkills',
-    label: 'Sync claude.ai skills',
-    description: 'Downloads and loads the skills you have on claude.ai. Only off counts.',
-    category: 'Plugins & skills',
-    control: { kind: 'toggle' },
+    advanced: true
+  }),
+  ui('dialogExpiry', 'Deadline for questions sent elsewhere', 'How long a question forwarded to a remote client, such as Remote Control, waits for an answer.', QUESTION_WAIT, {
+    default: '5m',
+    layers: ACCOUNT_ONLY,
+    advanced: true
+  }),
+  ui('autoContinueAtUsageLimit', 'Go on after the usage limit resets', 'When a usage limit stops a chat, it waits and carries on by itself once the limit resets.', TOGGLE, {
     default: true,
-    layers: NOT_REPO,
-    terminalOnly: false,
-    newChatsOnly: true,
-    advanced: false,
-    stricter: { value: false, from: ['organisation', 'local', 'account'] }
-  },
-  {
-    key: 'syncClaudeAiPlugins',
-    label: 'Sync claude.ai plugins',
-    description: 'Downloads and loads the plugins you have on claude.ai. Only off counts.',
-    category: 'Plugins & skills',
-    control: { kind: 'toggle' },
-    default: true,
-    layers: NOT_REPO,
-    terminalOnly: false,
-    newChatsOnly: true,
-    advanced: false,
-    stricter: { value: false, from: ['organisation', 'local', 'account'] }
-  }
+    layers: ACCOUNT_ONLY,
+    advanced: true,
+    ...terminal
+  }),
+  ui('bashEditDiffEnabled', 'Track files shell commands change', 'Shows which files a shell command changed, and tells your hooks.', TOGGLE, {
+    defaultLabel: 'only in auto and skip-all-prompts modes',
+    advanced: true,
+    stricter: { ladder: [false], from: REPO_AND_LOCAL, onlyStricter: true }
+  }),
+  ui('axScreenReader', 'Screen reader mode', 'Plain text without borders or animations, for screen readers.', TOGGLE, { default: false, layers: ACCOUNT_ONLY, advanced: true, ...terminal }),
+  ui('autoScrollEnabled', 'Follow new output', 'In full screen, the transcript scrolls along as Claude writes.', TOGGLE, { default: true, advanced: true, ...terminal }),
+  ui('wheelScrollAccelerationEnabled', 'Faster scrolling on quick wheel turns', 'In full screen, a fast turn of the mouse wheel scrolls further.', TOGGLE, { default: true, advanced: true, ...terminal }),
+  ui('syntaxHighlightingDisabled', 'Turn off code colours', 'Shows code and diffs as plain text.', TOGGLE, { default: false, advanced: true, ...terminal }),
+  ui('emojiCompletionEnabled', 'Emoji shortcodes', 'Typing a code such as :heart: suggests and puts in the emoji.', TOGGLE, { default: true, advanced: true, ...terminal }),
+  ui('respectGitignore', 'Leave ignored files out of the @ picker', 'The @ file picker skips files git is told to ignore.', TOGGLE, { default: true, advanced: true, ...terminal }),
+  ui('fileSuggestion', 'File suggestion command', 'Your own command that fills the @ file picker.', OTHER_KEYS, { defaultLabel: 'the built-in picker', advanced: true, ...terminal }),
+  ui('showClearContextOnPlanAccept', 'Offer to clear context on plan approval', 'Approving a plan can also clear the conversation and build from the plan alone.', TOGGLE, { default: false, advanced: true, ...terminal }),
+  ui('maxProseWidth', 'Text width', 'The widest, in characters, a line of Claude’s text gets in a wide terminal.', { kind: 'number', min: 40 }, { defaultLabel: 'the terminal width', advanced: true, ...terminal }),
+  ui('timeFormat', 'Time format', 'How times show, such as the time an answer finished.', choice(['auto', 'Automatic'], ['12-hour', '12-hour clock'], ['24-hour', '24-hour clock'], ['24-hour-utc', '24-hour clock in UTC']), {
+    default: 'auto',
+    advanced: true,
+    ...terminal
+  }),
+  ui('timeZone', 'Time zone', 'The time zone times show in, such as Europe/Stockholm.', TEXT, { defaultLabel: 'your computer’s time zone', advanced: true, ...terminal }),
+  ui('terminalProgressBarEnabled', 'Progress in the terminal tab', 'Terminals that can show progress on their tab or taskbar show when Claude is busy.', TOGGLE, { default: true, advanced: true, ...terminal }),
+  ui('terminalTitleFromRename', 'Tab title from the chat name', 'Once you name a chat, the terminal tab shows that name.', TOGGLE, { default: true, advanced: true, ...terminal }),
+  ui('companyAnnouncements', 'Start-up announcements', 'Messages shown when Claude starts; with several, one at random.', LIST, { defaultLabel: 'none', advanced: true, ...terminal }),
+  ui('spinnerTipsOverride', 'Your own tips', 'Tips to add to the spinner, or to show instead of the built-in ones.', OTHER_KEYS, { defaultLabel: 'the built-in tips', advanced: true, ...terminal }),
+  ui('spinnerVerbs', 'Spinner words', 'Your own words for the spinner, such as "Baking", added to the built-in ones or instead of them.', OTHER_KEYS, {
+    defaultLabel: 'the built-in words',
+    advanced: true,
+    ...terminal
+  }),
+  ui('footerLinksRegexes', 'Footer links', 'Turns ids that appear in the output, such as ticket numbers, into links under the input box.', OTHER_KEYS, {
+    defaultLabel: 'none',
+    layers: ACCOUNT_ONLY,
+    advanced: true,
+    ...terminal
+  }),
+  ui('spellcheck', 'Spell check', 'Underlines misspelt words in the input box, using a spell checker you install.', OTHER_KEYS, {
+    defaultLabel: 'off',
+    layers: ACCOUNT_ONLY,
+    advanced: true,
+    whole: true,
+    ...terminal
+  }),
+  ui('voice.enabled', 'Voice dictation', 'Speak your prompt instead of typing it.', TOGGLE, { default: false, advanced: true, ...terminal }),
+  ui('voice.mode', 'Dictation key', 'Hold the key while you speak, or tap it to start and again to send.', choice(['hold', 'Hold to speak'], ['tap', 'Tap to start and send']), { default: 'hold', advanced: true, ...terminal }),
+  ui('voice.autoSubmit', 'Send when you let go', 'In hold mode, letting go of the key sends the prompt.', TOGGLE, { default: false, advanced: true, ...terminal }),
+  ui('voiceEnabled', 'Voice dictation (older setting)', 'The older on/off for dictation; Voice dictation above wins when both are set.', TOGGLE, { defaultLabel: 'off', advanced: true, ...terminal }),
+  ui('vimInsertModeRemaps', 'Vim escape keys', 'Two-key sequences, such as jk, that act as Escape in vim mode.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...terminal }),
+  ui('subagentStatusLine', 'Subagent status line', 'A command whose output shows as the status line of subagents.', { kind: 'editor', editor: 'statusLine' }, { defaultLabel: 'none', advanced: true, ...terminal })
 ]
+
+const memory = inCategory('Memory & context')
+const MEMORY_AND_CONTEXT: SettingEntry[] = [
+  memory('autoMemoryEnabled', 'Auto memory', 'Claude keeps notes about the project between chats and reads them back.', TOGGLE, { default: true }),
+  memory('autoCompactEnabled', 'Compact automatically', 'Summarises the conversation when it nears the context limit, so the chat can go on.', TOGGLE, { default: true }),
+  memory('fileCheckpointingEnabled', 'Rewind checkpoints', 'Saves each file before Claude edits it, so /rewind can bring it back.', TOGGLE, { default: true }),
+  memory('claudeMdExcludes', 'CLAUDE.md files to skip', 'CLAUDE.md files Claude does not load, as full paths or patterns.', LIST, { defaultLabel: 'none' }),
+  memory('autoCompactWindow', 'Compact at', 'How many tokens the conversation reaches before it is compacted, at least 100,000.', { kind: 'number', min: 100000 }, {
+    defaultLabel: 'tuned for the model',
+    advanced: true
+  }),
+  memory('idleCompaction', 'Compact while you are away', 'A long conversation you stepped away from is summarised, so your next message costs less.', TOGGLE, { default: true, advanced: true }),
+  memory('autoMemoryDirectory', 'Auto memory folder', 'Where auto memory keeps its notes, as a full path or one starting with ~/.', TEXT, { defaultLabel: 'a folder per project in ~/.claude/projects', advanced: true }),
+  memory('plansDirectory', 'Plans folder', 'Where plan mode saves its plans, relative to the project.', TEXT, { defaultLabel: '~/.claude/plans', advanced: true }),
+  memory('bashOutputMaxChars', 'Command output Claude reads', 'How many characters of a command’s output Claude gets directly; the rest goes to a file.', { kind: 'number', min: 4000, max: 128000 }, {
+    defaultLabel: '30000',
+    advanced: true
+  }),
+  memory('skillListingBudgetFraction', 'Share of context for the skill list', 'The part of the context the list of skills may take, as a fraction such as 0.01 for 1%.', { kind: 'number', min: 0, max: 1 }, {
+    default: 0.01,
+    advanced: true
+  }),
+  memory('skillListingMaxDescChars', 'Skill description length', 'How many characters of each skill’s description Claude sees.', { kind: 'number', min: 1 }, { default: 1536, advanced: true })
+]
+
+const ENVIRONMENT: SettingEntry[] = [
+  inCategory('Environment')('env', 'Environment variables', 'Variables set for every chat and for the commands Claude runs.', { kind: 'editor', editor: 'environment' }, { defaultLabel: 'none' })
+]
+
+const git = inCategory('Git & attribution')
+const GIT_AND_ATTRIBUTION: SettingEntry[] = [
+  git('attribution.commit', 'Commit sign-off', 'The text Claude adds to the commits it makes.', TEXT, { defaultLabel: 'Co-Authored-By: Claude <model>' }),
+  git('attribution.pr', 'Pull request sign-off', 'The text Claude adds to the pull requests it writes.', TEXT, { defaultLabel: 'Generated with Claude Code' }),
+  git('includeGitInstructions', 'Git instructions and status', 'Claude gets its built-in commit and pull request instructions and a snapshot of the git status.', TOGGLE, { default: true }),
+  git('attribution.sessionUrl', 'Session link in commits', 'Commits and pull requests from a cloud or Remote Control chat link to it on claude.ai.', TOGGLE, { default: true, advanced: true }),
+  git('includeCoAuthoredBy', 'Sign-off line (older setting)', 'The older on/off for the commit and pull request sign-off; the sign-off texts above win.', TOGGLE, { default: true, advanced: true }),
+  git('prUrlTemplate', 'Pull request link address', 'Points pull request links at your own review tool, using {host}, {owner}, {repo}, {number} or {url}.', TEXT, {
+    defaultLabel: 'github.com',
+    advanced: true
+  })
+]
+
+const mcp = inCategory('MCP servers')
+const MCP_SERVERS: SettingEntry[] = [
+  mcp('enableAllProjectMcpServers', 'Approve every project server', "Connects every server in a project's .mcp.json without asking.", TOGGLE, { default: false }),
+  mcp('enabledMcpjsonServers', 'Approved project servers', "Servers from a project's .mcp.json that connect without asking.", LIST, { defaultLabel: 'none' }),
+  mcp('disabledMcpjsonServers', 'Rejected project servers', "Servers from a project's .mcp.json that never connect.", LIST, { defaultLabel: 'none' }),
+  mcp('disableClaudeAiConnectors', 'Turn off claude.ai connectors', 'Claude does not load the connectors you set up on claude.ai. On in any layer wins.', TOGGLE, {
+    default: false,
+    stricter: { ladder: [true], from: EVERY_SOURCE }
+  }),
+  mcp('allowedMcpServers', 'Allowed servers', 'Only servers that match this list can be added.', OTHER_KEYS, { defaultLabel: 'every server', advanced: true }),
+  mcp('deniedMcpServers', 'Blocked servers', 'Servers that match this list never load.', OTHER_KEYS, { defaultLabel: 'none', advanced: true })
+]
+
+const plugin = inCategory('Plugins & skills')
+const PLUGINS_AND_SKILLS: SettingEntry[] = [
+  plugin('enabledPlugins', 'Plugins on or off', 'Which installed plugins are turned on.', OTHER_KEYS, { defaultLabel: "each plugin's own default" }),
+  plugin('syncClaudeAiSkills', 'Sync claude.ai skills', 'Downloads and loads the skills you have on claude.ai. Only off counts.', TOGGLE, {
+    default: true,
+    layers: NOT_REPO,
+    newChatsOnly: true,
+    stricter: { ladder: [false], from: NOT_REPO_SOURCES }
+  }),
+  plugin('syncClaudeAiPlugins', 'Sync claude.ai plugins', 'Downloads and loads the plugins you have on claude.ai. Only off counts.', TOGGLE, {
+    default: true,
+    layers: NOT_REPO,
+    newChatsOnly: true,
+    stricter: { ladder: [false], from: NOT_REPO_SOURCES }
+  }),
+  plugin('skillOverrides', 'Skill visibility', 'Hides a skill from Claude, or shows only its name, without editing the skill.', OTHER_KEYS, { defaultLabel: 'every skill shown', advanced: true }),
+  plugin('extraKnownMarketplaces', 'Extra plugin marketplaces', 'Plugin marketplaces added for everyone these settings reach.', OTHER_KEYS, { defaultLabel: 'none', advanced: true }),
+  plugin('disableBundledSkills', 'Turn off built-in skills', 'Removes the skills and workflows that come with Claude Code.', TOGGLE, { default: false, advanced: true }),
+  plugin('disableSkillShellExecution', 'Stop commands inside skills', 'Shell commands written into skills and custom commands are not run.', TOGGLE, { default: false, advanced: true }),
+  plugin('pluginConfigs', 'Plugin options', 'The answers you gave when a plugin asked for its options.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true }),
+  plugin('prependPlugins', 'Plugins whose mods run first', 'Managed plugins whose mods run before the ones you installed.', LIST, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true }),
+  plugin('appendPlugins', 'Plugins whose mods run last', 'Managed plugins whose mods run after the ones you installed.', LIST, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true }),
+  plugin('skippedPlugins', 'Plugins you declined', 'Plugins you chose not to install when asked.', LIST, { defaultLabel: 'none', advanced: true }),
+  plugin('skippedMarketplaces', 'Marketplaces you declined', 'Plugin marketplaces you chose not to install when asked.', LIST, { defaultLabel: 'none', advanced: true })
+]
+
+const agents = inCategory('Agents & worktrees')
+const AGENTS_AND_WORKTREES: SettingEntry[] = [
+  agents('agent', 'Start as an agent', 'Chats start as this named agent, with its instructions, tools and model.', TEXT, { defaultLabel: 'none', newChatsOnly: true }),
+  agents('worktree.baseRef', 'New worktrees start from', 'The clean main branch from the remote, or your current branch with its unpushed commits.', choice(['fresh', 'The remote’s main branch'], ['head', 'Your current branch']), {
+    default: 'fresh'
+  }),
+  agents('worktree.symlinkDirectories', 'Folders shared into worktrees', 'Folders linked into each worktree instead of copied, such as node_modules.', LIST, { defaultLabel: 'none' }),
+  agents('worktree.sparsePaths', 'Folders worktrees check out', 'Each worktree gets only these folders, which is faster in a large repo.', LIST, { defaultLabel: 'the whole repo', advanced: true }),
+  agents('worktree.bgIsolation', 'Background chats edit in', 'Background chats edit in a worktree of their own, or straight in your folder.', choice(['worktree', 'Their own worktree'], ['none', 'Your folder']), {
+    default: 'worktree',
+    advanced: true,
+    ...terminal
+  }),
+  agents('worktree.location', 'Worktree folder over SSH', 'Where the desktop app makes worktrees on a remote machine.', TEXT, { defaultLabel: 'inside the project', layers: ACCOUNT_ONLY, advanced: true, ...terminal }),
+  agents('disableAgentView', 'Turn off background agents', 'Turns off claude agents, background chats and the agent view.', TOGGLE, { default: false, advanced: true, ...terminal }),
+  agents('teammateMode', 'Where teammates show', 'Agent team members show inside your terminal, or in panes of their own.', choice(['in-process', 'In your terminal'], ['auto', 'Panes when the terminal can'], ['tmux', 'tmux panes'], ['iterm2', 'iTerm2 panes']), {
+    default: 'in-process',
+    advanced: true,
+    ...terminal
+  }),
+  agents('crossSessionInbound', 'Messages from your other chats', 'What a chat does with a message one of your other chats sends it. Repo and Local count only when stricter.', choice(['accept', 'Pass it to Claude'], ['hold', 'Show it, held'], ['refuse', 'Drop it']), {
+    defaultLabel: 'decided per message',
+    advanced: true,
+    stricter: { ladder: ['accept', 'hold', 'refuse'], from: REPO_AND_LOCAL, onlyStricter: true }
+  }),
+  agents('isolatePeerMachines', 'Ask before messages to other machines', 'Claude asks you before a message reaches one of your chats on another computer. On in any layer wins.', TOGGLE, {
+    default: false,
+    advanced: true,
+    stricter: { ladder: [true], from: EVERY_SOURCE }
+  }),
+  agents('processWrapper', 'Launcher for background processes', 'A command placed in front of the processes Claude starts in the background (macOS and Linux).', TEXT, {
+    defaultLabel: 'none',
+    layers: ACCOUNT_ONLY,
+    advanced: true
+  })
+]
+
+const remote = inCategory('Remote & notifications')
+const REMOTE_AND_NOTIFICATIONS: SettingEntry[] = [
+  remote('remoteControlAtStartup', 'Remote Control at start', 'Each chat connects to claude.ai/code as it starts, so you can follow it from the web or your phone. Repo and Local can only turn it off.', TOGGLE, {
+    defaultLabel: 'Claude’s default',
+    newChatsOnly: true,
+    stricter: { ladder: [false], from: REPO_AND_LOCAL, onlyStricter: true }
+  }),
+  remote('inputNeededNotifEnabled', 'Phone alert when Claude needs you', 'A push notification on your phone when a question or approval waits, while Remote Control is on.', TOGGLE, {
+    defaultLabel: 'your account’s choice'
+  }),
+  remote('agentPushNotifEnabled', 'Phone alerts Claude decides on', 'Claude may send your phone a push notification, such as when a long task finishes.', TOGGLE, { defaultLabel: 'your account’s choice' }),
+  remote('enableArtifact', 'Artifacts', 'Claude can publish chat output as a private web page on claude.ai. Off in any layer wins.', TOGGLE, {
+    defaultLabel: 'your account’s choice',
+    stricter: { ladder: [false], from: EVERY_SOURCE }
+  }),
+  remote('preferredNotifChannel', 'Terminal notifications', 'How the terminal tells you a task finished or an approval waits.', choice(['auto', 'Automatic'], ['terminal_bell', 'Terminal bell'], ['iterm2', 'iTerm2'], ['iterm2_with_bell', 'iTerm2 and bell'], ['kitty', 'Kitty'], ['ghostty', 'Ghostty'], ['notifications_disabled', 'None']), {
+    default: 'auto',
+    ...terminal
+  }),
+  remote('awaySummaryEnabled', 'Recap when you come back', 'A one-line recap of the chat when you return after a few minutes away.', TOGGLE, { default: true, ...terminal }),
+  remote('disableRemoteControl', 'Turn off Remote Control', 'No chat can connect to claude.ai/code.', TOGGLE, { default: false, advanced: true }),
+  remote('disableArtifact', 'Turn off artifacts (older setting)', 'The older way to turn artifacts off; only on counts.', TOGGLE, {
+    default: false,
+    advanced: true,
+    stricter: { ladder: [true], from: EVERY_SOURCE }
+  }),
+  remote('disableDeepLinkRegistration', 'Turn off claude-cli:// links', 'Other programs can no longer open Claude with a prompt filled in.', DISABLE, { defaultLabel: 'links work', advanced: true, ...terminal }),
+  remote('remote.defaultEnvironmentId', 'Default cloud environment', 'The cloud environment a cloud chat started from the terminal runs in.', TEXT, { defaultLabel: 'Anthropic’s', advanced: true, ...terminal }),
+  remote('sshConfigs', 'SSH connections', 'SSH connections listed in the desktop app.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...terminal }),
+  remote('sshHostCommands', 'SSH connections from a command', 'SSH connections in the desktop app whose host a command prints.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...terminal })
+]
+
+const updates = inCategory('Updates, privacy & sign-in')
+const UPDATES_PRIVACY_AND_SIGN_IN: SettingEntry[] = [
+  updates('autoUpdatesChannel', 'Update channel', 'The newest release, or one about a week old that skips releases with big problems.', choice(['latest', 'Latest'], ['stable', 'Stable']), {
+    default: 'latest',
+    ...terminal
+  }),
+  updates('cleanupPeriodDays', 'Keep chat history for', 'Days before old chat transcripts are deleted, without a message.', { kind: 'number', min: 1 }, { default: 30 }),
+  updates('minimumVersion', 'Lowest version to update to', 'Updates never install a version below this one, such as 2.1.323.', TEXT, { defaultLabel: 'any version', advanced: true, ...terminal }),
+  updates('skipWebFetchPreflight', 'Skip the web address check', 'Web fetches no longer send the address to Anthropic for a safety check first.', TOGGLE, { default: false, advanced: true }),
+  updates('feedbackDrafts', 'Feedback drafts', 'Whether Claude may draft feedback for you to review, and whether a card says so.', choice(['notify', 'Draft and show a card'], ['quiet', 'Draft quietly'], ['off', 'Off']), {
+    default: 'notify',
+    layers: ACCOUNT_ONLY,
+    advanced: true,
+    ...terminal
+  }),
+  updates('feedbackSurveyRate', 'Survey rate', 'How likely the chat quality survey is to appear, from 0 (never) to 1.', { kind: 'number', min: 0, max: 1 }, {
+    defaultLabel: 'Anthropic’s rate',
+    advanced: true,
+    ...terminal
+  }),
+  updates('desktopSessionCleanupPeriodDays', 'Keep desktop chat history for', 'Days before transcripts of chats from Claude Desktop are deleted; 0 keeps them.', { kind: 'number', min: 0 }, {
+    default: 0,
+    layers: ACCOUNT_ONLY,
+    advanced: true,
+    ...terminal
+  }),
+  updates('forceLoginMethod', 'Sign-in method', 'Which kind of account people can sign in with.', {
+    kind: 'choice',
+    options: [
+      { value: 'claudeai', label: 'claude.ai' },
+      { value: 'console', label: 'Claude Console' },
+      { value: 'gateway', label: 'Cloud gateway', layers: ACCOUNT_ONLY }
+    ]
+  }, { defaultLabel: 'you pick when you sign in', advanced: true }),
+  updates('forceLoginOrgUUID', 'Organisation to sign in to', 'The organisation picked first when you sign in, as its id.', OTHER_KEYS, { defaultLabel: 'any', advanced: true }),
+  updates('forceLoginGatewayUrl', 'Cloud gateway address', 'The address the cloud gateway sign-in connects to.', TEXT, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true }),
+  updates('apiKeyHelper', 'API key command', 'A command that prints the key Claude sends with each request.', TEXT, { defaultLabel: 'none', advanced: true }),
+  updates('awsAuthRefresh', 'AWS sign-in refresh command', 'A command, such as aws sso login, that refreshes Amazon Bedrock credentials when they stop working.', TEXT, {
+    defaultLabel: 'none',
+    advanced: true
+  }),
+  updates('awsCredentialExport', 'AWS credentials command', 'A command that prints the AWS credentials for Amazon Bedrock.', TEXT, { defaultLabel: 'the usual AWS credentials', advanced: true }),
+  updates('gcpAuthRefresh', 'Google Cloud sign-in refresh command', 'A command that refreshes Google Cloud credentials when they run out.', TEXT, { defaultLabel: 'none', advanced: true }),
+  updates('otelHeadersHelper', 'Telemetry headers command', 'A command that prints the headers sent with OpenTelemetry exports.', TEXT, { defaultLabel: 'none', advanced: true })
+]
+
+export const SETTINGS_CATALOG: readonly SettingEntry[] = [
+  ...MODEL_AND_THINKING,
+  ...PERMISSIONS,
+  ...HOOKS,
+  ...INTERFACE,
+  ...MEMORY_AND_CONTEXT,
+  ...ENVIRONMENT,
+  ...GIT_AND_ATTRIBUTION,
+  ...MCP_SERVERS,
+  ...PLUGINS_AND_SKILLS,
+  ...AGENTS_AND_WORKTREES,
+  ...REMOTE_AND_NOTIFICATIONS,
+  ...UPDATES_PRIVACY_AND_SIGN_IN
+]
+
+/** The catalog entry a key path belongs to: its own, or the entry of the object it sits in. */
+export const entryOf = (path: string): SettingEntry | undefined =>
+  SETTINGS_CATALOG.find((e) => e.key === path) ?? SETTINGS_CATALOG.find((e) => path.startsWith(`${e.key}.`))
 
 /** The catalog's entry for a key, else a plain one for a key the page has no control for. */
 export function entryFor(key: string): SettingEntry {
@@ -258,7 +583,7 @@ export function entryFor(key: string): SettingEntry {
       label: key,
       description: '',
       category: 'Other keys',
-      control: { kind: 'editor', editor: 'otherKeys' },
+      control: OTHER_KEYS,
       layers: ALL_LAYERS,
       terminalOnly: false,
       newChatsOnly: false,
@@ -267,12 +592,62 @@ export function entryFor(key: string): SettingEntry {
   )
 }
 
+export interface SettingsFilter {
+  category: SettingCategory
+  /** Searches every category when not blank. */
+  query: string
+  showAdvanced: boolean
+  hideTerminalOnly: boolean
+}
+
+export interface SettingsGroup {
+  category: SettingCategory
+  entries: SettingEntry[]
+}
+
+const searchText = (entry: SettingEntry): string => `${entry.label} ${entry.description} ${entry.key}`.toLowerCase()
+
+/** Every word of the query is in the label, the description or the raw key. */
+export const matchesSearch = (entry: SettingEntry, query: string): boolean => {
+  const text = searchText(entry)
+  return query.toLowerCase().split(/\s+/).filter(Boolean).every((word) => text.includes(word))
+}
+
+/** The rows the page shows, by category, common ones first; a search looks through advanced ones too. */
+export function shownSettings(filter: SettingsFilter, catalog: readonly SettingEntry[] = SETTINGS_CATALOG): SettingsGroup[] {
+  const searching = filter.query.trim() !== ''
+  const shown = catalog.filter(
+    (e) =>
+      (searching ? matchesSearch(e, filter.query) : e.category === filter.category && (filter.showAdvanced || !e.advanced)) && !(filter.hideTerminalOnly && e.terminalOnly)
+  )
+  return SETTING_CATEGORIES.map((category) => {
+    const inGroup = shown.filter((e) => e.category === category)
+    return { category, entries: [...inGroup.filter((e) => !e.advanced), ...inGroup.filter((e) => e.advanced)] }
+  }).filter((group) => group.entries.length > 0)
+}
+
+const optionLabel = (options: ChoiceOption[], value: unknown): string | undefined => options.find((o) => o.value === value)?.label
+
+/** The effort saved per model, as `model: level` pairs. */
+function modelEfforts(value: unknown): string | null {
+  if (!isSettingsObject(value)) return null
+  const pairs = Object.entries(value).flatMap(([id, settings]) => {
+    const level = isSettingsObject(settings) ? settings.effortLevel : undefined
+    return typeof level === 'string' ? [`${id}: ${optionLabel(EFFORT_OPTIONS, level) ?? level}`] : []
+  })
+  return pairs.length === 0 ? 'none' : pairs.join(', ')
+}
+
 export function formatSettingValue(entry: SettingEntry, value: unknown): string {
   if (value === undefined) return 'not set'
   if (entry.control.kind === 'toggle' && typeof value === 'boolean') return value ? 'on' : 'off'
   if (entry.control.kind === 'choice') {
-    const option = entry.control.options.find((o) => o.value === value)
-    if (option) return option.label
+    const label = optionLabel(entry.control.options, value)
+    if (label) return label
+  }
+  if (entry.control.kind === 'editor' && entry.control.editor === 'modelEffort') {
+    const efforts = modelEfforts(value)
+    if (efforts) return efforts
   }
   if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return value.length === 0 ? 'none' : value.join(', ')
   return typeof value === 'string' ? value : JSON.stringify(value)

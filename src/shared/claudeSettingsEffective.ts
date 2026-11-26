@@ -28,17 +28,30 @@ function combineObjects(key: string, objects: SettingsObject[]): SettingsObject 
   return combined
 }
 
+interface LayerValue {
+  layer: SourceLayer
+  value: unknown
+}
+
+/** The highest layer's value, unless a stricter value from a layer the catalog marks beats it. */
+function winner({ stricter }: SettingEntry, set: LayerValue[]): LayerValue | undefined {
+  if (!stricter) return set[0]
+  const rank = (value: unknown): number => stricter.ladder.findIndex((step) => sameValue(step, value))
+  const marked = (layer: SourceLayer): boolean => stricter.from.includes(layer)
+  const base = stricter.onlyStricter ? set.find(({ layer }) => !marked(layer)) : set[0]
+  return set.reduce<LayerValue | undefined>((top, item) => (marked(item.layer) && rank(item.value) > (top ? rank(top.value) : -1) ? item : top), base)
+}
+
 export function effectiveSetting(entry: SettingEntry, layers: LayerSettings): EffectiveSetting {
   const set = SOURCE_ORDER.flatMap((layer) => {
     const value = getAt(layers[layer], entry.key)
     return value !== undefined && countsIn(entry, layer, value) ? [{ layer, value }] : []
   })
-  if (set.length === 0) return { value: undefined, sources: [], locked: false }
+  const top = winner(entry, set)
+  if (!top) return { value: undefined, sources: [], locked: false }
 
-  const stricter = entry.stricter && set.find(({ layer, value }) => entry.stricter?.from.includes(layer) && sameValue(value, entry.stricter.value))
-  const top = stricter || set[0]
   const single: EffectiveSetting = { value: top.value, sources: [top.layer], locked: top.layer === 'organisation' }
-  if (stricter || entry.whole) return single
+  if (entry.stricter || entry.whole) return single
 
   if (COMBINED_LISTS.has(entry.key) && set.every(({ value }) => Array.isArray(value))) {
     return { value: union(set.map(({ value }) => value as unknown[])), sources: set.map(({ layer }) => layer), locked: false }

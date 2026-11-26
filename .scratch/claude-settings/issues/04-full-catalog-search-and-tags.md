@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Every key that Claude Code documents as valid in user, project or local settings, except the sandbox keys and the managed-only keys, is in the catalog with label, description, category, control, default, valid layers, terminal-only, applies-only-to-new-chats and advanced.
 - [ ] Common settings come first in each category; rare ones are behind Show advanced.

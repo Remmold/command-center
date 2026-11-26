@@ -98,6 +98,32 @@ describe('the effective value', () => {
     })
   })
 
+  it('takes the lowest effort cap any layer sets, the organisation’s included', () => {
+    const cap = entry('maxEffortLevel')
+    expect(effectiveSetting(cap, layers({ organisation: { maxEffortLevel: 'high' }, account: { maxEffortLevel: 'medium' }, local: { maxEffortLevel: 'xhigh' } }))).toEqual({
+      value: 'medium',
+      sources: ['account'],
+      locked: false
+    })
+    expect(effectiveSetting(cap, layers({ account: { maxEffortLevel: 'low' }, local: { maxEffortLevel: 'max' } })).value).toBe('low')
+  })
+
+  it('counts a repo or local cross-session choice only when it is stricter than the account’s or organisation’s', () => {
+    const inbound = entry('crossSessionInbound')
+    expect(effectiveSetting(inbound, layers({ account: { crossSessionInbound: 'hold' }, local: { crossSessionInbound: 'accept' } })).value).toBe('hold')
+    expect(effectiveSetting(inbound, layers({ organisation: { crossSessionInbound: 'hold' }, repo: { crossSessionInbound: 'refuse' } }))).toEqual({
+      value: 'refuse',
+      sources: ['repo'],
+      locked: false
+    })
+  })
+
+  it('ignores a repo or local Remote Control at startup that turns it on', () => {
+    const startup = entry('remoteControlAtStartup')
+    expect(effectiveSetting(startup, layers({ local: { remoteControlAtStartup: true } })).sources).toEqual([])
+    expect(effectiveSetting(startup, layers({ account: { remoteControlAtStartup: true }, repo: { remoteControlAtStartup: false } })).value).toBe(false)
+  })
+
   it('is unset with no source when no layer sets it', () => {
     expect(effectiveSetting(entry('model'), layers({ account: { theme: 'dark' } }))).toEqual({ value: undefined, sources: [], locked: false })
   })

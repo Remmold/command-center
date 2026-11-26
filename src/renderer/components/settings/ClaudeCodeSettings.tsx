@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
-import { SETTINGS_CATALOG, SETTING_CATEGORIES, formatSettingValue, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
-import { changeCount, patchSize, sameValue, withPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
+import { SETTINGS_CATALOG, SETTING_CATEGORIES, entryOf, formatSettingValue, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { changeCount, getAt, pathKeys, patchSize, sameValue, withPatch, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
 import { effectiveSetting, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
 import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
-import { conflicts, pendingChanges, shownValue, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
+import { conflicts, pendingChanges, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
 import { useContextStore } from '../../state/contextStore'
 import { useProfilesStore } from '../../state/profilesStore'
 import { setSettingsLeaveGuard, useViewStore } from '../../state/viewStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { Banner } from '../ui/Banner'
 import { Button } from '../ui/Button'
+import { Checkbox } from '../ui/Checkbox'
 import { Dialog, DialogActions } from '../ui/Dialog'
 import { FormRow } from '../ui/FormRow'
 import { ListRow, ListRowText } from '../ui/ListRow'
@@ -18,6 +19,7 @@ import { NoticeLine } from '../ui/NoticeLine'
 import { Page, PageBody, PageGroup, PageHeader } from '../ui/Page'
 import { PropertyList } from '../ui/PropertyList'
 import { SaveBar } from '../ui/SaveBar'
+import { SearchField } from '../ui/SearchField'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { SidebarLayout } from '../ui/SidebarLayout'
@@ -70,10 +72,15 @@ function openInContext(workspaceId: string, path: string): void {
   if (useViewStore.getState().settings === null) useContextStore.getState().showFile(workspaceId, path)
 }
 
+/** Whether the patch changes the key or anything inside it. */
+const touches = (patch: SettingsPatch, key: string): boolean =>
+  [...Object.keys(patch.set), ...patch.remove].some((path) => path === key || path.startsWith(`${key}.`))
+
 function settingWords(key: string): { label: string; format: (value: unknown) => string } {
-  const entry = SETTINGS_CATALOG.find((e) => e.key === key)
+  const entry = entryOf(key)
+  const inside = entry && entry.key !== key ? pathKeys(key.slice(entry.key.length + 1)) : []
   return {
-    label: entry?.label ?? key,
+    label: entry ? [entry.label, ...inside].join(' · ') : key,
     format: (value) => (entry ? formatSettingValue(entry, value) : value === undefined ? 'not set' : JSON.stringify(value))
   }
 }
@@ -194,6 +201,9 @@ export function ClaudeCodeSettings() {
   const { load, applyChange, selectLayer, selectProfile, selectWorkspace, stage, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
   const { file, pending } = useEditedFile()
   const [category, setCategory] = useState<SettingCategory>(CATEGORIES[0])
+  const [query, setQuery] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [hideTerminalOnly, setHideTerminalOnly] = useState(false)
   const [reviewing, setReviewing] = useState(false)
 
   useEffect(() => {
@@ -212,7 +222,8 @@ export function ClaudeCodeSettings() {
   const snapshot = file?.snapshot
   const profile = profiles.find((p) => p.id === profileId)
   const defaultName = profiles.find((p) => p.id === DEFAULT_PROFILE_ID)?.name ?? 'Personal'
-  const rows = useMemo(() => SETTINGS_CATALOG.filter((e) => e.category === category && !e.advanced), [category])
+  const groups = useMemo(() => shownSettings({ category, query, showAdvanced, hideTerminalOnly }), [category, query, showAdvanced, hideTerminalOnly])
+  const searching = query.trim() !== ''
   const layers = useMemo(() => layersWithPending(read, allPending), [read, allPending])
   const count = pending ? patchSize(pending.patch) : 0
   const fileChanged = useMemo(() => new Map(conflicts(pending, snapshot?.value ?? null).map((c) => [c.key, { value: c.theirs }])), [pending, snapshot])
@@ -222,7 +233,21 @@ export function ClaudeCodeSettings() {
   return (
     <Page label="Claude Code">
       <PageHeader title="Claude Code" description="The settings Claude Code reads from its settings files, as plain controls." />
-      <Toolbar>
+      <Toolbar
+        actions={
+          <div className="flex items-center gap-3">
+            <Checkbox checked={showAdvanced} onChange={setShowAdvanced}>
+              Show advanced
+            </Checkbox>
+            <Checkbox checked={hideTerminalOnly} onChange={setHideTerminalOnly}>
+              Hide terminal-only
+            </Checkbox>
+            <div className="w-56">
+              <SearchField label="Search settings" placeholder="Search by name, words or key" value={query} onChange={setQuery} />
+            </div>
+          </div>
+        }
+      >
         <div className="flex items-center gap-2">
           <SegmentedControl label="Layer" options={LAYERS} value={layer} onChange={selectLayer} />
           {layer === 'account' ? (
@@ -238,7 +263,14 @@ export function ClaudeCodeSettings() {
             <nav aria-label="Claude Code categories">
               <ul className="py-1">
                 {CATEGORIES.map((c) => (
-                  <ListRow key={c} active={c === category} onClick={() => setCategory(c)}>
+                  <ListRow
+                    key={c}
+                    active={!searching && c === category}
+                    onClick={() => {
+                      setCategory(c)
+                      setQuery('')
+                    }}
+                  >
                     <ListRowText primary={c} />
                   </ListRow>
                 ))}
@@ -261,24 +293,26 @@ export function ClaudeCodeSettings() {
                 This file is {snapshot?.error}. Fix it in the Context view or an editor; it can&apos;t be saved from this page until it parses.
               </Banner>
             )}
-            <PageGroup title={category}>
-              <div>
-                {rows.map((entry) => (
-                  <SettingField
-                    key={entry.key}
-                    entry={entry}
-                    layer={layer}
-                    value={shownValue(pending, snapshot?.value ?? null, entry.key)}
-                    effective={shownEffective(entry, layers, layer)}
-                    changed={pending !== null && (entry.key in pending.patch.set || pending.patch.remove.includes(entry.key))}
-                    fileValue={fileChanged.get(entry.key)}
-                    disabled={!snapshot || unreadable || saving}
-                    onChange={(value) => stage(entry.key, value)}
-                    onReset={() => stage(entry.key, undefined)}
-                  />
-                ))}
-              </div>
-            </PageGroup>
+            {searching && groups.length === 0 && <p className="text-muted">No setting matches “{query.trim()}”.</p>}
+            {groups.map((group) => (
+              <PageGroup key={group.category} title={group.category}>
+                <div>
+                  {group.entries.map((entry) => (
+                    <SettingField
+                      key={entry.key}
+                      entry={entry}
+                      layer={layer}
+                      value={getAt(layers[layer], entry.key)}
+                      effective={shownEffective(entry, layers, layer)}
+                      changed={pending !== null && touches(pending.patch, entry.key)}
+                      fileValue={fileChanged.get(entry.key)}
+                      disabled={!snapshot || unreadable || saving}
+                      onStage={stage}
+                    />
+                  ))}
+                </div>
+              </PageGroup>
+            ))}
           </PageBody>
         </SidebarLayout>
       </div>

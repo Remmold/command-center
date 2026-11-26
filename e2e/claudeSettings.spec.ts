@@ -4,7 +4,7 @@ import { expect, test } from './harness'
 
 test.use({ userSettings: { model: 'sonnet', someKeyThePageDoesNotKnow: { keep: [1, 2] } } })
 
-test('Claude Code settings: a Model & thinking change waits in the save bar, and Save writes only that key into the account’s file; a change from outside then shows', async ({ launched }) => {
+test('Claude Code settings: a Model & thinking change and one found by search wait in the save bar, and Save writes only that key into the account’s file; a change from outside then shows', async ({ launched }) => {
   const { page, configDir } = launched
   const file = join(configDir, 'settings.json')
 
@@ -14,7 +14,14 @@ test('Claude Code settings: a Model & thinking change waits in the save bar, and
   await expect(model).toHaveValue('sonnet')
 
   await model.selectOption('opus')
+  await page.getByRole('navigation', { name: 'Claude Code categories' }).getByText('Interface', { exact: true }).click()
+  await expect(page.getByRole('group', { name: 'Extended thinking', exact: true })).toBeHidden()
+  const search = page.getByRole('searchbox', { name: 'Search settings' })
+  await search.fill('alwaysThinkingEnabled')
+  await expect(page.getByRole('region', { name: 'Model & thinking' }).getByRole('group')).toHaveCount(1)
+  await search.fill('extended thinking')
   await page.getByRole('group', { name: 'Extended thinking', exact: true }).getByRole('checkbox', { name: 'On' }).check()
+  await page.getByRole('navigation', { name: 'Claude Code categories' }).getByText('Model & thinking', { exact: true }).click()
   const bar = page.getByRole('region', { name: 'Unsaved Claude Code changes' })
   await expect(bar).toContainText('2 changes')
 
