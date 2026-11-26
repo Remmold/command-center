@@ -1,3 +1,3 @@
-Done: settings watch in main (settingsWatch.ts, set by each read, cleared by unwatch), refreshed/conflicts/settle in the pending store, conflict dialog, e2e outside-write check; build, quick and claudeSettings e2e green.
-Next: commit, then code review since ff72b7d and a follow-up commit for its fixes.
-Open reds: none.
+Done: watch, refresh, conflict marks and dialog (a9b7a28); review fixes: the watch skips the page's own save, a dialog answer counts only against the file value it was given for.
+Next: none, ticket 03 resolved; ticket 04 is next on the feature.
+Open reds: none (subagentWatch "serves every file from one timer" flaked once under load in a pre-commit run, passed alone and in later runs).

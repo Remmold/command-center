@@ -21,7 +21,7 @@ interface Props {
   value: unknown
   effective: ShownEffective
   changed: boolean
-  /** Set when the file changed this waiting key since: its value there now. */
+  /** Set when the file on disk changed this waiting key since it was edited; holds the file's value now. */
   fileValue?: { value: unknown }
   disabled: boolean
   onChange: (value: unknown) => void

@@ -50,6 +50,16 @@ describe('watching the settings files on screen', () => {
     expect(changes).toEqual([])
   })
 
+  it('sends nothing for a save from the page it was told about', async () => {
+    const file = join(folder, 'settings.json')
+    await fs.writeFile(file, text({ model: 'sonnet' }))
+    watch.set([await watched(file)])
+    await fs.writeFile(file, text({ model: 'opus' }))
+    watch.saved(await watched(file))
+    await quiet()
+    expect(changes).toEqual([])
+  })
+
   it('sees a file appear in a folder that did not exist yet', async () => {
     const file = join(folder, 'repo', '.claude', 'settings.local.json')
     watch.set([await watched(file)])

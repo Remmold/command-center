@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
 import { SETTINGS_CATALOG, SETTING_CATEGORIES, formatSettingValue, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
-import { changeCount, patchSize, withPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
+import { changeCount, patchSize, sameValue, withPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
 import { effectiveSetting, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
 import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
 import { conflicts, pendingChanges, shownValue, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
@@ -114,8 +114,12 @@ const CHOICES: { value: ConflictChoice; label: string }[] = [
 function ConflictDialog() {
   const { file, pending } = useEditedFile()
   const { settleConflicts, cancelSettling } = useClaudeSettingsStore.getState()
-  const [choices, setChoices] = useState<Record<string, ConflictChoice>>({})
+  // Each answer holds the file's value it was given against: if the file changes again, it is asked again.
+  const [answers, setAnswers] = useState<Record<string, { choice: ConflictChoice; theirs: unknown }>>({})
   const asked = conflicts(pending, file?.snapshot.value ?? null)
+  const choices = Object.fromEntries(
+    asked.flatMap(({ key, theirs }) => (answers[key] && sameValue(answers[key].theirs, theirs) ? [[key, answers[key].choice]] : []))
+  ) as Record<string, ConflictChoice>
   const answered = asked.every((c) => c.key in choices)
   return (
     <Dialog title="The file changed since your edit" onClose={cancelSettling} maxWidth={560}>
@@ -129,7 +133,7 @@ function ConflictDialog() {
             hint={key}
             description={`Yours: ${format(mine)} · In the file: ${format(theirs)}`}
             control={
-              <SegmentedControl label={`Keep for ${label}`} options={CHOICES} value={choices[key] ?? ''} onChange={(choice) => setChoices({ ...choices, [key]: choice })} />
+              <SegmentedControl label={`Keep for ${label}`} options={CHOICES} value={choices[key] ?? ''} onChange={(choice) => setAnswers({ ...answers, [key]: { choice, theirs } })} />
             }
           />
         )

@@ -42,6 +42,12 @@ export class SettingsFileWatch {
     if (this.entries.size > 0) this.poll = setInterval(() => this.entries.forEach((e) => this.check(e)), this.timing.pollMs)
   }
 
+  /** The page wrote this file itself and already holds the snapshot, so its own write is not sent back. */
+  saved({ path, snapshot }: SettingsFileChange): void {
+    const entry = this.entries.get(keyOf(path))
+    if (entry) entry.text = snapshot.text
+  }
+
   clear(): void {
     for (const entry of this.entries.values()) if (entry.settle) clearTimeout(entry.settle)
     this.entries = new Map()

@@ -429,7 +429,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       workspacePaths: (await workspaces.list()).map((w) => w.path)
     })
     if (problem) return { ok: false, error: problem }
-    return saveSettingsFile(path, base, patch)
+    const saved = await saveSettingsFile(path, base, patch)
+    if (saved.ok) settingsWatch.saved({ path, snapshot: saved.snapshot })
+    return saved
   })
   ipcMain.on(
     IPC.CLAUDE_SEND,
