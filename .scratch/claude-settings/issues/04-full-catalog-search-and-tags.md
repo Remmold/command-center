@@ -10,6 +10,7 @@
 - [ ] Common settings come first in each category; rare ones are behind Show advanced.
 - [ ] Each setting is tagged All chats or Terminal only; a filter can hide terminal-only ones.
 - [ ] Settings Claude reads only at start (model, effort) say "Applies to new chats".
+- [ ] Effort (settled by the conductor from user story 57 and the docs): Model & thinking shows `effortLevel` as "Default effort for models with no saved level", plus a per-model list from `modelSettings` (one row per model id with its effort level, add/remove a model), which is what the chats' effort picker writes. Both say "Applies to new chats".
 - [ ] Risky values with a warning: `permissions.defaultMode` = `bypassPermissions`; `disableAllHooks` = true; `skipDangerousModePermissionPrompt` = true; an Allow rule of bare `Bash`, `PowerShell` or `Bash(*)` (that rule warning shows in the Permissions editor, ticket 06).
 - [ ] A search box finds settings by label, description or raw key name, across all categories.
 - [ ] A bundled snapshot of the published settings schema is a test fixture: every schema key valid outside managed settings, sandbox excepted, is in the catalog or on a written-down skip list (Vitest).
