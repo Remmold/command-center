@@ -124,6 +124,12 @@ describe('the effective value', () => {
     expect(effectiveSetting(startup, layers({ account: { remoteControlAtStartup: true }, repo: { remoteControlAtStartup: false } })).value).toBe(false)
   })
 
+  it('lets any layer turn artifacts off, and none turn them back on', () => {
+    const artifacts = entry('enableArtifact')
+    expect(effectiveSetting(artifacts, layers({ local: { enableArtifact: true } })).sources).toEqual([])
+    expect(effectiveSetting(artifacts, layers({ organisation: { enableArtifact: true }, repo: { enableArtifact: false } }))).toEqual({ value: false, sources: ['repo'], locked: false })
+  })
+
   it('is unset with no source when no layer sets it', () => {
     expect(effectiveSetting(entry('model'), layers({ account: { theme: 'dark' } }))).toEqual({ value: undefined, sources: [], locked: false })
   })

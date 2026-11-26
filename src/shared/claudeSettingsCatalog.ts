@@ -217,11 +217,11 @@ const PERMISSIONS: SettingEntry[] = [
   permission('permissions.additionalDirectories', 'Extra folders', 'Folders outside the workspace Claude may read and edit.', LIST, { defaultLabel: 'none' }),
   permission('permissions.blockReadsOutsideWorkingDirectories', 'Block reads outside the workspace', "Claude's file tools refuse to read outside the workspace folders, in every mode. On in any layer wins.", TOGGLE, {
     default: false,
-    stricter: { ladder: [true], from: EVERY_SOURCE }
+    stricter: { ladder: [true], from: EVERY_SOURCE, onlyStricter: true }
   }),
   permission('permissions.blockWritesOutsideWorkingDirectories', 'Block writes outside the workspace', "Claude's file tools refuse to write outside the workspace folders, in every mode. On in any layer wins.", TOGGLE, {
     default: false,
-    stricter: { ladder: [true], from: EVERY_SOURCE }
+    stricter: { ladder: [true], from: EVERY_SOURCE, onlyStricter: true }
   }),
   permission('skipDangerousModePermissionPrompt', 'Skip the bypass-mode warning', 'Starts in "skip all permission prompts" mode without asking you to confirm first.', TOGGLE, {
     default: false,
@@ -271,30 +271,30 @@ const HOOKS: SettingEntry[] = [
 ]
 
 const ui = inCategory('Interface')
-const terminal: Details = { terminalOnly: true }
+const TERMINAL_ONLY: Details = { terminalOnly: true }
 const INTERFACE: SettingEntry[] = [
   ui('theme', 'Theme', "Claude's colours in the terminal.", choice(['auto', 'Match the terminal'], ['dark', 'Dark'], ['light', 'Light'], ['dark-daltonized', 'Dark, colour-blind friendly'], ['light-daltonized', 'Light, colour-blind friendly'], ['dark-ansi', 'Dark, terminal colours only'], ['light-ansi', 'Light, terminal colours only']), {
     default: 'dark',
-    ...terminal
+    ...TERMINAL_ONLY
   }),
   ui('promptSuggestionEnabled', 'Prompt suggestions', 'Greyed-out guesses of your next prompt in the input box.', TOGGLE, { default: true }),
-  ui('editorMode', 'Input keys', 'How the input box takes keys: as usual, or like the vim editor.', choice(['normal', 'Normal'], ['vim', 'Vim']), { default: 'normal', ...terminal }),
-  ui('tui', 'Screen mode', 'Full screen without flicker, or the classic scrolling terminal.', choice(['default', 'Classic'], ['fullscreen', 'Full screen']), { defaultLabel: 'Claude picks', ...terminal }),
+  ui('editorMode', 'Input keys', 'How the input box takes keys: as usual, or like the vim editor.', choice(['normal', 'Normal'], ['vim', 'Vim']), { default: 'normal', ...TERMINAL_ONLY }),
+  ui('tui', 'Screen mode', 'Full screen without flicker, or the classic scrolling terminal.', choice(['default', 'Classic'], ['fullscreen', 'Full screen']), { defaultLabel: 'Claude picks', ...TERMINAL_ONLY }),
   ui('viewMode', 'Transcript view', 'How much of each step the transcript shows when Claude starts.', choice(['default', 'Short summaries'], ['verbose', 'Full tool output'], ['focus', 'Only your prompt and the answer']), {
     defaultLabel: 'your last choice',
     newChatsOnly: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
-  ui('verbose', 'Full tool output', 'Shows everything each tool call took in and gave back, instead of a short summary.', TOGGLE, { default: false, ...terminal }),
-  ui('statusLine', 'Status line', 'A command whose output shows as a line under the input box.', { kind: 'editor', editor: 'statusLine' }, { defaultLabel: 'none', ...terminal }),
-  ui('showTurnDuration', 'Show how long each answer took', 'A line such as "Cooked for 1m 6s" after each answer.', TOGGLE, { default: true, ...terminal }),
-  ui('spinnerTipsEnabled', 'Tips while Claude works', 'Short tips about Claude Code beside the spinner.', TOGGLE, { default: true, ...terminal }),
-  ui('prefersReducedMotion', 'Reduce motion', 'Calms or stops animations such as the spinner and flashes.', TOGGLE, { default: false, ...terminal }),
+  ui('verbose', 'Full tool output', 'Shows everything each tool call took in and gave back, instead of a short summary.', TOGGLE, { default: false, ...TERMINAL_ONLY }),
+  ui('statusLine', 'Status line', 'A command whose output shows as a line under the input box.', { kind: 'editor', editor: 'statusLine' }, { defaultLabel: 'none', ...TERMINAL_ONLY }),
+  ui('showTurnDuration', 'Show how long each answer took', 'A line such as "Cooked for 1m 6s" after each answer.', TOGGLE, { default: true, ...TERMINAL_ONLY }),
+  ui('spinnerTipsEnabled', 'Tips while Claude works', 'Short tips about Claude Code beside the spinner.', TOGGLE, { default: true, ...TERMINAL_ONLY }),
+  ui('prefersReducedMotion', 'Reduce motion', 'Calms or stops animations such as the spinner and flashes.', TOGGLE, { default: false, ...TERMINAL_ONLY }),
   ui('defaultShell', 'Shell for ! commands', 'The shell that runs commands you type after ! in the input box.', choice(['bash', 'Bash'], ['powershell', 'PowerShell']), {
     defaultLabel: 'Bash, or PowerShell on Windows without Bash',
-    ...terminal
+    ...TERMINAL_ONLY
   }),
-  ui('respondToBashCommands', 'Reply after ! commands', 'Claude answers the output of a command you ran with !; off only adds the output.', TOGGLE, { default: true, ...terminal }),
+  ui('respondToBashCommands', 'Reply after ! commands', 'Claude answers the output of a command you ran with !; off only adds the output.', TOGGLE, { default: true, ...TERMINAL_ONLY }),
   ui('askUserQuestionTimeout', 'Answer questions for me after', 'A question Claude asks with no answer goes on with the options already picked after this long.', QUESTION_WAIT, {
     default: 'never',
     layers: ACCOUNT_ONLY,
@@ -309,56 +309,55 @@ const INTERFACE: SettingEntry[] = [
     default: true,
     layers: ACCOUNT_ONLY,
     advanced: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
   ui('bashEditDiffEnabled', 'Track files shell commands change', 'Shows which files a shell command changed, and tells your hooks.', TOGGLE, {
     defaultLabel: 'only in auto and skip-all-prompts modes',
-    advanced: true,
-    stricter: { ladder: [false], from: REPO_AND_LOCAL, onlyStricter: true }
+    advanced: true
   }),
-  ui('axScreenReader', 'Screen reader mode', 'Plain text without borders or animations, for screen readers.', TOGGLE, { default: false, layers: ACCOUNT_ONLY, advanced: true, ...terminal }),
-  ui('autoScrollEnabled', 'Follow new output', 'In full screen, the transcript scrolls along as Claude writes.', TOGGLE, { default: true, advanced: true, ...terminal }),
-  ui('wheelScrollAccelerationEnabled', 'Faster scrolling on quick wheel turns', 'In full screen, a fast turn of the mouse wheel scrolls further.', TOGGLE, { default: true, advanced: true, ...terminal }),
-  ui('syntaxHighlightingDisabled', 'Turn off code colours', 'Shows code and diffs as plain text.', TOGGLE, { default: false, advanced: true, ...terminal }),
-  ui('emojiCompletionEnabled', 'Emoji shortcodes', 'Typing a code such as :heart: suggests and puts in the emoji.', TOGGLE, { default: true, advanced: true, ...terminal }),
-  ui('respectGitignore', 'Leave ignored files out of the @ picker', 'The @ file picker skips files git is told to ignore.', TOGGLE, { default: true, advanced: true, ...terminal }),
-  ui('fileSuggestion', 'File suggestion command', 'Your own command that fills the @ file picker.', OTHER_KEYS, { defaultLabel: 'the built-in picker', advanced: true, ...terminal }),
-  ui('showClearContextOnPlanAccept', 'Offer to clear context on plan approval', 'Approving a plan can also clear the conversation and build from the plan alone.', TOGGLE, { default: false, advanced: true, ...terminal }),
-  ui('maxProseWidth', 'Text width', 'The widest, in characters, a line of Claude’s text gets in a wide terminal.', { kind: 'number', min: 40 }, { defaultLabel: 'the terminal width', advanced: true, ...terminal }),
+  ui('axScreenReader', 'Screen reader mode', 'Plain text without borders or animations, for screen readers.', TOGGLE, { default: false, layers: ACCOUNT_ONLY, advanced: true, ...TERMINAL_ONLY }),
+  ui('autoScrollEnabled', 'Follow new output', 'In full screen, the transcript scrolls along as Claude writes.', TOGGLE, { default: true, advanced: true, ...TERMINAL_ONLY }),
+  ui('wheelScrollAccelerationEnabled', 'Faster scrolling on quick wheel turns', 'In full screen, a fast turn of the mouse wheel scrolls further.', TOGGLE, { default: true, advanced: true, ...TERMINAL_ONLY }),
+  ui('syntaxHighlightingDisabled', 'Turn off code colours', 'Shows code and diffs as plain text.', TOGGLE, { default: false, advanced: true, ...TERMINAL_ONLY }),
+  ui('emojiCompletionEnabled', 'Emoji shortcodes', 'Typing a code such as :heart: suggests and puts in the emoji.', TOGGLE, { default: true, advanced: true, ...TERMINAL_ONLY }),
+  ui('respectGitignore', 'Leave ignored files out of the @ picker', 'The @ file picker skips files git is told to ignore.', TOGGLE, { default: true, advanced: true, ...TERMINAL_ONLY }),
+  ui('fileSuggestion', 'File suggestion command', 'Your own command that fills the @ file picker.', OTHER_KEYS, { defaultLabel: 'the built-in picker', advanced: true, ...TERMINAL_ONLY }),
+  ui('showClearContextOnPlanAccept', 'Offer to clear context on plan approval', 'Approving a plan can also clear the conversation and build from the plan alone.', TOGGLE, { default: false, advanced: true, ...TERMINAL_ONLY }),
+  ui('maxProseWidth', 'Text width', 'The widest, in characters, a line of Claude’s text gets in a wide terminal.', { kind: 'number', min: 40 }, { defaultLabel: 'the terminal width', advanced: true, ...TERMINAL_ONLY }),
   ui('timeFormat', 'Time format', 'How times show, such as the time an answer finished.', choice(['auto', 'Automatic'], ['12-hour', '12-hour clock'], ['24-hour', '24-hour clock'], ['24-hour-utc', '24-hour clock in UTC']), {
     default: 'auto',
     advanced: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
-  ui('timeZone', 'Time zone', 'The time zone times show in, such as Europe/Stockholm.', TEXT, { defaultLabel: 'your computer’s time zone', advanced: true, ...terminal }),
-  ui('terminalProgressBarEnabled', 'Progress in the terminal tab', 'Terminals that can show progress on their tab or taskbar show when Claude is busy.', TOGGLE, { default: true, advanced: true, ...terminal }),
-  ui('terminalTitleFromRename', 'Tab title from the chat name', 'Once you name a chat, the terminal tab shows that name.', TOGGLE, { default: true, advanced: true, ...terminal }),
-  ui('companyAnnouncements', 'Start-up announcements', 'Messages shown when Claude starts; with several, one at random.', LIST, { defaultLabel: 'none', advanced: true, ...terminal }),
-  ui('spinnerTipsOverride', 'Your own tips', 'Tips to add to the spinner, or to show instead of the built-in ones.', OTHER_KEYS, { defaultLabel: 'the built-in tips', advanced: true, ...terminal }),
+  ui('timeZone', 'Time zone', 'The time zone times show in, such as Europe/Stockholm.', TEXT, { defaultLabel: 'your computer’s time zone', advanced: true, ...TERMINAL_ONLY }),
+  ui('terminalProgressBarEnabled', 'Progress in the terminal tab', 'Terminals that can show progress on their tab or taskbar show when Claude is busy.', TOGGLE, { default: true, advanced: true, ...TERMINAL_ONLY }),
+  ui('terminalTitleFromRename', 'Tab title from the chat name', 'Once you name a chat, the terminal tab shows that name.', TOGGLE, { default: true, advanced: true, ...TERMINAL_ONLY }),
+  ui('companyAnnouncements', 'Start-up announcements', 'Messages shown when Claude starts; with several, one at random.', LIST, { defaultLabel: 'none', advanced: true, ...TERMINAL_ONLY }),
+  ui('spinnerTipsOverride', 'Your own tips', 'Tips to add to the spinner, or to show instead of the built-in ones.', OTHER_KEYS, { defaultLabel: 'the built-in tips', advanced: true, ...TERMINAL_ONLY }),
   ui('spinnerVerbs', 'Spinner words', 'Your own words for the spinner, such as "Baking", added to the built-in ones or instead of them.', OTHER_KEYS, {
     defaultLabel: 'the built-in words',
     advanced: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
   ui('footerLinksRegexes', 'Footer links', 'Turns ids that appear in the output, such as ticket numbers, into links under the input box.', OTHER_KEYS, {
     defaultLabel: 'none',
     layers: ACCOUNT_ONLY,
     advanced: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
   ui('spellcheck', 'Spell check', 'Underlines misspelt words in the input box, using a spell checker you install.', OTHER_KEYS, {
     defaultLabel: 'off',
     layers: ACCOUNT_ONLY,
     advanced: true,
     whole: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
-  ui('voice.enabled', 'Voice dictation', 'Speak your prompt instead of typing it.', TOGGLE, { default: false, advanced: true, ...terminal }),
-  ui('voice.mode', 'Dictation key', 'Hold the key while you speak, or tap it to start and again to send.', choice(['hold', 'Hold to speak'], ['tap', 'Tap to start and send']), { default: 'hold', advanced: true, ...terminal }),
-  ui('voice.autoSubmit', 'Send when you let go', 'In hold mode, letting go of the key sends the prompt.', TOGGLE, { default: false, advanced: true, ...terminal }),
-  ui('voiceEnabled', 'Voice dictation (older setting)', 'The older on/off for dictation; Voice dictation above wins when both are set.', TOGGLE, { defaultLabel: 'off', advanced: true, ...terminal }),
-  ui('vimInsertModeRemaps', 'Vim escape keys', 'Two-key sequences, such as jk, that act as Escape in vim mode.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...terminal }),
-  ui('subagentStatusLine', 'Subagent status line', 'A command whose output shows as the status line of subagents.', { kind: 'editor', editor: 'statusLine' }, { defaultLabel: 'none', advanced: true, ...terminal })
+  ui('voice.enabled', 'Voice dictation', 'Speak your prompt instead of typing it.', TOGGLE, { default: false, advanced: true, ...TERMINAL_ONLY }),
+  ui('voice.mode', 'Dictation key', 'Hold the key while you speak, or tap it to start and again to send.', choice(['hold', 'Hold to speak'], ['tap', 'Tap to start and send']), { default: 'hold', advanced: true, ...TERMINAL_ONLY }),
+  ui('voice.autoSubmit', 'Send when you let go', 'In hold mode, letting go of the key sends the prompt.', TOGGLE, { default: false, advanced: true, ...TERMINAL_ONLY }),
+  ui('voiceEnabled', 'Voice dictation (older setting)', 'The older on/off for dictation; Voice dictation above wins when both are set.', TOGGLE, { defaultLabel: 'off', advanced: true, ...TERMINAL_ONLY }),
+  ui('vimInsertModeRemaps', 'Vim escape keys', 'Two-key sequences, such as jk, that act as Escape in vim mode.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...TERMINAL_ONLY }),
+  ui('subagentStatusLine', 'Subagent status line', 'A command whose output shows as the status line of subagents.', { kind: 'editor', editor: 'statusLine' }, { defaultLabel: 'none', advanced: true, ...TERMINAL_ONLY })
 ]
 
 const memory = inCategory('Memory & context')
@@ -409,7 +408,7 @@ const MCP_SERVERS: SettingEntry[] = [
   mcp('disabledMcpjsonServers', 'Rejected project servers', "Servers from a project's .mcp.json that never connect.", LIST, { defaultLabel: 'none' }),
   mcp('disableClaudeAiConnectors', 'Turn off claude.ai connectors', 'Claude does not load the connectors you set up on claude.ai. On in any layer wins.', TOGGLE, {
     default: false,
-    stricter: { ladder: [true], from: EVERY_SOURCE }
+    stricter: { ladder: [true], from: EVERY_SOURCE, onlyStricter: true }
   }),
   mcp('allowedMcpServers', 'Allowed servers', 'Only servers that match this list can be added.', OTHER_KEYS, { defaultLabel: 'every server', advanced: true }),
   mcp('deniedMcpServers', 'Blocked servers', 'Servers that match this list never load.', OTHER_KEYS, { defaultLabel: 'none', advanced: true })
@@ -452,14 +451,14 @@ const AGENTS_AND_WORKTREES: SettingEntry[] = [
   agents('worktree.bgIsolation', 'Background chats edit in', 'Background chats edit in a worktree of their own, or straight in your folder.', choice(['worktree', 'Their own worktree'], ['none', 'Your folder']), {
     default: 'worktree',
     advanced: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
-  agents('worktree.location', 'Worktree folder over SSH', 'Where the desktop app makes worktrees on a remote machine.', TEXT, { defaultLabel: 'inside the project', layers: ACCOUNT_ONLY, advanced: true, ...terminal }),
-  agents('disableAgentView', 'Turn off background agents', 'Turns off claude agents, background chats and the agent view.', TOGGLE, { default: false, advanced: true, ...terminal }),
+  agents('worktree.location', 'Worktree folder over SSH', 'Where the desktop app makes worktrees on a remote machine.', TEXT, { defaultLabel: 'inside the project', layers: ACCOUNT_ONLY, advanced: true, ...TERMINAL_ONLY }),
+  agents('disableAgentView', 'Turn off background agents', 'Turns off claude agents, background chats and the agent view.', TOGGLE, { default: false, advanced: true, ...TERMINAL_ONLY }),
   agents('teammateMode', 'Where teammates show', 'Agent team members show inside your terminal, or in panes of their own.', choice(['in-process', 'In your terminal'], ['auto', 'Panes when the terminal can'], ['tmux', 'tmux panes'], ['iterm2', 'iTerm2 panes']), {
     default: 'in-process',
     advanced: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
   agents('crossSessionInbound', 'Messages from your other chats', 'What a chat does with a message one of your other chats sends it. Repo and Local count only when stricter.', choice(['accept', 'Pass it to Claude'], ['hold', 'Show it, held'], ['refuse', 'Drop it']), {
     defaultLabel: 'decided per message',
@@ -491,50 +490,50 @@ const REMOTE_AND_NOTIFICATIONS: SettingEntry[] = [
   remote('agentPushNotifEnabled', 'Phone alerts Claude decides on', 'Claude may send your phone a push notification, such as when a long task finishes.', TOGGLE, { defaultLabel: 'your account’s choice' }),
   remote('enableArtifact', 'Artifacts', 'Claude can publish chat output as a private web page on claude.ai. Off in any layer wins.', TOGGLE, {
     defaultLabel: 'your account’s choice',
-    stricter: { ladder: [false], from: EVERY_SOURCE }
+    stricter: { ladder: [false], from: EVERY_SOURCE, onlyStricter: true }
   }),
   remote('preferredNotifChannel', 'Terminal notifications', 'How the terminal tells you a task finished or an approval waits.', choice(['auto', 'Automatic'], ['terminal_bell', 'Terminal bell'], ['iterm2', 'iTerm2'], ['iterm2_with_bell', 'iTerm2 and bell'], ['kitty', 'Kitty'], ['ghostty', 'Ghostty'], ['notifications_disabled', 'None']), {
     default: 'auto',
-    ...terminal
+    ...TERMINAL_ONLY
   }),
-  remote('awaySummaryEnabled', 'Recap when you come back', 'A one-line recap of the chat when you return after a few minutes away.', TOGGLE, { default: true, ...terminal }),
+  remote('awaySummaryEnabled', 'Recap when you come back', 'A one-line recap of the chat when you return after a few minutes away.', TOGGLE, { default: true, ...TERMINAL_ONLY }),
   remote('disableRemoteControl', 'Turn off Remote Control', 'No chat can connect to claude.ai/code.', TOGGLE, { default: false, advanced: true }),
   remote('disableArtifact', 'Turn off artifacts (older setting)', 'The older way to turn artifacts off; only on counts.', TOGGLE, {
     default: false,
     advanced: true,
-    stricter: { ladder: [true], from: EVERY_SOURCE }
+    stricter: { ladder: [true], from: EVERY_SOURCE, onlyStricter: true }
   }),
-  remote('disableDeepLinkRegistration', 'Turn off claude-cli:// links', 'Other programs can no longer open Claude with a prompt filled in.', DISABLE, { defaultLabel: 'links work', advanced: true, ...terminal }),
-  remote('remote.defaultEnvironmentId', 'Default cloud environment', 'The cloud environment a cloud chat started from the terminal runs in.', TEXT, { defaultLabel: 'Anthropic’s', advanced: true, ...terminal }),
-  remote('sshConfigs', 'SSH connections', 'SSH connections listed in the desktop app.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...terminal }),
-  remote('sshHostCommands', 'SSH connections from a command', 'SSH connections in the desktop app whose host a command prints.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...terminal })
+  remote('disableDeepLinkRegistration', 'Turn off claude-cli:// links', 'Other programs can no longer open Claude with a prompt filled in.', DISABLE, { defaultLabel: 'links work', advanced: true, ...TERMINAL_ONLY }),
+  remote('remote.defaultEnvironmentId', 'Default cloud environment', 'The cloud environment a cloud chat started from the terminal runs in.', TEXT, { defaultLabel: 'Anthropic’s', advanced: true, ...TERMINAL_ONLY }),
+  remote('sshConfigs', 'SSH connections', 'SSH connections listed in the desktop app.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...TERMINAL_ONLY }),
+  remote('sshHostCommands', 'SSH connections from a command', 'SSH connections in the desktop app whose host a command prints.', OTHER_KEYS, { defaultLabel: 'none', layers: ACCOUNT_ONLY, advanced: true, ...TERMINAL_ONLY })
 ]
 
 const updates = inCategory('Updates, privacy & sign-in')
 const UPDATES_PRIVACY_AND_SIGN_IN: SettingEntry[] = [
   updates('autoUpdatesChannel', 'Update channel', 'The newest release, or one about a week old that skips releases with big problems.', choice(['latest', 'Latest'], ['stable', 'Stable']), {
     default: 'latest',
-    ...terminal
+    ...TERMINAL_ONLY
   }),
   updates('cleanupPeriodDays', 'Keep chat history for', 'Days before old chat transcripts are deleted, without a message.', { kind: 'number', min: 1 }, { default: 30 }),
-  updates('minimumVersion', 'Lowest version to update to', 'Updates never install a version below this one, such as 2.1.323.', TEXT, { defaultLabel: 'any version', advanced: true, ...terminal }),
+  updates('minimumVersion', 'Lowest version to update to', 'Updates never install a version below this one, such as 2.1.323.', TEXT, { defaultLabel: 'any version', advanced: true, ...TERMINAL_ONLY }),
   updates('skipWebFetchPreflight', 'Skip the web address check', 'Web fetches no longer send the address to Anthropic for a safety check first.', TOGGLE, { default: false, advanced: true }),
   updates('feedbackDrafts', 'Feedback drafts', 'Whether Claude may draft feedback for you to review, and whether a card says so.', choice(['notify', 'Draft and show a card'], ['quiet', 'Draft quietly'], ['off', 'Off']), {
     default: 'notify',
     layers: ACCOUNT_ONLY,
     advanced: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
   updates('feedbackSurveyRate', 'Survey rate', 'How likely the chat quality survey is to appear, from 0 (never) to 1.', { kind: 'number', min: 0, max: 1 }, {
     defaultLabel: 'Anthropic’s rate',
     advanced: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
   updates('desktopSessionCleanupPeriodDays', 'Keep desktop chat history for', 'Days before transcripts of chats from Claude Desktop are deleted; 0 keeps them.', { kind: 'number', min: 0 }, {
     default: 0,
     layers: ACCOUNT_ONLY,
     advanced: true,
-    ...terminal
+    ...TERMINAL_ONLY
   }),
   updates('forceLoginMethod', 'Sign-in method', 'Which kind of account people can sign in with.', {
     kind: 'choice',
@@ -614,9 +613,9 @@ export const matchesSearch = (entry: SettingEntry, query: string): boolean => {
 }
 
 /** The rows the page shows, by category, common ones first; a search looks through advanced ones too. */
-export function shownSettings(filter: SettingsFilter, catalog: readonly SettingEntry[] = SETTINGS_CATALOG): SettingsGroup[] {
+export function shownSettings(filter: SettingsFilter): SettingsGroup[] {
   const searching = filter.query.trim() !== ''
-  const shown = catalog.filter(
+  const shown = SETTINGS_CATALOG.filter(
     (e) =>
       (searching ? matchesSearch(e, filter.query) : e.category === filter.category && (filter.showAdvanced || !e.advanced)) && !(filter.hideTerminalOnly && e.terminalOnly)
   )
@@ -628,15 +627,13 @@ export function shownSettings(filter: SettingsFilter, catalog: readonly SettingE
 
 const optionLabel = (options: ChoiceOption[], value: unknown): string | undefined => options.find((o) => o.value === value)?.label
 
-/** The effort saved per model, as `model: level` pairs. */
-function modelEfforts(value: unknown): string | null {
-  if (!isSettingsObject(value)) return null
-  const pairs = Object.entries(value).flatMap(([id, settings]) => {
-    const level = isSettingsObject(settings) ? settings.effortLevel : undefined
-    return typeof level === 'string' ? [`${id}: ${optionLabel(EFFORT_OPTIONS, level) ?? level}`] : []
-  })
-  return pairs.length === 0 ? 'none' : pairs.join(', ')
+/** Each model in a `modelSettings` value with the effort saved for it. */
+export function savedEfforts(value: unknown): [model: string, level: string][] {
+  if (!isSettingsObject(value)) return []
+  return Object.entries(value).flatMap(([model, settings]) => (isSettingsObject(settings) && typeof settings.effortLevel === 'string' ? [[model, settings.effortLevel]] : []))
 }
+
+export const isModelEffort = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'modelEffort'
 
 export function formatSettingValue(entry: SettingEntry, value: unknown): string {
   if (value === undefined) return 'not set'
@@ -645,9 +642,9 @@ export function formatSettingValue(entry: SettingEntry, value: unknown): string 
     const label = optionLabel(entry.control.options, value)
     if (label) return label
   }
-  if (entry.control.kind === 'editor' && entry.control.editor === 'modelEffort') {
-    const efforts = modelEfforts(value)
-    if (efforts) return efforts
+  if (isModelEffort(entry) && isSettingsObject(value)) {
+    const pairs = savedEfforts(value).map(([model, level]) => `${model}: ${optionLabel(EFFORT_OPTIONS, level) ?? level}`)
+    return pairs.length === 0 ? 'none' : pairs.join(', ')
   }
   if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return value.length === 0 ? 'none' : value.join(', ')
   return typeof value === 'string' ? value : JSON.stringify(value)

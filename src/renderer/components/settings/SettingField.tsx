@@ -1,5 +1,5 @@
 import type { SettingsLayer } from '../../../shared/claudeSettings'
-import { defaultText, formatSettingValue, layerRule, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { defaultText, formatSettingValue, isModelEffort, layerRule, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -31,10 +31,10 @@ interface Props {
 
 const NOT_SET = ''
 
-function inRange(entry: SettingEntry, n: number): boolean {
-  if (entry.control.kind !== 'number') return true
-  const { min, max } = entry.control
-  return (min === undefined || n >= min) && (max === undefined || n <= max)
+function clamped(entry: SettingEntry, n: number): number {
+  if (entry.control.kind !== 'number') return n
+  const { min = -Infinity, max = Infinity } = entry.control
+  return Math.min(max, Math.max(min, n))
 }
 
 function rangeText(entry: SettingEntry): string | null {
@@ -48,13 +48,11 @@ function rangeText(entry: SettingEntry): string | null {
 function parseInput(entry: SettingEntry, text: string): unknown {
   if (entry.control.kind === 'number') {
     const n = Number(text)
-    return Number.isFinite(n) && inRange(entry, n) ? n : undefined
+    return Number.isFinite(n) ? clamped(entry, n) : undefined
   }
   if (entry.control.kind === 'stringList') return text.split(',').map((s) => s.trim()).filter(Boolean)
   return text
 }
-
-const isModelEffort = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'modelEffort'
 
 function Control({ entry, layer, value, disabled, onChange }: Pick<Props, 'entry' | 'layer' | 'value' | 'disabled'> & { onChange: (value: unknown) => void }) {
   const { control } = entry
@@ -104,7 +102,9 @@ export function SettingField({ entry, layer, value, effective, changed, fileValu
   const ignoredValue = notHere === null && value !== undefined ? layerRule(entry, layer, value) : null
   const risk = entry.risk?.(value) ?? null
   const range = rangeText(entry)
-  const readOnly = disabled || notHere !== null || effective.locked
+  // A stricter value still counts from its layers over the organisation's.
+  const lockedHere = effective.locked && !entry.stricter?.from.includes(layer)
+  const readOnly = disabled || notHere !== null || lockedHere
   return (
     <FormRow
       label={entry.label}

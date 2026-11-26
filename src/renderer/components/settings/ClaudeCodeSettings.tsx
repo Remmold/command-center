@@ -72,9 +72,8 @@ function openInContext(workspaceId: string, path: string): void {
   if (useViewStore.getState().settings === null) useContextStore.getState().showFile(workspaceId, path)
 }
 
-/** Whether the patch changes the key or anything inside it. */
-const touches = (patch: SettingsPatch, key: string): boolean =>
-  [...Object.keys(patch.set), ...patch.remove].some((path) => path === key || path.startsWith(`${key}.`))
+/** Whether the patch changes the entry's key or a path inside it no other entry owns. */
+const touches = (patch: SettingsPatch, entry: SettingEntry): boolean => [...Object.keys(patch.set), ...patch.remove].some((path) => entryOf(path)?.key === entry.key)
 
 function settingWords(key: string): { label: string; format: (value: unknown) => string } {
   const entry = entryOf(key)
@@ -226,7 +225,7 @@ export function ClaudeCodeSettings() {
   const searching = query.trim() !== ''
   const layers = useMemo(() => layersWithPending(read, allPending), [read, allPending])
   const count = pending ? patchSize(pending.patch) : 0
-  const fileChanged = useMemo(() => new Map(conflicts(pending, snapshot?.value ?? null).map((c) => [c.key, { value: c.theirs }])), [pending, snapshot])
+  const fileChanged = useMemo(() => new Map(conflicts(pending, snapshot?.value ?? null).map((c) => [entryOf(c.key)?.key ?? c.key, { value: c.theirs }])), [pending, snapshot])
   const unreadable = snapshot?.value === null
   const noWorkspace = layer !== 'account' && workspaces.length === 0
 
@@ -293,7 +292,7 @@ export function ClaudeCodeSettings() {
                 This file is {snapshot?.error}. Fix it in the Context view or an editor; it can&apos;t be saved from this page until it parses.
               </Banner>
             )}
-            {searching && groups.length === 0 && <p className="text-muted">No setting matches “{query.trim()}”.</p>}
+            {searching && groups.length === 0 && <NoticeLine>No setting matches “{query.trim()}”.</NoticeLine>}
             {groups.map((group) => (
               <PageGroup key={group.category} title={group.category}>
                 <div>
@@ -304,7 +303,7 @@ export function ClaudeCodeSettings() {
                       layer={layer}
                       value={getAt(layers[layer], entry.key)}
                       effective={shownEffective(entry, layers, layer)}
-                      changed={pending !== null && touches(pending.patch, entry.key)}
+                      changed={pending !== null && touches(pending.patch, entry)}
                       fileValue={fileChanged.get(entry.key)}
                       disabled={!snapshot || unreadable || saving}
                       onStage={stage}

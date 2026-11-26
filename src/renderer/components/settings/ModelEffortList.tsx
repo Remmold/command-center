@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import { isSettingsObject, keyPath } from '../../../shared/claudeSettings'
-import { EFFORT_OPTIONS } from '../../../shared/claudeSettingsCatalog'
+import { keyPath } from '../../../shared/claudeSettings'
+import { EFFORT_OPTIONS, savedEfforts } from '../../../shared/claudeSettingsCatalog'
 import { FormRow } from '../ui/FormRow'
 import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
@@ -16,10 +16,8 @@ interface Props {
 
 const effortPath = (model: string): string => keyPath('modelSettings', model, 'effortLevel')
 
-function savedEfforts(value: unknown): [model: string, level: string][] {
-  if (!isSettingsObject(value)) return []
-  return Object.entries(value).flatMap(([model, settings]) => (isSettingsObject(settings) && typeof settings.effortLevel === 'string' ? [[model, settings.effortLevel]] : []))
-}
+/** The known levels, plus a level the file has that the list doesn't know. */
+const levelOptions = (level: string) => (EFFORT_OPTIONS.some((o) => o.value === level) ? EFFORT_OPTIONS : [...EFFORT_OPTIONS, { value: level, label: level }])
 
 /** One row per model with a saved effort; a model can be added at a level, or have its level removed. */
 export function ModelEffortList({ value, disabled, onStage }: Props) {
@@ -32,7 +30,7 @@ export function ModelEffortList({ value, disabled, onStage }: Props) {
           label={model}
           control={
             <>
-              <Select label={`Effort for ${model}`} options={EFFORT_OPTIONS} value={level} disabled={disabled} onChange={(next) => onStage(effortPath(model), next)} />
+              <Select label={`Effort for ${model}`} options={levelOptions(level)} value={level} disabled={disabled} onChange={(next) => onStage(effortPath(model), next)} />
               {!disabled && (
                 <IconButton label={`Remove ${model}`} tooltip="Remove its saved effort" onClick={() => onStage(effortPath(model), undefined)}>
                   <X size={12} />
