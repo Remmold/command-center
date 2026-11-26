@@ -89,10 +89,10 @@ export async function openFeatureSession(feature: FeatureRecord): Promise<string
   const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { id: feature.sessionId, claudeSessionId: plan.claudeSessionId })
   if (!created) return `The session of ${feature.name} could not be hosted again.`
   const read = await window.api.observed.read(workspace.id, plan.claudeSessionId)
-  if (read.ok) {
-    const history: ChatItem[] = read.items
-    useChatItemsStore.getState().appendItems(created.id, history)
-  }
+  const history: ChatItem[] = read.ok
+    ? read.items
+    : [{ kind: 'system', id: crypto.randomUUID(), text: `Could not read this session's transcript (${read.error}); Claude still has the whole conversation.`, at: Date.now() }]
+  useChatItemsStore.getState().appendItems(created.id, history)
   openSession(created.id, { focus: false })
   return null
 }

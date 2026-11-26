@@ -156,8 +156,7 @@ function currentSources(): ListSources {
   }
 }
 
-/** Every session the list is built from, unfiltered. */
-/** With `withFeatures`, feature sessions are in too, for what counts every waiting session (the Needs you queue). */
+/** Every session the list is built from, unfiltered; `withFeatures` adds feature sessions, which the Needs you queue counts. */
 export function useSessionSources(withFeatures = false): Omit<SessionListInput, 'search'> {
   const views = useProjectViewsStore((s) => s.views)
   const byPane = useSessionStatusStore((s) => s.byPane)

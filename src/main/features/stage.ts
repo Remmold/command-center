@@ -10,19 +10,19 @@ export interface StageSources {
   repoName: string
 }
 
-/** True when the worktree folder is there; an empty listing and a missing folder look the same, so ask for its own file. */
-async function folderExists(path: string, files: BoardFileReader): Promise<boolean> {
+/** An empty folder listing looks like a missing folder, so ask for the path's own modified time. */
+async function exists(path: string, files: BoardFileReader): Promise<boolean> {
   return (await files.modifiedAt(path)) !== null
 }
 
-/** Reads a feature's files and derives its stage; a gone worktree folder is `missing`, never an error. */
+/** A gone worktree folder is `missing`, never an error. */
 export async function readFeatureStage(record: FeatureRecord, { files, testFlowsFolder, repoName }: StageSources): Promise<FeatureStageView> {
-  if (!(await folderExists(record.worktreePath, files))) return { missing: true }
+  if (!(await exists(record.worktreePath, files))) return { missing: true }
   const dir = join(record.worktreePath, '.scratch', record.name)
   const tickets = await readTickets(join(dir, 'issues'), files)
-  const spec = (await files.modifiedAt(join(dir, 'spec.md'))) !== null
+  const spec = await exists(join(dir, 'spec.md'), files)
   const stepsDir = join(testFlowsFolder, repoName)
-  const testSteps = (await Promise.all(['.md', '.html'].map((ext) => files.modifiedAt(join(stepsDir, `${record.name}${ext}`))))).some((t) => t !== null)
+  const testSteps = (await Promise.all(['.md', '.html'].map((ext) => exists(join(stepsDir, `${record.name}${ext}`), files)))).some(Boolean)
   const result = featureStage({
     spec,
     tickets: tickets.map((t) => ({ status: t.status.status, hasProgress: t.progressPath !== null })),
