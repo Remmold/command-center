@@ -54,3 +54,24 @@ describe('preview config store', () => {
     expect(await store.get('w1')).not.toBeNull()
   })
 })
+
+describe('preview config store, broken files', () => {
+  it('reads a corrupt file as no config instead of failing, and a save then replaces it', async () => {
+    const store = createPreviewConfigStore(file)
+    await store.save('w1', web)
+    writeFileSync(file, '{ not json')
+    expect(await store.get('w1')).toBeNull()
+    expect((await store.save('w1', web)).ok).toBe(true)
+    expect(await store.get('w1')).not.toBeNull()
+  })
+
+  it('keeps another workspace entry that no longer validates when saving', async () => {
+    const store = createPreviewConfigStore(file)
+    await store.save('w1', web)
+    const raw = JSON.parse(readFileSync(file, 'utf-8'))
+    raw.w9 = { servers: [{ name: '' }] }
+    writeFileSync(file, JSON.stringify(raw))
+    await store.save('w2', web)
+    expect(JSON.parse(readFileSync(file, 'utf-8')).w9).toBeDefined()
+  })
+})

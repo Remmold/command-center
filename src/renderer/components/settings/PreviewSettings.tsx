@@ -43,6 +43,7 @@ export function PreviewSettings() {
   const [draft, setDraft] = useState<Draft>(EMPTY)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     void load()
@@ -54,12 +55,19 @@ export function PreviewSettings() {
   useEffect(() => {
     if (!currentId) return
     let live = true
-    void window.api.previewConfig.get(currentId).then((config) => {
-      if (!live) return
-      setSaved(toDraft(config))
-      setDraft(toDraft(config))
-      setError(null)
-    })
+    setLoaded(false)
+    window.api.previewConfig
+      .get(currentId)
+      .then((config) => {
+        if (!live) return
+        setSaved(toDraft(config))
+        setDraft(toDraft(config))
+        setError(null)
+        setLoaded(true)
+      })
+      .catch((err) => {
+        if (live) setError(`Could not read this workspace's preview config: ${err instanceof Error ? err.message : String(err)}`)
+      })
     return () => {
       live = false
     }
@@ -96,6 +104,8 @@ export function PreviewSettings() {
       <PageBody>
         {!current ? (
           <PageNote>Add a workspace first.</PageNote>
+        ) : !loaded ? (
+          <PageNote>{error ?? 'Loading…'}</PageNote>
         ) : (
           <>
             <PageGroup title="Workspace">
@@ -149,7 +159,7 @@ export function PreviewSettings() {
           </>
         )}
       </PageBody>
-      {(dirty || error) && (
+      {loaded && (dirty || error) && (
         <SaveBar
           label="Unsaved preview changes"
           summary={dirty ? 'Unsaved preview changes' : 'Preview config'}

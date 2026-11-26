@@ -69,8 +69,9 @@ describe('serverCommand', () => {
 })
 
 describe('isEmptyPreviewConfig', () => {
-  it('is empty with no install command and no servers', () => {
+  it('is empty with no install command, no servers and the default start page', () => {
     expect(isEmptyPreviewConfig({ install: '', servers: [], startPage: '/' })).toBe(true)
     expect(isEmptyPreviewConfig({ install: 'x', servers: [], startPage: '/' })).toBe(false)
+    expect(isEmptyPreviewConfig({ install: '', servers: [], startPage: '/app' })).toBe(false)
   })
 })

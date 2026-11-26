@@ -83,7 +83,7 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
     return { ok: true, feature }
   } catch (err) {
     if (workspace) await deps.workspaces.remove(workspace.id).catch(() => undefined)
-    if (madeWorktree) await deps.git.removeNewWorktree(source.path, worktreePath, branch)
+    if (madeWorktree) await deps.git.removeNewWorktree(source.path, worktreePath, branch).catch(() => undefined)
     return fail(`Could not make the feature: ${reason(err)}`)
   }
 }

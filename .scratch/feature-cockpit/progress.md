@@ -4,4 +4,5 @@ Branch: feat/feature-cockpit
 - 01 review fixes: refuse a removed account, "workspace removed" note, one reload helper — e376fa1
 - 02 resolved: Features rows show stage, tickets done/total, account and session status read from files; Completed group; feature sessions count in Needs you and jump-to-next — 922eac7
 - 02 review fixes: restart re-host via saved Claude session id, one comment, stage helper, transcript-unreadable note, stageService tests — 5cd4cf1
-- 03 resolved: per-workspace preview config (shared reader, store, Settings → Preview page), New feature runs the install command with clean-up on failure — pending
+- 03 resolved: per-workspace preview config (shared reader, store, Settings → Preview page), New feature runs the install command with clean-up on failure — dce36c2
+- 03 review fixes: shared env/killTree, tolerant store, Settings load guard — dce36c2+

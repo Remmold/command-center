@@ -1,23 +1,16 @@
 import { spawn } from 'node:child_process'
+import { childEnv } from '../util/childEnv'
+import { killTree } from '../util/killTree'
 
-const TAIL_BYTES = 1500
-
-/** A shell command's children outlive a plain kill on Windows, so the whole tree goes. */
-function killTree(pid: number | undefined): void {
-  if (pid === undefined) return
-  if (process.platform === 'win32') spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true })
-  else process.kill(pid)
-}
+const TAIL_CHARS = 1500
 
 /** Runs a workspace's install command in a new worktree; rejects with the command's own last output when it fails. */
 export function runInstall(cwd: string, command: string, timeoutMs = 10 * 60_000): Promise<void> {
   return new Promise((resolve, reject) => {
-    // Electron's own flag would make a node-based installer run as Electron.
-    const { ELECTRON_RUN_AS_NODE: _drop, ...env } = process.env
-    const child = spawn(command, { cwd, shell: true, windowsHide: true, env })
+    const child = spawn(command, { cwd, shell: true, windowsHide: true, env: childEnv(process.env) })
     let tail = ''
     const keep = (chunk: Buffer): void => {
-      tail = (tail + chunk.toString()).slice(-TAIL_BYTES)
+      tail = (tail + chunk.toString()).slice(-TAIL_CHARS)
     }
     child.stdout?.on('data', keep)
     child.stderr?.on('data', keep)

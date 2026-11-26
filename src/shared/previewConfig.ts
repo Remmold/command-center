@@ -62,5 +62,5 @@ export function serverCommand(command: string, port: number): string {
 
 /** A config that says nothing: saving it removes the workspace's config. */
 export function isEmptyPreviewConfig(config: PreviewConfig): boolean {
-  return config.install === '' && config.servers.length === 0
+  return config.install === '' && config.servers.length === 0 && config.startPage === '/'
 }

@@ -1,3 +1,3 @@
-Done: preview config reader/store, Settings → Preview page, install step in createFeature; pnpm quick and pnpm e2e (16 of 20) green.
-Next: code review of the diff since ab8f37c, fix real findings.
+Done: review fixes (childEnv + shared killTree, tolerant preview store, Settings load guard, start-page-only config kept, guarded clean-up); quick and e2e (16 of 20) green.
+Next: nothing for 03; ticket 04 can start.
 Open reds: none.
