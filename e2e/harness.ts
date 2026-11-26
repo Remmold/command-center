@@ -322,7 +322,7 @@ export function transcriptsOf({ configDir, workspace }: Pick<Launched, 'configDi
 }
 
 export function prompt(page: Page) {
-  return page.locator('[data-chat-pane] textarea:visible')
+  return page.locator('[data-chat-pane] textarea:visible:not(.xterm-helper-textarea)')
 }
 
 export async function send(page: Page, text: string): Promise<void> {

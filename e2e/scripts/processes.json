@@ -13,6 +13,18 @@
         },
         { "type": "text", "text": "The dev server runs in the background." }
       ]
+    },
+    {
+      "match": "^start the watcher",
+      "events": [
+        {
+          "type": "tool_use",
+          "name": "Bash",
+          "input": { "command": "Write-Output ('cc-' + 'mine'); Start-Sleep -Seconds 600", "description": "Start the watcher", "run_in_background": true },
+          "approval": false
+        },
+        { "type": "text", "text": "The watcher runs in the background." }
+      ]
     }
   ]
 }

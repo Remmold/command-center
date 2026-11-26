@@ -11,12 +11,14 @@ import {
   useStopErrors,
   type ProcessOutput
 } from '../../state/backgroundProcessesStore'
+import { claudeRowKey } from '../../state/processesList'
+import { openInProcesses } from '../../state/processesViewStore'
 import { useViewStore } from '../../state/viewStore'
+import { ProcessOutputTerminal } from '../ProcessOutputTerminal'
 import { ServerLink } from '../ServerLink'
 import { Button } from '../ui/Button'
 import { EmptyState } from '../ui/EmptyState'
 import { ListItem, ListRowLines, ListRowMeta } from '../ui/ListRow'
-import { TerminalOutput } from '../ui/TerminalOutput'
 import { DotMark, type TimelineDot } from '../ui/Timeline'
 import { MessageColumn } from './MessageColumn'
 import { duration } from './subagents'
@@ -74,7 +76,8 @@ export function ProcessesPanel({ paneId }: { paneId: string }) {
                 process={p}
                 now={now}
                 error={stopErrors[p.taskId]}
-                output={outputs[p.taskId]?.tail}
+                paneId={paneId}
+                hasOutput={outputs[p.taskId]?.raw !== undefined}
                 servers={servers[p.taskId] ?? NO_SERVERS}
                 onStop={() => void stop(paneId, p.taskId)}
               />
@@ -87,18 +90,20 @@ export function ProcessesPanel({ paneId }: { paneId: string }) {
 }
 
 interface RowProps {
+  paneId: string
   process: BackgroundProcess
   now: number
   error: string | undefined
-  output: string | undefined
+  hasOutput: boolean
   servers: readonly LocalServer[]
   onStop: () => void
 }
 
-function ProcessRow({ process, now, error, output, servers, onStop }: RowProps) {
+function ProcessRow({ paneId, process, now, error, hasOutput, servers, onStop }: RowProps) {
   const ran = (process.endedAt ?? now) - process.startedAt
+  const output = hasOutput ? <ProcessOutputTerminal paneId={paneId} taskId={process.taskId} label={`Output of ${process.command}`} size="inline" /> : undefined
   return (
-    <ListItem tooltip={process.command} detail={output ? <TerminalOutput text={output} label={`Output of ${process.command}`} /> : undefined}>
+    <ListItem tooltip={process.command} detail={output}>
       <DotMark dot={DOT[process.status]} />
       <ListRowLines
         primary={
@@ -114,6 +119,9 @@ function ProcessRow({ process, now, error, output, servers, onStop }: RowProps) 
       {servers.map((server) => (
         <ServerLink key={server.port} server={server} />
       ))}
+      <Button variant="link" onClick={() => openInProcesses(claudeRowKey(paneId, process.taskId))} tooltip="Show it in the Processes view, with every workspace's processes and terminals">
+        Open in Processes
+      </Button>
       {process.status === 'running' && (
         <Button variant="danger" onClick={onStop}>
           Stop

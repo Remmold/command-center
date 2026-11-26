@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useTicking } from '../../hooks/useTicking'
 import { useBackgroundProcessesStore } from '../../state/backgroundProcessesStore'
-import { processesList, selectedRowKey, terminalRowKey, type ProcessGroup, type ProcessRow, type TerminalRow } from '../../state/processesList'
+import { processesList, selectedRowKey, terminalRowKey, type ClaudeProcessRow, type ProcessGroup, type ProcessRow, type TerminalRow } from '../../state/processesList'
 import { useProcessesViewStore } from '../../state/processesViewStore'
 import { useProjectViewsStore } from '../../state/projectViewsStore'
 import { useRepoIdentitiesStore } from '../../state/repoIdentitiesStore'
+import { runItMyself } from '../../state/runItMyself'
 import { openTerminalInDrawer } from '../../state/sessionNavigation'
 import { useTerminalsStore } from '../../state/terminalsStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
@@ -190,13 +191,40 @@ function RowActions({ row, onRename }: { row: ProcessRow; onRename: () => void }
       {row.servers.map((s) => (
         <ServerLink key={s.port} server={s} />
       ))}
-      {row.source === 'terminal' && <TerminalActions row={row} onRename={onRename} />}
+      {row.source === 'terminal' ? <TerminalActions row={row} onRename={onRename} /> : <RunItMyself row={row} />}
       {row.running && (
         <Button variant="danger" onClick={stop}>
           Stop
         </Button>
       )}
     </span>
+  )
+}
+
+/** Stops Claude's copy and reruns its command as Andreas's own terminal, after a confirm. */
+function RunItMyself({ row }: { row: ClaudeProcessRow }) {
+  const [confirming, setConfirming] = useState(false)
+  const cwd = useProjectViewsStore((s) => Object.values(s.views).find((v) => v.claudeSessions.some((c) => c.id === row.paneId))?.projectPath)
+  if (cwd === undefined) return null
+  const run = (): void => {
+    setConfirming(false)
+    void runItMyself(row.paneId, row.taskId)
+  }
+  return (
+    <>
+      <Button variant="secondary" onClick={() => setConfirming(true)} tooltip="Stop Claude's copy and run the same command as your own terminal">
+        Run it myself
+      </Button>
+      {confirming && (
+        <ConfirmDialog
+          title="Run it myself"
+          message={`Stop Claude's copy and run ${row.name} yourself in ${cwd}? Claude won't see its output any more.`}
+          confirmLabel="Run it myself"
+          onConfirm={run}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
+    </>
   )
 }
 

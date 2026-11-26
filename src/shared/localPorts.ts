@@ -36,9 +36,3 @@ export function isLocalUrl(url: string): boolean {
   const { protocol, hostname, username, password } = parsed
   return (protocol === 'http:' || protocol === 'https:') && LOCAL_HOSTS.has(hostname) && username === '' && password === ''
 }
-
-/** The last `count` lines of a process's output, terminal colours removed. */
-export function outputTail(output: string, count: number): string {
-  const lines = withoutAnsi(output).replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n')
-  return lines.slice(-count).join('\n')
-}

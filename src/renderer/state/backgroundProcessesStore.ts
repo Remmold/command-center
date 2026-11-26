@@ -1,13 +1,9 @@
 import { create } from 'zustand'
 import type { BackgroundProcess } from '../../shared/backgroundProcesses'
-import { localServers, outputTail, type LocalServer } from '../../shared/localPorts'
+import { localServers, type LocalServer } from '../../shared/localPorts'
 import { taskOutputOf, type TaskOutput } from './taskOutput'
 
-export const OUTPUT_LINES = 200
-
 export interface ProcessOutput {
-  /** The last `OUTPUT_LINES` lines. */
-  tail: string
   /** The CLI's last answer as it came, for a terminal that shows it; absent when that fetch failed. */
   raw?: TaskOutput
   /** Fetched after the process ended; no later fetch replaces it. */
@@ -25,7 +21,8 @@ interface BackgroundProcessesState {
   servers: Record<string, Record<string, LocalServer[]>>
   initialized: boolean
   init: () => void
-  stop: (paneId: string, taskId: string) => Promise<void>
+  /** Resolves whether the CLI stopped it; a failure is kept in `stopErrors`. */
+  stop: (paneId: string, taskId: string) => Promise<boolean>
   /** Asks the CLI for a process's output; once it has ended, this is its final fetch. */
   fetchOutput: (paneId: string, taskId: string) => Promise<void>
 }
@@ -95,6 +92,7 @@ export const useBackgroundProcessesStore = create<BackgroundProcessesState>((set
     const res = await window.api.claude.control(paneId, 'stop_task', { task_id: taskId })
     // The session may have closed while the stop was in flight.
     if (!res.ok && get().byPane[paneId]) set((s) => ({ stopErrors: { ...s.stopErrors, [paneId]: { ...(s.stopErrors[paneId] ?? NO_ERRORS), [taskId]: res.error } } }))
+    return res.ok
   },
   fetchOutput: async (paneId, taskId) => {
     const process = processOf(get(), paneId, taskId)
@@ -113,7 +111,7 @@ export const useBackgroundProcessesStore = create<BackgroundProcessesState>((set
         const before = s.outputs[paneId]?.[taskId]
         if (!processOf(s, paneId, taskId) || before?.final) return s
         // A failed final fetch keeps the last output, so an ended row is not asked again.
-        const kept: ProcessOutput = raw ? { tail: outputTail(raw.output, OUTPUT_LINES), raw, final } : { tail: before?.tail ?? '', ...(before?.raw ? { raw: before.raw } : {}), final }
+        const kept: ProcessOutput = raw ? { raw, final } : { ...(before?.raw ? { raw: before.raw } : {}), final }
         return { outputs: { ...s.outputs, [paneId]: { ...(s.outputs[paneId] ?? NO_OUTPUTS), [taskId]: kept } } }
       })
       if (final || output === undefined) return

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { LocalServer } from '../../shared/localPorts'
 import type { TerminalInfo } from '../../shared/types'
 import { terminalRunKey } from './processesList'
+import { useViewStore } from './viewStore'
 
 interface ProcessesViewState {
   /** The row picked in the Processes view, by its row key; kept while other views show. */
@@ -15,6 +16,12 @@ interface ProcessesViewState {
 }
 
 const checking = new Set<string>()
+
+/** Switches to the Processes view with the row of `key` selected. */
+export function openInProcesses(key: string): void {
+  useProcessesViewStore.getState().select(key)
+  useViewStore.getState().setView('processes')
+}
 
 export const useProcessesViewStore = create<ProcessesViewState>((set, get) => ({
   chosen: null,
