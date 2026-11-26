@@ -16,4 +16,4 @@ Branch: feat/feature-cockpit
 - 07 in-progress: Set up preview button in Settings starts a session that writes a draft JSON file the editor loads unsaved; no-browser outcome; not yet seen live � 06aefab
 - 11 resolved: /flow uses the given feature worktree and name; /test-flow writes the checklist form (needs a 'Preview browser: yes' prompt line the app does not send yet) — b2c44e5
 - 11 follow-up: first prompt carries "Preview browser: yes" when the workspace has a preview config — dc2aa24
-- gate fixes A: ticket 07 repaired (result applied before the setup ends, folder split on either separator, empty first write waits, 10-minute give-up, stale drafts swept, unreviewed draft kept and offered); still not seen live, ticket 07 stays in-progress — PENDING
+- gate fixes A: ticket 07 repaired (result applied before the setup ends, folder split on either separator, empty first write waits, 10-minute give-up, stale drafts swept, unreviewed draft kept and offered); still not seen live, ticket 07 stays in-progress — 87e9726
