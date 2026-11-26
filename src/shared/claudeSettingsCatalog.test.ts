@@ -137,6 +137,10 @@ describe('the other keys of a file', () => {
     expect(otherKeys({ 'made.up': 1, attribution: { 'a.b': 2 } })).toEqual(['made~1up', 'attribution.a~1b'])
   })
 
+  it('are labelled and searched by their key names, not the escaped path', () => {
+    expect(entryFor('attribution.a~1b').label).toBe('attribution.a.b')
+  })
+
   it('are none for a file that does not parse', () => {
     expect(otherKeys(null)).toEqual([])
   })

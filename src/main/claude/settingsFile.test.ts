@@ -40,6 +40,10 @@ describe('applyPatch', () => {
     expect(last).toEqual({ ok: true, text: text({ kept: {} }) })
   })
 
+  it('leaves the parent alone when the removed key is only inherited, such as constructor', () => {
+    expect(applyPatch(text({ a: {} }), null, { set: {}, remove: ['a.constructor'] })).toEqual({ ok: true, text: text({ a: {} }) })
+  })
+
   it('returns the patched keys Claude changed since the base was read, and applies nothing', () => {
     const base = { model: 'sonnet', permissions: { allow: ['Read'] }, theme: 'dark' }
     const onDisk = text({ model: 'haiku', permissions: { allow: ['Read', 'Bash(git status)'] }, theme: 'light' })

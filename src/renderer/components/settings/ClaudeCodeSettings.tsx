@@ -27,9 +27,9 @@ import { Toolbar } from '../ui/Toolbar'
 import { OtherKeysList, type OtherKeyRow } from './OtherKeysList'
 import { SettingField, type ShownEffective } from './SettingField'
 
-const OTHER_KEYS: SettingCategory = 'Other keys'
+const OTHER_KEYS_CATEGORY: SettingCategory = 'Other keys'
 
-const CATEGORIES = SETTING_CATEGORIES.filter((c) => c === OTHER_KEYS || SETTINGS_CATALOG.some((e) => e.category === c))
+const CATEGORIES = SETTING_CATEGORIES.filter((c) => c === OTHER_KEYS_CATEGORY || SETTINGS_CATALOG.some((e) => e.category === c))
 
 const LAYERS: { value: SettingsLayer; label: string; title: string }[] = [
   { value: 'account', label: 'Account', title: 'The account’s settings.json, for every workspace on that account' },
@@ -82,7 +82,7 @@ function otherKeyRows(
     path,
     value: getAt(edited, path),
     before: getAt(before, path),
-    changed: pending !== null && (path in pending.patch.set || pending.patch.remove.includes(path)),
+    changed: pending !== null && (Object.hasOwn(pending.patch.set, path) || pending.patch.remove.includes(path)),
     fileValue: fileChanged.get(path)
   }))
 }
@@ -252,7 +252,7 @@ export function ClaudeCodeSettings() {
     const rows = otherKeyRows(snapshot?.value ?? null, layers[layer], pending, fileChanged)
     return searching ? rows.filter((row) => matchesSearch(entryFor(row.path), query)) : rows
   }, [snapshot, layers, layer, pending, fileChanged, searching, query])
-  const showOtherKeys = searching ? otherRows.length > 0 : category === OTHER_KEYS
+  const showOtherKeys = searching ? otherRows.length > 0 : category === OTHER_KEYS_CATEGORY
   const noWorkspace = layer !== 'account' && workspaces.length === 0
 
   return (
@@ -339,7 +339,7 @@ export function ClaudeCodeSettings() {
               </PageGroup>
             ))}
             {showOtherKeys && (
-              <PageGroup title={OTHER_KEYS}>
+              <PageGroup title={OTHER_KEYS_CATEGORY}>
                 <NoticeLine>
                   {otherRows.length === 0 ? 'Every key in this file has its own setting above.' : 'Keys this page has no control for, as raw JSON. Leaving a box checks it before the change waits for Save.'}
                 </NoticeLine>

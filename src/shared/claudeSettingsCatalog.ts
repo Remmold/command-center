@@ -1,4 +1,4 @@
-import { isSettingsObject, keyPath, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
+import { isSettingsObject, keyPath, pathKeys, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
 
 export const SETTING_CATEGORIES = [
   'Model & thinking',
@@ -592,7 +592,7 @@ export function entryFor(key: string): SettingEntry {
   return (
     SETTINGS_CATALOG.find((e) => e.key === key) ?? {
       key,
-      label: key,
+      label: pathKeys(key).join('.'),
       description: '',
       category: 'Other keys',
       control: OTHER_KEYS,

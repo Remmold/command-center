@@ -15,11 +15,11 @@ const jsonText = (value: unknown): string => JSON.stringify(value, null, 2) ?? '
 /** A small box of raw JSON; text that does not parse shows its parse message and changes nothing. */
 export function JsonField({ label, value, disabled = false, onChange }: Props) {
   const text = jsonText(value)
-  const [shown, setShown] = useState(text)
+  const [syncedText, setSyncedText] = useState(text)
   const [draft, setDraft] = useState(text)
   const [error, setError] = useState<string | null>(null)
-  if (shown !== text) {
-    setShown(text)
+  if (syncedText !== text) {
+    setSyncedText(text)
     setDraft(text)
     setError(null)
   }

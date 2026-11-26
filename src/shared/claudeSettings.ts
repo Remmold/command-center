@@ -86,7 +86,7 @@ function setAt(settings: SettingsObject, path: string, value: unknown): void {
   at[last] = value
 }
 
-/** Deletes the key, then each object above it that this left empty, so no `{}` stays behind. */
+/** Deletes the key and each parent object that deletion emptied; an object that was already empty stays. */
 function removeAt(settings: SettingsObject, path: string): void {
   const segments = pathKeys(path)
   const parents: SettingsObject[] = [settings]
@@ -96,7 +96,7 @@ function removeAt(settings: SettingsObject, path: string): void {
     parents.push(next)
   }
   for (let depth = segments.length - 1; depth >= 0; depth--) {
-    if (!(segments[depth] in parents[depth])) return
+    if (!Object.hasOwn(parents[depth], segments[depth])) return
     delete parents[depth][segments[depth]]
     if (depth > 0 && Object.keys(parents[depth]).length > 0) return
   }
