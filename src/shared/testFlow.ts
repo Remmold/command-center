@@ -1,7 +1,7 @@
 import type { ChatItem } from './chatItems'
 
 export interface TestFlowPick {
-  /** The configured folder joined with the file's name, as the session wrote the name. */
+  /** The configured folder joined with the file's name (or `<subfolder>\<name>`), as the session wrote it. */
   path: string
   source: 'session' | 'repo'
 }
@@ -28,33 +28,40 @@ function countsAsTestFlow(name: string): boolean {
 
 function joinFolder(folder: string, name: string): string {
   const sep = folder.includes('/') && !folder.includes('\\') ? '/' : '\\'
-  return folder.replace(/[\\/]+$/, '') + sep + name
+  return folder.replace(/[\\/]+$/, '') + sep + name.split('/').join(sep)
 }
 
-/** The name of `path` when it sits directly in the folder and counts as a test flow. */
+/** A name relative to the folder: the file directly in it, or one subfolder down (`<repo>/<feature>.md`). */
+function relativeName(segments: readonly string[]): string | null {
+  if (segments.length < 1 || segments.length > 2 || segments.some((s) => s === '.' || s === '..')) return null
+  return countsAsTestFlow(segments[segments.length - 1]) ? segments.join('/') : null
+}
+
+/** The name of `path` relative to the folder when it counts as a test flow there. */
 function nameInFolder(path: string, folderKey: string): string | null {
   const key = comparable(path)
-  const cut = key.lastIndexOf('/')
-  if (cut === -1 || key.slice(0, cut) !== folderKey) return null
-  const name = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
-  return countsAsTestFlow(name) ? name : null
+  if (!key.startsWith(`${folderKey}/`)) return null
+  // The segments past the folder, taken from `path` itself so the name keeps the case it was written in.
+  const depth = key.split('/').length - folderKey.split('/').length
+  return relativeName(path.replace(/[\\/]+$/, '').split(/[\\/]+/).slice(-depth))
 }
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-/** Matches the folder in a command, written with either slash or as Git Bash's `/c/`, followed by one file name. */
+/** Matches the folder in a command, written with either slash or as Git Bash's `/c/`, followed by a file name, optionally one subfolder down. */
 function folderPattern(folder: string): RegExp {
   const parts = folder.split(/[\\/]+/).filter(Boolean)
   const drive = /^([a-z]):$/i.exec(parts[0] ?? '')
   const head = drive ? `(?:${drive[1]}:|/${drive[1]})` : escapeRegExp(parts[0] ?? '')
   const lead = folder.startsWith('/') || folder.startsWith('\\') ? '[\\\\/]+' : ''
   const body = [head, ...parts.slice(1).map(escapeRegExp)].join('[\\\\/]+')
-  return new RegExp(`${lead}${body}[\\\\/]+([^\\s"'\`\\\\/<>|;&()*?]+)(?![^\\s"'\`<>|;&()])`, 'gi')
+  const segment = `[^\\s"'\`\\\\/<>|;&()*?]+`
+  return new RegExp(`${lead}${body}[\\\\/]+((?:${segment}[\\\\/]+)?${segment})(?![^\\s"'\`<>|;&()])`, 'gi')
 }
 
 function lastNameInCommand(command: string, pattern: RegExp): string | null {
   let found: string | null = null
-  for (const match of command.matchAll(pattern)) if (countsAsTestFlow(match[1])) found = match[1]
+  for (const match of command.matchAll(pattern)) found = relativeName(match[1].split(/[\\/]+/)) ?? found
   return found
 }
 
@@ -67,8 +74,9 @@ function writtenName(block: { name?: unknown; input?: unknown }, folderKey: stri
 }
 
 /**
- * The session's test-flow candidates before twin resolution: each file it wrote in the folder once, newest write first,
- * then the one named after its repo. The first that exists is the session's test flow.
+ * The session's test-flow candidates before twin resolution: each file it wrote in the folder or one subfolder down once, newest write first,
+ * then the repo's own subfolder (a path ending in a separator, read as its newest feature file), then the file named after
+ * the repo. The first that exists is the session's test flow.
  */
 export function findTestFlows({ items, folder, repoName }: TestFlowInput): TestFlowPick[] {
   if (!folder.trim()) return []
@@ -91,7 +99,10 @@ export function findTestFlows({ items, folder, repoName }: TestFlowInput): TestF
       if (name) add(name, 'session')
     }
   }
-  if (repoName) add(`${repoName}.md`, 'repo')
+  if (repoName) {
+    add(`${repoName}/`, 'repo')
+    add(`${repoName}.md`, 'repo')
+  }
   return picks
 }
 
