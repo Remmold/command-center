@@ -13,7 +13,7 @@ export interface ProcessesListInput {
   /** Servers whose port answered, by pane and task id. */
   claudeServers: Readonly<Record<string, Readonly<Record<string, readonly LocalServer[]>>>>
   terminals: readonly TerminalInfo[]
-  /** A terminal's servers whose port answered, by terminal id. */
+  /** A terminal run's servers whose port answered, by `terminalRunKey`. */
   terminalServers: Readonly<Record<string, readonly LocalServer[]>>
 }
 
@@ -66,6 +66,8 @@ const NO_SERVERS: readonly LocalServer[] = []
 
 export const claudeRowKey = (paneId: string, taskId: string): string => `claude:${paneId}:${taskId}`
 export const terminalRowKey = (terminalId: string): string => `terminal:${terminalId}`
+/** A restart is a new run, whose servers are asked again. */
+export const terminalRunKey = (t: Pick<TerminalInfo, 'id' | 'startedAt'>): string => `${t.id}:${t.startedAt}`
 
 function terminalStatus(t: TerminalInfo): string {
   if (t.status === 'running') return 'Running'
@@ -77,7 +79,7 @@ function terminalTone(t: TerminalInfo): RowBase['tone'] {
   return t.exitCode === 0 ? 'ok' : 'failed'
 }
 
-/** The servers its output named that answered; a restart forgets what the run before named. */
+/** The servers this run's output named that answered. */
 function answering(t: TerminalInfo, confirmed: readonly LocalServer[] | undefined): readonly LocalServer[] {
   if (t.status !== 'running' || !t.servers || !confirmed) return NO_SERVERS
   return t.servers.filter((s) => confirmed.some((c) => c.port === s.port))
@@ -139,7 +141,7 @@ export function processesList(input: ProcessesListInput): ProcessGroup[] {
       tone: terminalTone(t),
       startedAt: t.startedAt,
       ...(t.endedAt !== undefined ? { endedAt: t.endedAt } : {}),
-      servers: answering(t, input.terminalServers[t.id])
+      servers: answering(t, input.terminalServers[terminalRunKey(t)])
     })
   }
 

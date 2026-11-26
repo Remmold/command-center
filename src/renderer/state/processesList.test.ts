@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BackgroundProcess } from '../../shared/backgroundProcesses'
 import type { TerminalInfo, Workspace } from '../../shared/types'
-import { claudeRowKey, processesList, selectedRowKey, terminalRowKey, type ProcessesListInput } from './processesList'
+import { claudeRowKey, processesList, selectedRowKey, terminalRowKey, terminalRunKey, type ProcessesListInput } from './processesList'
 
 const workspace = (id: string, repoName: string, worktreeTag = ''): Workspace => ({
   id,
@@ -123,17 +123,23 @@ describe('Processes view list', () => {
         terminals: [
           terminal('a', 'pnpm api', 2, { servers: [api, vite] }),
           terminal('b', 'pnpm old', 3, { status: 'exited', exitCode: 0, servers: [api] }),
-          terminal('c', 'restarted', 4)
+          terminal('c', 'restarted', 4),
+          terminal('d', 'restarted with the same port', 5, { servers: [api] })
         ],
-        terminalServers: { a: [api], b: [api], c: [api] }
+        terminalServers: { 'a:2': [api], 'b:3': [api], 'c:4': [api], 'd:1': [api] }
       })
     )
     expect(list[0].rows.map((r) => [r.name, r.servers.map((s) => s.port)])).toEqual([
+      ['restarted with the same port', []],
       ['restarted', []],
       ['pnpm api', [8080]],
       ['pnpm dev', [5173]],
       ['pnpm old', []]
     ])
+  })
+
+  it("keys a terminal's answering servers by its run", () => {
+    expect(terminalRunKey({ id: 'a', startedAt: 2 })).toBe('a:2')
   })
 
   it('carries what a row needs to act on it', () => {

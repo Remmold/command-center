@@ -39,38 +39,18 @@ function useProcessGroups(): ProcessGroup[] {
   }, [workspaces, identities, views, claude, claudeServers, byId, terminalServers])
 }
 
-/** While the view shows: running Claude processes' output and servers each second, an ended one's output once, and whether terminals' servers answer. */
-function useRefresh(groups: readonly ProcessGroup[]): void {
-  const rows = groups.flatMap((g) => g.rows)
-  const claudeRows = rows.filter((r) => r.source === 'claude')
-  const running = claudeRows
-    .filter((r) => r.running)
-    .map((r) => `${r.paneId}\n${r.taskId}`)
-    .join('\n\n')
-  const ended = claudeRows
-    .filter((r) => !r.running)
-    .map((r) => `${r.paneId}\n${r.taskId}`)
-    .join('\n\n')
+/** Each second while the view shows: Claude's processes' output and servers (an ended one's once), and whether terminals' servers answer. */
+function useRefresh(): void {
   useEffect(() => {
-    const { fetchOutput } = useBackgroundProcessesStore.getState()
     const refresh = (): void => {
-      for (const key of running ? running.split('\n\n') : []) {
-        const [paneId, taskId] = key.split('\n')
-        void fetchOutput(paneId, taskId)
-      }
+      const { byPane, fetchOutput } = useBackgroundProcessesStore.getState()
+      for (const [paneId, processes] of Object.entries(byPane)) for (const p of processes) void fetchOutput(paneId, p.taskId)
       void useProcessesViewStore.getState().checkTerminalServers(Object.values(useTerminalsStore.getState().byId))
     }
     refresh()
     const timer = setInterval(refresh, REFRESH_MS)
     return () => clearInterval(timer)
-  }, [running])
-  useEffect(() => {
-    const { fetchOutput } = useBackgroundProcessesStore.getState()
-    for (const key of ended ? ended.split('\n\n') : []) {
-      const [paneId, taskId] = key.split('\n')
-      void fetchOutput(paneId, taskId)
-    }
-  }, [ended])
+  }, [])
 }
 
 /** Every Claude background process and terminal across workspaces, the selected one in a terminal on the right. */
@@ -80,12 +60,12 @@ export function ProcessesView() {
   const select = useProcessesViewStore((s) => s.select)
   const selectedKey = selectedRowKey(groups, chosen)
   const selected = groups.flatMap((g) => g.rows).find((r) => r.key === selectedKey) ?? null
-  // The row picked for him stays picked once it ends.
+  // Pins the auto-picked row, so it stays picked once it ends.
   useEffect(() => {
     if (chosen === null && selectedKey !== null) select(selectedKey)
   }, [chosen, selectedKey, select])
-  const now = useTicking(groups.some((g) => g.rows.some((r) => r.running)))
-  useRefresh(groups)
+  const now = useTicking(groups.length > 0)
+  useRefresh()
 
   return (
     <SidebarLayout

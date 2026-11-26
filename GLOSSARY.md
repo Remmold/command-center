@@ -81,7 +81,7 @@ The tab beside Chat, Agents and Media that lists a session's background processe
 _Avoid_: Shells tab (the Shell drawer is your own terminal)
 
 **Terminal**:
-A shell, or one command, that the app runs for Andreas in a workspace's folder and that he can type into. It is Running until it exits, then Exited with its code, and it stays listed until he closes it. The Shell drawer and the Processes view show the same terminals.
+A shell, or one command, that the app runs for Andreas in a workspace's folder and that he can type into. It is Running until it exits, then Exited with its code (or Stopped, when he stops it), and it stays listed until he closes it. The Shell drawer and the Processes view show the same terminals.
 _Avoid_: Shell (only the drawer's name), console, tab
 
 **Processes view**:
