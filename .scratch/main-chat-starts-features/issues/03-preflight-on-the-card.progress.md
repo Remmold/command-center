@@ -1,3 +1,3 @@
-Done: shared checkStart/preflightFeature, features:preflight IPC, card reason + disabled Go, Started rule narrowed (started keys in memory).
-Green: quick; e2e 16/17 then the 1 red (chat last-prompt strip, unrelated timing) passed on rerun.
-Next: review, then ticket 04.
+Done: review fix: Go also disabled while the workspace is unclear (follow-up commit).
+Green: quick.
+Next: ticket 04.

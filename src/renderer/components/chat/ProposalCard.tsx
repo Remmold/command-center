@@ -94,7 +94,7 @@ function ProposalCard({ cardKey, proposal, state }: { cardKey: string; proposal:
       )}
       {state === 'live' && (
         <div className="mt-2 flex justify-end">
-          <Button onClick={() => void go()} disabled={starting || problem !== null}>
+          <Button onClick={() => void go()} disabled={starting || workspaceId === null || problem !== null}>
             {starting ? 'Starting…' : 'Go'}
           </Button>
         </div>
