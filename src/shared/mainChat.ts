@@ -16,7 +16,7 @@ const NEVER_TOOLS: readonly string[] = ['Write', 'Edit', 'MultiEdit', 'NotebookE
 export interface MainChatLaunch {
   /** Folders the process may read without asking. */
   addDirs: string[]
-  /** Extra CLI arguments, in `--flag=value` form so no variadic flag swallows a later one. */
+  /** Extra CLI arguments, in `--flag=value` form so no variadic flag swallows a later one. The setting source is cut to the app's own folder: a user-level allow rule such as Read(*) would approve reads before the app's boundary sees them. */
   cliArgs: string[]
 }
 
@@ -26,7 +26,7 @@ export function mainChatLaunch(digestFile: string, worktrees: readonly string[])
   for (const dir of [dirnameOf(digestFile), ...worktrees]) if (!addDirs.some((d) => pathKey(d) === pathKey(dir))) addDirs.push(dir)
   return {
     addDirs,
-    cliArgs: [`--tools=${READ_ONLY_TOOLS.join(',')}`, `--disallowedTools=${NEVER_TOOLS.join(',')}`, '--strict-mcp-config']
+    cliArgs: [`--tools=${READ_ONLY_TOOLS.join(',')}`, `--disallowedTools=${NEVER_TOOLS.join(',')}`, '--strict-mcp-config', '--setting-sources=project']
   }
 }
 
@@ -41,16 +41,34 @@ export function mainChatFirstPrompt(digestFile: string): string {
 }
 
 const PATH_FIELDS = ['file_path', 'path']
+/** The field of each tool that holds a file glob; Grep's `pattern` is a regex over contents, not a path. */
+const GLOB_FIELD: Record<string, string> = { Glob: 'pattern', Grep: 'glob' }
+
+/** Turns a path into its real location (links, short names and case settled), or null when it cannot be resolved. */
+export type PathResolver = (path: string) => Promise<string | null>
+
+const BACKSLASH = String.fromCharCode(92)
+
+const leavesItsFolder = (pattern: string): boolean => pattern.includes('..') || /^[A-Za-z]:|^~/.test(pattern) || pattern.startsWith('/') || pattern.startsWith(BACKSLASH)
+
+const inside = (path: string, root: string): boolean => pathKey(path) === pathKey(root) || pathKey(path).startsWith(`${pathKey(root)}/`)
 
 /**
- * Answers a permission request from the main chat's process. A read tool inside one of `roots` is allowed, which covers a
- * worktree made after the process started; everything else is refused, a call naming no path included (a Glob pattern can itself be an absolute path).
+ * Answers a permission request from the main chat's process. A read tool is allowed only when every path it names resolves,
+ * through `resolve`, to somewhere inside one of `roots` (also resolved), which covers a worktree made after the process started.
+ * A Glob pattern or Grep glob that climbs or is absolute is refused, and so is a call naming no path.
  */
-export function mainChatReply(toolName: string, input: ToolInput, roots: readonly string[]): AllowReply | DenyReply {
+export async function mainChatReply(toolName: string, input: ToolInput, roots: readonly string[], resolve: PathResolver): Promise<AllowReply | DenyReply> {
   if (!READ_ONLY_TOOLS.includes(toolName)) return denyReply('The main chat answers only; it cannot use this tool.')
+  const refused = denyReply("The main chat reads only the feature digest and the features' worktrees.")
   const paths = PATH_FIELDS.flatMap((f) => (typeof input[f] === 'string' ? [input[f] as string] : []))
-  const inside = (p: string): boolean => roots.some((r) => pathKey(p) === pathKey(r) || pathKey(p).startsWith(`${pathKey(r)}/`))
-  if (paths.length === 0 || !paths.every(inside)) return denyReply('The main chat reads only the feature digest and the features\' worktrees.')
+  const glob = input[GLOB_FIELD[toolName] ?? '']
+  if (paths.length === 0 || (typeof glob === 'string' && leavesItsFolder(glob))) return refused
+  const real = (await Promise.all(roots.map(resolve))).filter((r): r is string => r !== null)
+  for (const path of paths) {
+    const where = await resolve(path)
+    if (where === null || !real.some((r) => inside(where, r))) return refused
+  }
   return allowReply(input)
 }
 

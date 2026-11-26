@@ -67,7 +67,8 @@ import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
 import type { RateLimitInfo } from './usage/usageReply'
-import { featureDigestFile, mainChatDir, previewDraftsFolder, userDataPath } from './util/paths'
+import { featureDigestFile, legacyFeatureDigestFile, mainChatDir, previewDraftsFolder, userDataPath } from './util/paths'
+import { realPathFrom } from './features/realPath'
 import { createMainChatStore } from './features/mainChatStore'
 import { MAIN_CHAT_PANE_ID, mainChatLaunch, mainChatReply, type MainChatInfo } from '../shared/mainChat'
 import { setScreenFocus } from './sessions/screenFocus'
@@ -258,6 +259,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.PREVIEW_CONFIG_SAVE, (_e, workspaceId: unknown, raw: unknown) =>
     typeof workspaceId === 'string' ? previewConfigs.save(workspaceId, raw) : { ok: false, error: 'No workspace was named.' }
   )
+  void fs.rm(legacyFeatureDigestFile(), { force: true })
   void sweepStalePreviewDrafts(previewDraftsFolder(), Date.now())
   ipcMain.handle(IPC.PREVIEW_DRAFT_BEGIN, () => beginPreviewDraft(previewDraftsFolder(), randomUUID()))
   ipcMain.handle(IPC.PREVIEW_DRAFT_READ, (_e, file: unknown) => readPreviewDraftFile(previewDraftsFolder(), file))
@@ -782,7 +784,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     return async (raw) => {
       if (raw.subtype !== 'can_use_tool') throw new Error(`Unsupported control request: ${raw.subtype}`)
       const input = typeof raw.input === 'object' && raw.input !== null ? (raw.input as Record<string, unknown>) : {}
-      return { ...mainChatReply(typeof raw.tool_name === 'string' ? raw.tool_name : '', input, await mainChatRoots()), toolUseID: raw.tool_use_id }
+      return { ...(await mainChatReply(typeof raw.tool_name === 'string' ? raw.tool_name : '', input, await mainChatRoots(), realPathFrom(mainChatDir()))), toolUseID: raw.tool_use_id }
     }
   })
   unsubscribers.push(

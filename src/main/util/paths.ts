@@ -6,8 +6,13 @@ export function userDataPath(...parts: string[]): string {
   return join(app.getPath('userData'), ...parts)
 }
 
-/** The feature digest the main chat reads (ticket 10 gives this path to it). */
+/** The feature digest the main chat reads, alone in its own folder so the chat's read access takes in nothing else of the app's data. */
 export function featureDigestFile(): string {
+  return userDataPath('feature-digest', digestFileName)
+}
+
+/** Where the digest was kept before it had a folder of its own. */
+export function legacyFeatureDigestFile(): string {
   return userDataPath(digestFileName)
 }
 

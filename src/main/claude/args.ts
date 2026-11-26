@@ -12,10 +12,9 @@ export function claudeArgs(options: ClaudeStartOptions & { extraArgs?: readonly 
     '--verbose',
     '--include-partial-messages',
     '--replay-user-messages',
-    '--permission-prompt-tool=stdio',
-    '--setting-sources',
-    'user,project,local'
+    '--permission-prompt-tool=stdio'
   ]
+  if (!extraArgs.some((a) => a.startsWith('--setting-sources'))) args.push('--setting-sources', 'user,project,local')
   if (model) args.push('--model', model)
   if (effort) args.push('--effort', effort)
   if (thinking === false) args.push('--thinking=disabled')
