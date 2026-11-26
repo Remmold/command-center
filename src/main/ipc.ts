@@ -50,6 +50,7 @@ import { createPreviewConfigStore } from './previewConfig/store'
 import { beginPreviewDraft, discardPreviewDraft, readPreviewDraftFile, sweepStalePreviewDrafts } from './previewConfig/draftFile'
 import { createStageService, type StageService } from './features/stageService'
 import { rateLimitOf, type DigestFeature } from './features/digest'
+import { workspaceOptions } from '../shared/workspaceLabel'
 import { createDigestWriter, type DigestWriter } from './features/digestWriter'
 import { readTestFlowsFolder } from './testFlow/settings'
 import { createFeature, discardFeature, type CreateDeps } from './features/create'
@@ -445,9 +446,11 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   })
 
   ipcMain.handle(IPC.REPO_IDENTITIES_LIST, () => repoIdentities.list())
-  ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, (_e, key: string, name: string) =>
-    repoIdentities.setDisplayName(key, name)
-  )
+  ipcMain.handle(IPC.REPO_IDENTITIES_SET_NAME, async (_e, key: string, name: string) => {
+    const views = await repoIdentities.setDisplayName(key, name)
+    featureDigest?.changed()
+    return views
+  })
   ipcMain.handle(IPC.REPO_IDENTITIES_SET_ICON, (_e, key: string, icon: unknown) => repoIdentities.setIcon(key, icon))
   ipcMain.handle(IPC.REPO_IDENTITIES_CHOOSE_IMAGE, async (event, key: string) => {
     const options: Electron.OpenDialogOptions = {
@@ -515,6 +518,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   usage.start()
   featureDigest = createDigestWriter({
     file: featureDigestFile(),
+    workspaceLabels: async () => workspaceOptions(listed(await workspaces.list()), await repoIdentities.list()).map((o) => o.label),
     features: async (): Promise<DigestFeature[]> => {
       const [features, allWorkspaces, allProfiles, stages] = await Promise.all([featureStore.list(), workspaces.list(), profiles.list(), featureStages?.snapshot() ?? {}])
       const servers = serverRunner.all()

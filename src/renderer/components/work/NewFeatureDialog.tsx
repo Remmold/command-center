@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import { nameProblem, proposeSlug } from '../../../shared/featureName'
-import { workspaceLabel } from '../../state/workspacePicker'
+import { workspaceOptions } from '../../../shared/workspaceLabel'
 import { useFeaturesStore, startFeature } from '../../state/featuresStore'
 import { useRepoIdentitiesStore } from '../../state/repoIdentitiesStore'
 import { focusedTarget } from '../../state/sessionNavigation'
 import { useWorkspacesStore } from '../../state/workspacesStore'
-import { repoDisplayName } from '../../../shared/repoIdentity'
 import { Button } from '../ui/Button'
 import { Dialog, DialogActions } from '../ui/Dialog'
 import { Select } from '../ui/Select'
@@ -23,10 +22,7 @@ function NewFeatureDialog() {
   const installing = useFeaturesStore((s) => s.installing)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const identities = useRepoIdentitiesStore((s) => s.identities)
-  const options = useMemo(
-    () => workspaces.map((w) => ({ value: w.id, label: workspaceLabel(w, repoDisplayName(w.repoName, identities[w.repoGroupKey])) })),
-    [workspaces, identities]
-  )
+  const options = useMemo(() => workspaceOptions(workspaces, identities).map(({ id, label }) => ({ value: id, label })), [workspaces, identities])
   const [workspaceId, setWorkspaceId] = useState(() => {
     const focused = focusedTarget()?.workspaceId
     return workspaces.find((w) => w.id === focused)?.id ?? workspaces[0]?.id ?? ''

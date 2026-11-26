@@ -31,6 +31,8 @@ import { RunInBackgroundLine } from './RunInBackgroundLine'
 import { AnsweredQuestions } from './QuestionCard'
 import { questionOutcome } from './questionCardModel'
 import { QUESTION_TOOL, parseQuestions } from '../../../shared/approval'
+import { PROPOSAL_TAG } from '../../../shared/featureProposal'
+import { ProposalText } from './ProposalCard'
 
 const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
 
@@ -158,6 +160,8 @@ function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens, joinAb
           <TimelinePlaceProvider key={i} value={place}>
             <ContentBlockView
               block={content[i]}
+              itemId={item.id}
+              index={i}
               streaming={streamingFrom !== undefined && i >= streamingFrom}
               durationMs={item.thinkingMs?.[i]}
               thinkingTokens={thinkingTokens}
@@ -179,6 +183,8 @@ function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens, joinAb
 
 interface BlockProps {
   block: ContentBlock
+  itemId: string
+  index: number
   streaming: boolean
   durationMs: number | undefined
   thinkingTokens?: number
@@ -186,11 +192,13 @@ interface BlockProps {
   footer?: ReactNode
 }
 
-function ContentBlockView({ block, streaming, durationMs, thinkingTokens, stamp, footer }: BlockProps) {
+function ContentBlockView({ block, itemId, index, streaming, durationMs, thinkingTokens, stamp, footer }: BlockProps) {
+  const { proposals } = useToolContext()
   if (block.type === 'text') {
+    const text = (block as { text: string }).text
     return (
       <TimelineRow dot="neutral" stamp={stamp}>
-        <Markdown text={(block as { text: string }).text} />
+        {proposals && text.includes(PROPOSAL_TAG) ? <ProposalText text={text} itemId={itemId} block={index} /> : <Markdown text={text} />}
         {footer}
       </TimelineRow>
     )

@@ -3,6 +3,7 @@ import type { ToolPairs } from './toolCall'
 import type { ChatItem } from './types'
 import type { SubagentTasks } from './subagents'
 import type { BackgroundOutcome, ForegroundCalls } from './runInBackground'
+import type { ProposalState, WorkspaceOption } from '../../../shared/featureProposal'
 
 /** A hosted or followed session whose transcripts folder holds its subagents' own files. */
 export interface TranscriptSource {
@@ -31,6 +32,12 @@ export interface BackgroundHost {
   move: (toolUseIds: readonly string[]) => Promise<BackgroundOutcome>
 }
 
+/** The main chat only: how each feature proposal in its transcript stands, and the workspaces a proposal may name. */
+export interface ProposalHost {
+  states: ReadonlyMap<string, ProposalState>
+  options: readonly WorkspaceOption[]
+}
+
 interface ToolContextValue {
   pairs: ToolPairs
   cwd: string | undefined
@@ -42,6 +49,7 @@ interface ToolContextValue {
   /** Tool calls still waiting on their result while the turn runs. */
   running: ReadonlySet<string>
   background?: BackgroundHost
+  proposals?: ProposalHost
 }
 
 const NO_PAIRS: ToolPairs = { resultFor: new Map(), isPaired: () => false }

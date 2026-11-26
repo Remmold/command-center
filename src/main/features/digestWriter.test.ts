@@ -56,6 +56,19 @@ describe('digest writer', () => {
     expect(statSync(file).mtimeMs).toBe(before)
   })
 
+  it('writes again when only the workspace list changed', async () => {
+    const file = join(root, 'd.md')
+    let labels = ['app']
+    const writer = createDigestWriter({ file, features: async () => [feature()], workspaceLabels: async () => labels })
+    await writer.flush()
+    expect(readFileSync(file, 'utf-8')).toContain('- app\n')
+    expect(await writer.flush()).toBe(false)
+    labels = ['app', 'api']
+    expect(await writer.flush()).toBe(true)
+    expect(readFileSync(file, 'utf-8')).toContain('- api\n')
+    writer.stop()
+  })
+
   it('writes again when a fact changed', async () => {
     const file = join(root, 'd.md')
     let features = [feature()]
