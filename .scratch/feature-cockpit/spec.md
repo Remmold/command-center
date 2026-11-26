@@ -97,12 +97,27 @@ A feature becomes a first-class thing in the app.
 56. As Andreas, I want `/flow`, when started by New feature, to work in the feature worktree it is given and not make its own, so that the feature session and the windows agree on one folder.
 57. As Andreas, I want all of this to cost no tokens beyond the sessions I already run, so that the cockpit itself is free.
 
+### Accounts
+
+58. As Andreas, I want a feature session to run on the account of the workspace I picked in New feature, so that work stays on the login that project belongs to.
+59. As Andreas, I want the feature's worktree to be added with that same account, so that its session, test windows and servers never fall back to the default login.
+60. As Andreas, I want features of different accounts to run, be tested and be completed at the same time, so that one account's limit or login never blocks another's.
+61. As Andreas, I want the main chat to answer about features on every account, not only its own, so that I ask in one place.
+62. As Andreas, I want the Features group, the digest and the main chat to name each feature's account, so that I know which login a feature burns.
+63. As Andreas, I want the digest to show when a feature's account is rate limited, so that "why is it stuck" has an answer.
+64. As Andreas, I want to choose which account the main chat runs on, kept in Settings, so that I can move it when one account's limit is spent.
+65. As Andreas, I want New feature to refuse, with a reason, a workspace whose account cannot run `/flow` (the skill is missing from that account's Claude folder, as in an adopted folder), so that a feature never starts and then stalls.
+66. As Andreas, I want a feature to keep working after its account profile is renamed, and to say so plainly when the profile was removed, so that the record never points at nothing.
+
 ## Implementation Decisions
 
 - **Feature record.** The app keeps one record per feature: name, workspace, worktree path, branch, session id, ports, started and completed times. It is the single link between the session, the `.scratch/<feature>` folder in the worktree, the servers and the windows. A feature's stage is never stored: it is derived from the files (see story 11) each time it is shown.
 - **Feature stage reader (pure).** Takes the file facts of a feature's `.scratch` folder (spec present, ticket statuses, test steps present and their marks, completed flag) and returns the stage plus tickets done out of total. Reuses the board's ticket status reading.
+- **Accounts.** An account profile belongs to a workspace, and each profile is its own Claude config folder (ADR 0001). A feature stores its workspace, never its own account: the feature worktree is added as a workspace of the same repo group with the source workspace's profile, so everything started for the feature (session, servers, terminals) takes its environment from that one profile. The main chat is the only session that may differ from a feature's account, and it reaches features through files, never through their sessions, so no account's login is used for another's work.
+- **Account readiness.** New feature checks that the chosen profile's Claude folder offers `/flow` (shared items link the skill into app-made profiles; an adopted folder gets no links) and refuses with the reason when it does not. The digest carries each feature's account name and, from the usage service the Dashboard already uses, whether that account is rate limited.
+- **Test flow lookup across accounts.** Which test flow a feature shows is decided by the feature record (its checklist file), not by reading the session's transcript, so it does not depend on which profile folder holds the transcript.
 - **Feature digest writer.** Renders every feature record plus its stage, tickets, session status, last test result and server state into one markdown file in the app's data folder, rewritten on any change. Its path is given to the main chat in its first prompt, with the instruction that it answers only and may read the named features' files. The main chat runs with a tool allow-list of read tools only, so "answers only" holds by construction (ADR 0008).
-- **Main chat.** A hosted session in a fixed app-owned folder, pinned above the Work list, resumed after a restart. It uses the default account profile.
+- **Main chat.** A hosted session in a fixed app-owned folder, pinned above the Work list, resumed after a restart. It runs on the account profile chosen in Settings, the default account until chosen. The app starts it with read access (additional directories) to the digest's folder and to every feature worktree, whatever their account, so reading another account's feature needs no approval and never asks that account to log in.
 - **Preview config.** Stored per workspace: optional install command; a list of servers (name, command, working folder inside the worktree, ready check, a port placeholder); start page path. The command template substitutes `{port}`; the server also receives PORT. A ready check is "the port accepts a connection". A workspace without one has no preview.
 - **Port allocator (pure core).** Picks from a reserved range (4100–4999), skipping ports in the app's own records and ports that accept a connection or fail to bind right now. A feature keeps its ports until Complete.
 - **Server runner.** Starts each server in the worktree as a terminal the app already knows (so output and Stop show in the Processes view), waits for the ready check with a 60 second limit, and reports Starting, Ready, Failed per server.
@@ -121,6 +136,7 @@ A feature becomes a first-class thing in the app.
 - **Seam 1, pure modules under Vitest (the main seam):** feature stage reader; port allocator; command template and preview config reading; digest writer; test steps parser and results merge (mark kept when the text is unchanged, dropped when it changes); the preview browser's navigation rule (allowed or sent out); worktree name and slug rules. Prior art: the board's ticket tests, the test-flow finder's tests.
 - **Seam 2, one end-to-end path on the fake CLI (Playwright, budget +2 scenarios, 15 → 17 of 20):** New feature creates a feature that appears in the Features group with its stage; Test with a tiny local fake server boots it, opens the pair and shows its page; marking all steps Pass and pressing Complete stops the server and moves the feature under Completed. The window may not reach the internet, so the fake server is on localhost.
 - Real Claude is never used in tests; the fake CLI stands in for the feature session and the main chat. Git worktree creation runs against a temp repo.
+- **Accounts:** a unit test that a feature's worktree workspace carries its source workspace's profile and that the environment built for its session, servers and terminals names that profile's config folder; one that the digest names each account and a rate-limited one; one that New feature refuses a profile whose folder lacks `/flow`. The end-to-end path runs once with two fake profiles (default and a second one) and checks each feature's session got its own config folder variable.
 - The main chat's read-only allow-list is checked by a unit test on the arguments the app builds for its process.
 
 ## Out of Scope
@@ -132,6 +148,7 @@ A feature becomes a first-class thing in the app.
 - Removing worktrees automatically, merging, and pushing.
 - Preview support for projects with no web server; they keep the test flow window only.
 - Opening features on a second computer.
+- Moving a running feature to another account, and logging an account in from the cockpit (accounts are set up in Settings as today).
 
 ## Further Notes
 

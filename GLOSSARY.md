@@ -121,6 +121,10 @@ _Avoid_: Sub-session, feature chat
 The dialog that starts a feature: Andreas picks a workspace and describes the feature. The app makes the feature's worktree, starts its feature session and sends it `/flow` with the description.
 _Avoid_: Start flow, create ticket
 
+**Feature account**:
+The account profile of the workspace a feature was started in. The feature session, its worktree workspace, its servers and its terminals all run on it. The main chat may run on another account and still answers about every feature.
+_Avoid_: Feature login
+
 **Feature worktree**:
 The git worktree and branch made for one feature, so two features of one repo can run and be tested side by side. It is kept when the feature is completed.
 _Avoid_: Sandbox, checkout
