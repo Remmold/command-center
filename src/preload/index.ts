@@ -51,6 +51,11 @@ const api: RendererApi = {
       ipcRenderer.invoke(IPC.WORKSPACES_SET_PROFILE, id, profileId),
     reorder: (ids: string[]): Promise<Workspace[]> => ipcRenderer.invoke(IPC.WORKSPACES_REORDER, ids)
   },
+  features: {
+    list: () => ipcRenderer.invoke(IPC.FEATURES_LIST),
+    create: (request) => ipcRenderer.invoke(IPC.FEATURES_CREATE, request),
+    discard: (name, workspaceId) => ipcRenderer.invoke(IPC.FEATURES_DISCARD, name, workspaceId)
+  },
   sidebarGroups: {
     load: () => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_LOAD),
     save: (layout) => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_SAVE, layout)

@@ -10,6 +10,7 @@ import type { TestFlowFocus, TestFlowView } from './testFlow'
 import type { ZoomStep } from './zoom'
 import type { LocalServer } from './localPorts'
 import type { SidebarLayout } from './sidebarGroups'
+import type { FeatureRecord, NewFeatureRequest, NewFeatureResult } from './features'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
 import type { ClaudeSettingsRead, SettingsFileChange, SettingsObject, SettingsPatch, SettingsSaveResult } from './claudeSettings'
@@ -455,6 +456,13 @@ export interface RendererApi {
     setProfile: (id: string, profileId: string) => Promise<Workspace | null>
     /** Saves this order; ids it leaves out keep their place after the ones it names. */
     reorder: (ids: string[]) => Promise<Workspace[]>
+  }
+  features: {
+    list: () => Promise<FeatureRecord[]>
+    /** Makes the worktree, its workspace and the record; the caller then starts the feature session under `request.sessionId`. */
+    create: (request: NewFeatureRequest) => Promise<NewFeatureResult>
+    /** Undoes a created feature whose session could not start. */
+    discard: (name: string, workspaceId: string) => Promise<void>
   }
   sidebarGroups: {
     /** null before the first save: the list then seeds one from its repo groups. */

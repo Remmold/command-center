@@ -36,6 +36,7 @@ import type { ChatProcess } from './chatAccount'
 import { currentAccounts, useAccounts } from './useAccounts'
 import { useSessionStatusStore } from './sessionStatusStore'
 import { useWorkspacesStore } from './workspacesStore'
+import { featurePanes, useFeaturesStore } from './featuresStore'
 
 interface WorkSearchState {
   search: string
@@ -104,11 +105,12 @@ function hostedInputs(
   views: Record<string, ProjectView>,
   byPane: Record<string, SessionStatusEntry>,
   models: ModelSources,
-  workspaces: readonly Workspace[]
+  workspaces: readonly Workspace[],
+  features: ReadonlySet<string>
 ): HostedSessionInput[] {
   return Object.values(views).flatMap((v) => {
     const profileId = workspaces.find((w) => w.id === v.projectId)?.profileId
-    return v.claudeSessions.map((c) => ({
+    return v.claudeSessions.filter((c) => !features.has(c.id)).map((c) => ({
       paneId: c.id,
       workspaceId: v.projectId,
       title: c.title,
@@ -123,10 +125,12 @@ interface ListSources extends Omit<SessionListInput, 'hosted' | 'statuses'> {
   views: Record<string, ProjectView>
   byPane: Record<string, SessionStatusEntry>
   models: ModelSources
+  /** Feature sessions, which the Features group shows instead. */
+  features: ReadonlySet<string>
 }
 
-function listInput({ views, byPane, models, ...rest }: ListSources): SessionListInput {
-  return { hosted: hostedInputs(views, byPane, models, rest.workspaces), statuses: Object.values(byPane), ...rest }
+function listInput({ views, byPane, models, features, ...rest }: ListSources): SessionListInput {
+  return { hosted: hostedInputs(views, byPane, models, rest.workspaces, features), statuses: Object.values(byPane), ...rest }
 }
 
 function currentModelSources(): ModelSources {
@@ -139,6 +143,7 @@ function currentSources(): ListSources {
   return {
     views: useProjectViewsStore.getState().views,
     models: currentModelSources(),
+    features: featurePanes(useFeaturesStore.getState().features),
     byPane: useSessionStatusStore.getState().byPane,
     observed: useObservedStore.getState().sessions,
     workspaces: useWorkspacesStore.getState().workspaces,
@@ -160,18 +165,20 @@ export function useSessionSources(): Omit<SessionListInput, 'search'> {
   const applied = useModelStore((s) => s.applied)
   const defaultByProfile = useModelStore((s) => s.defaultByProfile)
   const processes = useSessionInitStore((s) => s.processByPane)
+  const featureList = useFeaturesStore((s) => s.features)
   return useMemo(
     () =>
       listInput({
         views,
         byPane,
         models: { inits, cachedModels, settingsByProfile, applied, defaultByProfile, processes },
+        features: featurePanes(featureList),
         observed,
         workspaces,
         identities,
         search: ''
       }),
-    [views, byPane, inits, cachedModels, settingsByProfile, applied, defaultByProfile, processes, observed, workspaces, identities]
+    [views, byPane, inits, cachedModels, settingsByProfile, applied, defaultByProfile, processes, featureList, observed, workspaces, identities]
   )
 }
 

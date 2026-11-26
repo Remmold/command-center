@@ -33,7 +33,10 @@ import { isTeleportedSession } from './claude/teleport'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { contextReport, readListedFile, startTotals, writeListedFile } from './context/service'
-import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
+import { addWorktree, branchTaken, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
+import { createFeatureStore } from './features/store'
+import { createFeature, discardFeature, type CreateDeps } from './features/create'
+import type { NewFeatureRequest } from '../shared/features'
 import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
 import { MANAGED_SETTINGS_FILE, readOrganisationLayer, readSettingsFile, saveSettingsFile, settingsTargetProblem } from './claude/settingsFile'
@@ -201,6 +204,40 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.WORKSPACES_REORDER, (_e, ids: unknown) =>
     workspaces.reorder(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])
   )
+
+  const featureStore = createFeatureStore(userDataPath('features.json'))
+  const featureDeps: CreateDeps = {
+    git: {
+      isRepo: isGitRepo,
+      mainBranch,
+      branchTaken,
+      addWorktree,
+      removeNewWorktree
+    },
+    workspaces: {
+      get: async (id) => (await workspaces.list()).find((w) => w.id === id),
+      add: workspaces.add,
+      remove: workspaces.remove
+    },
+    profile: async (profileId) => {
+      await profiles.prepareSession(profileId)
+      return profiles.get(profileId)
+    },
+    features: featureStore,
+    pathExists: (path) => fs.access(path).then(() => true, () => false),
+    now: () => Date.now()
+  }
+  ipcMain.handle(IPC.FEATURES_LIST, () => featureStore.list())
+  ipcMain.handle(IPC.FEATURES_CREATE, async (_e, request: NewFeatureRequest) => {
+    const result = await createFeature(featureDeps, request)
+    if (result.ok) workspacesChanged()
+    return result
+  })
+  ipcMain.handle(IPC.FEATURES_DISCARD, async (_e, name: string, workspaceId: string) => {
+    const source = (await workspaces.list()).find((w) => w.id === workspaceId)
+    if (source) await discardFeature(featureDeps, name, source.path)
+    workspacesChanged()
+  })
 
   const sidebarGroups = createSidebarGroupsStore(app.getPath('userData'))
   ipcMain.handle(IPC.SIDEBAR_GROUPS_LOAD, () => sidebarGroups.load())
