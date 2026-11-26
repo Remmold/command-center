@@ -55,6 +55,7 @@ interface ParsedTicket {
   number: TicketNumber
   fileName: string
   title: string
+  summary: string | null
   status: TicketStatus
   blockedBy: TicketNumber[]
   filePath: string
@@ -104,6 +105,40 @@ function parseTitle(markdown: string, fallback: string): string {
   return heading.replace(/^\d+[a-z]?\s*[:.-]\s*/i, '').trim()
 }
 
+const SUMMARY_MAX = 600
+const WHAT_TO_BUILD = /^\s*what to build\s*:\s*/i
+/** Headings, lists, quotes, tables, fences and `Field:` lines; none of them is a ticket's opening prose. */
+const NOT_PROSE = /^\s*(?:#|[-*+]\s|\d+[.)]\s|>|\||```|~~~|[\w ]+:\s)/
+
+function unbold(line: string): string {
+  return line.replace(/\*\*|__/g, '')
+}
+
+/** The lines from `start` up to the next blank line, joined. */
+function paragraphFrom(lines: readonly string[], start: number): string {
+  const out: string[] = []
+  for (let i = start; i < lines.length && lines[i].trim(); i++) out.push(lines[i].trim())
+  return out.join(' ')
+}
+
+/** The "What to build" paragraph, else the first prose paragraph after the title, clipped for a card or a strip. */
+function parseSummary(markdown: string): string | null {
+  const lines = markdown.split(/\r?\n/).map(unbold)
+  const at = lines.findIndex((l) => WHAT_TO_BUILD.test(l))
+  let text = ''
+  if (at !== -1) {
+    const rest = [lines[at].replace(WHAT_TO_BUILD, ''), ...lines.slice(at + 1)]
+    const start = rest.findIndex((l) => l.trim() !== '')
+    if (start !== -1) text = paragraphFrom(rest, start)
+  } else {
+    const first = lines.findIndex((l, i) => i > 0 && l.trim() !== '' && !NOT_PROSE.test(l) && !lines[i - 1].trim())
+    if (first !== -1) text = paragraphFrom(lines, first)
+  }
+  text = text.replace(/`/g, '').replace(/\s+/g, ' ').trim()
+  if (!text) return null
+  return text.length > SUMMARY_MAX ? `${text.slice(0, SUMMARY_MAX).trimEnd()}…` : text
+}
+
 /** Reads leading items that start with a ticket number; the first other item (prose, another feature's name) ends the list. */
 function parseBlockedBy(markdown: string): TicketNumber[] {
   const value = field(markdown, 'blocked by')
@@ -149,6 +184,7 @@ async function readTickets(issuesDir: string, files: BoardFileReader): Promise<P
       number: toTicketNumber(match[1]),
       fileName: name.toLowerCase(),
       title: parseTitle(markdown, match[2]),
+      summary: parseSummary(markdown),
       status: parseStatus(markdown),
       blockedBy: parseBlockedBy(markdown),
       filePath,
@@ -261,6 +297,7 @@ function buildFeature(name: string, copies: FeatureCopy[]): BoardFeature {
       number: parsed.number,
       fileName,
       title: parsed.title,
+      summary: parsed.summary,
       column: sighting.column,
       ...parsed.status,
       sightings: ranked.map((r) => r.sighting)

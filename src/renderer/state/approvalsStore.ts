@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ApprovalRequest } from '../../shared/approval'
+import type { ApprovalReply, ApprovalRequest } from '../../shared/approval'
 
 interface ApprovalsState {
   /** Open approval requests per pane, oldest first. */
@@ -36,3 +36,9 @@ export const useApprovalsStore = create<ApprovalsState>((set, get) => ({
       return { byPane: next }
     })
 }))
+
+/** Sends a reply to the CLI and drops the request here at once: the one path the chat, the inbox and the Dashboard answer through. */
+export function answerRequest(requestId: string, reply: ApprovalReply): void {
+  window.api.approval.respond(requestId, reply)
+  useApprovalsStore.getState().remove(requestId)
+}

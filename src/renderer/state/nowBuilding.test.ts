@@ -15,6 +15,7 @@ function ticket(number: string, column: BoardColumn): BoardTicket {
     statusNote: null,
     statusLine: null,
     statusKnown: true,
+    summary: null,
     sightings: []
   }
 }

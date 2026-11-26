@@ -28,6 +28,7 @@ import { IDE_PANELS_SHORTCUT, SHELL_DRAWER_SHORTCUT } from '../../hooks/useKeybo
 import { itemsToMarkdown } from '../chat/exportMarkdown'
 import { pickPastSession } from '../../state/launcherStore'
 import { AccountMismatchNotice, HostedAccountBadge, ObservedAccountBadge } from './ChatAccountBadge'
+import { CurrentTicketStrip } from './CurrentTicketStrip'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -127,6 +128,7 @@ export function HostedSessionHeader({ workspace, view, session, place }: HostedP
         </HeaderRow>
       </Toolbar>
       <AccountMismatchNotice workspace={workspace} paneId={session.id} />
+      <CurrentTicketStrip workspace={workspace} paneId={session.id} />
     </>
   )
 }

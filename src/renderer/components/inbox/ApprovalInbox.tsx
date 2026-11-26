@@ -34,12 +34,14 @@ import { SidebarLayout } from '../ui/SidebarLayout'
 
 const CONTEXT_LINES = 6
 
-interface ChatInfo {
+export interface ChatInfo {
   paneId: string
   title: string
   workspaceId: string
   repoGroupKey: string
   repoName: string
+  /** The workspace folder, for showing paths relative to it. */
+  cwd?: string
   account: string | null
   model?: string
   effort?: string
@@ -47,7 +49,7 @@ interface ChatInfo {
 }
 
 /** What each chat with a request is called and where it lives, from the stores the Work list reads. */
-function useChats(paneIds: readonly string[]): Record<string, ChatInfo> {
+export function useChats(paneIds: readonly string[]): Record<string, ChatInfo> {
   const views = useProjectViewsStore((s) => s.views)
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const accounts = useAccounts()
@@ -64,6 +66,7 @@ function useChats(paneIds: readonly string[]): Record<string, ChatInfo> {
         workspaceId: found.projectId,
         repoGroupKey: workspace?.repoGroupKey ?? found.projectId,
         repoName: workspace?.repoName ?? found.projectId,
+        cwd: workspace?.path,
         account: accounts.length > 1 && workspace ? accountOf(accounts, workspace.profileId).name : null,
         model: found.session.model,
         effort: found.session.effort,

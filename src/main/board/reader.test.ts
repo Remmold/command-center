@@ -570,3 +570,26 @@ describe('board reader: ticket lifecycle words', () => {
     })
   })
 })
+
+describe('board reader: ticket summary', () => {
+  async function summaryOf(markdown: string): Promise<string | null> {
+    const root = fixture({ '.scratch/f/issues/01-one.md': markdown })
+    return tickets(await readBoard([workspace(root)], nodeFileReader))[0].summary
+  }
+
+  it('takes the What to build paragraph as plain text, on its line or below it', async () => {
+    expect(await summaryOf('# 01: One\n\n**What to build:** a **strip** under\nthe `header`.\n\nDecided:\n- x')).toBe('a strip under the header.')
+    expect(await summaryOf('# 01: One\n\n**What to build:**\n\nthe strip.\n\n**Status:** ready')).toBe('the strip.')
+  })
+
+  it('falls back to the first prose paragraph after the title, skipping fields and lists', async () => {
+    expect(await summaryOf('# 01: One\n\n**Status:** ready\n\n- [ ] box\n\nPlain words here.\nMore.\n\nLater.')).toBe('Plain words here. More.')
+  })
+
+  it('is null without prose, and clips a long paragraph', async () => {
+    expect(await summaryOf('# 01: One\n\n**Status:** ready\n\n- [ ] box')).toBeNull()
+    const long = await summaryOf(`# 01: One\n\nWhat to build: ${'word '.repeat(200)}`)
+    expect(long?.endsWith('…')).toBe(true)
+    expect(long!.length).toBeLessThanOrEqual(601)
+  })
+})

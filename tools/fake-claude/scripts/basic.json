@@ -5,15 +5,47 @@
       "repeat": true,
       "suggestion": "Run the tests",
       "events": [
-        { "type": "text", "text": "Hello! This is a scripted reply from the fake Claude." }
+        {
+          "type": "text",
+          "text": "Hello! This is a scripted reply from the fake Claude."
+        }
+      ]
+    },
+    {
+      "match": "^work on the ticket",
+      "repeat": true,
+      "events": [
+        {
+          "type": "write_file",
+          "path": "{cwd}{sep}.scratch{sep}e2e-feature{sep}issues{sep}01-first-ticket.md",
+          "content": "# 01: First ticket\n\n**What to build:** A strip that names the ticket the session works on.\n\n**Status:** in-progress\n"
+        },
+        {
+          "type": "tool_use",
+          "name": "Read",
+          "approval": false,
+          "input": {
+            "file_path": "{cwd}{sep}.scratch{sep}e2e-feature{sep}issues{sep}01-first-ticket.md"
+          },
+          "result": "1\t# 01: First ticket"
+        },
+        {
+          "type": "text",
+          "text": "Reading the ticket."
+        }
       ]
     },
     {
       "match": "",
       "repeat": true,
       "events": [
-        { "type": "rate_limit_event" },
-        { "type": "text", "text": "Hello! This is a scripted reply from the fake Claude." }
+        {
+          "type": "rate_limit_event"
+        },
+        {
+          "type": "text",
+          "text": "Hello! This is a scripted reply from the fake Claude."
+        }
       ]
     }
   ]

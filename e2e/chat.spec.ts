@@ -344,7 +344,7 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
 test.describe('slow turns', () => {
   test.use({ script: 'slow' })
 
-  test('a prompt sent mid-turn queues and starts after Esc; Run in background; the working line; Stop interrupts; then tool approval (1, 3 with feedback, 2 for the session, the inbox and question cards), and chats picked up from settings.json and with a full context', async ({ launched }) => {
+  test('a prompt sent mid-turn queues and starts after Esc; Run in background; the working line; Stop interrupts; then tool approval (1, 3 with feedback, 2 for the session, the inbox and question cards, Accept all on the Dashboard), and chats picked up from settings.json and with a full context', async ({ launched }) => {
     const { page, log, workspace } = launched
     const pane = page.locator('[data-chat-pane]')
     const longJob = pane.getByText('Starting a long job.')
@@ -536,6 +536,36 @@ test.describe('slow turns', () => {
       await expect.poll(() => log.approvalReplies().length).toBe(6)
       expect(log.approvalReplies()[5]).toEqual(answered({ [FORMATS]: 'PDF', [LAYOUT]: 'Table' }))
       await expect(page.locator('[data-chat-pane]').getByText('Answered · 2 questions').last()).toBeVisible()
+    })
+
+    await test.step('the Dashboard lists every waiting request; Accept all says Yes to the tool approvals only, and a question opens the inbox', async () => {
+      for (const text of ['create hello.txt', 'create hello.txt', 'ask about the export']) {
+        await page.keyboard.press('Control+t')
+        await newChatIn(page, /e2e-workspace/)
+        await send(page, text)
+      }
+      await expect(page.getByRole('button', { name: '3 approvals' })).toBeVisible()
+      await page.keyboard.press('Control+1')
+      const panel = page.getByTestId('view-dashboard').getByRole('region', { name: 'Approvals' })
+      const rows = panel.getByRole('list', { name: 'Waiting approvals' }).getByRole('listitem')
+      await expect(rows).toHaveCount(3)
+      await expect(rows.nth(0)).toContainText('hello.txt')
+      await panel.getByRole('button', { name: 'Accept all (2)' }).click()
+      await expect.poll(() => log.approvalReplies().length).toBe(8)
+      for (const reply of log.approvalReplies().slice(6)) expect(reply).toMatchObject({ behavior: 'allow', updatedInput: expect.objectContaining({ content: 'hi' }), updatedPermissions: [] })
+      await expect(rows).toHaveCount(1)
+      await expect(rows.first()).toContainText('Question')
+      await expect(panel.getByRole('button', { name: 'Accept all' })).toBeDisabled()
+
+      await rows.first().getByRole('button').first().click()
+      const card = page.getByRole('dialog', { name: /^Approvals/ }).getByRole('group', { name: 'Questions from Claude' })
+      await card.getByRole('checkbox', { name: 'PDF' }).click()
+      await card.getByRole('tab', { name: 'Layout' }).click()
+      await card.getByRole('radio', { name: 'Table' }).click()
+      await card.getByRole('button', { name: /Submit answers/ }).click()
+      await expect.poll(() => log.approvalReplies().length).toBe(9)
+      await expect(panel).toContainText('No session is waiting for a permission')
+      await page.keyboard.press('Control+2')
     })
 
     await test.step("a new chat starts in settings.json's default mode and turns Remote Control on when the CLI says remoteControlAtStartup", async () => {

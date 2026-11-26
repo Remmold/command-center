@@ -19,7 +19,7 @@ import {
   type PermissionDestination,
   type ToolInput
 } from '../../../shared/approval'
-import { useApprovalsStore } from '../../state/approvalsStore'
+import { answerRequest } from '../../state/approvalsStore'
 import type { PermissionMode } from '../../state/permissionModes'
 import {
   ChoiceButton,
@@ -164,8 +164,7 @@ function useReply(request: ApprovalRequest, onAnswered: Props['onAnswered']): (p
     if (answered.current) return
     answered.current = true
     onAnswered?.(request.requestId)
-    window.api.approval.respond(request.requestId, payload)
-    useApprovalsStore.getState().remove(request.requestId)
+    answerRequest(request.requestId, payload)
   }
 }
 

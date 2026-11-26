@@ -1,7 +1,7 @@
 import { BASIC_REPLY } from './common'
 import { expect, newChatIn, prompt, send, startSession, test } from './harness'
 
-test('a waiting session opens in the Dashboard chat drawer, takes a reply there, Ctrl+Shift+J swaps it, it survives a Board detour, and Open in Work lands on it', async ({ launched }) => {
+test('a waiting session opens in the Dashboard chat drawer, takes a reply there, Ctrl+Shift+J swaps it, it survives a Board detour, and Open in Work lands on it; a session shows the ticket it read', async ({ launched }) => {
   const { page, log, workspace } = launched
   const dashboard = page.getByTestId('view-dashboard')
   const work = page.getByTestId('view-work')
@@ -73,5 +73,17 @@ test('a waiting session opens in the Dashboard chat drawer, takes a reply there,
     await expect(asked('second question')).toBeVisible()
     await page.keyboard.press('Control+1')
     await expect(drawer).toBeHidden()
+  })
+
+  await test.step('a session that read a ticket shows it under its header, and Open on Board opens it there', async () => {
+    await page.keyboard.press('Control+2')
+    await send(page, 'work on the ticket')
+    const strip = work.getByRole('region', { name: 'Current ticket' })
+    await expect(strip).toContainText('e2e-feature #01 · First ticket')
+    await expect(strip).toContainText('in-progress')
+    await expect(strip).toContainText('A strip that names the ticket the session works on.')
+    await strip.getByRole('button', { name: 'Open on Board' }).click()
+    await expect(page.getByTestId('view-board')).toBeVisible()
+    await expect(page.getByRole('complementary', { name: 'Ticket' })).toContainText('First ticket')
   })
 })
