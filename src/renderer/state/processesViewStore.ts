@@ -8,8 +8,8 @@ interface ProcessesViewState {
   chosen: string | null
   /** Each terminal run's servers whose port answered, by `terminalRunKey`. */
   terminalServers: Record<string, LocalServer[]>
-  /** `claudeRowKey(...)` or `terminalRowKey(...)`; a key not listed yet is kept until it is. */
-  select: (key: string) => void
+  /** `claudeRowKey(...)` or `terminalRowKey(...)`; a key not listed yet is kept until it is. Null picks the first running row again. */
+  select: (key: string | null) => void
   /** Asks whether the servers running terminals named answer yet. */
   checkTerminalServers: (terminals: readonly TerminalInfo[]) => Promise<void>
 }

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { SquareTerminal } from 'lucide-react'
-import type { Workspace } from '../../../shared/types'
-import { DEFAULT_SHELL_KIND } from '../../state/projectViewLayout'
+import { DEFAULT_SHELL_KIND, type Workspace } from '../../../shared/types'
 import { useRecentProjectsStore } from '../../state/recentProjectsStore'
 import { useRepoIdentitiesStore } from '../../state/repoIdentitiesStore'
 import { useTerminalsStore } from '../../state/terminalsStore'

@@ -4,7 +4,7 @@ import { Terminal as PtyTerminal } from './Terminal'
 import { useProjectViewsStore } from '../state/projectViewsStore'
 import type { ProjectView } from '../state/projectViewsStore'
 import { useTerminalsStore } from '../state/terminalsStore'
-import type { PtyKind, TerminalInfo } from '../../shared/types'
+import { DEFAULT_SHELL_KIND, type PtyKind, type TerminalInfo } from '../../shared/types'
 
 interface Props {
   view: ProjectView
@@ -45,15 +45,15 @@ export function ShellTabs({ view }: Props) {
 
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  // A tab whose terminal main hasn't reported yet shows as a plain pwsh until it does.
+  // A tab whose terminal main hasn't reported yet shows as a plain default shell until it does.
   const tabs: TerminalInfo[] = view.shellTabs.map(
-    (id) => byId[id] ?? { id, workspaceId: view.projectId, cwd: view.projectPath, label: '', kind: 'pwsh', status: 'running', startedAt: 0 }
+    (id) => byId[id] ?? { id, workspaceId: view.projectId, cwd: view.projectPath, label: '', kind: DEFAULT_SHELL_KIND, status: 'running', startedAt: 0 }
   )
   const activeTab = tabs.find((t) => t.id === view.activeShellTabId) ?? null
   const showSidebar = tabs.length > 1
 
   const handleAddDefault = () => {
-    addShellTab(view.projectId, 'pwsh')
+    addShellTab(view.projectId, DEFAULT_SHELL_KIND)
     setPickerOpen(false)
   }
 

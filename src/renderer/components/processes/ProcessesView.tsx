@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useTicking } from '../../hooks/useTicking'
 import { useBackgroundProcessesStore } from '../../state/backgroundProcessesStore'
@@ -69,6 +69,13 @@ export function ProcessesView() {
   useEffect(() => {
     if (chosen === null && selectedKey !== null) select(selectedKey)
   }, [chosen, selectedKey, select])
+  // A chosen row that was listed and is gone (closed) hands the pick back to the first running row.
+  const listedBefore = useRef(new Set<string>())
+  useEffect(() => {
+    const listed = new Set(groups.flatMap((g) => g.rows.map((r) => r.key)))
+    if (chosen !== null && listedBefore.current.has(chosen) && !listed.has(chosen)) select(null)
+    listedBefore.current = listed
+  }, [groups, chosen, select])
   const now = useTicking(groups.length > 0)
   const [picking, setPicking] = useState(false)
   useRefresh()

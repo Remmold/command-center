@@ -98,6 +98,9 @@ export interface ScreenFocus {
 
 export type PtyKind = 'pwsh' | 'powershell' | 'cmd' | 'bash'
 
+/** The shell a new terminal runs in unless one is picked. */
+export const DEFAULT_SHELL_KIND: PtyKind = 'pwsh'
+
 export interface SpawnResult {
   ok: boolean
   error?: string

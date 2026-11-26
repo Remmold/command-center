@@ -1,12 +1,11 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { DEFAULT_PROFILE_ID, type PtyKind, type Workspace } from '../../shared/types'
+import { DEFAULT_PROFILE_ID, DEFAULT_SHELL_KIND, type PtyKind, type Workspace } from '../../shared/types'
 import { useChatItemsStore } from './chatItemsStore'
 import {
   LAYOUT_VERSION,
   dropShellTabs,
   migrateLayout,
-  DEFAULT_SHELL_KIND,
   openShellTab,
   persistableView,
   toggleIdePanels,
