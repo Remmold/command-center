@@ -14,3 +14,4 @@ Branch: feat/feature-cockpit
 - 09 resolved: feature digest (pure renderer, change-only debounced writer in userData, wired to stage/server/session/usage/profile changes) — 78ea9cd
 - 10 in-progress: main chat pinned above Work, tools restricted to Read/Grep/Glob with deny-by-default approvals, account picker in Settings; resume-after-restart not yet seen live — 6ab19dd
 - 07 in-progress: Set up preview button in Settings starts a session that writes a draft JSON file the editor loads unsaved; no-browser outcome; not yet seen live � 06aefab
+- 11 resolved: /flow uses the given feature worktree and name; /test-flow writes the checklist form (needs a 'Preview browser: yes' prompt line the app does not send yet) — pending
