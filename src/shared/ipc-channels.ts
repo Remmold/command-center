@@ -11,6 +11,8 @@ export const IPC = {
   FEATURES_STAGES: 'features:stages',
   FEATURES_SET_CLAUDE_SESSION: 'features:setClaudeSession',
   FEATURES_STAGES_CHANGED: 'features:stagesChanged',
+  PREVIEW_CONFIG_GET: 'previewConfig:get',
+  PREVIEW_CONFIG_SAVE: 'previewConfig:save',
   SIDEBAR_GROUPS_LOAD: 'sidebarGroups:load',
   SIDEBAR_GROUPS_SAVE: 'sidebarGroups:save',
   CHAT_HISTORY_LOAD: 'chatHistory:load',

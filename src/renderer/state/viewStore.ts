@@ -3,7 +3,7 @@ import { DEFAULT_VIEW, type AppView } from '../../shared/views'
 
 export type { AppView }
 
-export type SettingsSection = 'workspaces' | 'accounts' | 'claude-code' | 'apps' | 'board' | 'general'
+export type SettingsSection = 'workspaces' | 'accounts' | 'claude-code' | 'apps' | 'board' | 'preview' | 'general'
 
 interface ViewState {
   view: AppView

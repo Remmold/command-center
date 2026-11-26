@@ -23,6 +23,9 @@ let workspaces: Workspace[]
 let profileAdopted: boolean
 let failAddingWorkspace: boolean
 let profileRemoved: boolean
+let installCommand: string
+let installRuns: { cwd: string; command: string }[]
+let installError: string | null
 
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf-8' })
 
@@ -49,6 +52,11 @@ function deps(): CreateDeps {
       add: async (r) => void records.push(r),
       remove: async (name) => void (records = records.filter((r) => r.name !== name))
     },
+    installCommand: async (workspaceId) => (workspaceId === 'src' ? installCommand : ''),
+    runInstall: async (cwd, command) => {
+      installRuns.push({ cwd, command })
+      if (installError) throw new Error(installError)
+    },
     pathExists: async (p) => existsSync(p),
     now: () => 42
   }
@@ -72,6 +80,9 @@ beforeEach(() => {
   profileAdopted = false
   failAddingWorkspace = false
   profileRemoved = false
+  installCommand = ''
+  installRuns = []
+  installError = null
 })
 
 afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))
@@ -132,6 +143,33 @@ describe('createFeature', () => {
     expect(existsSync(worktreePathFor(repo, 'login'))).toBe(false)
     expect(git(repo, 'branch', '--list', 'feat/login').trim()).toBe('')
     expect(git(repo, 'worktree', 'list', '--porcelain')).not.toMatch(/login/)
+    expect(records).toEqual([])
+    expect(workspaces).toHaveLength(1)
+  })
+})
+
+describe('createFeature install step', () => {
+  it('runs the source workspace install command in the new worktree before recording the feature', async () => {
+    installCommand = 'pnpm install'
+    const result = await createFeature(deps(), request)
+    expect(result.ok).toBe(true)
+    expect(installRuns).toEqual([{ cwd: worktreePathFor(repo, 'login'), command: 'pnpm install' }])
+  })
+
+  it('runs nothing for a workspace without an install command, exactly as before', async () => {
+    const result = await createFeature(deps(), request)
+    expect(result.ok).toBe(true)
+    expect(installRuns).toEqual([])
+    expect(records).toHaveLength(1)
+  })
+
+  it('cleans up and shows the reason when the install fails', async () => {
+    installCommand = 'pnpm install'
+    installError = 'The install command failed: network down'
+    const result = await createFeature(deps(), request)
+    expect(result).toEqual({ ok: false, error: expect.stringMatching(/network down/) })
+    expect(existsSync(worktreePathFor(repo, 'login'))).toBe(false)
+    expect(git(repo, 'branch', '--list', 'feat/login').trim()).toBe('')
     expect(records).toEqual([])
     expect(workspaces).toHaveLength(1)
   })

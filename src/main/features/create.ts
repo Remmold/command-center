@@ -20,6 +20,10 @@ export interface CreateDeps {
   /** The profile a workspace's sessions run on, its shared-item links repaired first. */
   profile: (profileId: string) => Promise<{ id: string; name: string; configDir: string; adopted: boolean }>
   features: { list: () => Promise<FeatureRecord[]>; add: (r: FeatureRecord) => Promise<void>; remove: (name: string) => Promise<void> }
+  /** The install command saved for a workspace's preview config; empty when none. */
+  installCommand: (workspaceId: string) => Promise<string>
+  /** Runs a command in a folder; rejects with the reason when it fails. */
+  runInstall: (cwd: string, command: string) => Promise<void>
   pathExists: (path: string) => Promise<boolean>
   now: () => number
 }
@@ -62,6 +66,8 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
   try {
     await deps.git.addWorktree(source.path, worktreePath, branch, base)
     madeWorktree = true
+    const install = await deps.installCommand(source.id)
+    if (install) await deps.runInstall(worktreePath, install)
     workspace = await deps.workspaces.add(worktreePath, profile.id)
     const feature: FeatureRecord = {
       name: request.name,

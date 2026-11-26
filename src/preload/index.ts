@@ -64,6 +64,10 @@ const api: RendererApi = {
       return () => ipcRenderer.off(IPC.FEATURES_STAGES_CHANGED, handler)
     }
   },
+  previewConfig: {
+    get: (workspaceId) => ipcRenderer.invoke(IPC.PREVIEW_CONFIG_GET, workspaceId),
+    save: (workspaceId, raw) => ipcRenderer.invoke(IPC.PREVIEW_CONFIG_SAVE, workspaceId, raw)
+  },
   sidebarGroups: {
     load: () => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_LOAD),
     save: (layout) => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_SAVE, layout)

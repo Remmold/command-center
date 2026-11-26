@@ -35,6 +35,8 @@ import { DiscoveryService } from './board/discoveryService'
 import { contextReport, readListedFile, startTotals, writeListedFile } from './context/service'
 import { addWorktree, branchTaken, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
 import { createFeatureStore } from './features/store'
+import { runInstall } from './features/install'
+import { createPreviewConfigStore } from './previewConfig/store'
 import { createStageService, type StageService } from './features/stageService'
 import { readTestFlowsFolder } from './testFlow/settings'
 import { createFeature, discardFeature, type CreateDeps } from './features/create'
@@ -210,6 +212,11 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
 
   const featureStore = createFeatureStore(userDataPath('features.json'))
+  const previewConfigs = createPreviewConfigStore(userDataPath('preview-configs.json'))
+  ipcMain.handle(IPC.PREVIEW_CONFIG_GET, (_e, workspaceId: unknown) => (typeof workspaceId === 'string' ? previewConfigs.get(workspaceId) : null))
+  ipcMain.handle(IPC.PREVIEW_CONFIG_SAVE, (_e, workspaceId: unknown, raw: unknown) =>
+    typeof workspaceId === 'string' ? previewConfigs.save(workspaceId, raw) : { ok: false, error: 'No workspace was named.' }
+  )
   const featureDeps: CreateDeps = {
     git: {
       isRepo: isGitRepo,
@@ -228,6 +235,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       return profiles.get(profileId)
     },
     features: featureStore,
+    installCommand: async (workspaceId) => (await previewConfigs.get(workspaceId))?.install ?? '',
+    runInstall,
     pathExists: (path) => fs.access(path).then(() => true, () => false),
     now: () => Date.now()
   }

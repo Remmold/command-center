@@ -12,6 +12,7 @@ import type { LocalServer } from './localPorts'
 import type { SidebarLayout } from './sidebarGroups'
 import type { FeatureStageView } from './featureStage'
 import type { FeatureRecord, NewFeatureRequest, NewFeatureResult } from './features'
+import type { PreviewConfig } from './previewConfig'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
 import type { ClaudeSettingsRead, SettingsFileChange, SettingsObject, SettingsPatch, SettingsSaveResult } from './claudeSettings'
@@ -469,6 +470,12 @@ export interface RendererApi {
     /** Keeps the feature session's Claude id on its record, so the session can be resumed once its chat is gone. */
     setClaudeSession: (name: string, claudeSessionId: string) => Promise<void>
     onStagesChanged: (cb: (stages: Record<string, FeatureStageView>) => void) => () => void
+  }
+  previewConfig: {
+    /** The workspace's saved preview config; null when it has none (no browser, only the test flow). */
+    get: (workspaceId: string) => Promise<PreviewConfig | null>
+    /** Validates, then saves; an empty config removes the entry. The refusal names the field. */
+    save: (workspaceId: string, config: unknown) => Promise<{ ok: true; config: PreviewConfig | null } | { ok: false; error: string }>
   }
   sidebarGroups: {
     /** null before the first save: the list then seeds one from its repo groups. */
