@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Locator } from '@playwright/test'
 import { BASIC_REPLY } from './common'
-import { delayClaudeStart, evaluateMain, expect, newChatIn, send, startSession, test } from './harness'
+import { delayClaudeStart, evaluateMain, expect, newChatIn, send, sessionList, startSession, test } from './harness'
 
 function folderUri(path: string): string {
   const [drive, ...rest] = path.split(/[\\/]/)
@@ -158,7 +158,7 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await send(page, 'say hello')
   await expect(page.getByText(BASIC_REPLY)).toBeVisible()
 
-  const list = page.getByRole('navigation', { name: 'Sessions' })
+  const list = sessionList(page)
   const homeSection = list.getByRole('region', { name: 'Personal · Ultra' })
   const workSection = list.getByRole('region', { name: 'Work · Ultra' })
   const workWaiting = workSection.getByRole('listitem').filter({ has: page.getByRole('img', { name: 'Your turn' }) })
@@ -190,8 +190,8 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await expect(repoHeader).toHaveText(/Ungrouped$/)
 
   await page.keyboard.press('Control+3')
-  await page.getByRole('tab', { name: 'By account' }).click()
   const board = page.getByTestId('view-board')
+  await board.getByRole('tab', { name: 'By account' }).click()
   await expect(board.getByRole('region', { name: homeLabel }).getByText('Home ticket')).toBeVisible()
   await expect(board.getByRole('region', { name: workLabel }).getByText('Work ticket')).toBeVisible()
 
@@ -342,7 +342,7 @@ test('a VS Code profile’s folder is offered, adopted logged in, never written 
     await expect(page.getByText(BASIC_REPLY)).toBeVisible()
 
     await page.evaluate(() => (globalThis as unknown as { api: RendererApi }).api.usage.refresh('p-work'))
-    const list = page.getByRole('navigation', { name: 'Sessions' })
+    const list = sessionList(page)
     const workHeader = list.getByRole('button', { name: /^Work · Team/ })
     await expect(workHeader.getByRole('meter', { name: 'Work Weekly (7 day)' })).toHaveAttribute('aria-valuenow', '69', { timeout: 15_000 })
     await expect(workHeader).toContainText('69%')

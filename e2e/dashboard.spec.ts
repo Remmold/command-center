@@ -1,5 +1,5 @@
 import { BASIC_REPLY } from './common'
-import { expect, newChatIn, prompt, send, startSession, test } from './harness'
+import { chatTabs, expect, newChatIn, prompt, send, startSession, test } from './harness'
 
 test('a waiting session opens in the Dashboard chat drawer, takes a reply there, Ctrl+Shift+J swaps it, it survives a Board detour, and Open in Work lands on it; a session shows the ticket it read', async ({ launched }) => {
   const { page, log, workspace } = launched
@@ -32,7 +32,7 @@ test('a waiting session opens in the Dashboard chat drawer, takes a reply there,
     await expect(row).toHaveAttribute('aria-current', 'true')
     await expect(asked('first question')).toBeVisible()
     await expect(prompt(page)).toBeFocused()
-    await expect(chats.getByRole('tab', { name: 'Processes', exact: true })).toHaveCount(0)
+    await expect(chatTabs(page).getByRole('tab', { name: 'Processes', exact: true })).toHaveCount(0)
     await prompt(page).click()
     await send(page, 'and one more')
     await expect.poll(() => log.userTexts()).toContain('and one more')

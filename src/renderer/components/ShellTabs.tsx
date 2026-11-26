@@ -67,7 +67,7 @@ export function ShellTabs({ view }: Props) {
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-editor">
+    <section aria-label="Shell drawer" className="flex h-full min-h-0 flex-col bg-editor">
       {/* top bar — title + actions */}
       <header className="flex shrink-0 items-center justify-between border-b border-subtle bg-editor px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2 text-xs">

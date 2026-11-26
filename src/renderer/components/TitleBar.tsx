@@ -24,7 +24,7 @@ export function TitleBar() {
   const closeSettings = useViewStore((s) => s.closeSettings)
 
   return (
-    <header className="flex h-10 shrink-0 items-center border-b border-subtle bg-titlebar">
+    <header aria-label="Title bar" className="flex h-10 shrink-0 items-center border-b border-subtle bg-titlebar">
       <div className="shrink-0 border-r border-subtle px-2">
         <SegmentedControl<AppView> label="view" value={view} onChange={setView} options={VIEW_OPTIONS} />
       </div>

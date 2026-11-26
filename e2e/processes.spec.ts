@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { connect } from 'node:net'
 import type { ElectronApplication } from '@playwright/test'
-import { evaluateMain, expect, send, startSession, test } from './harness'
+import { chatTabs, evaluateMain, expect, processesView, send, sessionList, shellDrawer, startSession, test } from './harness'
 
 /** Swaps the main process's `shell.openExternal` for a recorder, so no browser opens. */
 async function recordExternalOpens(app: ElectronApplication): Promise<void> {
@@ -32,12 +32,11 @@ test.describe('background processes', () => {
   test('the Processes tab counts a background server, lists it Running with its command and output, opens its port, badges the session row, Stop turns it Stopped; Open in Processes shows another live with its port and Run it myself stops it for a running terminal of mine; closing the session ends a server left running', async ({ launched }) => {
     const { app, page, log } = launched
     const pane = page.locator('[data-chat-pane]')
-    const strip = pane.locator('[data-tab-strip]')
-    const processesTab = strip.getByRole('tab', { name: /^Processes/ })
+    const processesTab = chatTabs(page).getByRole('tab', { name: /^Processes/ })
     const rows = pane.getByRole('list', { name: 'Background processes' }).getByRole('listitem')
     const output = rows.getByLabel('Output of pnpm dev --port 0').locator('.xterm-rows')
-    const chatTab = strip.getByRole('tab', { name: 'Chat' })
-    const sessions = page.getByRole('navigation', { name: 'Sessions' })
+    const chatTab = chatTabs(page).getByRole('tab', { name: 'Chat' })
+    const sessions = sessionList(page)
     const badge = sessions.getByRole('img', { name: '1 background process running' })
     try {
       await recordExternalOpens(app)
@@ -79,7 +78,7 @@ test.describe('background processes', () => {
       const watcherRow = rows.filter({ has: page.locator('[data-process-command]', { hasText: watcher }) })
       await expect(watcherRow.locator('[data-process-status]')).toHaveText('Running')
       await watcherRow.getByRole('button', { name: 'Open in Processes' }).click()
-      const claudeCopy = page.getByRole('region', { name: watcher })
+      const claudeCopy = processesView(page).getByRole('region', { name: watcher })
       await expect(claudeCopy.locator('.xterm-rows')).toContainText(/Listening on http:\/\/localhost:\d+/)
       await expect(claudeCopy.getByRole('button', { name: /^Open http:\/\/localhost:\d+/ })).toBeVisible()
       await claudeCopy.getByRole('button', { name: 'Run it myself' }).click()
@@ -87,10 +86,10 @@ test.describe('background processes', () => {
       await expect(confirm).toContainText(`Stop Claude's copy and run ${watcher} yourself in ${launched.workspace}? Claude won't see its output any more.`)
       await confirm.getByRole('button', { name: 'Run it myself' }).click()
       await expect.poll(() => log.controlRequests('stop_task').length).toBe(2)
-      const mine = page.getByRole('region', { name: watcher })
+      const mine = processesView(page).getByRole('region', { name: watcher })
       await expect(mine).toContainText('Running · You')
       await expect(mine.locator('.xterm-rows')).toContainText('cc-mine')
-      const group = page.getByRole('list', { name: /e2e-workspace/ })
+      const group = processesView(page).getByRole('list', { name: /e2e-workspace/ })
       await expect(group.getByRole('button').filter({ hasText: watcher }).filter({ hasText: 'Stopped' })).toHaveCount(1)
       await page.keyboard.press('Control+2')
       await expect(watcherRow.locator('[data-process-status]')).toHaveText('Stopped')
@@ -119,10 +118,10 @@ test.describe('background processes', () => {
 test.describe('terminals in the Processes view', () => {
   test('New terminal runs a command that stays alive and opens a plain shell that echoes typing; renamed, it shows in the Shell drawer, leaves it on closing the tab, and Close ends it', async ({ launched }) => {
     const { page } = launched
-    const group = page.getByRole('list', { name: /e2e-workspace/ })
+    const group = processesView(page).getByRole('list', { name: /e2e-workspace/ })
     const row = (name: string) => group.getByRole('button').filter({ hasText: name })
     const newTerminal = async (command: string): Promise<void> => {
-      await page.getByRole('button', { name: 'New terminal' }).click()
+      await processesView(page).getByRole('button', { name: 'New terminal' }).click()
       await page.getByRole('option', { name: /e2e-workspace/ }).click()
       if (command) await page.getByRole('combobox', { name: 'New terminal' }).fill(command)
       await page.keyboard.press('Enter')
@@ -130,12 +129,12 @@ test.describe('terminals in the Processes view', () => {
     await page.keyboard.press('Control+5')
 
     await newTerminal("Write-Output ('cc-' + 'ready'); Start-Sleep -Seconds 600")
-    const server = page.getByRole('region', { name: /^Write-Output/ })
+    const server = processesView(page).getByRole('region', { name: /^Write-Output/ })
     await expect(server.locator('.xterm-rows')).toContainText('cc-ready')
     await expect(row('Write-Output')).toContainText('Running · You')
 
     await newTerminal('')
-    const shell = page.getByRole('region', { name: 'pwsh' })
+    const shell = processesView(page).getByRole('region', { name: 'pwsh' })
     await expect(shell.getByRole('button', { name: 'Restart' })).toHaveCount(0)
     await shell.locator('.xterm-helper-textarea').focus()
     await page.keyboard.type("echo ('cc-' + 'typed')")
@@ -145,14 +144,14 @@ test.describe('terminals in the Processes view', () => {
     await shell.getByRole('button', { name: 'Rename' }).click()
     await page.getByRole('textbox', { name: 'Terminal name' }).fill('my shell')
     await page.keyboard.press('Enter')
-    const mine = page.getByRole('region', { name: 'my shell' })
+    const mine = processesView(page).getByRole('region', { name: 'my shell' })
     await expect(row('my shell')).toBeVisible()
 
     await mine.getByRole('button', { name: 'Open in Shell drawer' }).click()
-    const drawer = page.locator('.xterm-rows:visible')
+    const drawer = shellDrawer(page).locator('.xterm-rows:visible')
     await expect(drawer).toHaveCount(1)
     await expect(drawer).toContainText(')cc-typed')
-    await page.getByTitle('close all tabs (the terminals keep running)').click()
+    await shellDrawer(page).getByTitle('close all tabs (the terminals keep running)').click()
     await expect(page.locator('.xterm-rows:visible')).toHaveCount(0)
 
     await page.keyboard.press('Control+5')

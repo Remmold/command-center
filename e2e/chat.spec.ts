@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASIC_REPLY, FAKE_SESSION, TINY_PNG, WRITE_DONE, clipboardText, transcriptLine, userLines } from './common'
-import { cliPermissionMode, delayClaudeStart, expect, newChatIn, prompt, send, startSession, test, transcriptsOf, useScript } from './harness'
+import { chatPane, chatTabs, cliPermissionMode, delayClaudeStart, expect, newChatIn, prompt, send, startSession, test, titleBar, transcriptsOf, useScript } from './harness'
 
 const modeButton = (page: Page, label: string) => page.locator('[data-chat-pane]').getByRole('button', { name: label, exact: true })
 
@@ -40,7 +40,7 @@ test('a basic chat: views, usage strip, Manual start, @ menu, attachments, promp
   seedMentionWorkspace(workspace)
 
   await test.step('Ctrl+1/2/3 switch Dashboard, Work and Board', async () => {
-    const tab = (name: string) => page.getByRole('tab', { name, exact: true })
+    const tab = (name: string) => titleBar(page).getByRole('tab', { name, exact: true })
     const views = {
       Dashboard: page.getByTestId('view-dashboard'),
       Work: page.getByTestId('view-work'),
@@ -375,7 +375,7 @@ test.describe('slow turns', () => {
     })
 
     await test.step('Stop sends interrupt and shows Interrupted', async () => {
-      await page.getByRole('button', { name: 'stop' }).click()
+      await chatPane(page).getByRole('button', { name: 'Stop' }).click()
       await expect.poll(() => log.controlRequests('interrupt').length).toBe(2)
       await expect(interrupted).toHaveCount(2)
       await expect(prompt(page)).toBeEditable()
@@ -745,14 +745,14 @@ test.describe('chat rendering', () => {
     })
 
     const transcript = shown.locator('[data-transcript]')
-    const chatTab = shown.getByRole('tab', { name: 'Chat' })
-    const mediaTab = shown.getByRole('tab', { name: 'Media 3' })
+    const chatTab = chatTabs(page).getByRole('tab', { name: 'Chat' })
+    const mediaTab = chatTabs(page).getByRole('tab', { name: 'Media 3' })
     const grid = shown.getByRole('tabpanel', { name: 'Media' })
     const tiles = grid.locator('[data-thumbnail]')
 
     await test.step('the Media tab replaces the transcript with the chat’s png, webm and missing file', async () => {
       await newChatOn('media')
-      await expect(shown.getByRole('tab', { name: /^Media/ })).toHaveCount(0)
+      await expect(chatTabs(page).getByRole('tab', { name: /^Media/ })).toHaveCount(0)
       await send(page, 'show the media')
       await expect(shown.getByText('That is the reference shot.')).toBeVisible()
 
@@ -846,7 +846,7 @@ test.describe('chat rendering', () => {
     {
       const pane = page.locator('[data-chat-pane]:visible')
       const calls = pane.locator('[data-agent-call]')
-      const strip = pane.locator('[data-tab-strip]')
+      const strip = chatTabs(page)
       const agentsTab = strip.getByRole('tab', { name: /^Agents( \d+ working)?$/ })
       const chatTab = strip.getByRole('tab', { name: 'Chat', exact: true })
       const list = pane.getByRole('list', { name: 'Agents' })

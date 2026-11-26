@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASIC_REPLY, FAST_OBSERVED, transcriptLine } from './common'
-import { expect, send, startSession, test, transcriptsOf, useScript, type FakeLog } from './harness'
+import { expect, send, sessionList, startSession, test, transcriptsOf, useScript, type FakeLog } from './harness'
 
 const OLD_SESSION = '11111111-1111-4111-8111-111111111111'
 const UNNAMED_SESSION = '22222222-2222-4222-8222-222222222222'
@@ -61,7 +61,7 @@ test.describe('session history and VS Code sessions in Work', () => {
       const transcripts = transcriptsOf(launched)
       seedPastSessions(transcripts)
       await startSession(launched)
-      const list = page.getByRole('navigation', { name: 'Sessions' })
+      const list = sessionList(page)
 
       await send(page, 'fix the login bug today please')
       await expect(list.getByText('Fix the login bug today', { exact: true })).toBeVisible()
