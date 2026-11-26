@@ -158,7 +158,7 @@ A Claude Code setting that changes only Claude run in a terminal (its theme, key
 _Avoid_: CLI setting, TUI setting
 
 **Other keys**:
-Entries in a Claude settings file that Claude Code settings has no control for. They are listed with their raw value, can be edited or removed, and are never dropped on save.
+Entries in a Claude settings file that Claude Code settings has no control for. They are listed with their raw value, can be edited or removed, and are never dropped on save unless removed.
 _Avoid_: Unknown settings, extra keys
 
 ## Board

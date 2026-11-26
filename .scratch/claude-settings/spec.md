@@ -93,7 +93,7 @@ A new **Claude Code** section in Settings (between Accounts and Apps). It lists 
 
 **Settings file module (main process, the deep module)**
 - One module owns reading, patching and writing a Claude settings file and keybindings.json. Its interface: read a file into `{ value, text, mtime, error? }`; apply a patch `{ set: {path: value}, remove: [path] }` against a base snapshot, returning the new text or the list of conflicting keys; write in place.
-- A patch touches only the paths it names. Unknown keys and key order stay; new keys go at the end. Output is 2-space JSON with a final newline.
+- A patch touches only the paths it names, plus any parent object a removal leaves empty, which goes with it. Unknown keys and key order stay; new keys go at the end. Output is 2-space JSON with a final newline.
 - A conflict is a patched path whose value on disk differs from the base the page read. With conflicts it writes nothing and returns them. The renderer then asks per key (keep mine / keep the file's) and saves again with a new base.
 - Writes go in place (never temp file + rename) through the same serial queue the model-defaults save already uses. That save moves onto this module, so both share one writer.
 - A file that does not parse is never written from a patch.
