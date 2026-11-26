@@ -129,6 +129,85 @@ describe('saving a settings file', () => {
   })
 })
 
+describe('keybindings.json', () => {
+  let dir: string
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(join(tmpdir(), 'cc-keybindings-file-'))
+  })
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  const kb = (bindings: unknown[], top: Record<string, unknown> = {}) => text({ $schema: 'https://www.schemastore.org/claude-code-keybindings.json', ...top, bindings })
+
+  it('reads as keys per context, a missing file as all defaults, and saves a new file with its schema line', async () => {
+    const file = join(dir, 'keybindings.json')
+    const missing = await readSettingsFile(file)
+    expect(missing).toEqual({ value: {}, text: null, mtime: null })
+    const result = await saveSettingsFile(file, missing.value, { set: { 'bindings.Chat.ctrl+e': 'chat:externalEditor', 'bindings.Chat.ctrl+s': null }, remove: [] })
+    expect(result).toMatchObject({ ok: true, snapshot: { value: { bindings: { Chat: { 'ctrl+e': 'chat:externalEditor', 'ctrl+s': null } } } } })
+    expect(await fs.readFile(file, 'utf-8')).toBe(
+      text({
+        $schema: 'https://www.schemastore.org/claude-code-keybindings.json',
+        $docs: 'https://code.claude.com/docs/en/keybindings',
+        bindings: [{ context: 'Chat', bindings: { 'ctrl+e': 'chat:externalEditor', 'ctrl+s': null } }]
+      })
+    )
+  })
+
+  it('changes keys in the blocks that hold them, adds new keys to the last block of their context and new contexts at the end, and drops a block it empties', async () => {
+    const file = join(dir, 'keybindings.json')
+    await fs.writeFile(
+      file,
+      kb(
+        [
+          { context: 'Chat', bindings: { 'ctrl+e': 'chat:externalEditor', 'ctrl+s': null } },
+          { context: 'Task', bindings: { 'ctrl+x ctrl+b': null } },
+          { context: 'Chat', bindings: { 'meta+g': 'command:compact' } },
+          { context: 'Future', bindings: {} }
+        ],
+        { unknownTop: 1 }
+      )
+    )
+    const { value } = await readSettingsFile(file)
+    expect(value).toEqual({
+      $schema: 'https://www.schemastore.org/claude-code-keybindings.json',
+      unknownTop: 1,
+      bindings: { Chat: { 'ctrl+e': 'chat:externalEditor', 'ctrl+s': null, 'meta+g': 'command:compact' }, Task: { 'ctrl+x ctrl+b': null }, Future: {} }
+    })
+    const result = await saveSettingsFile(file, value, {
+      set: { 'bindings.Chat.ctrl+e': 'chat:stash', 'bindings.Chat.ctrl+k ctrl+s': 'chat:submit', 'bindings.Global.ctrl+~1': 'app:redraw' },
+      remove: ['bindings.Task.ctrl+x ctrl+b', 'bindings.Chat.ctrl+s']
+    })
+    expect(result).toMatchObject({ ok: true })
+    expect(await fs.readFile(file, 'utf-8')).toBe(
+      kb(
+        [
+          { context: 'Chat', bindings: { 'ctrl+e': 'chat:stash' } },
+          { context: 'Chat', bindings: { 'meta+g': 'command:compact', 'ctrl+k ctrl+s': 'chat:submit' } },
+          { context: 'Future', bindings: {} },
+          { context: 'Global', bindings: { 'ctrl+.': 'app:redraw' } }
+        ],
+        { unknownTop: 1 }
+      )
+    )
+  })
+
+  it('writes nothing when a patched key changed on disk, nor to a file whose bindings are not context blocks', async () => {
+    const file = join(dir, 'keybindings.json')
+    await fs.writeFile(file, kb([{ context: 'Chat', bindings: { 'ctrl+e': 'chat:externalEditor' } }]))
+    const { value } = await readSettingsFile(file)
+    await fs.writeFile(file, kb([{ context: 'Chat', bindings: { 'ctrl+e': 'chat:stash' } }]))
+    expect(await saveSettingsFile(file, value, { set: { 'bindings.Chat.ctrl+e': null }, remove: [] })).toEqual({ ok: false, conflicts: ['bindings.Chat.ctrl+e'] })
+
+    const odd = kb([{ context: 'Chat', bindings: ['ctrl+e'] }])
+    await fs.writeFile(file, odd)
+    expect(await readSettingsFile(file)).toMatchObject({ value: null, error: expect.stringContaining('context') })
+    expect(await saveSettingsFile(file, {}, { set: { 'bindings.Chat.ctrl+e': null }, remove: [] })).toMatchObject({ ok: false, error: expect.any(String) })
+    expect(await fs.readFile(file, 'utf-8')).toBe(odd)
+  })
+})
+
 describe('the organisation layer', () => {
   let dir: string
   beforeEach(async () => {

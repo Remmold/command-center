@@ -12,6 +12,8 @@ interface ClaudeSettingsState {
   profileId: string
   /** The workspace the Repo and Local layers edit; its own account gives their account layer. */
   workspaceId: string | null
+  /** The Key bindings editor is on screen, so the form edits the account's keybindings.json. Account layer only. */
+  keybindings: boolean
   read: ClaudeSettingsRead | null
   readError: string | null
   /** By file path, so another account's changes wait while it is not on screen. */
@@ -30,6 +32,7 @@ interface ClaudeSettingsState {
   selectLayer: (layer: SettingsLayer) => void
   selectProfile: (profileId: string) => void
   selectWorkspace: (workspaceId: string) => void
+  showKeybindings: (shown: boolean) => void
   stage: (key: string, value: unknown) => void
   markUnparsed: (key: string, unparsed: boolean) => void
   discard: () => void
@@ -46,10 +49,17 @@ interface ClaudeSettingsState {
   dropAll: () => void
 }
 
-/** The layer file the form edits. */
-const editedFile = (read: ClaudeSettingsRead | null, layer: SettingsLayer): SettingsLayerFile | null => read?.[layer] ?? null
+/** A file of the read the form can edit. */
+export type FileSlot = SettingsLayer | 'keybindings'
 
-const LAYER_KEYS = ['account', 'repo', 'local'] as const
+export const editedSlot = ({ layer, keybindings }: Pick<ClaudeSettingsState, 'layer' | 'keybindings'>): FileSlot => (keybindings && layer === 'account' ? 'keybindings' : layer)
+
+/** The file the form edits. */
+const editedFile = (state: Pick<ClaudeSettingsState, 'read' | 'layer' | 'keybindings'>): SettingsLayerFile | null => state.read?.[editedSlot(state)] ?? null
+
+const SLOTS = ['account', 'keybindings', 'repo', 'local'] as const
+
+const slotOf = (read: ClaudeSettingsRead, path: string): FileSlot | undefined => SLOTS.find((slot) => read[slot]?.path.toLowerCase() === path.toLowerCase())
 
 /** The waiting changes of each layer file in the read, refreshed onto it as read. */
 function pendingOnto(pending: Record<string, PendingFile>, files: readonly (SettingsLayerFile | null)[]): Record<string, PendingFile> {
@@ -87,6 +97,7 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
     layer: 'account',
     profileId: DEFAULT_PROFILE_ID,
     workspaceId: null,
+    keybindings: false,
     read: null,
     readError: null,
     pending: {},
@@ -100,7 +111,7 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
       const workspace = shownWorkspace(get(), useWorkspacesStore.getState().workspaces)
       try {
         const read = await window.api.claudeSettings.read(workspace?.profileId ?? get().profileId, workspace?.id ?? null)
-        if (thisRead === readTurn) set({ read, readError: null, pending: pendingOnto(get().pending, LAYER_KEYS.map((layer) => read[layer])) })
+        if (thisRead === readTurn) set({ read, readError: null, pending: pendingOnto(get().pending, SLOTS.map((slot) => read[slot])) })
       } catch (err) {
         if (thisRead === readTurn) set({ readError: (err as Error).message })
       }
@@ -108,18 +119,18 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
     applyChange: ({ path, snapshot }) => {
       const read = get().read
       if (!read) return
-      const layer = LAYER_KEYS.find((key) => read[key]?.path.toLowerCase() === path.toLowerCase())
-      const shown = layer && read[layer]
-      if (!layer || !shown) {
+      const slot = slotOf(read, path)
+      const shown = slot && read[slot]
+      if (!slot || !shown) {
         void get().load()
         return
       }
       const file = { ...shown, snapshot }
-      set({ read: { ...read, [layer]: file }, pending: pendingOnto(get().pending, [file]) })
+      set({ read: { ...read, [slot]: file }, pending: pendingOnto(get().pending, [file]) })
     },
     selectLayer: (layer) => {
       if (layer === get().layer) return
-      set({ layer, workspaceId: get().workspaceId ?? startWorkspace(), read: null, saveError: null, settling: false })
+      set({ layer, keybindings: get().keybindings && layer === 'account', workspaceId: get().workspaceId ?? startWorkspace(), read: null, saveError: null, settling: false })
       void get().load()
     },
     selectWorkspace: (workspaceId) => {
@@ -127,13 +138,17 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
       set({ workspaceId, read: null, saveError: null, settling: false })
       void get().load()
     },
+    showKeybindings: (shown) => {
+      const keybindings = shown && get().layer === 'account'
+      if (keybindings !== get().keybindings) set({ keybindings, saveError: null, settling: false })
+    },
     selectProfile: (profileId) => {
       if (profileId === get().profileId) return
       set({ profileId, read: null, saveError: null, settling: false })
       void get().load()
     },
     stage: (key, value) => {
-      const file = editedFile(get().read, get().layer)
+      const file = editedFile(get())
       if (!file?.snapshot.value) return
       const { [file.path]: current, ...rest } = get().pending
       const next = stage(current ?? null, file.snapshot.value, key, value)
@@ -145,14 +160,14 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
       else if (!unparsed && marked) set({ unparsed: get().unparsed.filter((k) => k !== key) })
     },
     discard: () => {
-      const file = editedFile(get().read, get().layer)
+      const file = editedFile(get())
       if (!file) return
       const { [file.path]: _dropped, ...rest } = get().pending
       set({ pending: rest, saveError: null, settling: false, discards: get().discards + 1 })
       void get().load()
     },
     save: async () => {
-      const file = editedFile(get().read, get().layer)
+      const file = editedFile(get())
       const changes = file ? get().pending[file.path] : undefined
       if (!file || !changes || get().saving || get().unparsed.length > 0) return
       if (conflicts(changes, file.snapshot.value).length > 0) {
@@ -165,13 +180,14 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
         if (result.ok) {
           const { [file.path]: _saved, ...rest } = get().pending
           const read = get().read
-          const shown = read?.[file.layer]
-          set({ pending: rest, read: read && shown?.path === file.path ? { ...read, [file.layer]: { ...shown, snapshot: result.snapshot } } : read })
+          const slot = read && slotOf(read, file.path)
+          const shown = slot && read[slot]
+          set({ pending: rest, read: slot && shown ? { ...read, [slot]: { ...shown, snapshot: result.snapshot } } : read })
           void useModelStore.getState().reloadDefaults()
         } else if ('conflicts' in result) {
           // The watch had not seen the change yet: read the file, then ask.
           await get().load()
-          const now = editedFile(get().read, get().layer)
+          const now = editedFile(get())
           const waiting = now && get().pending[now.path]
           if (waiting && conflicts(waiting, now.snapshot.value).length > 0) set({ settling: true })
           else set({ saveError: `Not saved: ${saveFailure(result)}. Save again to retry.` })
@@ -185,7 +201,7 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
       }
     },
     settleConflicts: async (choices) => {
-      const file = editedFile(get().read, get().layer)
+      const file = editedFile(get())
       const changes = file ? get().pending[file.path] : undefined
       if (!file?.snapshot.value || !changes) return
       if (conflicts(changes, file.snapshot.value).some((c) => !(c.key in choices))) return

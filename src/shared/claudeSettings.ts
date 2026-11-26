@@ -84,6 +84,8 @@ export interface SettingsFileChange {
 
 export interface ClaudeSettingsRead {
   account: SettingsLayerFile & { profileId: string }
+  /** The account's keybindings.json, read as one object of keys per context (`bindings.<context>.<key>`). */
+  keybindings: SettingsLayerFile
   /** Null without a workspace. */
   repo: SettingsLayerFile | null
   local: SettingsLayerFile | null

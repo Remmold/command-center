@@ -408,15 +408,16 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const profile = await profiles.get(profileId)
     const workspace = workspaceId ? (await workspaces.list()).find((w) => w.id === workspaceId) : undefined
     const remoteFile = join(profile.configDir, 'remote-settings.json')
-    const [account, repo, local, organisation, ...organisationFiles] = await Promise.all([
+    const [account, keybindings, repo, local, organisation, ...organisationFiles] = await Promise.all([
       layerFile('account', join(profile.configDir, 'settings.json')),
+      layerFile('account', join(profile.configDir, 'keybindings.json')),
       workspace ? layerFile('repo', join(workspace.path, '.claude', 'settings.json')) : null,
       workspace ? layerFile('local', join(workspace.path, '.claude', 'settings.local.json')) : null,
       readOrganisationLayer(remoteFile, MANAGED_SETTINGS_FILE),
       ...[remoteFile, MANAGED_SETTINGS_FILE].map(async (path) => ({ path, snapshot: await readSettingsFile(path) }))
     ])
-    if (turn === watchTurn) settingsWatch.set([account, repo, local, ...organisationFiles].filter((file) => file !== null))
-    return { account: { ...account, profileId: profile.id }, repo, local, organisation }
+    if (turn === watchTurn) settingsWatch.set([account, keybindings, repo, local, ...organisationFiles].filter((file) => file !== null))
+    return { account: { ...account, profileId: profile.id }, keybindings, repo, local, organisation }
   })
   ipcMain.on(IPC.CLAUDE_SETTINGS_UNWATCH, () => {
     watchTurn++

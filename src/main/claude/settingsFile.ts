@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { samePath } from '../profiles/linker'
+import { NEW_KEYBINDINGS, keybindingsFile, keybindingsView } from './keybindingsView'
 import { getAt, isSettingsObject, isStringList, sameValue, withPatch, type OrganisationFile, type SettingsObject, type SettingsPatch, type SettingsSaveResult, type SettingsSnapshot } from '../../shared/claudeSettings'
 
 export type ParsedSettings = { ok: true; value: SettingsObject } | { ok: false; error: string }
@@ -18,13 +19,30 @@ export function parseSettings(text: string | null): ParsedSettings {
   return isSettingsObject(value) ? { ok: true, value } : { ok: false, error: 'not a JSON object' }
 }
 
+/** keybindings.json is read and patched as one object of keys per context; see `keybindingsView`. */
+export type SettingsFileFormat = 'settings' | 'keybindings'
+
+export const fileFormat = (file: string): SettingsFileFormat => (basename(file).toLowerCase() === 'keybindings.json' ? 'keybindings' : 'settings')
+
+/** The file's value as patches see it, and the file's own value it was read from. */
+function parseAs(text: string | null, format: SettingsFileFormat): { ok: true; value: SettingsObject; file: SettingsObject } | { ok: false; error: string } {
+  if (format === 'settings') {
+    const parsed = parseSettings(text)
+    return parsed.ok ? { ...parsed, file: parsed.value } : parsed
+  }
+  const parsed = text === null ? { ok: true as const, value: NEW_KEYBINDINGS } : parseSettings(text)
+  if (!parsed.ok) return parsed
+  const view = keybindingsView(parsed.value)
+  return view.ok ? { ok: true, value: view.value, file: parsed.value } : view
+}
+
 /**
  * Applies the patch onto the file's text. With a base, a patched path whose value in the text differs
  * from the base's is a conflict and nothing is applied; a null base applies over whatever is there. An item
  * list's edit goes onto the list as the text holds it, so it conflicts only with a value that isn't a list.
  */
-export function applyPatch(text: string | null, base: SettingsObject | null, patch: SettingsPatch): PatchResult {
-  const parsed = parseSettings(text)
+export function applyPatch(text: string | null, base: SettingsObject | null, patch: SettingsPatch, format: SettingsFileFormat = 'settings'): PatchResult {
+  const parsed = parseAs(text, format)
   if (!parsed.ok) return parsed
   if (base) {
     const wanted: [string, unknown][] = [...Object.entries(patch.set), ...patch.remove.map((path): [string, unknown] => [path, undefined])]
@@ -38,15 +56,18 @@ export function applyPatch(text: string | null, base: SettingsObject | null, pat
     }
     if (conflicts.length > 0) return { ok: false, conflicts }
   }
-  return { ok: true, text: patchedText(parsed.value, patch) }
+  return { ok: true, text: patchedText(parsed, patch, format) }
 }
 
-const patchedText = (value: SettingsObject, patch: SettingsPatch): string => JSON.stringify(withPatch(value, patch), null, 2) + '\n'
+function patchedText(parsed: { value: SettingsObject; file: SettingsObject }, patch: SettingsPatch, format: SettingsFileFormat): string {
+  const patched = withPatch(parsed.value, patch)
+  return JSON.stringify(format === 'keybindings' ? keybindingsFile(parsed.file, patched) : patched, null, 2) + '\n'
+}
 
 /** Applies the patch over whatever the text holds, with no conflict check. */
 export function patchText(text: string | null, patch: SettingsPatch): { ok: true; text: string } | { ok: false; error: string } {
-  const parsed = parseSettings(text)
-  return parsed.ok ? { ok: true, text: patchedText(parsed.value, patch) } : parsed
+  const parsed = parseAs(text, 'settings')
+  return parsed.ok ? { ok: true, text: patchedText(parsed, patch, 'settings') } : parsed
 }
 
 async function readText(file: string): Promise<{ text: string; mtime: number } | null> {
@@ -62,7 +83,7 @@ async function readText(file: string): Promise<{ text: string; mtime: number } |
 export async function readSettingsFile(file: string): Promise<SettingsSnapshot> {
   const read = await readText(file)
   if (!read) return { value: {}, text: null, mtime: null }
-  const parsed = parseSettings(read.text)
+  const parsed = parseAs(read.text, fileFormat(file))
   return parsed.ok ? { value: parsed.value, text: read.text, mtime: read.mtime } : { value: null, text: read.text, mtime: read.mtime, error: parsed.error }
 }
 
@@ -90,7 +111,7 @@ let queue: Promise<unknown> = Promise.resolve()
 export function saveSettingsFile(file: string, base: SettingsObject | null, patch: SettingsPatch): Promise<SettingsSaveResult> {
   const run = async (): Promise<SettingsSaveResult> => {
     try {
-      const patched = applyPatch((await readText(file))?.text ?? null, base, patch)
+      const patched = applyPatch((await readText(file))?.text ?? null, base, patch, fileFormat(file))
       if (!patched.ok) return patched
       await fs.mkdir(dirname(file), { recursive: true })
       await fs.writeFile(file, patched.text, 'utf-8')

@@ -5,7 +5,7 @@ import { SETTINGS_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { AppsDashboard } from '../AppsDashboard'
 import { IconButton } from '../ui/IconButton'
 import { ListRow, ListRowText } from '../ui/ListRow'
-import { isTyping, overlayOpen } from '../ui/overlay'
+import { isTyping, keyCaptureOpen, overlayOpen } from '../ui/overlay'
 import { SectionHeader } from '../ui/SectionHeader'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { AccountsSettings } from './AccountsSettings'
@@ -44,7 +44,7 @@ export function SettingsPage({ section }: { section: SettingsSection }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape' || overlayOpen()) return
+      if (e.key !== 'Escape' || overlayOpen() || keyCaptureOpen()) return
       if (isTyping(e.target)) {
         e.target.blur()
         return

@@ -5,9 +5,10 @@ import { changeCount, getAt, pathKeys, patchPaths, patchSize, sameValue, withPat
 import { effectiveSetting, ruleSources, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
 import { MASK, isSecretName } from '../../../shared/envCatalog'
 import { hookChangeText, hookEvent } from '../../../shared/hooks'
+import { keyEditWords } from '../../../shared/keybindings'
 import { isStatusLineKey } from '../../../shared/statusLine'
 import { RULE_LISTS, ruleListKey, ruleListOf, type RuleList } from '../../../shared/permissionRules'
-import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
+import { editedSlot, shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
 import { conflicts, pendingChanges, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
 import { useContextStore } from '../../state/contextStore'
 import { useProfilesStore } from '../../state/profilesStore'
@@ -30,6 +31,7 @@ import { SidebarLayout } from '../ui/SidebarLayout'
 import { Toolbar } from '../ui/Toolbar'
 import { EnvironmentEditor } from './EnvironmentEditor'
 import { HooksEditor } from './HooksEditor'
+import { KeyBindingsEditor } from './KeyBindingsEditor'
 import { OtherKeysList } from './OtherKeysList'
 import { PermissionRuleList } from './PermissionRuleList'
 import { otherKeyRows, otherKeysNotice } from './otherKeysView'
@@ -38,19 +40,29 @@ import { StatusLineEditor } from './StatusLineEditor'
 
 /** Names the boxes whose text Save would lose. */
 function unparsedNote(keys: readonly string[]): string {
-  const names = keys.map((key) => settingWords(key).label).join(', ')
+  const names = keys.map((key) => settingWords(key, false).label).join(', ')
   return `${keys.length === 1 ? 'A box holds' : `${keys.length} boxes hold`} JSON not taken yet: ${names}`
 }
 
 const OTHER_KEYS_CATEGORY: SettingCategory = 'Other keys'
+const KEY_BINDINGS_CATEGORY: SettingCategory = 'Key bindings'
 
-const CATEGORIES = SETTING_CATEGORIES.filter((c) => c === OTHER_KEYS_CATEGORY || SETTINGS_CATALOG.some((e) => e.category === c))
+const CATEGORIES = SETTING_CATEGORIES.filter((c) => c === OTHER_KEYS_CATEGORY || c === KEY_BINDINGS_CATEGORY || SETTINGS_CATALOG.some((e) => e.category === c))
+
+/** Key bindings live only in the account's folder (user scope). */
+const categoriesOf = (layer: SettingsLayer): SettingCategory[] => (layer === 'account' ? CATEGORIES : CATEGORIES.filter((c) => c !== KEY_BINDINGS_CATEGORY))
 
 const LAYERS: { value: SettingsLayer; label: string; title: string }[] = [
   { value: 'account', label: 'Account', title: 'The account’s settings.json, for every workspace on that account' },
   { value: 'repo', label: 'Repo', title: 'The workspace’s committed .claude/settings.json' },
   { value: 'local', label: 'Local', title: 'The workspace’s .claude/settings.local.json' }
 ]
+
+function keybindingsNote(profile: AccountProfile | undefined): string {
+  if (!profile || profile.id === DEFAULT_PROFILE_ID) return 'This account’s own key bindings for terminal Claude.'
+  if (profile.adopted) return 'Its own folder. The app writes to it only when you press Save here.'
+  return 'This account’s own key bindings: unlike its settings, they aren’t shared.'
+}
 
 function accountNote(profile: AccountProfile | undefined, defaultName: string): string {
   if (!profile || profile.id === DEFAULT_PROFILE_ID) return 'Accounts the app made share this file.'
@@ -64,7 +76,7 @@ const LAYER_NOTES: Record<Exclude<SettingsLayer, 'account'>, string> = {
 }
 
 function useEditedFile(): { file: SettingsLayerFile | null; pending: PendingFile | null } {
-  const file = useClaudeSettingsStore((s) => s.read?.[s.layer] ?? null)
+  const file = useClaudeSettingsStore((s) => s.read?.[editedSlot(s)] ?? null)
   const pending = useClaudeSettingsStore((s) => (file ? s.pending[file.path] : undefined)) ?? null
   return { file, pending }
 }
@@ -99,7 +111,8 @@ function isMaskedKey(key: string): boolean {
   return entry !== undefined && isEnvironmentEntry(entry) && entry.key !== key && isSecretName(pathKeys(key)[1])
 }
 
-function settingWords(key: string): { label: string; format: (value: unknown) => string } {
+function settingWords(key: string, keybindings: boolean): { label: string; format: (value: unknown) => string } {
+  if (keybindings) return keyEditWords(key)
   const entry = entryOf(key)
   const inside = entry && entry.key !== key ? pathKeys(key.slice(entry.key.length + 1)) : []
   if (entry && isHooksEntry(entry) && inside.length > 0) inside[0] = hookEvent(inside[0])?.label ?? inside[0]
@@ -110,11 +123,16 @@ function settingWords(key: string): { label: string; format: (value: unknown) =>
   }
 }
 
+/** The edited file is the account's keybindings.json. */
+const useKeybindingsEdited = (): boolean => useClaudeSettingsStore((s) => editedSlot(s) === 'keybindings')
+
 function ReviewDialog({ onClose }: { onClose: () => void }) {
   const { pending } = useEditedFile()
+  const keybindings = useKeybindingsEdited()
   const save = useClaudeSettingsStore((s) => s.save)
   const entries = pendingChanges(pending).map(({ key, before, after }): [string, string] => {
-    const { label, format } = settingWords(key)
+    const { label, format } = settingWords(key, keybindings)
+    if (keybindings) return [label, `${format(before)} → ${format(after)}`]
     const entry = entryOf(key)
     if (entry?.key === key) return [label, changeText(entry, before, after)]
     return [label, entry && isHooksEntry(entry) && pathKeys(key).length === 2 ? hookChangeText(before, after) : `${format(before)} → ${format(after)}`]
@@ -147,6 +165,7 @@ const CHOICES: { value: ConflictChoice; label: string }[] = [
 /** Save's question for each waiting key the file changed under; nothing is written until each is answered. */
 function ConflictDialog() {
   const { file, pending } = useEditedFile()
+  const keybindings = useKeybindingsEdited()
   const { settleConflicts, cancelSettling } = useClaudeSettingsStore.getState()
   // Each answer holds the file's value it was given against: if the file changes again, it is asked again.
   const [answers, setAnswers] = useState<Record<string, { choice: ConflictChoice; theirs: unknown }>>({})
@@ -159,7 +178,7 @@ function ConflictDialog() {
     <Dialog title="The file changed since your edit" onClose={cancelSettling} maxWidth={560}>
       <p className="mb-2 text-muted">Claude or another program changed these settings in {file?.path} while your changes waited.</p>
       {asked.map(({ key, mine, theirs }) => {
-        const { label, format } = settingWords(key)
+        const { label, format } = settingWords(key, keybindings)
         return (
           <FormRow
             key={key}
@@ -227,7 +246,8 @@ export function ClaudeCodeSettings() {
   const settling = useClaudeSettingsStore((s) => s.settling)
   const unparsed = useClaudeSettingsStore((s) => s.unparsed)
   const discards = useClaudeSettingsStore((s) => s.discards)
-  const { load, applyChange, selectLayer, selectProfile, selectWorkspace, stage, markUnparsed, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
+  const keybindingsShown = useKeybindingsEdited()
+  const { load, applyChange, selectLayer, selectProfile, selectWorkspace, showKeybindings, stage, markUnparsed, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
   const { file, pending } = useEditedFile()
   const [category, setCategory] = useState<SettingCategory>(CATEGORIES[0])
   const [query, setQuery] = useState('')
@@ -277,6 +297,20 @@ export function ClaudeCodeSettings() {
     return null
   }
   const noWorkspace = layer !== 'account' && workspaces.length === 0
+  const pickCategory = (next: SettingCategory) => {
+    setCategory(next)
+    setQuery('')
+    showKeybindings(next === KEY_BINDINGS_CATEGORY)
+  }
+  const search = (next: string) => {
+    setQuery(next)
+    showKeybindings(next.trim() === '' && category === KEY_BINDINGS_CATEGORY)
+  }
+  const pickLayer = (next: SettingsLayer) => {
+    if (next !== 'account' && category === KEY_BINDINGS_CATEGORY) setCategory(CATEGORIES[0])
+    selectLayer(next)
+  }
+  const fileNote = keybindingsShown ? keybindingsNote(profile) : layer === 'account' ? accountNote(profile, defaultName) : LAYER_NOTES[layer]
 
   return (
     <Page label="Claude Code">
@@ -292,13 +326,13 @@ export function ClaudeCodeSettings() {
               Hide terminal-only
             </Checkbox>
             <div className="w-56 max-w-full">
-              <SearchField label="Search settings" placeholder="Search by name, words or key" value={query} onChange={setQuery} />
+              <SearchField label="Search settings" placeholder="Search by name, words or key" value={query} onChange={search} />
             </div>
           </div>
         }
       >
         <div className="flex items-center gap-2">
-          <SegmentedControl label="Layer" options={LAYERS} value={layer} onChange={selectLayer} />
+          <SegmentedControl label="Layer" options={LAYERS} value={layer} onChange={pickLayer} />
           {layer === 'account' ? (
             <Select label="Account" options={profiles.map((p) => ({ value: p.id, label: p.name }))} value={profileId} onChange={selectProfile} />
           ) : (
@@ -311,15 +345,8 @@ export function ClaudeCodeSettings() {
           sidebar={
             <nav aria-label="Claude Code categories">
               <ul className="py-1">
-                {CATEGORIES.map((c) => (
-                  <ListRow
-                    key={c}
-                    active={!searching && c === category}
-                    onClick={() => {
-                      setCategory(c)
-                      setQuery('')
-                    }}
-                  >
+                {categoriesOf(layer).map((c) => (
+                  <ListRow key={c} active={!searching && c === category} onClick={() => pickCategory(c)}>
                     <ListRowText primary={c} />
                   </ListRow>
                 ))}
@@ -327,51 +354,58 @@ export function ClaudeCodeSettings() {
             </nav>
           }
         >
-          {/* A new file or a Discard starts every box afresh, dropping text typed for the file before. */}
-          <PageBody key={`${discards}:${file?.path}`}>
-            <FileLine note={layer === 'account' ? accountNote(profile, defaultName) : LAYER_NOTES[layer]} />
-            {read?.organisation && <NoticeLine tone="warning">Your organisation’s settings in {read.organisation.path} apply over every layer and can’t be changed here.</NoticeLine>}
-            {read?.organisation?.snapshot.error && (
-              <Banner label="Organisation settings not read">
-                Your organisation’s settings file is {read.organisation.snapshot.error}, so this page can’t show what it sets.
-              </Banner>
-            )}
-            {noWorkspace && <Banner label="No workspace">Add a workspace to edit its Repo and Local settings.</Banner>}
-            {readError && <Banner label="Settings not read">Could not read the settings: {readError}</Banner>}
-            {unreadable && (
-              <Banner label="Settings file does not parse">
-                This file is {snapshot?.error}. Fix it in the Context view or an editor; it can&apos;t be saved from this page until it parses.
-              </Banner>
-            )}
-            {searching && groups.length === 0 && !showOtherKeys && <NoticeLine>No setting matches “{query.trim()}”.</NoticeLine>}
-            {groups.map((group) => (
-              <PageGroup key={group.category} title={group.category}>
-                <div>
-                  {group.entries.map((entry) => (
-                    <SettingField
-                      key={entry.key}
-                      entry={entry}
-                      layer={layer}
-                      value={getAt(layers[layer], entry.key)}
-                      effective={shownEffective(entry, layers, layer)}
-                      changed={pending !== null && touches(pending.patch, entry)}
-                      fileValue={fileChanged.get(entry.key)}
-                      disabled={!snapshot || unreadable || saving}
-                      onStage={stage}
-                      onUnparsed={markUnparsed}
-                      editor={editorFor(entry)}
-                    />
-                  ))}
-                </div>
-              </PageGroup>
-            ))}
-            {showOtherKeys && (
-              <PageGroup title={OTHER_KEYS_CATEGORY}>
-                {snapshot && <NoticeLine>{otherKeysNotice(snapshot, otherRows.length)}</NoticeLine>}
-                <OtherKeysList rows={otherRows} disabled={!snapshot || unreadable || saving} onStage={stage} onUnparsed={markUnparsed} />
-              </PageGroup>
-            )}
-          </PageBody>
+          {/* A column, so the body scrolls inside the section rather than the whole window. */}
+          <div className="flex h-full min-h-0 flex-col">
+            {/* A new file or a Discard starts every box afresh, dropping text typed for the file before. */}
+            <PageBody key={`${discards}:${file?.path}`}>
+              <FileLine note={fileNote} />
+              {read?.organisation && <NoticeLine tone="warning">Your organisation’s settings in {read.organisation.path} apply over every layer and can’t be changed here.</NoticeLine>}
+              {read?.organisation?.snapshot.error && (
+                <Banner label="Organisation settings not read">
+                  Your organisation’s settings file is {read.organisation.snapshot.error}, so this page can’t show what it sets.
+                </Banner>
+              )}
+              {noWorkspace && <Banner label="No workspace">Add a workspace to edit its Repo and Local settings.</Banner>}
+              {readError && <Banner label="Settings not read">Could not read the settings: {readError}</Banner>}
+              {unreadable && (
+                <Banner label="Settings file does not parse">
+                  This file is {snapshot?.error}. Fix it in the Context view or an editor; it can&apos;t be saved from this page until it parses.
+                </Banner>
+              )}
+              {keybindingsShown && !unreadable && (
+                <KeyBindingsEditor value={snapshot?.value && pending ? withPatch(snapshot.value, pending.patch) : (snapshot?.value ?? null)} saved={snapshot?.value ?? null} disabled={!snapshot || saving} onStage={stage} />
+              )}
+              {searching && groups.length === 0 && !showOtherKeys && <NoticeLine>No setting matches “{query.trim()}”.</NoticeLine>}
+              {!keybindingsShown &&
+                groups.map((group) => (
+                <PageGroup key={group.category} title={group.category}>
+                  <div>
+                    {group.entries.map((entry) => (
+                      <SettingField
+                        key={entry.key}
+                        entry={entry}
+                        layer={layer}
+                        value={getAt(layers[layer], entry.key)}
+                        effective={shownEffective(entry, layers, layer)}
+                        changed={pending !== null && touches(pending.patch, entry)}
+                        fileValue={fileChanged.get(entry.key)}
+                        disabled={!snapshot || unreadable || saving}
+                        onStage={stage}
+                        onUnparsed={markUnparsed}
+                        editor={editorFor(entry)}
+                      />
+                    ))}
+                  </div>
+                </PageGroup>
+              ))}
+              {showOtherKeys && !keybindingsShown && (
+                <PageGroup title={OTHER_KEYS_CATEGORY}>
+                  {snapshot && <NoticeLine>{otherKeysNotice(snapshot, otherRows.length)}</NoticeLine>}
+                  <OtherKeysList rows={otherRows} disabled={!snapshot || unreadable || saving} onStage={stage} onUnparsed={markUnparsed} />
+                </PageGroup>
+              )}
+            </PageBody>
+          </div>
         </SidebarLayout>
       </div>
       {(count > 0 || saveError || unparsed.length > 0) && (

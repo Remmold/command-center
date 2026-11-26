@@ -40,6 +40,20 @@ test('Claude Code settings: a Model & thinking change and one found by search wa
   await expect(model).toHaveValue('haiku')
   await expect(bar).toBeHidden()
 
+  // Key bindings: a chord set by pressing it lands in the account's keybindings.json, made on first Save.
+  await page.getByRole('navigation', { name: 'Claude Code categories' }).getByText('Key bindings', { exact: true }).click()
+  await page.getByRole('button', { name: 'Add a key to Edit the prompt in your editor' }).click()
+  await page.keyboard.press('Control+c')
+  await expect(page.getByRole('alert')).toContainText('Ctrl+C')
+  await page.getByRole('button', { name: 'Again', exact: true }).click()
+  await page.keyboard.press('Control+k')
+  await page.keyboard.press('Control+e')
+  await page.getByRole('button', { name: 'Use', exact: true }).click()
+  await bar.getByRole('button', { name: 'Save' }).click()
+  await expect(bar).toBeHidden()
+  expect(JSON.parse(readFileSync(join(configDir, 'keybindings.json'), 'utf-8')).bindings).toEqual([{ context: 'Chat', bindings: { 'ctrl+k ctrl+e': 'chat:externalEditor' } }])
+  await page.getByRole('navigation', { name: 'Claude Code categories' }).getByText('Model & thinking', { exact: true }).click()
+
   // In a narrow window the toolbar and each row's control wrap rather than run under the layer bar or off the right.
   await app.evaluate(({ BrowserWindow }) => {
     const win = BrowserWindow.getAllWindows()[0]

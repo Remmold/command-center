@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { AppView } from '../state/viewStore'
 import { useViewStore } from '../state/viewStore'
+import { keyCaptureOpen } from '../components/ui/overlay'
 import type { ZoomStep } from '../../shared/zoom'
 import { beforeFocusedElement, shortcutApplies, shortcutFor, type ShortcutAction } from './shortcutMap'
 
@@ -51,6 +52,7 @@ function run(action: ShortcutAction, handlers: ShortcutHandlers): boolean {
 export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
   useEffect(() => {
     const handle = (e: KeyboardEvent, capturing: boolean): boolean => {
+      if (keyCaptureOpen()) return false
       const action = shortcutFor(e)
       if (!action || beforeFocusedElement(action) !== capturing) return false
       const { view, settings } = useViewStore.getState()
