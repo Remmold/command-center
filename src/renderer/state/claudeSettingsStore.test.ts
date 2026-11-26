@@ -70,6 +70,12 @@ describe('key bindings', () => {
     expect(Object.keys(store().pending)).toEqual([PATH])
   })
 
+  it('are off again when the section is left, so it reopens on the settings file', () => {
+    store().showKeybindings(true)
+    store().dropAll()
+    expect(store().keybindings).toBe(false)
+  })
+
   it('give way to the settings file on the Repo and Local layers', () => {
     store().showKeybindings(true)
     store().selectLayer('local')

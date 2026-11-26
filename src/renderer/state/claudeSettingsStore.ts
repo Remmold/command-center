@@ -219,6 +219,6 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
       const lost = [count > 0 && changeCount(count), boxes > 0 && `JSON typed in ${boxes === 1 ? 'a box' : `${boxes} boxes`}`].filter(Boolean).join(' and ')
       return window.confirm(`Discard ${lost} to Claude Code settings?`)
     },
-    dropAll: () => set({ pending: {}, saveError: null, settling: false })
+    dropAll: () => set({ pending: {}, keybindings: false, saveError: null, settling: false })
   }
 })

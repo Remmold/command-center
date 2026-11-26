@@ -1,4 +1,4 @@
-import { keyPath, pathKeys } from './claudeSettings'
+import { isSettingsObject, keyPath, pathKeys } from './claudeSettings'
 
 /** Where in terminal Claude a block of bindings applies. */
 export interface KeybindingContext {
@@ -49,157 +49,157 @@ export const KEYBINDING_CONTEXTS: readonly KeybindingContext[] = [
   { name: 'Scroll', label: 'Scrolling and selecting in fullscreen' }
 ]
 
-const a = (context: string, action: string, label: string, ...defaults: string[]): KeybindingAction => ({ context, action, label, defaults })
+const row = (context: string, action: string, label: string, ...defaults: string[]): KeybindingAction => ({ context, action, label, defaults })
 
 /** Every action the keybindings docs list per context, with its built-in keys on Windows. */
 export const KEYBINDING_ACTIONS: readonly KeybindingAction[] = [
-  a('Global', 'app:interrupt', 'Cancel what is running', 'ctrl+c'),
-  a('Global', 'app:exit', 'Exit Claude Code (press twice)', 'ctrl+d'),
-  a('Global', 'app:redraw', 'Redraw the terminal'),
-  a('Global', 'app:toggleTodos', 'Show or hide Claude’s to-do list', 'ctrl+t'),
-  a('Global', 'app:toggleTranscript', 'Show or hide the full transcript', 'ctrl+o'),
-  a('Global', 'app:toggleReplTab', 'Open or close the earlier diff panel'),
-  a('Global', 'app:diffFileListUp', 'Scroll the diff panel’s file list up', 'ctrl+up', 'alt+up'),
-  a('Global', 'app:diffFileListDown', 'Scroll the diff panel’s file list down', 'ctrl+down', 'alt+down'),
-  a('Global', 'app:toggleDiffNoiseFilter', 'Show or hide test and generated files in the earlier diff panel'),
-  a('Global', 'app:toggleDiffPreSession', 'Expand or collapse changes from before this chat in the earlier diff panel'),
-  a('Global', 'pane:next', 'Show the next open pane'),
-  a('Global', 'pane:previous', 'Show the previous open pane'),
-  a('Chat', 'history:search', 'Search your prompt history', 'ctrl+r'),
-  a('Chat', 'history:previous', 'Previous prompt from history', 'up'),
-  a('Chat', 'history:next', 'Next prompt from history', 'down'),
-  a('Chat', 'chat:cancel', 'Cancel what you are typing', 'escape'),
-  a('Chat', 'chat:clearInput', 'Redraw the screen, keeping your prompt', 'ctrl+l'),
-  a('Chat', 'chat:clearScreen', 'Same as redraw the screen', 'cmd+k'),
-  a('Chat', 'chat:killAgents', 'Stop every background subagent (press twice)', 'ctrl+x ctrl+k'),
-  a('Chat', 'chat:cycleMode', 'Switch permission mode', 'shift+tab'),
-  a('Chat', 'chat:modelPicker', 'Open the model picker', 'alt+p'),
-  a('Chat', 'chat:fastMode', 'Turn fast mode on or off', 'alt+o'),
-  a('Chat', 'chat:thinkingToggle', 'Turn extended thinking on or off', 'alt+t'),
-  a('Chat', 'chat:submit', 'Send the prompt', 'enter'),
-  a('Chat', 'chat:queueSubmit', 'Send the prompt to wait its turn', 'ctrl+x enter'),
-  a('Chat', 'chat:sendNow', 'Send queued prompts right away', 'ctrl+enter', 'ctrl+x ctrl+s'),
-  a('Chat', 'chat:newline', 'New line without sending', 'ctrl+j'),
-  a('Chat', 'chat:undo', 'Undo', 'ctrl+_', 'ctrl+shift+-'),
-  a('Chat', 'chat:externalEditor', 'Edit the prompt in your editor', 'ctrl+g', 'ctrl+x ctrl+e'),
-  a('Chat', 'chat:stash', 'Put the prompt aside', 'ctrl+s'),
-  a('Chat', 'chat:imagePaste', 'Paste an image', 'alt+v'),
-  a('Chat', 'voice:pushToTalk', 'Dictate a prompt, with voice on', 'space'),
-  a('Chat', 'abovePrompt:toggle', 'Fold or unfold the band above the prompt', 'ctrl+x ctrl+a'),
-  a('Chat', 'abovePrompt:focus', 'Move into the band above the prompt and the panes', 'ctrl+x tab'),
-  a('Autocomplete', 'autocomplete:accept', 'Take the suggestion', 'tab'),
-  a('Autocomplete', 'autocomplete:dismiss', 'Close the menu', 'escape'),
-  a('Autocomplete', 'autocomplete:previous', 'Previous suggestion', 'up'),
-  a('Autocomplete', 'autocomplete:next', 'Next suggestion', 'down'),
-  a('Settings', 'settings:search', 'Search', '/'),
-  a('Settings', 'settings:retry', 'Load usage again after an error', 'r'),
-  a('Settings', 'settings:fixUsage', 'Apply the /usage recommendations', 'f'),
-  a('Settings', 'select:accept', 'Change the setting or open it', 'enter', 'space'),
-  a('Settings', 'confirm:no', 'Close the panel (changes are kept)', 'escape'),
-  a('Confirmation', 'confirm:yes', 'Confirm', 'enter'),
-  a('Confirmation', 'confirm:no', 'Decline', 'escape'),
-  a('Confirmation', 'confirm:previous', 'Previous option', 'up'),
-  a('Confirmation', 'confirm:next', 'Next option', 'down'),
-  a('Confirmation', 'confirm:nextField', 'Turn fast mode on or off in /fast', 'tab'),
-  a('Confirmation', 'confirm:previousField', 'Nothing (kept so old files stay valid)'),
-  a('Confirmation', 'confirm:toggle', 'Tick or untick', 'space'),
-  a('Confirmation', 'confirm:cycleMode', 'Allow for the rest of the chat, or close a comment', 'shift+tab'),
-  a('Confirmation', 'permission:toggleDebug', 'Nothing (kept so old files stay valid)'),
-  a('Tabs', 'tabs:next', 'Next tab', 'tab', 'right'),
-  a('Tabs', 'tabs:previous', 'Previous tab', 'shift+tab', 'left'),
-  a('Help', 'help:dismiss', 'Close the help menu', 'escape'),
-  a('Transcript', 'transcript:toggleShowAll', 'Show everything or less', 'ctrl+e'),
-  a('Transcript', 'transcript:exit', 'Leave the transcript', 'q', 'ctrl+c', 'escape'),
-  a('HistorySearch', 'historySearch:next', 'Next match', 'ctrl+r'),
-  a('HistorySearch', 'historySearch:accept', 'Take the match', 'escape', 'tab'),
-  a('HistorySearch', 'historySearch:cancel', 'Cancel the search', 'ctrl+c'),
-  a('HistorySearch', 'historySearch:execute', 'Run the match', 'enter'),
-  a('HistorySearch', 'historySearch:cycleScope', 'Search this chat, this project or everywhere', 'ctrl+s'),
-  a('Task', 'task:background', 'Send the task to the background', 'ctrl+b', 'ctrl+x ctrl+b'),
-  a('ThemePicker', 'theme:toggleSyntaxHighlighting', 'Turn syntax colours on or off', 'ctrl+t'),
-  a('Attachments', 'attachments:next', 'Next attachment', 'right'),
-  a('Attachments', 'attachments:previous', 'Previous attachment', 'left'),
-  a('Attachments', 'attachments:remove', 'Remove the attachment', 'backspace', 'delete'),
-  a('Attachments', 'attachments:exit', 'Leave the attachments', 'down', 'escape'),
-  a('Footer', 'footer:next', 'Next item', 'right'),
-  a('Footer', 'footer:previous', 'Previous item', 'left'),
-  a('Footer', 'footer:up', 'Up (leaves at the top)', 'up', 'ctrl+p'),
-  a('Footer', 'footer:down', 'Down', 'down', 'ctrl+n'),
-  a('Footer', 'footer:openSelected', 'Open the item', 'enter'),
-  a('Footer', 'footer:clearSelection', 'Leave the items', 'escape'),
-  a('Footer', 'footer:close', 'Stop the agent or workflow, or dismiss its row', 'x'),
-  a('Footer', 'footer:dismiss', 'Nothing (kept so old files stay valid)'),
-  a('DiffDialog', 'diff:dismiss', 'Close, or back to the file list', 'escape'),
-  a('DiffDialog', 'diff:previousSource', 'Previous source', 'left'),
-  a('DiffDialog', 'diff:nextSource', 'Next source', 'right'),
-  a('DiffDialog', 'diff:previousFile', 'Previous file, or a line up', 'up', 'k'),
-  a('DiffDialog', 'diff:nextFile', 'Next file, or a line down', 'down', 'j'),
-  a('DiffDialog', 'diff:back', 'Back'),
-  a('DiffDialog', 'scroll:pageUp', 'Half a screen up', 'pageup'),
-  a('DiffDialog', 'scroll:pageDown', 'Half a screen down', 'pagedown'),
-  a('DiffDialog', 'scroll:fullPageUp', 'A screen up', 'shift+space', 'b'),
-  a('DiffDialog', 'scroll:fullPageDown', 'A screen down', 'space'),
-  a('DiffDialog', 'scroll:top', 'To the top', 'g', 'home'),
-  a('DiffDialog', 'scroll:bottom', 'To the bottom', 'shift+g', 'end'),
-  a('DiffPanel', 'app:cycleDiffBase', 'Compare with this chat, uncommitted or the branch', 'ctrl+x b'),
-  a('ModelPicker', 'modelPicker:decreaseEffort', 'Less effort', 'left'),
-  a('ModelPicker', 'modelPicker:increaseEffort', 'More effort', 'right'),
-  a('ModelPicker', 'modelPicker:thisSessionOnly', 'Use the model in this chat only', 's'),
-  a('EffortSlider', 'effortSlider:decreaseEffort', 'Less effort', 'left'),
-  a('EffortSlider', 'effortSlider:increaseEffort', 'More effort', 'right'),
-  a('EffortSlider', 'effortSlider:toggleUltracode', 'Turn ultracode on or off for this chat', 'tab'),
-  a('EffortSlider', 'effortSlider:thisSessionOnly', 'Use the effort in this chat only', 's'),
-  a('Select', 'select:next', 'Next option', 'down', 'j', 'ctrl+n'),
-  a('Select', 'select:previous', 'Previous option', 'up', 'k', 'ctrl+p'),
-  a('Select', 'select:pageUp', 'A page of options up', 'pageup'),
-  a('Select', 'select:pageDown', 'A page of options down', 'pagedown'),
-  a('Select', 'select:first', 'First option', 'home'),
-  a('Select', 'select:last', 'Last option', 'end'),
-  a('Select', 'select:accept', 'Pick the option', 'enter'),
-  a('Select', 'select:cancel', 'Cancel', 'escape'),
-  a('Plugin', 'plugin:toggle', 'Tick or untick the plugin', 'space'),
-  a('Plugin', 'plugin:install', 'Install the ticked plugins', 'i'),
-  a('Plugin', 'plugin:favorite', 'Favourite the plugin', 'f'),
-  a('AbovePrompt', 'abovePrompt:next', 'Next control', 'tab'),
-  a('AbovePrompt', 'abovePrompt:previous', 'Previous control', 'shift+tab'),
-  a('AbovePrompt', 'abovePrompt:press', 'Press, send or pick', 'enter'),
-  a('AbovePrompt', 'abovePrompt:leave', 'Back to the prompt', 'escape'),
-  a('AbovePromptSelect', 'abovePrompt:highlightNext', 'Highlight the next option', 'down'),
-  a('AbovePromptSelect', 'abovePrompt:highlightPrevious', 'Highlight the previous option', 'up'),
-  a('Pane', 'pane:scrollUp', 'Scroll up', 'up'),
-  a('Pane', 'pane:scrollDown', 'Scroll down', 'down'),
-  a('Pane', 'pane:pageUp', 'A page up', 'pageup'),
-  a('Pane', 'pane:pageDown', 'A page down', 'pagedown'),
-  a('Pane', 'pane:top', 'To the top', 'home'),
-  a('Pane', 'pane:bottom', 'To the bottom', 'end'),
-  a('Pane', 'pane:grow', 'Give the pane more room', 'ctrl+x left', 'ctrl+x up'),
-  a('Pane', 'pane:shrink', 'Give the pane less room', 'ctrl+x right', 'ctrl+x down'),
-  a('Pane', 'pane:close', 'Close the pane', 'ctrl+x x'),
-  a('PaneField', 'pane:close', 'Close the pane', 'ctrl+x x'),
-  a('Agents', 'agents:switchView', 'Group by state or by folder', 'ctrl+s'),
-  a('Agents', 'agents:togglePin', 'Pin or unpin the chat', 'ctrl+t'),
-  a('Agents', 'agents:find', 'Find chats by name', 'ctrl+f'),
-  a('Agents', 'agents:rename', 'Rename the chat', 'ctrl+r'),
-  a('Agents', 'agents:previousGroup', 'Previous group', 'ctrl+up', 'alt+up'),
-  a('Agents', 'agents:nextGroup', 'Next group', 'ctrl+down', 'alt+down'),
-  a('Scroll', 'scroll:lineUp', 'A line up', 'wheelup'),
-  a('Scroll', 'scroll:lineDown', 'A line down', 'wheeldown'),
-  a('Scroll', 'scroll:pageUp', 'Half a screen up', 'pageup'),
-  a('Scroll', 'scroll:pageDown', 'Half a screen down', 'pagedown'),
-  a('Scroll', 'scroll:top', 'To the start of the chat', 'ctrl+home'),
-  a('Scroll', 'scroll:bottom', 'To the latest message', 'ctrl+end'),
-  a('Scroll', 'scroll:halfPageUp', 'Half a screen up (for vi-style keys)'),
-  a('Scroll', 'scroll:halfPageDown', 'Half a screen down (for vi-style keys)'),
-  a('Scroll', 'scroll:fullPageUp', 'A screen up'),
-  a('Scroll', 'scroll:fullPageDown', 'A screen down'),
-  a('Scroll', 'selection:copy', 'Copy the selection', 'ctrl+shift+c', 'cmd+c'),
-  a('Scroll', 'selection:clear', 'Clear the selection'),
-  a('Scroll', 'selection:extendLeft', 'Grow the selection left', 'shift+left'),
-  a('Scroll', 'selection:extendRight', 'Grow the selection right', 'shift+right'),
-  a('Scroll', 'selection:extendUp', 'Grow the selection up', 'shift+up'),
-  a('Scroll', 'selection:extendDown', 'Grow the selection down', 'shift+down'),
-  a('Scroll', 'selection:extendLineStart', 'Grow the selection to the line start', 'shift+home'),
-  a('Scroll', 'selection:extendLineEnd', 'Grow the selection to the line end', 'shift+end')
+  row('Global', 'app:interrupt', 'Cancel what is running', 'ctrl+c'),
+  row('Global', 'app:exit', 'Exit Claude Code (press twice)', 'ctrl+d'),
+  row('Global', 'app:redraw', 'Redraw the terminal'),
+  row('Global', 'app:toggleTodos', 'Show or hide Claude’s to-do list', 'ctrl+t'),
+  row('Global', 'app:toggleTranscript', 'Show or hide the full transcript', 'ctrl+o'),
+  row('Global', 'app:toggleReplTab', 'Open or close the earlier diff panel'),
+  row('Global', 'app:diffFileListUp', 'Scroll the diff panel’s file list up', 'ctrl+up', 'alt+up'),
+  row('Global', 'app:diffFileListDown', 'Scroll the diff panel’s file list down', 'ctrl+down', 'alt+down'),
+  row('Global', 'app:toggleDiffNoiseFilter', 'Show or hide test and generated files in the earlier diff panel'),
+  row('Global', 'app:toggleDiffPreSession', 'Expand or collapse changes from before this chat in the earlier diff panel'),
+  row('Global', 'pane:next', 'Show the next open pane'),
+  row('Global', 'pane:previous', 'Show the previous open pane'),
+  row('Chat', 'history:search', 'Search your prompt history', 'ctrl+r'),
+  row('Chat', 'history:previous', 'Previous prompt from history', 'up'),
+  row('Chat', 'history:next', 'Next prompt from history', 'down'),
+  row('Chat', 'chat:cancel', 'Cancel what you are typing', 'escape'),
+  row('Chat', 'chat:clearInput', 'Redraw the screen, keeping your prompt', 'ctrl+l'),
+  row('Chat', 'chat:clearScreen', 'Same as redraw the screen', 'cmd+k'),
+  row('Chat', 'chat:killAgents', 'Stop every background subagent (press twice)', 'ctrl+x ctrl+k'),
+  row('Chat', 'chat:cycleMode', 'Switch permission mode', 'shift+tab'),
+  row('Chat', 'chat:modelPicker', 'Open the model picker', 'alt+p'),
+  row('Chat', 'chat:fastMode', 'Turn fast mode on or off', 'alt+o'),
+  row('Chat', 'chat:thinkingToggle', 'Turn extended thinking on or off', 'alt+t'),
+  row('Chat', 'chat:submit', 'Send the prompt', 'enter'),
+  row('Chat', 'chat:queueSubmit', 'Send the prompt to wait its turn', 'ctrl+x enter'),
+  row('Chat', 'chat:sendNow', 'Send queued prompts right away', 'ctrl+enter', 'ctrl+x ctrl+s'),
+  row('Chat', 'chat:newline', 'New line without sending', 'ctrl+j'),
+  row('Chat', 'chat:undo', 'Undo', 'ctrl+_', 'ctrl+shift+-'),
+  row('Chat', 'chat:externalEditor', 'Edit the prompt in your editor', 'ctrl+g', 'ctrl+x ctrl+e'),
+  row('Chat', 'chat:stash', 'Put the prompt aside', 'ctrl+s'),
+  row('Chat', 'chat:imagePaste', 'Paste an image', 'alt+v'),
+  row('Chat', 'voice:pushToTalk', 'Dictate a prompt, with voice on', 'space'),
+  row('Chat', 'abovePrompt:toggle', 'Fold or unfold the band above the prompt', 'ctrl+x ctrl+a'),
+  row('Chat', 'abovePrompt:focus', 'Move into the band above the prompt and the panes', 'ctrl+x tab'),
+  row('Autocomplete', 'autocomplete:accept', 'Take the suggestion', 'tab'),
+  row('Autocomplete', 'autocomplete:dismiss', 'Close the menu', 'escape'),
+  row('Autocomplete', 'autocomplete:previous', 'Previous suggestion', 'up'),
+  row('Autocomplete', 'autocomplete:next', 'Next suggestion', 'down'),
+  row('Settings', 'settings:search', 'Search', '/'),
+  row('Settings', 'settings:retry', 'Load usage again after an error', 'r'),
+  row('Settings', 'settings:fixUsage', 'Apply the /usage recommendations', 'f'),
+  row('Settings', 'select:accept', 'Change the setting or open it', 'enter', 'space'),
+  row('Settings', 'confirm:no', 'Close the panel (changes are kept)', 'escape'),
+  row('Confirmation', 'confirm:yes', 'Confirm', 'enter'),
+  row('Confirmation', 'confirm:no', 'Decline', 'escape'),
+  row('Confirmation', 'confirm:previous', 'Previous option', 'up'),
+  row('Confirmation', 'confirm:next', 'Next option', 'down'),
+  row('Confirmation', 'confirm:nextField', 'Turn fast mode on or off in /fast', 'tab'),
+  row('Confirmation', 'confirm:previousField', 'Nothing (kept so old files stay valid)'),
+  row('Confirmation', 'confirm:toggle', 'Tick or untick', 'space'),
+  row('Confirmation', 'confirm:cycleMode', 'Allow for the rest of the chat, or close a comment', 'shift+tab'),
+  row('Confirmation', 'permission:toggleDebug', 'Nothing (kept so old files stay valid)'),
+  row('Tabs', 'tabs:next', 'Next tab', 'tab', 'right'),
+  row('Tabs', 'tabs:previous', 'Previous tab', 'shift+tab', 'left'),
+  row('Help', 'help:dismiss', 'Close the help menu', 'escape'),
+  row('Transcript', 'transcript:toggleShowAll', 'Show everything or less', 'ctrl+e'),
+  row('Transcript', 'transcript:exit', 'Leave the transcript', 'q', 'ctrl+c', 'escape'),
+  row('HistorySearch', 'historySearch:next', 'Next match', 'ctrl+r'),
+  row('HistorySearch', 'historySearch:accept', 'Take the match', 'escape', 'tab'),
+  row('HistorySearch', 'historySearch:cancel', 'Cancel the search', 'ctrl+c'),
+  row('HistorySearch', 'historySearch:execute', 'Run the match', 'enter'),
+  row('HistorySearch', 'historySearch:cycleScope', 'Search this chat, this project or everywhere', 'ctrl+s'),
+  row('Task', 'task:background', 'Send the task to the background', 'ctrl+b', 'ctrl+x ctrl+b'),
+  row('ThemePicker', 'theme:toggleSyntaxHighlighting', 'Turn syntax colours on or off', 'ctrl+t'),
+  row('Attachments', 'attachments:next', 'Next attachment', 'right'),
+  row('Attachments', 'attachments:previous', 'Previous attachment', 'left'),
+  row('Attachments', 'attachments:remove', 'Remove the attachment', 'backspace', 'delete'),
+  row('Attachments', 'attachments:exit', 'Leave the attachments', 'down', 'escape'),
+  row('Footer', 'footer:next', 'Next item', 'right'),
+  row('Footer', 'footer:previous', 'Previous item', 'left'),
+  row('Footer', 'footer:up', 'Up (leaves at the top)', 'up', 'ctrl+p'),
+  row('Footer', 'footer:down', 'Down', 'down', 'ctrl+n'),
+  row('Footer', 'footer:openSelected', 'Open the item', 'enter'),
+  row('Footer', 'footer:clearSelection', 'Leave the items', 'escape'),
+  row('Footer', 'footer:close', 'Stop the agent or workflow, or dismiss its row', 'x'),
+  row('Footer', 'footer:dismiss', 'Nothing (kept so old files stay valid)'),
+  row('DiffDialog', 'diff:dismiss', 'Close, or back to the file list', 'escape'),
+  row('DiffDialog', 'diff:previousSource', 'Previous source', 'left'),
+  row('DiffDialog', 'diff:nextSource', 'Next source', 'right'),
+  row('DiffDialog', 'diff:previousFile', 'Previous file, or a line up', 'up', 'k'),
+  row('DiffDialog', 'diff:nextFile', 'Next file, or a line down', 'down', 'j'),
+  row('DiffDialog', 'diff:back', 'Back'),
+  row('DiffDialog', 'scroll:pageUp', 'Half a screen up', 'pageup'),
+  row('DiffDialog', 'scroll:pageDown', 'Half a screen down', 'pagedown'),
+  row('DiffDialog', 'scroll:fullPageUp', 'A screen up', 'shift+space', 'b'),
+  row('DiffDialog', 'scroll:fullPageDown', 'A screen down', 'space'),
+  row('DiffDialog', 'scroll:top', 'To the top', 'g', 'home'),
+  row('DiffDialog', 'scroll:bottom', 'To the bottom', 'shift+g', 'end'),
+  row('DiffPanel', 'app:cycleDiffBase', 'Compare with this chat, uncommitted or the branch', 'ctrl+x b'),
+  row('ModelPicker', 'modelPicker:decreaseEffort', 'Less effort', 'left'),
+  row('ModelPicker', 'modelPicker:increaseEffort', 'More effort', 'right'),
+  row('ModelPicker', 'modelPicker:thisSessionOnly', 'Use the model in this chat only', 's'),
+  row('EffortSlider', 'effortSlider:decreaseEffort', 'Less effort', 'left'),
+  row('EffortSlider', 'effortSlider:increaseEffort', 'More effort', 'right'),
+  row('EffortSlider', 'effortSlider:toggleUltracode', 'Turn ultracode on or off for this chat', 'tab'),
+  row('EffortSlider', 'effortSlider:thisSessionOnly', 'Use the effort in this chat only', 's'),
+  row('Select', 'select:next', 'Next option', 'down', 'j', 'ctrl+n'),
+  row('Select', 'select:previous', 'Previous option', 'up', 'k', 'ctrl+p'),
+  row('Select', 'select:pageUp', 'A page of options up', 'pageup'),
+  row('Select', 'select:pageDown', 'A page of options down', 'pagedown'),
+  row('Select', 'select:first', 'First option', 'home'),
+  row('Select', 'select:last', 'Last option', 'end'),
+  row('Select', 'select:accept', 'Pick the option', 'enter'),
+  row('Select', 'select:cancel', 'Cancel', 'escape'),
+  row('Plugin', 'plugin:toggle', 'Tick or untick the plugin', 'space'),
+  row('Plugin', 'plugin:install', 'Install the ticked plugins', 'i'),
+  row('Plugin', 'plugin:favorite', 'Favourite the plugin', 'f'),
+  row('AbovePrompt', 'abovePrompt:next', 'Next control', 'tab'),
+  row('AbovePrompt', 'abovePrompt:previous', 'Previous control', 'shift+tab'),
+  row('AbovePrompt', 'abovePrompt:press', 'Press, send or pick', 'enter'),
+  row('AbovePrompt', 'abovePrompt:leave', 'Back to the prompt', 'escape'),
+  row('AbovePromptSelect', 'abovePrompt:highlightNext', 'Highlight the next option', 'down'),
+  row('AbovePromptSelect', 'abovePrompt:highlightPrevious', 'Highlight the previous option', 'up'),
+  row('Pane', 'pane:scrollUp', 'Scroll up', 'up'),
+  row('Pane', 'pane:scrollDown', 'Scroll down', 'down'),
+  row('Pane', 'pane:pageUp', 'A page up', 'pageup'),
+  row('Pane', 'pane:pageDown', 'A page down', 'pagedown'),
+  row('Pane', 'pane:top', 'To the top', 'home'),
+  row('Pane', 'pane:bottom', 'To the bottom', 'end'),
+  row('Pane', 'pane:grow', 'Give the pane more room', 'ctrl+x left', 'ctrl+x up'),
+  row('Pane', 'pane:shrink', 'Give the pane less room', 'ctrl+x right', 'ctrl+x down'),
+  row('Pane', 'pane:close', 'Close the pane', 'ctrl+x x'),
+  row('PaneField', 'pane:close', 'Close the pane', 'ctrl+x x'),
+  row('Agents', 'agents:switchView', 'Group by state or by folder', 'ctrl+s'),
+  row('Agents', 'agents:togglePin', 'Pin or unpin the chat', 'ctrl+t'),
+  row('Agents', 'agents:find', 'Find chats by name', 'ctrl+f'),
+  row('Agents', 'agents:rename', 'Rename the chat', 'ctrl+r'),
+  row('Agents', 'agents:previousGroup', 'Previous group', 'ctrl+up', 'alt+up'),
+  row('Agents', 'agents:nextGroup', 'Next group', 'ctrl+down', 'alt+down'),
+  row('Scroll', 'scroll:lineUp', 'A line up', 'wheelup'),
+  row('Scroll', 'scroll:lineDown', 'A line down', 'wheeldown'),
+  row('Scroll', 'scroll:pageUp', 'Half a screen up', 'pageup'),
+  row('Scroll', 'scroll:pageDown', 'Half a screen down', 'pagedown'),
+  row('Scroll', 'scroll:top', 'To the start of the chat', 'ctrl+home'),
+  row('Scroll', 'scroll:bottom', 'To the latest message', 'ctrl+end'),
+  row('Scroll', 'scroll:halfPageUp', 'Half a screen up (for vi-style keys)'),
+  row('Scroll', 'scroll:halfPageDown', 'Half a screen down (for vi-style keys)'),
+  row('Scroll', 'scroll:fullPageUp', 'A screen up'),
+  row('Scroll', 'scroll:fullPageDown', 'A screen down'),
+  row('Scroll', 'selection:copy', 'Copy the selection', 'ctrl+shift+c', 'cmd+c'),
+  row('Scroll', 'selection:clear', 'Clear the selection'),
+  row('Scroll', 'selection:extendLeft', 'Grow the selection left', 'shift+left'),
+  row('Scroll', 'selection:extendRight', 'Grow the selection right', 'shift+right'),
+  row('Scroll', 'selection:extendUp', 'Grow the selection up', 'shift+up'),
+  row('Scroll', 'selection:extendDown', 'Grow the selection down', 'shift+down'),
+  row('Scroll', 'selection:extendLineStart', 'Grow the selection to the line start', 'shift+home'),
+  row('Scroll', 'selection:extendLineEnd', 'Grow the selection to the line end', 'shift+end')
 ]
 
 const MODIFIERS = ['ctrl', 'shift', 'alt', 'cmd'] as const
@@ -249,7 +249,7 @@ const LABELS: Record<string, string> = {
   wheeldown: 'Wheel down'
 }
 
-const partLabel = (part: string): string => LABELS[part] ?? (part.length === 1 ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1))
+const partLabel = (part: string): string => LABELS[part] ?? (part.length <= 1 ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1))
 
 /** A binding as a person reads it: `Ctrl+K Ctrl+S`. */
 export const bindingLabel = (binding: string): string =>
@@ -286,6 +286,8 @@ export interface KeyPress {
   shiftKey: boolean
   altKey: boolean
   metaKey: boolean
+  /** AltGr, which Windows reports as Ctrl and Alt held together; the key is then the character it types. */
+  altGraph?: boolean
 }
 
 const CODE_KEYS: Record<string, string> = {
@@ -335,6 +337,7 @@ function keyName({ key, code }: KeyPress): string | null {
 
 /** One key press as binding text, such as `ctrl+k`; null while only modifiers are down. */
 export function keystrokeText(press: KeyPress): string | null {
+  if (press.altGraph && press.key.length === 1) return press.key.toLowerCase()
   const key = keyName(press)
   if (key === null) return null
   const mods = [press.ctrlKey && 'ctrl', press.shiftKey && 'shift', press.altKey && 'alt', press.metaKey && 'cmd'].filter(Boolean)
@@ -419,14 +422,23 @@ export interface OtherBinding {
 }
 
 /** The file's entries no action row shows: an unknown context, an action not listed for its context, a command, or null on a key with nothing built in. */
-export function otherBindings(bindings: Record<string, unknown> | undefined): OtherBinding[] {
-  return Object.entries(bindings ?? {}).flatMap(([context, keys]) => {
-    if (typeof keys !== 'object' || keys === null || Array.isArray(keys)) return [{ context, key: '', value: keys }]
+export function otherBindings(bindings: unknown): OtherBinding[] {
+  if (!isSettingsObject(bindings)) return []
+  return Object.entries(bindings).flatMap(([context, keys]) => {
+    if (!isSettingsObject(keys)) return []
     return Object.entries(keys)
       .filter(([key, value]) => !(typeof value === 'string' && keybindingAction(context, value)) && !(value === null && defaultAction(context, key) !== undefined))
       .map(([key, value]) => ({ context, key, value }))
   })
 }
+
+/** Built-in chords on the Chat context's Ctrl+X prefix whose action the docs don't name; unbinding them frees Ctrl+X. */
+export const UNNAMED_CHORDS: Record<string, readonly string[]> = { Chat: ['ctrl+x ctrl+=', 'ctrl+x ctrl+-', 'ctrl+x ctrl+_', 'ctrl+x =', 'ctrl+x -'] }
+
+export const isUnnamedChord = (context: string, key: string): boolean => UNNAMED_CHORDS[context]?.includes(normalBinding(key)) ?? false
+
+/** Keys of the file that aren't key bindings, such as a stray setting; `$schema` and `$docs` are the file's own. */
+export const otherTopKeys = (file: unknown): [string, unknown][] => (isSettingsObject(file) ? Object.entries(file).filter(([key]) => !['$schema', '$docs', 'bindings'].includes(key)) : [])
 
 /** What a value of the file runs, in words. */
 export function actionWords(context: string, value: unknown): string {

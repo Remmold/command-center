@@ -5,7 +5,7 @@ import {
   actionKeys,
   addKeyEdits,
   bindingLabel,
-  keyEditWords,
+  keyEditWords, otherTopKeys,
   keybindingAction,
   keystrokeText,
   normalBinding,
@@ -82,6 +82,9 @@ describe('capturing a key', () => {
     expect(keystrokeText(press(' ', 'Space'))).toBe('space')
     expect(keystrokeText(press('Escape', 'Escape'))).toBe('escape')
     expect(keystrokeText(press('Control', 'ControlLeft', { ctrl: true }))).toBeNull()
+    expect(keystrokeText({ ...press('@', 'Digit2', { ctrl: true, alt: true }), altGraph: true })).toBe('@')
+    expect(bindingLabel('ctrl++')).toBe('Ctrl++')
+    expect(bindingLabel('ctrl+')).toBe('Ctrl+')
   })
 
   it('reads every spelling the docs allow as one binding', () => {
@@ -143,6 +146,11 @@ describe('editing an action’s keys', () => {
     expect(label).toBe('The prompt box · Ctrl+K Ctrl+S')
     expect([undefined, null, 'chat:stash', 'command:compact', 'future:x'].map(format)).toEqual(['no action', 'nothing (unbound)', 'Put the prompt aside', 'the command /compact', 'future:x'])
     expect(keyEditWords('bindings.Chat.Ctrl+S').format(undefined)).toBe('Put the prompt aside (built in)')
+  })
+
+  it('keeps keys of the file that are not bindings visible, but not its schema and docs lines', () => {
+    expect(otherTopKeys({ $schema: 'x', $docs: 'y', bindings: [], stray: 1 })).toEqual([['stray', 1]])
+    expect(otherBindings('not an object')).toEqual([])
   })
 
   it('lists the file’s entries no action row shows, unknown contexts and actions included', () => {

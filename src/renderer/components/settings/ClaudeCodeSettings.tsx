@@ -58,15 +58,17 @@ const LAYERS: { value: SettingsLayer; label: string; title: string }[] = [
   { value: 'local', label: 'Local', title: 'The workspace’s .claude/settings.local.json' }
 ]
 
+const ADOPTED_NOTE = 'Its own folder. The app writes to it only when you press Save here.'
+
 function keybindingsNote(profile: AccountProfile | undefined): string {
   if (!profile || profile.id === DEFAULT_PROFILE_ID) return 'This account’s own key bindings for terminal Claude.'
-  if (profile.adopted) return 'Its own folder. The app writes to it only when you press Save here.'
+  if (profile.adopted) return ADOPTED_NOTE
   return 'This account’s own key bindings: unlike its settings, they aren’t shared.'
 }
 
 function accountNote(profile: AccountProfile | undefined, defaultName: string): string {
   if (!profile || profile.id === DEFAULT_PROFILE_ID) return 'Accounts the app made share this file.'
-  if (profile.adopted) return 'Its own folder. The app writes to it only when you press Save here.'
+  if (profile.adopted) return ADOPTED_NOTE
   return `Shares ${defaultName}’s settings file: a change here reaches ${defaultName} too.`
 }
 
@@ -354,7 +356,7 @@ export function ClaudeCodeSettings() {
             </nav>
           }
         >
-          {/* A column, so the body scrolls inside the section rather than the whole window. */}
+          {/* The body scrolls inside the section; without a column around it the whole window scrolls. */}
           <div className="flex h-full min-h-0 flex-col">
             {/* A new file or a Discard starts every box afresh, dropping text typed for the file before. */}
             <PageBody key={`${discards}:${file?.path}`}>

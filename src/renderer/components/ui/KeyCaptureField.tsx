@@ -25,7 +25,7 @@ export function KeyCaptureField({ label, problem, note, onCapture, onCancel }: P
   useEffect(() => box.current?.focus(), [])
   const binding = strokes.join(' ')
   const why = binding ? problem(binding) : null
-  const said = binding && !why ? (note?.(binding) ?? null) : null
+  const noted = binding && !why ? (note?.(binding) ?? null) : null
   return (
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
       <div
@@ -38,7 +38,7 @@ export function KeyCaptureField({ label, problem, note, onCapture, onCancel }: P
         onKeyDown={(e) => {
           e.preventDefault()
           e.stopPropagation()
-          const stroke = keystrokeText(e)
+          const stroke = keystrokeText({ key: e.key, code: e.code, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, altGraph: e.getModifierState('AltGraph') })
           if (stroke) setStrokes((now) => (now.length >= MAX_STROKES ? [stroke] : [...now, stroke]))
         }}
         className="min-w-24 rounded border border-focus bg-input px-1.5 py-1 font-mono text-[11px] text-fg focus:outline-none"
@@ -66,7 +66,7 @@ export function KeyCaptureField({ label, problem, note, onCapture, onCancel }: P
           {why}: pick another key.
         </p>
       )}
-      {said && <p className="w-full text-right text-[11px] text-muted">{said}</p>}
+      {noted && <p className="w-full text-right text-[11px] text-muted">{noted}</p>}
     </div>
   )
 }
