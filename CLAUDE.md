@@ -20,7 +20,7 @@ Read `docs/adr/` before changing how chats mount or where they show: every hoste
 
 Package manager is pnpm (`pnpm install`).
 
-- `pnpm dev`: run the app with hot reload
+- `pnpm dev`: run the app with hot reload. Only one Command Center runs per user (single-instance lock), so quit the installed app first.
 - `pnpm build`: production build into `out/`
 - `pnpm test`: Vitest once (`src/`, `tools/` and `e2e/` `*.test.ts`, Node environment, no Electron)
 - `pnpm dist`: build the per-user NSIS installer into `release/` (`release/win-unpacked/` is the unpacked app)
