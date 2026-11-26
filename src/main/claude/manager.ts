@@ -17,6 +17,8 @@ type InitCallback = (paneId: string, init: SessionInit) => void
 export interface StartOptions extends ClaudeStartOptions {
   profileEnv?: Record<string, string>
   profileId?: string
+  /** The app's own restrictions for the process; never taken from the renderer. */
+  extraArgs?: readonly string[]
   /** The resumed session came from another machine, so Remote Control is not turned on at start. */
   teleported?: boolean
 }
@@ -52,6 +54,7 @@ class ClaudeManager {
         permissionMode: options.permissionMode,
         addDirs: options.addDirs,
         profileEnv: options.profileEnv,
+        extraArgs: options.extraArgs,
         teleported: options.teleported,
         onEvent: (id, event) => {
           for (const cb of this.eventListeners) cb(id, event)

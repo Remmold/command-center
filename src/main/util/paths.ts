@@ -11,6 +11,11 @@ export function featureDigestFile(): string {
   return userDataPath(digestFileName)
 }
 
+/** The fixed folder the main chat runs in. */
+export function mainChatDir(): string {
+  return userDataPath('main-chat')
+}
+
 export function projectsFile(): string {
   return userDataPath('projects.json')
 }

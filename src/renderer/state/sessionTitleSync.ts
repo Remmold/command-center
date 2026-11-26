@@ -1,5 +1,6 @@
 import type { RenameResult } from '../../shared/types'
 import { rememberFeatureSession } from './featuresStore'
+import { rememberMainChatSession } from './mainChatStore'
 import { useProjectViewsStore, type ClaudeChatSession } from './projectViewsStore'
 import { NEW_SESSION_TITLE, titleRequests, wantsClaudeTitle } from './sessionTitle'
 
@@ -52,6 +53,7 @@ export function renameHostedSession(paneId: string, name: string): Promise<Renam
 /** A session renamed before it had a CLI session id passes the rename on once the id arrives. */
 export function noteClaudeSessionId(paneId: string, sessionId: string): void {
   rememberFeatureSession(paneId, sessionId)
+  rememberMainChatSession(paneId, sessionId)
   const found = hosted(paneId)
   // Runs per streamed event, and persist rewrites the store on every set, even one that changes nothing.
   if (!found || found.session.claudeSessionId === sessionId) return

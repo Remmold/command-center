@@ -14,6 +14,7 @@ import type { SidebarLayout } from './sidebarGroups'
 import type { FeatureStageView } from './featureStage'
 import type { FeatureServersView } from './featureServers'
 import type { FeatureRecord, NewFeatureRequest, NewFeatureResult } from './features'
+import type { MainChatInfo } from './mainChat'
 import type { PreviewConfig } from './previewConfig'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
@@ -491,6 +492,13 @@ export interface RendererApi {
     /** Every started feature's servers by feature name. */
     servers: () => Promise<Record<string, FeatureServersView>>
     onServersChanged: (cb: (name: string, view: FeatureServersView) => void) => () => void
+  }
+  mainChat: {
+    /** Makes the main chat's folder and workspace record when missing, and says how to host it. */
+    info: () => Promise<MainChatInfo>
+    /** Chooses the account the main chat runs on; its conversation starts afresh, since the old one lives in the old account's folder. */
+    setProfile: (profileId: string) => Promise<MainChatInfo>
+    setClaudeSession: (claudeSessionId: string) => Promise<void>
   }
   previewConfig: {
     /** The workspace's saved preview config; null when it has none (no browser, only the test flow). */

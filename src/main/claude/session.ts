@@ -1,10 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { locateClaude } from '../pty/claude-locator'
 import { CONFIG_DIR_VAR } from '../../shared/profiles'
-import { THINKING_BUDGET, type ClaudeStartOptions, type UserContentBlock, type SessionInit } from '../../shared/types'
+import type { ClaudeStartOptions, UserContentBlock, SessionInit } from '../../shared/types'
 import { childEnv } from '../util/childEnv'
 import { ControlChannel, type ControlPayload, type IncomingHandler } from './controlChannel'
 import { parseInitialize } from './initialize'
+import { claudeArgs } from './args'
 
 
 export type EventCallback = (paneId: string, event: unknown) => void
@@ -13,6 +14,8 @@ export type InitCallback = (paneId: string, init: SessionInit) => void
 
 export interface ClaudeSessionOptions extends ClaudeStartOptions {
   profileEnv?: Record<string, string>
+  /** Appended last; the app's own restrictions for a session, never from the renderer. */
+  extraArgs?: readonly string[]
   teleported?: boolean
   onEvent: EventCallback
   onExit: ExitCallback
@@ -51,35 +54,11 @@ export class ClaudeSession {
   private readonly handshake: Promise<void>
 
   constructor(options: ClaudeSessionOptions) {
-    const { paneId, cwd, model, effort, thinking, resumeSessionId, permissionMode, allowBypass, addDirs = [], profileEnv = {} } = options
+    const { paneId, cwd, model, effort, thinking, resumeSessionId, permissionMode, profileEnv = {} } = options
     this.paneId = paneId
     this.cwd = cwd
     const launch = locateClaude()
-    const args = [
-      ...launch.args,
-      '--print',
-      '--input-format',
-      'stream-json',
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--include-partial-messages',
-      '--replay-user-messages',
-      '--permission-prompt-tool=stdio',
-      '--setting-sources',
-      'user,project,local'
-    ]
-    if (model) args.push('--model', model)
-    if (effort) args.push('--effort', effort)
-    if (thinking === false) args.push('--thinking=disabled')
-    else args.push('--max-thinking-tokens', String(THINKING_BUDGET))
-    if (resumeSessionId) {
-      args.push('--resume', resumeSessionId)
-    }
-    if (permissionMode) args.push('--permission-mode', permissionMode)
-    // The CLI refuses a later switch to bypass unless the launch allowed it.
-    if (allowBypass || permissionMode === 'bypassPermissions') args.push('--allow-dangerously-skip-permissions')
-    for (const dir of addDirs) args.push('--add-dir', dir)
+    const args = [...launch.args, ...claudeArgs(options)]
 
     console.log('[claude] spawn', {
       paneId,

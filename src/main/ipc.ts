@@ -1,6 +1,6 @@
 import { ipcMain, dialog, BrowserWindow, app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
@@ -65,12 +65,15 @@ import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
 import type { RateLimitInfo } from './usage/usageReply'
-import { featureDigestFile, userDataPath } from './util/paths'
+import { featureDigestFile, mainChatDir, userDataPath } from './util/paths'
+import { createMainChatStore } from './features/mainChatStore'
+import { MAIN_CHAT_PANE_ID, mainChatLaunch, mainChatReply, type MainChatInfo } from '../shared/mainChat'
 import { setScreenFocus } from './sessions/screenFocus'
 import {
   DEFAULT_PROFILE_ID,
   DEFAULT_SHELL_KIND,
   type AddWorkspaceResult,
+  type Workspace,
   type AdoptResult,
   type ClaudeStartOptions,
   type UserContentBlock,
@@ -181,7 +184,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     void discovery.rescan()
   }
 
-  ipcMain.handle(IPC.WORKSPACES_LIST, () => workspaces.list())
+  // The main chat's folder is a workspace record only so its sessions resolve an account and a transcript folder; no list shows it.
+  const isMainChatFolder = (w: Workspace): boolean => resolve(w.path).toLowerCase() === resolve(mainChatDir()).toLowerCase()
+  const listed = (all: Workspace[]): Workspace[] => all.filter((w) => !isMainChatFolder(w))
+  ipcMain.handle(IPC.WORKSPACES_LIST, async () => listed(await workspaces.list()))
 
   ipcMain.handle(IPC.WORKSPACES_ADD_PATH, async (_e, path: unknown): Promise<AddWorkspaceResult> => {
     if (typeof path !== 'string' || path.trim() === '') return { ok: false, error: 'No folder given' }
@@ -220,8 +226,28 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     return updated
   })
 
-  ipcMain.handle(IPC.WORKSPACES_REORDER, (_e, ids: unknown) =>
-    workspaces.reorder(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])
+  ipcMain.handle(IPC.WORKSPACES_REORDER, async (_e, ids: unknown) =>
+    listed(await workspaces.reorder(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []))
+  )
+
+  const mainChatStore = createMainChatStore(userDataPath('main-chat.json'))
+  const mainChatInfo = async (): Promise<MainChatInfo> => {
+    const path = mainChatDir()
+    await fs.mkdir(path, { recursive: true })
+    const saved = await mainChatStore.get()
+    const profileId = saved.profileId && (await profiles.list()).some((p) => p.id === saved.profileId) ? saved.profileId : DEFAULT_PROFILE_ID
+    let workspace = (await workspaces.list()).find(isMainChatFolder) ?? (await workspaces.add(path, profileId))
+    if (workspace.profileId !== profileId) workspace = (await workspaces.setProfile(workspace.id, profileId)) ?? workspace
+    return { workspaceId: workspace.id, path, profileId, claudeSessionId: saved.claudeSessionId, digestFile: featureDigestFile() }
+  }
+  ipcMain.handle(IPC.MAIN_CHAT_INFO, mainChatInfo)
+  ipcMain.handle(IPC.MAIN_CHAT_SET_PROFILE, async (_e, profileId: unknown) => {
+    const before = await mainChatInfo()
+    if (typeof profileId === 'string' && profileId !== before.profileId && (await profiles.list()).some((p) => p.id === profileId)) await mainChatStore.setProfile(profileId)
+    return mainChatInfo()
+  })
+  ipcMain.handle(IPC.MAIN_CHAT_SET_CLAUDE_SESSION, (_e, claudeSessionId: unknown) =>
+    typeof claudeSessionId === 'string' && claudeSessionId !== '' ? mainChatStore.setClaudeSession(claudeSessionId) : undefined
   )
 
   const featureStore = createFeatureStore(userDataPath('features.json'))
@@ -578,6 +604,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
 
   // Claude (stream-json subprocess)
   ipcMain.handle(IPC.CLAUDE_START, async (_e, options: ClaudeStartOptions) => {
+    if (options.paneId === MAIN_CHAT_PANE_ID) return startMainChat(options)
     const workspace = await workspaces.findByPath(options.cwd)
     if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
     const { profileId, env } = await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)
@@ -587,6 +614,25 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const started = claudeManager.start({ ...options, promptSuggestions, profileEnv: env, profileId, teleported })
     return started.ok ? { ...started, profileId: claudeManager.profileOf(options.paneId) } : started
   })
+  // Read-only by construction: the process is given read tools only, and the app answers its permission requests itself.
+  const mainChatRoots = async (): Promise<string[]> => [dirname(featureDigestFile()), mainChatDir(), ...(await featureStore.list()).map((f) => f.worktreePath)]
+  const startMainChat = async (options: ClaudeStartOptions) => {
+    const info = await mainChatInfo()
+    const { env } = await profiles.prepareSession(info.profileId)
+    const launch = mainChatLaunch(featureDigestFile(), (await featureStore.list()).map((f) => f.worktreePath))
+    const started = claudeManager.start({
+      ...options,
+      cwd: info.path,
+      addDirs: launch.addDirs,
+      permissionMode: 'default',
+      allowBypass: false,
+      extraArgs: launch.cliArgs,
+      promptSuggestions: false,
+      profileEnv: env,
+      profileId: info.profileId
+    })
+    return started.ok ? { ...started, profileId: info.profileId } : started
+  }
   ipcMain.handle(IPC.CLAUDE_PROCESS_PROFILE, (_e, paneId: string) => (claudeManager.isAlive(paneId) ? claudeManager.profileOf(paneId) : null))
   ipcMain.handle(
     IPC.CLAUDE_CONTROL,
@@ -724,7 +770,14 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     })
   )
 
-  claudeManager.setIncomingHandlerFactory((paneId) => approvalBroker.handlerFor(paneId))
+  claudeManager.setIncomingHandlerFactory((paneId) => {
+    if (paneId !== MAIN_CHAT_PANE_ID) return approvalBroker.handlerFor(paneId)
+    return async (raw) => {
+      if (raw.subtype !== 'can_use_tool') throw new Error(`Unsupported control request: ${raw.subtype}`)
+      const input = typeof raw.input === 'object' && raw.input !== null ? (raw.input as Record<string, unknown>) : {}
+      return { ...mainChatReply(typeof raw.tool_name === 'string' ? raw.tool_name : '', input, await mainChatRoots()), toolUseID: raw.tool_use_id }
+    }
+  })
   unsubscribers.push(
     approvalBroker.onRaised((request) => {
       sessionStatusTracker.apply(request.paneId, { kind: 'permission-raised', requestId: request.requestId })

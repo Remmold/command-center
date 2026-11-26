@@ -35,6 +35,7 @@ import { changeLayout, isShown, openRow, useAccountSectionsStore, useListFold, u
 import type { ChatPair } from '../../state/chatPair'
 import { useFeaturesStore } from '../../state/featuresStore'
 import { FeaturesGroup } from './FeaturesGroup'
+import { MainChatRow } from './MainChatRow'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -172,6 +173,7 @@ export function SessionList() {
         <SearchField label="Search sessions" placeholder="Search title, repo or worktree" value={search} onChange={setSearch} />
       </div>
       <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
+        <MainChatRow />
         <FeaturesGroup />
         {!loading && sections.length === 0 && <EmptyHint>{search.trim() ? 'No session matches.' : 'No sessions yet.'}</EmptyHint>}
         {headed

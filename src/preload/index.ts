@@ -53,6 +53,11 @@ const api: RendererApi = {
       ipcRenderer.invoke(IPC.WORKSPACES_SET_PROFILE, id, profileId),
     reorder: (ids: string[]): Promise<Workspace[]> => ipcRenderer.invoke(IPC.WORKSPACES_REORDER, ids)
   },
+  mainChat: {
+    info: () => ipcRenderer.invoke(IPC.MAIN_CHAT_INFO),
+    setProfile: (profileId) => ipcRenderer.invoke(IPC.MAIN_CHAT_SET_PROFILE, profileId),
+    setClaudeSession: (claudeSessionId) => ipcRenderer.invoke(IPC.MAIN_CHAT_SET_CLAUDE_SESSION, claudeSessionId)
+  },
   features: {
     list: () => ipcRenderer.invoke(IPC.FEATURES_LIST),
     create: (request) => ipcRenderer.invoke(IPC.FEATURES_CREATE, request),
