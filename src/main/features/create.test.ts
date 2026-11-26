@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { profileEnv } from '../../shared/profiles'
 import { BRIEF_LIMIT, type FeatureRecord } from '../../shared/features'
 import type { Workspace } from '../../shared/types'
-import { addWorktree, branchTaken, isGitRepo, mainBranch, removeNewWorktree } from '../git/service'
+import { addWorktree, branchTaken, fileInBranch, isGitRepo, mainBranch, removeNewWorktree } from '../git/service'
 import { git, isolateGitEnv, makeTempRepo } from '../util/testGit'
 import { createFeature, discardFeature, featureBranch, preflightFeature, worktreePathFor, writeNewFile, type CreateDeps } from './create'
 
@@ -35,7 +35,7 @@ function workspace(path: string, profileId: string, id: string): Workspace {
 
 function deps(): CreateDeps {
   return {
-    git: { isRepo: isGitRepo, mainBranch, branchTaken, addWorktree, removeNewWorktree },
+    git: { isRepo: isGitRepo, mainBranch, branchTaken, fileInBranch, addWorktree, removeNewWorktree },
     workspaces: {
       get: async (id) => workspaces.find((w) => w.id === id),
       add: async (path, profileId) => {
@@ -225,6 +225,12 @@ describe('preflightFeature', () => {
     ['a taken name', async () => void (await createFeature(deps(), request)), { name: 'login' }, /already called login/],
     ['an invalid name', () => undefined, { name: 'No Good' }, /lowercase letters/],
     ['an existing branch', () => void git(repo, 'branch', 'feat/login'), {}, /branch feat\/login already exists/],
+    ['a brief already in the main branch', () => {
+      mkdirSync(join(repo, '.scratch', 'login'), { recursive: true })
+      writeFileSync(join(repo, '.scratch', 'login', 'brief.md'), 'old')
+      git(repo, 'add', '.')
+      git(repo, 'commit', '-m', 'brief')
+    }, {}, /login already has a brief in \w+; pick another name\./],
     ['an existing folder', () => mkdirSync(worktreePathFor(repo, 'login'), { recursive: true }), {}, /already exists/],
     ['a workspace that is not a repository', () => void workspaces.push(workspace(join(root, 'plain'), 'work-profile', 'plain')), { workspaceId: 'plain' }, /not a git repository/],
     ['a removed account', () => void (profileRemoved = true), {}, /account of .* was removed/],
@@ -314,6 +320,32 @@ describe('failure report', () => {
     }
     const result = await createFeature(d, request)
     expect(result).toEqual({ ok: false, error: 'Could not make the feature while making the worktree and branch: git exploded. Nothing was left behind.' })
+  })
+
+  it('removes nothing when the branch appeared after the checks, and says nothing of this call was left', async () => {
+    const d = deps()
+    d.git.branchTaken = async (cwd, branch) => (branch === 'feat/login' ? false : branchTaken(cwd, branch))
+    git(repo, 'branch', 'feat/login')
+    const other = join(root, 'other-wt')
+    git(repo, 'worktree', 'add', other, 'feat/login')
+    const result = await createFeature(d, request)
+    expect(result.ok === false && result.error).toMatch(/while making the worktree and branch: [\s\S]*\. Nothing was left behind\.$/)
+    expect(git(repo, 'branch', '--list', 'feat/login').trim()).not.toBe('')
+    expect(existsSync(other)).toBe(true)
+    expect(git(repo, 'worktree', 'list', '--porcelain')).toMatch(/other-wt/)
+  })
+
+  it('removes nothing when the folder appeared after the checks', async () => {
+    const d = deps()
+    const add = d.git.addWorktree
+    d.git.addWorktree = async (...args) => {
+      mkdirSync(args[1], { recursive: true })
+      writeFileSync(join(args[1], 'keep.txt'), 'theirs')
+      await add(...args)
+    }
+    const result = await createFeature(d, request)
+    expect(result.ok === false && result.error).toMatch(/while making the worktree and branch: [\s\S]*\. Nothing was left behind\.$/)
+    expect(readFileSync(join(folder(), 'keep.txt'), 'utf8')).toBe('theirs')
   })
 
   it('names the install step and says nothing was left behind after a clean undo', async () => {

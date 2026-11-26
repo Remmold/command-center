@@ -10,6 +10,8 @@ export interface CreateDeps {
     isRepo: (path: string) => Promise<boolean>
     mainBranch: (path: string) => Promise<string | null>
     branchTaken: (path: string, branch: string) => Promise<boolean>
+    /** Whether a file is committed in a branch. */
+    fileInBranch: (path: string, branch: string, file: string) => Promise<boolean>
     addWorktree: (repo: string, path: string, branch: string, base: string) => Promise<void>
     removeNewWorktree: (repo: string, path: string, branch: string) => Promise<void>
   }
@@ -73,6 +75,7 @@ async function checkStart(deps: CreateDeps, request: PreflightRequest): Promise<
   const briefPath = join(worktreePath, ...briefRelativePath(request.name).split('/'))
   if (await deps.pathExists(worktreePath)) return fail(`The folder ${worktreePath} already exists.`)
   if (await deps.git.branchTaken(source.path, branch)) return fail(`The branch ${branch} already exists.`)
+  if (await deps.git.fileInBranch(source.path, base, briefRelativePath(request.name))) return fail(`${request.name} already has a brief in ${base}; pick another name.`)
   return { ok: true, plan: { source, profile, base, branch, worktreePath, briefPath } }
 }
 
@@ -148,7 +151,8 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
     const previewBrowser = await deps.hasPreviewBrowser(source.id)
     return request.brief === undefined ? { ok: true, feature, previewBrowser } : { ok: true, feature, previewBrowser, briefPath }
   } catch (err) {
-    const left = await leftAfterUndo(deps, { repoPath: source.path, worktreePath, branch, workspaceId: workspace?.id })
+    // A failed add made nothing, and the branch or folder in the way belongs to someone else.
+    const left = step === 'worktree' ? [] : await leftAfterUndo(deps, { repoPath: source.path, worktreePath, branch, workspaceId: workspace?.id })
     return fail(failureReport(step, reason(err), left))
   }
 }

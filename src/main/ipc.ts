@@ -35,7 +35,7 @@ import { isTeleportedSession } from './claude/teleport'
 import { BoardService } from './board/service'
 import { DiscoveryService } from './board/discoveryService'
 import { contextReport, readListedFile, startTotals, writeListedFile } from './context/service'
-import { addWorktree, branchTaken, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
+import { addWorktree, branchTaken, fileInBranch, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
 import { createFeatureStore } from './features/store'
 import { featureAccount } from './features/account'
 import { killRunningInstalls, runInstall } from './features/install'
@@ -272,6 +272,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       isRepo: isGitRepo,
       mainBranch,
       branchTaken,
+      fileInBranch,
       addWorktree,
       removeNewWorktree
     },

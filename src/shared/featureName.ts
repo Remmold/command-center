@@ -1,5 +1,6 @@
 const MAX_SLUG = 24
 const VALID = /^[a-z0-9][a-z0-9-]*$/
+const DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
 
 /** A short folder- and branch-safe name from the words of a description. */
 export function proposeSlug(description: string): string {
@@ -19,6 +20,7 @@ export function nameProblem(name: string, taken: readonly string[]): string | nu
   if (!VALID.test(name) || name.length > 40) {
     return 'Use lowercase letters, digits and dashes only, starting with a letter or digit (40 characters at most): the name becomes a folder and a branch.'
   }
+  if (DEVICE.test(name)) return `${name} is a name reserved by Windows and cannot be a folder; pick another.`
   if (taken.some((t) => t.toLowerCase() === name.toLowerCase())) return `Another feature is already called ${name}.`
   return null
 }
