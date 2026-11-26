@@ -3,7 +3,7 @@ import { EyeOff, X } from 'lucide-react'
 import { SOURCE_ORDER, isSettingsObject, keyPath, type SettingsLayer, type SourceLayer } from '../../../shared/claudeSettings'
 import { LAYER_NAMES, layerList } from '../../../shared/claudeSettingsCatalog'
 import type { LayerSettings } from '../../../shared/claudeSettingsEffective'
-import { ENV_VAR_NAMES, MASK, envRows, envVar, ignoredHere, isSecretName, retiredNote, toggleText, toggledOn, type EnvRow, type EnvVar } from '../../../shared/envCatalog'
+import { ENV_VAR_NAMES, MASK, acceptsValue, envRows, envVar, ignoredHere, isSecretName, retiredNote, toggleText, toggledOn, type EnvRow, type EnvVar } from '../../../shared/envCatalog'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -34,12 +34,8 @@ function sourceWords(row: EnvRow, edited: SettingsLayer): string | null {
   const source = row.effective?.layer
   if (!source) return null
   if (source === 'organisation') return 'Set by your organisation'
-  if (source === edited) return `From ${LAYER_NAMES[source]}`
-  const editedCounts = row.value !== undefined && ignoredHere(row.name, edited, row.value) === null
-  return above(source, edited) || editedCounts ? `Overridden by ${LAYER_NAMES[source]}` : `From ${LAYER_NAMES[source]}`
+  return above(source, edited) ? `Overridden by ${LAYER_NAMES[source]}` : `From ${LAYER_NAMES[source]}`
 }
-
-const isNumberText = (text: string): boolean => Number.isFinite(Number(text.replace(/_/g, ''))) && !text.startsWith('-')
 
 interface ValueControlProps {
   name: string
@@ -48,11 +44,13 @@ interface ValueControlProps {
   disabled: boolean
   /** Undefined removes the variable. */
   onChange: (value: string | undefined) => void
+  /** Told whether the box holds text the variable doesn't take, which isn't saved. */
+  onRefused: (refused: boolean) => void
 }
 
 /** On/off as a checkbox and numbers checked, for a variable the catalog describes; a text box for any other value. */
-function ValueControl({ name, known, value, disabled, onChange }: ValueControlProps) {
-  const on = known?.kind === 'toggle' ? toggledOn(known, value) : undefined
+function ValueControl({ name, known, value, disabled, onChange, onRefused }: ValueControlProps) {
+  const on = toggledOn(known, value)
   if (known && on !== undefined) {
     return (
       <Checkbox checked={on} disabled={disabled} onChange={(next) => onChange(toggleText(known, next))}>
@@ -69,8 +67,11 @@ function ValueControl({ name, known, value, disabled, onChange }: ValueControlPr
       disabled={disabled}
       submitOnBlur
       keepOnSubmit
+      onChange={() => onRefused(false)}
       onSubmit={(text) => {
-        if (known?.kind !== 'number' || isNumberText(text)) onChange(text)
+        const takes = acceptsValue(known, text)
+        onRefused(!takes)
+        if (takes) onChange(text)
       }}
     />
   )
@@ -95,12 +96,13 @@ interface VarRowProps {
 
 function VarRow({ row, layer, disabled, onChange }: VarRowProps) {
   const [shown, setShown] = useState(false)
+  const [refused, setRefused] = useState(false)
   const known = envVar(row.name)
   const secret = isSecretName(row.name)
   const hidden = secret && !shown
   const words = (value: string) => {
     if (hidden) return MASK
-    const on = known?.kind === 'toggle' ? toggledOn(known, value) : undefined
+    const on = toggledOn(known, value)
     return on === undefined ? value : on ? 'on' : 'off'
   }
   const own = row.value
@@ -125,6 +127,7 @@ function VarRow({ row, layer, disabled, onChange }: VarRowProps) {
           {own === undefined && <Badge tone="quiet">Set in {layerList(row.others.map((o) => o.layer))}</Badge>}
           {ignored && <Badge tone="quiet-warning">{ignored}</Badge>}
           {retired && <Badge tone="quiet-warning">{retired}</Badge>}
+          {refused && <Badge tone="quiet-warning">Not a number, so not taken</Badge>}
         </>
       }
       control={
@@ -132,7 +135,7 @@ function VarRow({ row, layer, disabled, onChange }: VarRowProps) {
           {hidden ? (
             <Masked name={row.name} onShow={() => setShown(true)} />
           ) : editable ? (
-            <ValueControl name={row.name} known={known} value={own} disabled={disabled} onChange={onChange} />
+            <ValueControl name={row.name} known={known} value={own} disabled={disabled} onChange={onChange} onRefused={setRefused} />
           ) : (
             <span className="truncate text-muted">{own ?? row.others[0]?.value}</span>
           )}
@@ -161,13 +164,13 @@ function kindHint(known: EnvVar | undefined): string {
 function VarBuilder({ taken, disabled, onAdd }: { taken: readonly string[]; disabled: boolean; onAdd: (name: string, value: string) => void }) {
   const [name, setName] = useState('')
   const [value, setValue] = useState('')
-  // Bumped on each add, so both boxes start empty again.
+  // Remounts both boxes empty after an add.
   const [added, setAdded] = useState(0)
   const trimmed = name.trim()
   const known = envVar(trimmed)
   const valid = VALID_NAME.test(trimmed)
   const text = value.trim() === '' && known?.kind === 'toggle' ? toggleText(known, true) : value.trim()
-  const ready = valid && text !== undefined && text !== '' && (known?.kind !== 'number' || isNumberText(text))
+  const ready = valid && text !== undefined && text !== '' && acceptsValue(known, text)
   const add = () => {
     if (!ready || text === undefined) return
     onAdd(trimmed, text)

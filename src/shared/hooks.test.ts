@@ -27,13 +27,18 @@ describe('hook events', () => {
     for (const event of HOOK_EVENTS) expect(event.label, event.name).toMatch(/^[A-Z]/)
   })
 
-  it('knows the skill shell and model switch events, which run no prompt or agent hooks', () => {
+  it('knows the skill shell and model switch events, and the hook types each event runs', () => {
     const hooks = { PreSkillShellCommand: [{ matcher: 'Bash|PowerShell', hooks: [lint] }], PreModelSwitch: [{ matcher: 'claude-opus-5', hooks: [lint] }], PostModelSwitch: [{ hooks: [notify] }] }
     expect(hooksLeftOut(hooks)).toEqual([])
     for (const name of HOOKS_DOCS_ONLY) expect(hookEvent(name)?.types, name).toEqual(['command', 'http', 'mcp_tool'])
     expect(takesIf(hookEvent('PreSkillShellCommand'))).toBe(true)
     expect(takesIf(hookEvent('PreModelSwitch'))).toBe(false)
     expect(defaultTimeout('command', 'PreModelSwitch')).toBe(30)
+    expect(hookEvent('ConfigChange')?.types).toEqual(['command', 'http', 'mcp_tool'])
+    expect(hookEvent('SessionStart')?.types).toEqual(['command', 'mcp_tool'])
+    expect(hookEvent('Setup')?.types).toEqual(['command'])
+    expect(hookEvent('PermissionRequest')?.types).toEqual(['command', 'http', 'mcp_tool', 'prompt'])
+    expect(hookEvent('PreToolUse')?.types).toBeUndefined()
     expect(defaultTimeout('command', 'PreSkillShellCommand')).toBe(600)
   })
 })

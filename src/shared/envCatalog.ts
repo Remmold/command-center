@@ -115,16 +115,19 @@ export interface EnvVar {
   kind: EnvValueKind
   /** For a toggle, the text that turns it on; '1' when absent. */
   on?: string
-  /** For a toggle, the text that turns it off, or null when only an unset variable is off; '0' when absent. */
-  off?: string | null
+  /** For a toggle, the text that turns it off; '0' when absent. */
+  off?: string
+  /** Off takes the variable out of the file instead of saving the off text. */
+  offRemoves?: boolean
+  /** Claude reads only whether it is set, so any text, 0 too, is on. */
+  setOrNot?: boolean
   placeholder?: string
 }
 
 const toggle = (name: string, description: string, extra: Partial<EnvVar> = {}): EnvVar => ({ name, description, kind: 'toggle', ...extra })
 const number = (name: string, description: string, placeholder?: string): EnvVar => ({ name, description, kind: 'number', placeholder })
 const text = (name: string, description: string, placeholder?: string): EnvVar => ({ name, description, kind: 'text', placeholder })
-/** The docs list these as read set-or-not: any value, even 0, turns them on. */
-const SET_OR_NOT: Partial<EnvVar> = { off: null }
+const SET_OR_NOT: Partial<EnvVar> = { setOrNot: true, offRemoves: true }
 
 /** The variables worth a plain explanation and a typed input. */
 export const DESCRIBED_ENV_VARS: readonly EnvVar[] = [
@@ -194,7 +197,7 @@ export const DESCRIBED_ENV_VARS: readonly EnvVar[] = [
   toggle('DISABLE_COMPACT', 'Turns off all compaction, /compact included.'),
   number('CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', 'Compacts earlier, at this percentage (1 to 100) of the compaction window.', '50'),
   number('CLAUDE_CODE_AUTO_COMPACT_WINDOW', 'Tokens the conversation reaches before it is compacted, at least 100000.', '200000'),
-  toggle('CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'Turns auto memory off; 0 turns it on even where it would be off.'),
+  toggle('CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'Turns auto memory off. Off here removes the variable; a 0 typed in the file turns auto memory on even where it would be off.', { offRemoves: true }),
   toggle('CLAUDE_CODE_DISABLE_CLAUDE_MDS', 'Loads no CLAUDE.md or memory files at all.'),
   toggle('CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS', 'Leaves out Claude’s built-in commit and pull request instructions and the git status.'),
   toggle('CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING', 'Saves no files before edits, so /rewind can’t bring code back.'),
@@ -217,6 +220,7 @@ const RETIRED: Readonly<Record<string, string>> = {
   ANTHROPIC_SMALL_FAST_MODEL: 'Deprecated: use ANTHROPIC_DEFAULT_HAIKU_MODEL',
   CLAUDE_CODE_AUTO_BACKGROUND_WORKER_CHECKIN_SECONDS: 'Removed in v2.1.283: use CLAUDE_CODE_WORKER_CHECKIN_SCHEDULE',
   CLAUDE_CODE_CONNECT_TIMEOUT_MS: 'Removed in v2.1.186; does nothing: use API_TIMEOUT_MS',
+  CLAUDE_CODE_ENABLE_AUTO_MODE: 'Kept for older releases; has no effect',
   CLAUDE_CODE_ENABLE_OPUS_4_7_FAST_MODE: 'Removed in v2.1.142; does nothing',
   CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION: 'Removed in v2.1.224; does nothing',
   CLAUDE_CODE_OPUS_4_6_FAST_MODE_OVERRIDE: 'Removed in v2.1.160; does nothing',
@@ -227,27 +231,34 @@ const RETIRED: Readonly<Record<string, string>> = {
 
 export const retiredNote = (name: string): string | null => RETIRED[name] ?? null
 
-export const isSecretName = (name: string): boolean => /KEY|TOKEN|SECRET|PASSWORD/i.test(name)
+/** A name part ending in KEY, TOKEN, SECRET or PASSWORD, so a count such as MAX_OUTPUT_TOKENS isn't one. */
+export const isSecretName = (name: string): boolean => /(^|_)[A-Z0-9]*(KEY|TOKEN|SECRET|PASSWORD)\d*(_|$)/i.test(name)
 
 export const MASK = '••••••••'
 
 /** The text a toggle saves; undefined removes the variable. */
 export function toggleText(v: EnvVar, on: boolean): string | undefined {
   if (on) return v.on ?? '1'
-  return v.off === null ? undefined : (v.off ?? '0')
+  return v.offRemoves ? undefined : (v.off ?? '0')
 }
 
 const ON_WORDS = new Set(['1', 'true', 'yes', 'on'])
 const OFF_WORDS = new Set(['0', 'false', 'no', 'off'])
 
-/** Whether the text turns the toggle on; undefined for text it doesn't read as either. */
-export function toggledOn(v: EnvVar, value: string): boolean | undefined {
-  if (v.off === null) return value !== ''
+/** Whether the text turns the toggle on; undefined for text it doesn't read as either, or a variable that isn't a toggle. */
+export function toggledOn(v: EnvVar | undefined, value: string): boolean | undefined {
+  if (v?.kind !== 'toggle') return undefined
+  if (v.setOrNot) return value !== ''
   const word = value.trim().toLowerCase()
   if (ON_WORDS.has(word) || word === v.on?.toLowerCase()) return true
   if (OFF_WORDS.has(word) || word === v.off?.toLowerCase()) return false
   return undefined
 }
+
+const NUMBER_TEXT = /^\d[\d_]*(\.\d+)?(e\d+)?$/i
+
+/** Whether the variable takes the text: a number variable only digits, digit separators or an exponent, as the docs allow. */
+export const acceptsValue = (v: EnvVar | undefined, text: string): boolean => v?.kind !== 'number' || NUMBER_TEXT.test(text)
 
 /** What Repo and Local `env` can't set (settings reference, "Variables Claude Code ignores in env"). */
 const NOT_FROM_REPO = new Set([

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DESCRIBED_ENV_VARS, ENV_VAR_NAMES, envLeftOut, envRows, envVar, ignoredHere, isSecretName, retiredNote, toggleText, toggledOn } from './envCatalog'
+import { DESCRIBED_ENV_VARS, ENV_VAR_NAMES, acceptsValue, envLeftOut, envRows, envVar, ignoredHere, isSecretName, retiredNote, toggleText, toggledOn } from './envCatalog'
 
 describe('the environment catalog', () => {
   it('lists every documented name once, and describes only listed names, once each', () => {
@@ -16,14 +16,15 @@ describe('the environment catalog', () => {
   it('marks the names the docs say are removed or deprecated', () => {
     expect(retiredNote('CLAUDE_CODE_CONNECT_TIMEOUT_MS')).toMatch(/Removed/)
     expect(retiredNote('ANTHROPIC_SMALL_FAST_MODEL')).toMatch(/Deprecated/)
+    expect(retiredNote('CLAUDE_CODE_ENABLE_AUTO_MODE')).toMatch(/no effect/)
     expect(retiredNote('API_TIMEOUT_MS')).toBeNull()
   })
 })
 
 describe('masking', () => {
-  it('applies to a name holding KEY, TOKEN, SECRET or PASSWORD, in any case', () => {
-    for (const name of ['ANTHROPIC_API_KEY', 'AWS_BEARER_TOKEN_BEDROCK', 'MCP_CLIENT_SECRET', 'DB_PASSWORD', 'my_token']) expect(isSecretName(name), name).toBe(true)
-    for (const name of ['API_TIMEOUT_MS', 'HTTPS_PROXY', 'DISABLE_TELEMETRY']) expect(isSecretName(name), name).toBe(false)
+  it('applies to a name with a KEY, TOKEN, SECRET or PASSWORD part, in any case, not to a count of tokens', () => {
+    for (const name of ['ANTHROPIC_API_KEY', 'AWS_BEARER_TOKEN_BEDROCK', 'MCP_CLIENT_SECRET', 'DB_PASSWORD', 'my_token', 'CLAUDE_CODE_CLIENT_KEY_PASSPHRASE', 'APIKEY', 'GITHUB_PAT_TOKEN2']) expect(isSecretName(name), name).toBe(true)
+    for (const name of ['API_TIMEOUT_MS', 'HTTPS_PROXY', 'DISABLE_TELEMETRY', 'MAX_THINKING_TOKENS', 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'KEYBOARD_LAYOUT']) expect(isSecretName(name), name).toBe(false)
   })
 })
 
@@ -35,7 +36,17 @@ describe('typed values', () => {
     expect(toggleText(autoupdater!, false)).toBe('0')
     expect(toggleText(envVar('DISABLE_TELEMETRY')!, false)).toBeUndefined()
     expect(toggleText(envVar('CLAUDE_CODE_SYNTAX_HIGHLIGHT')!, false)).toBe('false')
+    expect(toggleText(envVar('CLAUDE_CODE_DISABLE_AUTO_MEMORY')!, false)).toBeUndefined()
+    expect(toggledOn(envVar('CLAUDE_CODE_DISABLE_AUTO_MEMORY')!, '0')).toBe(false)
     expect(envVar('API_TIMEOUT_MS')?.kind).toBe('number')
+  })
+
+  it('take a number only as plain digits, digit separators or an exponent', () => {
+    const timeout = envVar('API_TIMEOUT_MS')
+    for (const text of ['600000', '64_000', '2e3', '1.5']) expect(acceptsValue(timeout, text), text).toBe(true)
+    for (const text of ['', ' ', 'ten', '0x10', '-1']) expect(acceptsValue(timeout, text), text).toBe(false)
+    expect(acceptsValue(envVar('HTTPS_PROXY'), 'http://proxy')).toBe(true)
+    expect(acceptsValue(undefined, 'anything')).toBe(true)
   })
 
   it('read any of the docs’ on words as on; a set-or-not variable is on with any value', () => {
