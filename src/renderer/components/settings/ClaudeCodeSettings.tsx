@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
 import { SETTINGS_CATALOG, SETTING_CATEGORIES, changeText, entryFor, entryOf, formatSettingValue, matchesSearch, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
-import { changeCount, getAt, pathKeys, patchSize, sameValue, withPatch, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
+import { changeCount, getAt, pathKeys, patchPaths, patchSize, sameValue, withPatch, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
 import { effectiveSetting, ruleSources, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
 import { RULE_LISTS, ruleListKey, ruleListOf, type RuleList } from '../../../shared/permissionRules'
 import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
@@ -85,7 +85,7 @@ function openInContext(workspaceId: string, path: string): void {
 }
 
 /** Whether the patch changes the entry's key or a path inside it no other entry owns. */
-const touches = (patch: SettingsPatch, entry: SettingEntry): boolean => [...Object.keys(patch.set), ...patch.remove].some((path) => entryOf(path)?.key === entry.key)
+const touches = (patch: SettingsPatch, entry: SettingEntry): boolean => patchPaths(patch).some((path) => entryOf(path)?.key === entry.key)
 
 function settingWords(key: string): { label: string; format: (value: unknown) => string } {
   const entry = entryOf(key)

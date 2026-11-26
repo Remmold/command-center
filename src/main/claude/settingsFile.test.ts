@@ -59,6 +59,23 @@ describe('applyPatch', () => {
     })
   })
 
+  it('adds and removes single rules on the list as it is on disk, keeping a rule Claude added meanwhile without a conflict', () => {
+    const base = { permissions: { allow: ['Read', 'Edit'], deny: ['WebSearch'] } }
+    const onDisk = text({ permissions: { allow: ['Bash(git status)', 'Read', 'Edit'], deny: ['WebSearch'] } })
+    const result = applyPatch(onDisk, base, {
+      set: {},
+      remove: [],
+      items: { 'permissions.allow': { add: ['Write', 'Read'], remove: ['Edit'] }, 'permissions.ask': { add: ['Edit'], remove: [] } }
+    })
+    expect(result).toEqual({ ok: true, text: text({ permissions: { allow: ['Bash(git status)', 'Read', 'Write'], deny: ['WebSearch'], ask: ['Edit'] } }) })
+  })
+
+  it('removes a list its last rule was removed from, and the parent that empties with it', () => {
+    const onDisk = text({ permissions: { deny: ['WebSearch'] }, model: 'opus' })
+    const result = applyPatch(onDisk, { permissions: { deny: ['WebSearch'] } }, { set: {}, remove: [], items: { 'permissions.deny': { add: [], remove: ['WebSearch'] } } })
+    expect(result).toEqual({ ok: true, text: text({ model: 'opus' }) })
+  })
+
   it('refuses a file that does not parse or is not an object', () => {
     expect(applyPatch('{ "model": ', {}, { set: { model: 'opus' }, remove: [] })).toMatchObject({ ok: false, error: expect.stringContaining('not valid JSON') })
     expect(applyPatch('[1, 2]', null, { set: { model: 'opus' }, remove: [] })).toEqual({ ok: false, error: 'not a JSON object' })

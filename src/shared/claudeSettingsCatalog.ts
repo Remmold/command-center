@@ -1,4 +1,4 @@
-import { isSettingsObject, keyPath, pathKeys, sameValue, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
+import { ITEM_LISTS, isSettingsObject, keyPath, pathKeys, sameValue, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
 import { isRuleList, ruleRisk } from './permissionRules'
 
 export const SETTING_CATEGORIES = [
@@ -693,9 +693,9 @@ export function formatSettingValue(entry: SettingEntry, value: unknown): string 
 const missingFrom = (items: unknown[], from: unknown[]): unknown[] => items.filter((item) => !from.some((other) => sameValue(other, item)))
 const listed = (items: unknown[]): string => items.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join(', ')
 
-/** A change as Review shows it: a rule list's rules added and removed, any other value as before → after. */
+/** A change as Review shows it: an item list's items added and removed, any other value as before → after. */
 export function changeText(entry: SettingEntry, before: unknown, after: unknown): string {
-  if (isRuleListEntry(entry) && isRuleList(before) && isRuleList(after)) {
+  if (ITEM_LISTS.includes(entry.key) && isRuleList(before) && isRuleList(after)) {
     const added = missingFrom(after ?? [], before ?? [])
     const removed = missingFrom(before ?? [], after ?? [])
     const parts = [added.length > 0 && `Added ${listed(added)}`, removed.length > 0 && `Removed ${listed(removed)}`].filter(Boolean)

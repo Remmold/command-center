@@ -1,4 +1,4 @@
-import { getAt, type SettingsObject, type SettingsSnapshot } from '../../../shared/claudeSettings'
+import { getAt, patchPaths, type SettingsObject, type SettingsSnapshot } from '../../../shared/claudeSettings'
 import { otherKeys } from '../../../shared/claudeSettingsCatalog'
 import { conflicts, type PendingFile } from '../../state/claudeSettingsPending'
 
@@ -22,7 +22,7 @@ export function otherKeyRows(disk: SettingsObject | null, edited: SettingsObject
     path,
     value: getAt(edited, path),
     before: getAt(before, path),
-    changed: pending !== null && (Object.hasOwn(pending.patch.set, path) || pending.patch.remove.includes(path)),
+    changed: pending !== null && patchPaths(pending.patch).includes(path),
     fileValue: fileChanged.get(path)
   }))
 }

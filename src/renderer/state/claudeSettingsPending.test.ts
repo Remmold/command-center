@@ -33,6 +33,27 @@ describe('staging Claude Code settings changes', () => {
   })
 })
 
+describe('staging a permission rule list', () => {
+  const rules = { permissions: { allow: ['Read', 'Edit'] } }
+
+  it('records the rules added and removed, and the list empty once its last rule goes', () => {
+    const file = stage(null, rules, 'permissions.allow', ['Edit', 'Write'])
+    expect(file?.patch).toEqual({ set: {}, remove: [], items: { 'permissions.allow': { add: ['Write'], remove: ['Read'] } } })
+    expect(pendingChanges(file)).toEqual([{ key: 'permissions.allow', before: ['Read', 'Edit'], after: ['Edit', 'Write'] }])
+    const emptied = stage(null, rules, 'permissions.allow', [])
+    expect(shownValue(emptied, rules, 'permissions.allow')).toBeUndefined()
+    expect(shownValue(emptied, rules, 'permissions')).toBeUndefined()
+  })
+
+  it('keeps a rule Claude added on disk meanwhile, with no question to ask', () => {
+    const file = stage(null, rules, 'permissions.allow', ['Edit', 'Write']) as PendingFile
+    const disk = { permissions: { allow: ['Read', 'Edit', 'Bash(git status)'] } }
+    const now = refreshed(file, disk)
+    expect(conflicts(now, disk)).toEqual([])
+    expect(shownValue(now, disk, 'permissions.allow')).toEqual(['Edit', 'Bash(git status)', 'Write'])
+  })
+})
+
 describe('a settings file that changed on disk while changes wait', () => {
   const waiting = (): PendingFile => stage(stage(null, base, 'model', 'opus'), base, 'effortLevel', 'high') as PendingFile
 

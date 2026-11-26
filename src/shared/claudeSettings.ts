@@ -13,7 +13,45 @@ export interface SettingsSnapshot {
 export interface SettingsPatch {
   set: Record<string, unknown>
   remove: string[]
+  /** Per item list (`ITEM_LISTS`), the items to add and remove, applied to the list as it is then. */
+  items?: Record<string, ItemEdit>
 }
+
+export interface ItemEdit {
+  add: string[]
+  remove: string[]
+}
+
+/** The string lists Claude appends to itself, such as an "always allow" rule; they are patched per item, never whole (ADR 0006). */
+export const ITEM_LISTS: readonly string[] = ['permissions.allow', 'permissions.ask', 'permissions.deny', 'permissions.additionalDirectories']
+
+export const isStringList = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string')
+
+/** The list with the edit applied: each removed item's first copy out, each added item not there yet onto the end. */
+export function editedList(list: readonly string[], edit: ItemEdit): string[] {
+  const next = [...list]
+  for (const item of edit.remove) {
+    const at = next.indexOf(item)
+    if (at >= 0) next.splice(at, 1)
+  }
+  for (const item of edit.add) if (!next.includes(item)) next.push(item)
+  return next
+}
+
+/** The edit that turns `from` into `to`, ignoring order; null when they hold the same items. */
+export function itemEdit(from: readonly string[], to: readonly string[]): ItemEdit | null {
+  const left = [...to]
+  const remove = from.filter((item) => {
+    const at = left.indexOf(item)
+    if (at < 0) return true
+    left.splice(at, 1)
+    return false
+  })
+  return remove.length + left.length === 0 ? null : { add: left, remove }
+}
+
+/** Every key path the patch touches. */
+export const patchPaths = (patch: SettingsPatch): string[] => [...Object.keys(patch.set), ...patch.remove, ...Object.keys(patch.items ?? {})]
 
 export type SettingsSaveResult =
   | { ok: true; snapshot: SettingsSnapshot }
@@ -107,6 +145,12 @@ export function withPatch(settings: SettingsObject, patch: SettingsPatch): Setti
   const patched = structuredClone(settings)
   for (const [path, value] of Object.entries(patch.set)) setAt(patched, path, value)
   for (const path of patch.remove) removeAt(patched, path)
+  for (const [path, edit] of Object.entries(patch.items ?? {})) {
+    const onFile = getAt(patched, path)
+    const next = editedList(isStringList(onFile) ? onFile : [], edit)
+    if (next.length > 0) setAt(patched, path, next)
+    else removeAt(patched, path)
+  }
   return patched
 }
 
@@ -120,7 +164,10 @@ export function sameValue(a: unknown, b: unknown): boolean {
   return keys.length === Object.keys(b).length && keys.every((key) => key in b && sameValue(a[key], b[key]))
 }
 
-export const patchSize = (patch: SettingsPatch): number => Object.keys(patch.set).length + patch.remove.length
+export const patchSize = (patch: SettingsPatch): number => patchPaths(patch).length
 
 export const isSettingsPatch = (value: unknown): value is SettingsPatch =>
-  isSettingsObject(value) && isSettingsObject(value.set) && Array.isArray(value.remove) && value.remove.every((path) => typeof path === 'string')
+  isSettingsObject(value) &&
+  isSettingsObject(value.set) &&
+  isStringList(value.remove) &&
+  (value.items === undefined || (isSettingsObject(value.items) && Object.values(value.items).every((edit) => isSettingsObject(edit) && isStringList(edit.add) && isStringList(edit.remove))))

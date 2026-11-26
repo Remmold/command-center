@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { samePath } from '../profiles/linker'
-import { getAt, isSettingsObject, sameValue, withPatch, type OrganisationFile, type SettingsObject, type SettingsPatch, type SettingsSaveResult, type SettingsSnapshot } from '../../shared/claudeSettings'
+import { getAt, isSettingsObject, isStringList, sameValue, withPatch, type OrganisationFile, type SettingsObject, type SettingsPatch, type SettingsSaveResult, type SettingsSnapshot } from '../../shared/claudeSettings'
 
 export type ParsedSettings = { ok: true; value: SettingsObject } | { ok: false; error: string }
 
@@ -20,7 +20,8 @@ export function parseSettings(text: string | null): ParsedSettings {
 
 /**
  * Applies the patch onto the file's text. With a base, a patched path whose value in the text differs
- * from the base's is a conflict and nothing is applied; a null base applies over whatever is there.
+ * from the base's is a conflict and nothing is applied; a null base applies over whatever is there. An item
+ * list's edit goes onto the list as the text holds it, so it conflicts only with a value that isn't a list.
  */
 export function applyPatch(text: string | null, base: SettingsObject | null, patch: SettingsPatch): PatchResult {
   const parsed = parseSettings(text)
@@ -31,6 +32,10 @@ export function applyPatch(text: string | null, base: SettingsObject | null, pat
       const onDisk = getAt(parsed.value, path)
       return sameValue(onDisk, getAt(base, path)) || sameValue(onDisk, value) ? [] : [path]
     })
+    for (const path of Object.keys(patch.items ?? {})) {
+      const onDisk = getAt(parsed.value, path)
+      if (onDisk !== undefined && !isStringList(onDisk)) conflicts.push(path)
+    }
     if (conflicts.length > 0) return { ok: false, conflicts }
   }
   return { ok: true, text: patchedText(parsed.value, patch) }
