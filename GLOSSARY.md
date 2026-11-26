@@ -13,7 +13,7 @@ A named Claude login that a workspace uses. Every workspace uses exactly one. Th
 _Avoid_: Licence, account, user
 
 **Account**:
-How an account profile is shown: its name and plan, e.g. "Work · Team". Each profile has an editable short name; the email appears only in tooltips and Settings. Projects and their sessions are grouped by account in Work, the Dashboard, the Board and Settings.
+How an account profile is shown: its name and plan, e.g. "Work · Team". The plan is the Claude subscription the login has. Each profile has an editable short name; the email appears only in tooltips and Settings. Projects and their sessions are grouped by account in Work, the Dashboard, the Board and Settings.
 _Avoid_: Subscription, licence
 
 **Adopted folder**:
@@ -88,8 +88,16 @@ The worktrees of one git repository, shown together under the repo's name.
 _Avoid_: Shard set, worktree family
 
 **Own group**:
-A named group of sessions in the Work list that the user makes, names and orders by dragging, kept per account. Sessions in none of them sit in Ungrouped, first in the account. The first own groups were seeded from the repo groups.
+A named group of sessions in the Work list that the user makes, names and orders by dragging, kept under one account. It may hold sessions of other accounts too: where a session sits never changes the account it runs on, which comes from its workspace. Sessions in no own group sit in Ungrouped, which is last in the account until dragged elsewhere. The first own groups were seeded from the repo groups.
 _Avoid_: Folder, category, channel
+
+**Guest session**:
+A session placed in an own group or Ungrouped under an account other than its own. Its row carries a tag naming the account it runs on.
+_Avoid_: Moved session, foreign session
+
+**Last prompt strip**:
+The one-line strip at the top of a chat showing the last prompt Andreas sent there, shown while that prompt is scrolled out of view. Clicking it scrolls the chat back to the prompt.
+_Avoid_: Pinned message, sticky prompt
 
 ## Views
 
