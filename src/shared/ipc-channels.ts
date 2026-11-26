@@ -8,6 +8,8 @@ export const IPC = {
   FEATURES_LIST: 'features:list',
   FEATURES_CREATE: 'features:create',
   FEATURES_DISCARD: 'features:discard',
+  FEATURES_STAGES: 'features:stages',
+  FEATURES_STAGES_CHANGED: 'features:stagesChanged',
   SIDEBAR_GROUPS_LOAD: 'sidebarGroups:load',
   SIDEBAR_GROUPS_SAVE: 'sidebarGroups:save',
   CHAT_HISTORY_LOAD: 'chatHistory:load',

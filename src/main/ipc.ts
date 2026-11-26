@@ -35,6 +35,8 @@ import { DiscoveryService } from './board/discoveryService'
 import { contextReport, readListedFile, startTotals, writeListedFile } from './context/service'
 import { addWorktree, branchTaken, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
 import { createFeatureStore } from './features/store'
+import { createStageService, type StageService } from './features/stageService'
+import { readTestFlowsFolder } from './testFlow/settings'
 import { createFeature, discardFeature, type CreateDeps } from './features/create'
 import type { NewFeatureRequest } from '../shared/features'
 import { approvalBroker } from './claude/approvals'
@@ -85,7 +87,9 @@ interface IpcDeps {
 }
 
 export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void {
+  let featureStages: StageService | undefined
   const board = new BoardService(workspaces.list, (model) => {
+    featureStages?.changed()
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send(IPC.BOARD_CHANGED, model)
     }
@@ -227,16 +231,30 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     pathExists: (path) => fs.access(path).then(() => true, () => false),
     now: () => Date.now()
   }
+  featureStages = createStageService({
+    listFeatures: featureStore.list,
+    listWorkspaces: workspaces.list,
+    testFlowsFolder: readTestFlowsFolder,
+    push: (stages) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.FEATURES_STAGES_CHANGED, stages)
+      }
+    }
+  })
+  unsubscribers.push(() => featureStages?.stop())
   ipcMain.handle(IPC.FEATURES_LIST, () => featureStore.list())
+  ipcMain.handle(IPC.FEATURES_STAGES, () => featureStages?.current() ?? {})
   ipcMain.handle(IPC.FEATURES_CREATE, async (_e, request: NewFeatureRequest) => {
     const result = await createFeature(featureDeps, request)
     if (result.ok) workspacesChanged()
+    featureStages?.changed()
     return result
   })
   ipcMain.handle(IPC.FEATURES_DISCARD, async (_e, name: string, workspaceId: string) => {
     const source = (await workspaces.list()).find((w) => w.id === workspaceId)
     if (source) await discardFeature(featureDeps, name, source.path)
     workspacesChanged()
+    featureStages?.changed()
   })
 
   const sidebarGroups = createSidebarGroupsStore(app.getPath('userData'))

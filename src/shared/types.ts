@@ -10,6 +10,7 @@ import type { TestFlowFocus, TestFlowView } from './testFlow'
 import type { ZoomStep } from './zoom'
 import type { LocalServer } from './localPorts'
 import type { SidebarLayout } from './sidebarGroups'
+import type { FeatureStageView } from './featureStage'
 import type { FeatureRecord, NewFeatureRequest, NewFeatureResult } from './features'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
@@ -463,6 +464,9 @@ export interface RendererApi {
     create: (request: NewFeatureRequest) => Promise<NewFeatureResult>
     /** Undoes a created feature whose session could not start. */
     discard: (name: string, workspaceId: string) => Promise<void>
+    /** Each feature's stage by name, read from its files. */
+    stages: () => Promise<Record<string, FeatureStageView>>
+    onStagesChanged: (cb: (stages: Record<string, FeatureStageView>) => void) => () => void
   }
   sidebarGroups: {
     /** null before the first save: the list then seeds one from its repo groups. */

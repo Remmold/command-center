@@ -40,6 +40,7 @@ import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from '../shared/
 import type { RepoIdentityViews } from '../shared/repoIdentity'
 import type { SpeechModelStatus, VideoProgressEvent } from '../shared/video'
 import type { TestFlowFocus } from '../shared/testFlow'
+import type { FeatureStageView } from '../shared/featureStage'
 
 const api: RendererApi = {
   workspaces: {
@@ -54,7 +55,13 @@ const api: RendererApi = {
   features: {
     list: () => ipcRenderer.invoke(IPC.FEATURES_LIST),
     create: (request) => ipcRenderer.invoke(IPC.FEATURES_CREATE, request),
-    discard: (name, workspaceId) => ipcRenderer.invoke(IPC.FEATURES_DISCARD, name, workspaceId)
+    discard: (name, workspaceId) => ipcRenderer.invoke(IPC.FEATURES_DISCARD, name, workspaceId),
+    stages: () => ipcRenderer.invoke(IPC.FEATURES_STAGES),
+    onStagesChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, stages: Record<string, FeatureStageView>) => cb(stages)
+      ipcRenderer.on(IPC.FEATURES_STAGES_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.FEATURES_STAGES_CHANGED, handler)
+    }
   },
   sidebarGroups: {
     load: () => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_LOAD),
