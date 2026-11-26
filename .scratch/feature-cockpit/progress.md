@@ -11,3 +11,4 @@ Branch: feat/feature-cockpit
 - 05 resolved: test steps checklist with Pass/Fail marks and Fail notes in a results file, counter in the Test tab and last result on the feature row — 693b82c
 - 06 resolved: Test button boots the servers and opens the test pair (test flow + sandboxed preview browser on its own storage partition, F6 flips); ports kept per server name; missing workspace and ready-wait errors handled — 1493528
 - 08 resolved: Complete (servers stopped and forgotten, pair and browser store closed, ports freed, marked Completed), Re-open with fresh ports, Remove worktree refused on unmerged work; UI scenario 17 of 20 — a815a58
+- 09 resolved: feature digest (pure renderer, change-only debounced writer in userData, wired to stage/server/session/usage/profile changes) — 78ea9cd
