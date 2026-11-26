@@ -5,6 +5,7 @@ import { profileEnv } from '../../shared/profiles'
 import type { PreviewConfig } from '../../shared/previewConfig'
 import type { CreateTerminalRequest, CreateTerminalResult, TerminalInfo } from '../../shared/types'
 import { createPortReserver } from './ports'
+import { completeFeature } from './complete'
 import { createServerRunner, type RunnerTerminals } from './serverRunner'
 
 /** A pool that records what it was asked and lets a test end a terminal. */
@@ -64,6 +65,8 @@ let held: Set<number>
 let currentConfig: PreviewConfig | null
 let missingWorkspace: string | null
 let readyThrows: boolean
+let listGate: Promise<void> | null
+let removedAccount: string | null
 
 const record = (name: string, extra: Partial<FeatureRecord> = {}): FeatureRecord => ({
   name,
@@ -79,7 +82,10 @@ const record = (name: string, extra: Partial<FeatureRecord> = {}): FeatureRecord
 
 function runner(options: { readyTimeoutMs?: number } = {}) {
   const reserver = createPortReserver({
-    list: async () => records,
+    list: async () => {
+      await listGate
+      return records
+    },
     save: async (name, ports, portNames) => void Object.assign(records.find((r) => r.name === name)!, { ports, portNames }),
     isFree: async (p) => !held.has(p)
   })
@@ -87,7 +93,12 @@ function runner(options: { readyTimeoutMs?: number } = {}) {
     terminals: pool,
     feature: async (name) => records.find((r) => r.name === name),
     config: async () => currentConfig,
-    env: async (workspaceId) => workspaceId === missingWorkspace ? null : profileEnv({ id: workspaceId === 'ws-a' ? 'work' : 'default', configDir: `C:/cfg/${workspaceId}` }, null),
+    env: async (workspaceId) =>
+      workspaceId === missingWorkspace
+        ? { ok: false, error: 'The workspace of this feature was removed, so it would run on the default account.' }
+        : workspaceId === removedAccount
+          ? { ok: false, error: 'Its account was removed, so it would run on the default login.' }
+          : { ok: true, env: profileEnv({ id: workspaceId === 'ws-a' ? 'work' : 'default', configDir: `C:/cfg/${workspaceId}` }, null) },
     reservePorts: reserver.reserve,
     isReady: async (port) => {
       if (readyThrows) throw new Error('socket exploded')
@@ -107,6 +118,8 @@ beforeEach(() => {
   currentConfig = config
   missingWorkspace = null
   readyThrows = false
+  listGate = null
+  removedAccount = null
 })
 
 const portOf = (view: { servers: { name: string; port: number }[] }, server: string): number => view.servers.find((s) => s.name === server)!.port
@@ -255,7 +268,7 @@ describe('server runner', () => {
   it('refuses a feature whose workspace is gone instead of starting it on the default account', async () => {
     missingWorkspace = 'ws-a'
     const r = runner()
-    expect(await r.start('a')).toEqual({ ok: false, error: expect.stringMatching(/workspace of a was removed.*not started/) })
+    expect(await r.start('a')).toEqual({ ok: false, error: expect.stringMatching(/workspace of this feature was removed.*not started/) })
     expect(pool.created).toHaveLength(0)
   })
 
@@ -302,5 +315,61 @@ describe('server runner', () => {
     expect(Object.keys(r.all())).toEqual(['b'])
     expect(pool.list().map((t) => t.id).sort()).toEqual(['feature-server:b:api', 'feature-server:b:web'])
     expect(seen.at(-1)).toBe('a:0')
+  })
+
+  it('Complete during a start leaves no running server and no saved ports', async () => {
+    let release!: () => void
+    listGate = new Promise((resolve) => (release = resolve))
+    const r = runner()
+    const starting = r.start('a')
+    const completing = r.lock.run('a', () =>
+      completeFeature(
+        {
+          feature: async (n) => records.find((f) => f.name === n),
+          runner: r,
+          closePair: async () => undefined,
+          setPorts: async (n, ports, portNames) => void Object.assign(records.find((f) => f.name === n)!, { ports, portNames }),
+          setCompleted: async (n, at) => void Object.assign(records.find((f) => f.name === n)!, { completedAt: at }),
+          now: () => 9
+        },
+        'a'
+      )
+    )
+    release()
+    await starting
+    await completing
+    expect(pool.list().filter((t) => t.status === 'running')).toEqual([])
+    expect(r.current('a').servers).toEqual([])
+    expect(records[0]).toMatchObject({ ports: [], completedAt: 9 })
+  })
+
+  it('refuses, naming the account, when its account was removed', async () => {
+    removedAccount = 'ws-a'
+    const r = runner()
+    expect(await r.start('a')).toEqual({ ok: false, error: expect.stringMatching(/account was removed.*not started/) })
+    expect(await r.retry('a', 'web')).toEqual({ ok: false, error: expect.stringMatching(/account was removed/) })
+    expect(pool.created).toHaveLength(0)
+  })
+
+  it('gives a server a fresh port, and says so, when a foreign program took its kept one', async () => {
+    const r = runner()
+    await r.start('a')
+    await r.stop('a')
+    held.add(4100)
+    const again = await r.start('a')
+    expect(again).toEqual({ ok: true, note: expect.stringMatching(/web.*4102/) })
+    expect(portOf(r.current('a'), 'web')).toBe(4102)
+    expect(portOf(r.current('a'), 'api')).toBe(4101)
+    expect(pool.created.at(-2)).toMatchObject({ command: 'vite --port 4102' })
+  })
+
+  it('does not take a port from its own running server', async () => {
+    const r = runner()
+    await r.start('a')
+    held.add(4100)
+    held.add(4101)
+    expect(await r.start('a')).toEqual({ ok: true })
+    expect(pool.created).toHaveLength(2)
+    expect(portOf(r.current('a'), 'web')).toBe(4100)
   })
 })

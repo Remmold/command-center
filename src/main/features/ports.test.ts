@@ -146,3 +146,23 @@ describe('real sockets', () => {
     expect(await portIsFree(port)).toBe(true)
   })
 })
+
+describe('re-checking kept ports', () => {
+  it('gives a server a fresh port when a foreign program now holds its kept one, and names it', async () => {
+    const all: Rec[] = [{ name: 'a', ports: [4100, 4101], portNames: ['web', 'api'], completedAt: null }]
+    const reserver = reserverOver(all, async (p) => p !== 4100)
+    expect(await reserver.reserve('a', ['web', 'api'], new Set())).toEqual({ ok: true, ports: [4102, 4101], moved: ['web'] })
+    expect(Object.fromEntries(all[0].portNames!.map((n, i) => [n, all[0].ports[i]]))).toEqual({ web: 4102, api: 4101 })
+  })
+
+  it('leaves a kept port alone when its own tracked server holds it', async () => {
+    const all: Rec[] = [{ name: 'a', ports: [4100, 4101], portNames: ['web', 'api'], completedAt: null }]
+    const reserver = reserverOver(all, async (p) => p !== 4100)
+    expect(await reserver.reserve('a', ['web', 'api'], new Set(['web']))).toEqual({ ok: true, ports: [4100, 4101] })
+  })
+
+  it('does not re-check unless asked to', async () => {
+    const reserver = reserverOver([{ name: 'a', ports: [4100], portNames: ['web'], completedAt: null }], async () => false)
+    expect(await reserver.reserve('a', ['web'])).toEqual({ ok: true, ports: [4100] })
+  })
+})

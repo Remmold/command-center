@@ -4,6 +4,7 @@ import type { FeatureServerView, FeatureServersView } from '../../shared/feature
 import { withoutAnsi } from '../../shared/localPorts'
 import { serverCommand, type PreviewConfig } from '../../shared/previewConfig'
 import type { CreateTerminalRequest, CreateTerminalResult, TerminalAttachment, TerminalInfo } from '../../shared/types'
+import { createFeatureLock, type FeatureLock } from './featureLock'
 import type { PortsResult } from './ports'
 
 export const READY_TIMEOUT_MS = 60_000
@@ -26,18 +27,20 @@ export interface RunnerDeps {
   feature: (name: string) => Promise<FeatureRecord | undefined>
   /** The preview config the feature uses, through its source workspace; null when there is none. */
   config: (feature: FeatureRecord) => Promise<PreviewConfig | null>
-  /** The variables a process needs to run as the feature's account; null when its workspace no longer exists. */
-  env: (workspaceId: string) => Promise<Record<string, string> | null>
-  /** One port per server name, in the order given. */
-  reservePorts: (name: string, servers: string[]) => Promise<PortsResult>
+  /** The variables a process needs to run as the feature's account, or why it must not run (its workspace or account was removed). */
+  env: (workspaceId: string) => Promise<{ ok: true; env: Record<string, string> } | { ok: false; error: string }>
+  /** One port per server name, in the order given; the servers in `ownRunning` keep theirs, every other kept port is checked again. */
+  reservePorts: (name: string, servers: string[], ownRunning?: ReadonlySet<string>) => Promise<PortsResult>
   /** Whether something accepts a connection on the port. */
   isReady: (port: number) => Promise<boolean>
   shell: CreateTerminalRequest['kind']
   readyTimeoutMs?: number
   pollMs?: number
+  /** Shared with Complete, Re-open and Remove, so none of them interleaves with a start. */
+  lock?: FeatureLock
 }
 
-export type StartResult = { ok: true } | { ok: false; error: string }
+export type StartResult = { ok: true; note?: string } | { ok: false; error: string }
 
 interface Tracked {
   view: FeatureServerView
@@ -54,6 +57,7 @@ const terminalId = (feature: string, server: string): string => `feature-server:
  * the Processes view), and reports each as Starting, Ready, Failed, or Stopped when the app stopped it.
  */
 export function createServerRunner(deps: RunnerDeps) {
+  const lock = deps.lock ?? createFeatureLock()
   const timeout = deps.readyTimeoutMs ?? READY_TIMEOUT_MS
   const poll = deps.pollMs ?? POLL_MS
   const tracked = new Map<string, Map<string, Tracked>>()
@@ -157,34 +161,44 @@ export function createServerRunner(deps: RunnerDeps) {
   }
 
   /** Starts the servers that are not running (Starting or Ready) on the feature's own ports; returns once launched. */
-  async function start(name: string, only?: string): Promise<StartResult> {
+  async function startLocked(name: string, only?: string): Promise<StartResult> {
     const feature = await deps.feature(name)
     if (!feature) return { ok: false, error: `The feature ${name} is not known.` }
     if (feature.completedAt !== null) return { ok: false, error: `${name} is completed; re-open it before starting its servers.` }
     const config = await deps.config(feature)
     if (!config || config.servers.length === 0) return { ok: false, error: `The workspace of ${name} has no preview servers; set them up in Settings, Preview.` }
     if (only && !config.servers.some((s) => s.name === only)) return { ok: false, error: `${name} has no server called ${only}.` }
-    const reserved = await deps.reservePorts(name, config.servers.map((s) => s.name))
+    const keepsPort = (server: string): boolean => {
+      const status = tracked.get(name)?.get(server)?.view.status
+      return status === 'starting' || status === 'ready' || (only !== undefined && server !== only)
+    }
+    const running = new Set(config.servers.map((s) => s.name).filter(keepsPort))
+    const reserved = await deps.reservePorts(name, config.servers.map((s) => s.name), running)
     if (!reserved.ok) return reserved
-    let account: Record<string, string> | null
+    let account: Awaited<ReturnType<RunnerDeps['env']>>
     try {
       account = await deps.env(feature.workspaceId)
     } catch (err) {
       return { ok: false, error: `The account of ${name} could not be prepared: ${err instanceof Error ? err.message : String(err)}` }
     }
-    if (!account) return { ok: false, error: `The workspace of ${name} was removed, so its servers would run on the default account; they were not started.` }
+    if (!account.ok) return { ok: false, error: `${account.error} The servers of ${name} were not started.` }
     const launches: Promise<void>[] = []
     for (const [i, server] of config.servers.entries()) {
       if (only && server.name !== only) continue
       const status = tracked.get(name)?.get(server.name)?.view.status
       if (status === 'starting' || status === 'ready') continue
-      launches.push(launch(feature, config, i, reserved.ports[i], account))
+      launches.push(launch(feature, config, i, reserved.ports[i], account.env))
     }
     await Promise.all(launches)
-    return { ok: true }
+    const moves = (reserved.moved ?? []).map((server) => `${server} (port ${reserved.ports[config.servers.findIndex((c) => c.name === server)]})`)
+    if (moves.length === 0) return { ok: true }
+    return { ok: true, note: `Another program held the kept port of ${moves.join(', ')}, so a new port was reserved.` }
   }
 
+  const start = (name: string, only?: string): Promise<StartResult> => lock.run(name, () => startLocked(name, only))
+
   return {
+    lock,
     start: (name: string) => start(name),
     /** Runs one server again, e.g. after it Failed. */
     retry: (name: string, server: string) => start(name, server),

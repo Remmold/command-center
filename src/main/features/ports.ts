@@ -4,7 +4,8 @@ import { namedPorts } from '../../shared/features'
 /** The ports the app reserves for features' servers. */
 export const PORT_RANGE = { from: 4100, to: 4999 } as const
 
-export type PortsResult = { ok: true; ports: number[] } | { ok: false; error: string }
+/** `moved` names the servers whose kept port a foreign program now holds, which were given a fresh one. */
+export type PortsResult = { ok: true; ports: number[]; moved?: string[] } | { ok: false; error: string }
 
 function connects(port: number, host: string, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -68,15 +69,24 @@ export interface PortReserverDeps {
  * Gives each feature's servers a port once and keeps it, by server name, so reordering or renaming servers in the
  * preview config never swaps ports. The feature records are the only memory. Reservations run one at a time and are
  * saved before the next starts, so features started at once never share a port. Returns the ports in the order of `servers`.
+ * With `ownRunning` (the servers of this feature that are running), each other kept port is checked again and replaced when something else holds it.
  */
 export function createPortReserver(deps: PortReserverDeps) {
   let queue: Promise<unknown> = Promise.resolve()
-  const reserve = (name: string, servers: readonly string[]): Promise<PortsResult> => {
+  const reserve = (name: string, servers: readonly string[], ownRunning?: ReadonlySet<string>): Promise<PortsResult> => {
     const run = async (): Promise<PortsResult> => {
       const records = await deps.list()
       const own = records.find((r) => r.name === name)
       if (!own) return { ok: false, error: `The feature ${name} is not known.` }
       const kept = namedPorts(own, servers)
+      const moved: string[] = []
+      if (ownRunning) {
+        for (const [server, port] of [...kept]) {
+          if (ownRunning.has(server) || (await deps.isFree(port))) continue
+          kept.delete(server)
+          moved.push(server)
+        }
+      }
       const missing = servers.filter((s) => !kept.has(s))
       if (missing.length > 0) {
         const taken = new Set(records.filter((r) => r.completedAt === null).flatMap((r) => r.ports))
@@ -85,7 +95,7 @@ export function createPortReserver(deps: PortReserverDeps) {
         missing.forEach((server, i) => kept.set(server, more.ports[i]))
         await deps.save(name, [...kept.values()], [...kept.keys()])
       }
-      return { ok: true, ports: servers.map((s) => kept.get(s)!) }
+      return { ok: true, ports: servers.map((s) => kept.get(s)!), ...(moved.length > 0 ? { moved } : {}) }
     }
     const next = queue.then(run, run)
     queue = next.catch(() => undefined)

@@ -7,6 +7,7 @@ import * as workspaces from './workspaces/store'
 import * as profiles from './profiles/store'
 import { createSidebarGroupsStore } from './sidebarGroups/store'
 import { createChatHistoryStore } from './chatHistory/store'
+import { pathKey } from '../shared/findings'
 import { isHistoryChange } from '../shared/chatHistory'
 import { liveConfigDir } from './observed/turn'
 import * as vscodeMatch from './profiles/vscodeMatch'
@@ -36,7 +37,8 @@ import { DiscoveryService } from './board/discoveryService'
 import { contextReport, readListedFile, startTotals, writeListedFile } from './context/service'
 import { addWorktree, branchTaken, getDiff, getStatus, getUntrackedFilePreview, isGitRepo, mainBranch, removeNewWorktree } from './git/service'
 import { createFeatureStore } from './features/store'
-import { runInstall } from './features/install'
+import { featureAccount } from './features/account'
+import { killRunningInstalls, runInstall } from './features/install'
 import { createPortReserver, portAccepts, portIsFree } from './features/ports'
 import { createServerRunner } from './features/serverRunner'
 import { closeFeaturePair, openPair } from './features/pairWindows'
@@ -316,15 +318,21 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     }
     return null
   }
+  const accountOfFeatureWork = (workspaceId: string) =>
+    featureAccount(
+      {
+        workspace: async (id) => (await workspaces.list()).find((w) => w.id === id),
+        hasProfile: async (id) => (await profiles.list()).some((p) => p.id === id),
+        prepare: profiles.prepareSession
+      },
+      workspaceId
+    )
   const portReserver = createPortReserver({ list: featureStore.list, save: featureStore.setPorts, isFree: portIsFree })
   const serverRunner = createServerRunner({
     terminals,
     feature: async (name) => (await featureStore.list()).find((f) => f.name === name),
     config: previewConfigFor,
-    env: async (workspaceId) => {
-      const workspace = (await workspaces.list()).find((w) => w.id === workspaceId)
-      return workspace ? (await profiles.prepareSession(workspace.profileId)).env : null
-    },
+    env: (workspaceId) => accountOfFeatureWork(workspaceId),
     reservePorts: portReserver.reserve,
     isReady: (port) => portAccepts(port),
     shell: DEFAULT_SHELL_KIND
@@ -360,31 +368,24 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   const featureNamed = async (n: string) => (await featureStore.list()).find((f) => f.name === n)
   ipcMain.handle(IPC.FEATURES_COMPLETE, async (_e, name: unknown) => {
     if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
-    const result = await completeFeature(
-      { feature: featureNamed, runner: serverRunner, closePair: closeFeaturePair, setPorts: featureStore.setPorts, setCompleted: featureStore.setCompleted, now: () => Date.now() },
-      name
+    const result = await serverRunner.lock.run(name, () =>
+      completeFeature({ feature: featureNamed, runner: serverRunner, closePair: closeFeaturePair, setPorts: featureStore.setPorts, setCompleted: featureStore.setCompleted, now: () => Date.now() }, name)
     )
     featureStages?.changed()
     return result
   })
   ipcMain.handle(IPC.FEATURES_REOPEN, async (_e, name: unknown) => {
     if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
-    const result = await reopenFeature(
-      {
-        feature: featureNamed,
-        config: previewConfigFor,
-        reservePorts: portReserver.reserve,
-        setPorts: featureStore.setPorts,
-        setCompleted: featureStore.setCompleted
-      },
-      name
+    const result = await serverRunner.lock.run(name, () =>
+      reopenFeature({ feature: featureNamed, config: previewConfigFor, reservePorts: portReserver.reserve, setPorts: featureStore.setPorts, setCompleted: featureStore.setCompleted }, name)
     )
     featureStages?.changed()
     return result
   })
   ipcMain.handle(IPC.FEATURES_REMOVE_WORKTREE, async (_e, name: unknown) => {
     if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
-    const result = await removeFeatureWorktree(
+    const result = await serverRunner.lock.run(name, () =>
+      removeFeatureWorktree(
       {
         feature: featureNamed,
         repo: async (feature) => {
@@ -404,6 +405,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
         }
       },
       name
+      )
     )
     if (result.ok) workspacesChanged()
     featureStages?.changed()
@@ -615,6 +617,11 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   ipcMain.handle(IPC.CLAUDE_START, async (_e, options: ClaudeStartOptions) => {
     if (options.paneId === MAIN_CHAT_PANE_ID) return startMainChat(options)
     const workspace = await workspaces.findByPath(options.cwd)
+    const ofFeature = (await featureStore.list()).find((f) => pathKey(f.worktreePath) === pathKey(options.cwd))
+    if (ofFeature) {
+      const account = await accountOfFeatureWork(ofFeature.workspaceId)
+      if (!account.ok) return { ok: false as const, error: account.error }
+    }
     if (!workspace) console.warn('[profiles] no workspace at', options.cwd, '- session runs on Default')
     const { profileId, env } = await profiles.prepareSession(workspace?.profileId ?? DEFAULT_PROFILE_ID)
     const teleported = options.resumeSessionId ? await isTeleportedSession(await transcriptsDirForCwd(options.cwd), options.resumeSessionId) : false
@@ -850,6 +857,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   holdQuit(
     app,
     () => {
+      killRunningInstalls()
       const terminalsClosed = terminals.closeAll()
       const killed = claudeManager.stopAll()
       claudeManager.setIncomingHandlerFactory(null)

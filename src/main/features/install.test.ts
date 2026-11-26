@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { runInstall } from './install'
+import { killRunningInstalls, runInstall } from './install'
 
 let dir: string
 beforeEach(() => void (dir = mkdtempSync(join(tmpdir(), 'cc-install-'))))
@@ -27,5 +27,19 @@ describe('runInstall', () => {
 
   it('rejects, stopping the command, when it runs too long', async () => {
     await expect(runInstall(dir, node('setTimeout(()=>{},60000)'), {}, 300)).rejects.toThrow(/took longer/)
+  })
+})
+
+describe('killRunningInstalls', () => {
+  it('stops an install that is still running, as the app quitting does', async () => {
+    const running = runInstall(dir, node('setTimeout(()=>{},60000)'))
+    const outcome = running.then(() => 'finished', (err: Error) => err.message)
+    await new Promise((r) => setTimeout(r, 300))
+    killRunningInstalls()
+    expect(await outcome).toMatch(/failed|stopped/)
+  })
+
+  it('has nothing to stop when no install runs', () => {
+    expect(() => killRunningInstalls()).not.toThrow()
   })
 })

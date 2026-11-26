@@ -485,9 +485,9 @@ export interface RendererApi {
     /** Removes a completed feature's worktree; refused while its branch has commits the main branch lacks. */
     removeWorktree: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
     /** Boots the feature's servers from its preview config on its own ports; resolves once they are launched, not ready. */
-    startServers: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
+    startServers: (name: string) => Promise<{ ok: true; note?: string } | { ok: false; error: string }>
     /** Runs one server again, e.g. after it Failed. */
-    retryServer: (name: string, server: string) => Promise<{ ok: true } | { ok: false; error: string }>
+    retryServer: (name: string, server: string) => Promise<{ ok: true; note?: string } | { ok: false; error: string }>
     /** Stops the feature's servers; it keeps its ports. */
     stopServers: (name: string) => Promise<void>
     /** Every started feature's servers by feature name. */

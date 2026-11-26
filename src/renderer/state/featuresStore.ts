@@ -86,6 +86,7 @@ export function followFeatureStages(): () => void {
 export function startFeatureServers(name: string): void {
   void window.api.features.startServers(name).then((r) => {
     if (!r.ok) useToastStore.getState().show(r.error)
+    else if (r.note) useToastStore.getState().show(r.note)
   })
 }
 
@@ -115,6 +116,7 @@ export const removeFeatureWorktree = (name: string): Promise<boolean> => settle(
 export function retryFeatureServer(name: string, server: string): void {
   void window.api.features.retryServer(name, server).then((r) => {
     if (!r.ok) useToastStore.getState().show(r.error)
+    else if (r.note) useToastStore.getState().show(r.note)
   })
 }
 
