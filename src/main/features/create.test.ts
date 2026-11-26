@@ -24,6 +24,7 @@ let profileAdopted: boolean
 let failAddingWorkspace: boolean
 let profileRemoved: boolean
 let installCommand: string
+let previewServers: number
 let installRuns: { cwd: string; command: string; env: Record<string, string> }[]
 let installingCalls: string[]
 let installError: string | null
@@ -54,6 +55,7 @@ function deps(): CreateDeps {
       remove: async (name) => void (records = records.filter((r) => r.name !== name))
     },
     installCommand: async (workspaceId) => (workspaceId === 'src' ? installCommand : ''),
+    hasPreviewBrowser: async (workspaceId) => workspaceId === 'src' && previewServers > 0,
     runInstall: async (cwd, command, env) => {
       installRuns.push({ cwd, command, env })
       if (installError) throw new Error(installError)
@@ -83,6 +85,7 @@ beforeEach(() => {
   failAddingWorkspace = false
   profileRemoved = false
   installCommand = ''
+  previewServers = 0
   installRuns = []
   installingCalls = []
   installError = null
@@ -103,6 +106,14 @@ describe('createFeature', () => {
     const added = workspaces.find((w) => w.id === 'w2')
     expect(added?.profileId).toBe('work-profile')
     expect(profileEnv({ id: added!.profileId, configDir }, null)).toEqual({ CLAUDE_CONFIG_DIR: configDir })
+  })
+
+  it('says the feature has a preview browser exactly when the source workspace preview config has a server', async () => {
+    const without = await createFeature(deps(), request)
+    expect(without).toMatchObject({ ok: true, previewBrowser: false })
+    previewServers = 1
+    const withServer = await createFeature(deps(), { ...request, name: 'other', sessionId: 's2' })
+    expect(withServer).toMatchObject({ ok: true, previewBrowser: true })
   })
 
   it('refuses a folder that is not a git repository and makes nothing', async () => {

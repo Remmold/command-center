@@ -280,6 +280,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     },
     features: featureStore,
     installCommand: async (workspaceId) => (await previewConfigs.get(workspaceId))?.install ?? '',
+    hasPreviewBrowser: async (workspaceId) => ((await previewConfigs.get(workspaceId))?.servers.length ?? 0) > 0,
     runInstall,
     installing: (name, running) => sendAll(IPC.FEATURES_INSTALLING, { name, running }),
     pathExists: (path) => fs.access(path).then(() => true, () => false),

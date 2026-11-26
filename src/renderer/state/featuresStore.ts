@@ -59,11 +59,11 @@ export async function startFeature(request: Omit<NewFeatureRequest, 'sessionId'>
   const sessionId = crypto.randomUUID()
   const made = await window.api.features.create({ ...request, sessionId })
   if (!made.ok) return made.error
-  const { feature } = made
+  const { feature, previewBrowser } = made
   await reload()
   const workspace = useWorkspacesStore.getState().workspaces.find((w) => w.id === feature.workspaceId)
   const started = workspace
-    ? startSession(workspace, { send: { id: sessionId, prompt: featureFirstPrompt(feature, request.description) } })
+    ? startSession(workspace, { send: { id: sessionId, prompt: featureFirstPrompt(feature, request.description, previewBrowser) } })
     : false
   if (started) return null
   await window.api.features.discard(feature.name, request.workspaceId)

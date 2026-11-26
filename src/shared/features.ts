@@ -28,16 +28,17 @@ export interface NewFeatureRequest {
 }
 
 export type NewFeatureResult =
-  | { ok: true; feature: FeatureRecord }
+  | { ok: true; feature: FeatureRecord; /** The source workspace's preview config has a server, so the feature has a preview browser. */ previewBrowser: boolean }
   | { ok: false; error: string }
 
 /** The first prompt of a feature session: `/flow`, the description, and where it works. */
-export function featureFirstPrompt(feature: Pick<FeatureRecord, 'name' | 'worktreePath'>, description: string): string {
+export function featureFirstPrompt(feature: Pick<FeatureRecord, 'name' | 'worktreePath'>, description: string, previewBrowser = false): string {
   return [
     `/flow ${description.trim()}`,
     '',
     `Feature name: ${feature.name}`,
     `Feature worktree: ${feature.worktreePath}`,
+    ...(previewBrowser ? ['Preview browser: yes'] : []),
     'Work in this worktree; do not make another one.'
   ].join('\n')
 }

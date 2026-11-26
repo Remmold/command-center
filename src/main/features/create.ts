@@ -22,6 +22,8 @@ export interface CreateDeps {
   features: { list: () => Promise<FeatureRecord[]>; add: (r: FeatureRecord) => Promise<void>; remove: (name: string) => Promise<void> }
   /** The install command saved for a workspace's preview config; empty when none. */
   installCommand: (workspaceId: string) => Promise<string>
+  /** Whether a workspace's preview config has at least one server, so its features have a preview browser. */
+  hasPreviewBrowser: (workspaceId: string) => Promise<boolean>
   /** Runs a command in a folder on an account's environment; rejects with the reason when it fails. */
   runInstall: (cwd: string, command: string, env: Record<string, string>) => Promise<void>
   /** Told when the install starts and when it ends, so the dialog can say one is running. */
@@ -90,7 +92,7 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
       completedAt: null
     }
     await deps.features.add(feature)
-    return { ok: true, feature }
+    return { ok: true, feature, previewBrowser: await deps.hasPreviewBrowser(source.id) }
   } catch (err) {
     if (workspace) await deps.workspaces.remove(workspace.id).catch(() => undefined)
     if (madeWorktree) await deps.git.removeNewWorktree(source.path, worktreePath, branch).catch(() => undefined)
