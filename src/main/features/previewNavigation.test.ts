@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { previewNavigation, previewPartition, previewRequestAllowed, previewStartUrl } from './previewNavigation'
+import { createRateGate, previewNavigation, previewPartition, previewRequestAllowed, previewStartUrl } from './previewNavigation'
 
 const PORTS = [4100, 4101]
 
@@ -53,5 +53,18 @@ describe('preview browser addresses', () => {
   it('keeps one storage partition per feature name', () => {
     expect(previewPartition('login')).toBe('persist:feature-login')
     expect(previewPartition('login')).not.toBe(previewPartition('login-2'))
+  })
+})
+
+describe('createRateGate', () => {
+  it('lets one call through per interval and refuses the rest until it has passed', () => {
+    let now = 10_000
+    const gate = createRateGate(1000, () => now)
+    expect(gate()).toBe(true)
+    expect(gate()).toBe(false)
+    now += 999
+    expect(gate()).toBe(false)
+    now += 1
+    expect(gate()).toBe(true)
   })
 })

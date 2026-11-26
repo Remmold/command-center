@@ -39,3 +39,14 @@ export function previewStartUrl(port: number, startPage: string): string {
 
 /** The partition a feature's preview browser keeps its cookies and storage in. */
 export const previewPartition = (feature: string): string => `persist:feature-${feature}`
+
+/** Lets one call through per `intervalMs`; the page cannot flood the default browser with windows. */
+export function createRateGate(intervalMs: number, now: () => number = Date.now): () => boolean {
+  let last = -Infinity
+  return () => {
+    const at = now()
+    if (at - last < intervalMs) return false
+    last = at
+    return true
+  }
+}

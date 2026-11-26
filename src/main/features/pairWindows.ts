@@ -6,7 +6,7 @@ import { appWebPreferences, guardAppWindow, loadRenderer, revealPlaced, WINDOW_B
 import { pairPlaceKey, type PairRole } from '../windowPlace/place'
 import { savedPlacement, trackWindowPlace } from '../windowPlace/service'
 import { isPairFlipKey } from './pairHotkey'
-import { previewNavigation, previewPartition, previewRequestAllowed } from './previewNavigation'
+import { createRateGate, previewNavigation, previewPartition, previewRequestAllowed } from './previewNavigation'
 import type { PairSpec } from './testPair'
 
 interface Pair {
@@ -93,10 +93,11 @@ function flipPair(feature: string, from: PairRole): void {
 
 /** Navigation, new windows and redirects follow the rule: the feature's own ports load, other http(s) addresses open in the default browser. */
 function guardPreview(win: BrowserWindow, feature: string): void {
+  const mayOpenExternal = createRateGate(1000)
   /** Only the page itself may send the user to the default browser; an embedded frame is just blocked. */
   const judge = (url: string, mainFrame: boolean): boolean => {
     const verdict = previewNavigation(url, pairs.get(feature)?.ports ?? [])
-    if (verdict === 'external' && mainFrame) void shell.openExternal(url)
+    if (verdict === 'external' && mainFrame && mayOpenExternal()) void shell.openExternal(url)
     return verdict === 'allow'
   }
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -118,6 +119,8 @@ function guardPartition(feature: string): void {
   guardedPartitions.add(partition)
   const store = session.fromPartition(partition)
   store.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+  store.setPermissionCheckHandler(() => false)
+  store.on('will-download', (event) => event.preventDefault())
   store.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, (details, callback) =>
     callback({ cancel: !previewRequestAllowed(details.url, pairs.get(feature)?.ports ?? []) })
   )
