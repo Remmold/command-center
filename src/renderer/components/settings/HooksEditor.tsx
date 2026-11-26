@@ -60,7 +60,6 @@ const typeChoices = (event: HookEvent | undefined) => (event?.commandOnly ? HOOK
 const timeoutText = (hook: Hook, event: string): string =>
   typeof hook.timeout === 'number' ? `Time limit ${hook.timeout} s` : `Time limit ${defaultTimeout(hook.type as HookType, event)} s (default)`
 
-/** The type's required fields as text boxes, for a new hook or a hook turned into another type. */
 interface RequiredFieldsProps {
   type: HookType
   values: Record<string, string>
@@ -70,6 +69,7 @@ interface RequiredFieldsProps {
   onSubmit: () => void
 }
 
+/** The type's required fields as text boxes, for a new hook or a hook turned into another type. */
 function RequiredFields({ type, values, disabled, onChange, onSubmit }: RequiredFieldsProps) {
   return (
     <>
@@ -299,7 +299,7 @@ function GroupRows({ event, group, onGroupChange, onHookChange, disabled, unpars
     >
       {group.hooks.map((hook, index) => (
         <HookRow
-          key={`${index}:${hook.type}`}
+          key={`${index}:${hook.type}:${hookSummary(hook)}`}
           event={event}
           hook={hook}
           disabled={disabled}
@@ -380,7 +380,7 @@ export function HooksEditor({ value, layers, layer, disabled, onStage, onUnparse
   const stageEvent = (event: string, groups: HookGroup[] | undefined) => onStage(hookEventPath(event), groups)
   return (
     <div>
-      {events.length === 0 && <NoticeLine>No hooks in this layer.</NoticeLine>}
+      {events.length === 0 && <NoticeLine>{isSettingsObject(value) && Object.keys(value).length > 0 ? 'This layer’s hooks are ones this editor can’t show; they are under Other keys as raw JSON.' : 'No hooks in this layer.'}</NoticeLine>}
       {events.map(({ event, groups }) => {
         const known = hookEvent(event)
         return (

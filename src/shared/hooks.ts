@@ -80,7 +80,7 @@ export const HOOK_TYPES: readonly { value: HookType; label: string; description:
   { value: 'mcp_tool', label: 'MCP tool', description: 'Calls a tool of an MCP server that is already connected.' }
 ]
 
-export type HookFieldKind = 'text' | 'longText' | 'number' | 'toggle' | 'choice' | 'list' | 'object'
+export type HookFieldKind = 'text' | 'number' | 'toggle' | 'choice' | 'list' | 'object'
 
 export interface HookField {
   key: string
@@ -103,7 +103,7 @@ const IF: HookField = {
 }
 const STATUS: HookField = { key: 'statusMessage', label: 'Message while it runs', kind: 'text', description: 'Shown beside the spinner while the hook runs.' }
 const MODEL: HookField = { key: 'model', label: 'Model', kind: 'text', description: 'The model that answers. Empty uses a fast model.', placeholder: 'a fast model' }
-const PROMPT: HookField = { key: 'prompt', label: 'Prompt', kind: 'longText', required: true, description: '$ARGUMENTS stands for the event as JSON.', placeholder: 'Is this command safe? $ARGUMENTS' }
+const PROMPT: HookField = { key: 'prompt', label: 'Prompt', kind: 'text', required: true, description: '$ARGUMENTS stands for the event as JSON.', placeholder: 'Is this command safe? $ARGUMENTS' }
 
 export const HOOK_FIELDS: Record<HookType, readonly HookField[]> = {
   command: [
@@ -154,7 +154,6 @@ export const requiredFields = (type: HookType): HookField[] => HOOK_FIELDS[type]
 function fieldFits(field: HookField, value: unknown): boolean {
   switch (field.kind) {
     case 'text':
-    case 'longText':
       return typeof value === 'string'
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -199,10 +198,14 @@ export interface EventHooks {
   groups: HookGroup[]
 }
 
-/** The events the editor shows, in file order. */
+const eventOrder = (name: string): number => HOOK_EVENTS.findIndex((e) => e.name === name)
+
+/** The events the editor shows, in the order a chat meets them. */
 export function readHookEvents(value: unknown): EventHooks[] {
   if (!isSettingsObject(value)) return []
-  return Object.entries(value).flatMap(([event, groups]) => (isEditableEvent(event, groups) ? [{ event, groups }] : []))
+  return Object.entries(value)
+    .flatMap(([event, groups]) => (isEditableEvent(event, groups) ? [{ event, groups }] : []))
+    .sort((a, b) => eventOrder(a.event) - eventOrder(b.event))
 }
 
 export const hookEventPath = (event: string): string => keyPath('hooks', event)
@@ -220,7 +223,7 @@ export function changeHook(groups: readonly HookGroup[], groupIndex: number, hoo
   )
 }
 
-/** A matcher that is empty or `*` matches everything, so it is left out of the file. */
+/** An empty matcher matches everything, so it is left out of the file. */
 const withMatcher = (group: HookGroup, matcher: string): HookGroup => {
   const { matcher: _old, ...rest } = group
   return matcher.trim() === '' ? rest : { matcher: matcher.trim(), ...rest }
@@ -322,6 +325,5 @@ export function otherLayerGroups(edited: SettingsLayer, layers: Record<SourceLay
       }
     }
   }
-  const order = (event: string) => HOOK_EVENTS.findIndex((e) => e.name === event)
-  return found.sort((a, b) => order(a.event) - order(b.event))
+  return found.sort((a, b) => eventOrder(a.event) - eventOrder(b.event))
 }

@@ -1,4 +1,4 @@
-import { ITEM_LISTS, editedList, getAt, isStringList, itemEdit, patchPaths, patchSize, sameValue, withPatch, type ItemEdit, type SettingsObject, type SettingsPatch } from '../../shared/claudeSettings'
+import { ITEM_LISTS, editedList, getAt, isSettingsObject, isStringList, itemEdit, patchPaths, patchSize, sameValue, withPatch, type ItemEdit, type SettingsObject, type SettingsPatch } from '../../shared/claudeSettings'
 
 /** The changes waiting for one file, against the file as last read, each waiting key as it was when its change was made. */
 export interface PendingFile {
@@ -12,14 +12,25 @@ export interface PendingChange {
   after: unknown
 }
 
+/** A whole value with the path inside it set, or removed for undefined; undefined once nothing is left. */
+function insideValue(whole: unknown, inside: string, value: unknown): unknown {
+  const wrapped = { whole: isSettingsObject(whole) ? whole : {} }
+  const path = `whole.${inside}`
+  const next = withPatch(wrapped, value === undefined ? { set: {}, remove: [path] } : { set: { [path]: value }, remove: [] })
+  return isSettingsObject(next.whole) && Object.keys(next.whole).length === 0 ? undefined : next.whole
+}
+
 const isItemList = (key: string, ...values: unknown[]): boolean => ITEM_LISTS.includes(key) && values.every((v) => v === undefined || isStringList(v))
 
 /**
- * Stages `value` for `key`, in place of any waiting change inside it; undefined removes the key. An item list records the items added and removed
- * instead, so Save keeps what Claude adds to the list meanwhile. Null once the file has no change left.
+ * Stages `value` for `key`, in place of any waiting change inside it; undefined removes the key. A key inside
+ * one staged whole changes that whole value instead. An item list records the items added and removed, so
+ * Save keeps what Claude adds to the list meanwhile. Null once the file has no change left.
  */
 export function stage(file: PendingFile | null, base: SettingsObject, key: string, value: unknown): PendingFile | null {
   const from = file?.base ?? base
+  const parent = file && [...Object.keys(file.patch.set), ...file.patch.remove].find((path) => key.startsWith(`${path}.`))
+  if (parent) return stage(file, base, parent, insideValue(file.patch.set[parent], key.slice(parent.length + 1), value))
   const kept = (path: string) => path !== key && !path.startsWith(`${key}.`)
   const set = Object.fromEntries(Object.entries(file?.patch.set ?? {}).filter(([path]) => kept(path)))
   const remove = (file?.patch.remove ?? []).filter(kept)
@@ -88,10 +99,14 @@ export function conflicts(file: PendingFile | null, disk: SettingsObject | null)
 
 export type ConflictChoice = 'mine' | 'file'
 
-/** The waiting changes rebased onto the file as it is now, without the keys settled as the file's. */
+/** The waiting changes rebased onto the file as it is now, without the keys settled as the file's; an item list's edit goes on as it was. */
 export function settle(file: PendingFile, disk: SettingsObject, choices: Record<string, ConflictChoice>): PendingFile | null {
-  return pendingChanges(file).reduce<PendingFile | null>(
-    (next, { key, after }) => (choices[key] === 'file' ? next : stage(next, disk, key, after)),
-    null
-  )
+  const items = file.patch.items ?? {}
+  return pendingChanges(file).reduce<PendingFile | null>((next, { key, after }) => {
+    if (choices[key] === 'file') return next
+    const theirs = getAt(disk, key)
+    if (!(key in items) || !(theirs === undefined || isStringList(theirs))) return stage(next, disk, key, after)
+    const patch = next?.patch ?? { set: {}, remove: [] }
+    return { base: next?.base ?? disk, patch: { ...patch, items: { ...patch.items, [key]: items[key] } } }
+  }, null)
 }

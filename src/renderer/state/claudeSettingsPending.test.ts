@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { changeHook, hookEventPath, readHookEvents, type HookGroup } from '../../shared/hooks'
+import { withPatch } from '../../shared/claudeSettings'
 import { conflicts, pendingChanges, refreshed, settle, shownValue, stage, type PendingFile } from './claudeSettingsPending'
 
 const base = { model: 'sonnet', alwaysThinkingEnabled: true }
@@ -33,6 +34,15 @@ describe('staging Claude Code settings changes', () => {
     expect(file?.patch).toEqual({ set: {}, remove: ['hooks'] })
   })
 
+  it('stages a change inside a key waiting to be removed onto that removal, so Reset then add keeps the new hook', () => {
+    const hooks = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'a' }] }] } }
+    const added = [{ hooks: [{ type: 'command', command: 'b' }] }]
+    const file = stage(stage(null, hooks, 'hooks', undefined), hooks, 'hooks.SessionStart', added)
+    expect(file?.patch).toEqual({ set: { hooks: { SessionStart: added } }, remove: [] })
+    expect(shownValue(file, hooks, 'hooks')).toEqual({ SessionStart: added })
+    expect(stage(stage(null, hooks, 'hooks', undefined), hooks, 'hooks.Stop', undefined)?.patch).toEqual({ set: {}, remove: ['hooks'] })
+  })
+
   it('keeps the base of the first change, so Save can tell what Claude changed since', () => {
     const later = { model: 'haiku' }
     const file = stage(stage(null, base, 'model', 'opus'), later, 'effortLevel', 'low')
@@ -50,6 +60,20 @@ describe('staging a permission rule list', () => {
     const emptied = stage(null, rules, 'permissions.allow', [])
     expect(shownValue(emptied, rules, 'permissions.allow')).toBeUndefined()
     expect(shownValue(emptied, rules, 'permissions')).toBeUndefined()
+  })
+
+  it('keeps the rules Claude added when a conflict elsewhere is settled', () => {
+    const file = stage(stage(null, { ...rules, model: 'sonnet' }, 'permissions.allow', ['Edit', 'Write']), { ...rules, model: 'sonnet' }, 'model', 'opus') as PendingFile
+    const disk = { model: 'haiku', permissions: { allow: ['Read', 'Edit', 'Bash(git status)'] } }
+    const settled = settle(file, disk, { model: 'mine' })
+    expect(settled?.patch.items).toEqual({ 'permissions.allow': { add: ['Write'], remove: ['Read'] } })
+    expect(shownValue(settled, disk, 'permissions.allow')).toEqual(['Edit', 'Bash(git status)', 'Write'])
+  })
+
+  it('keeps the place of a list whose only rule moved to another list', () => {
+    const only = { permissions: { allow: ['Read'] }, model: 'opus' }
+    const file = stage(stage(null, only, 'permissions.allow', []), only, 'permissions.ask', ['Read'])
+    expect(Object.keys(withPatch(only, (file as PendingFile).patch))).toEqual(['permissions', 'model'])
   })
 
   it('keeps a rule Claude added on disk meanwhile, with no question to ask', () => {

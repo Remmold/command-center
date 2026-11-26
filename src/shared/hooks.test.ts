@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HOOK_EVENTS, addHook, changeHook, hookChangeText, hooksLeftOut, otherLayerGroups, readHookEvents, retype, type HookGroup } from './hooks'
+import { isEditableStatusLine } from './statusLine'
 import schema from './fixtures/claude-code-settings.schema.json'
 
 const guard = { type: 'command', command: 'python guard.py', timeout: 10, statusMessage: 'Dev-mode check' }
@@ -81,5 +82,14 @@ describe('hook groups from other layers', () => {
       { event: 'PreToolUse', group: permissionHook, layers: ['local'] },
       { event: 'Stop', group: { hooks: [notify] }, layers: ['repo'] }
     ])
+  })
+})
+
+describe('status lines', () => {
+  it('are shown by the editor only as a command with options it knows, a subagent’s with none', () => {
+    expect(isEditableStatusLine('statusLine', { type: 'command', command: 'x', padding: 0, refreshInterval: 5, hideVimModeIndicator: true })).toBe(true)
+    expect(isEditableStatusLine('statusLine', { type: 'command', command: 'x', refreshInterval: 0.5 })).toBe(false)
+    expect(isEditableStatusLine('subagentStatusLine', { type: 'command', command: 'x', padding: 1 })).toBe(false)
+    expect(isEditableStatusLine('statusLine', 'node x.js')).toBe(false)
   })
 })

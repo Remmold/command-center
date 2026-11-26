@@ -144,13 +144,15 @@ function removeAt(settings: SettingsObject, path: string): void {
 export function withPatch(settings: SettingsObject, patch: SettingsPatch): SettingsObject {
   const patched = structuredClone(settings)
   for (const [path, value] of Object.entries(patch.set)) setAt(patched, path, value)
-  for (const path of patch.remove) removeAt(patched, path)
+  const emptied: string[] = []
   for (const [path, edit] of Object.entries(patch.items ?? {})) {
     const onFile = getAt(patched, path)
     const next = editedList(isStringList(onFile) ? onFile : [], edit)
     if (next.length > 0) setAt(patched, path, next)
-    else removeAt(patched, path)
+    else emptied.push(path)
   }
+  // Removals go last, so a parent they empty is not dropped and made again at the end of the file.
+  for (const path of [...patch.remove, ...emptied]) removeAt(patched, path)
   return patched
 }
 
