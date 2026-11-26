@@ -21,6 +21,8 @@ interface Props {
   value: unknown
   effective: ShownEffective
   changed: boolean
+  /** Set when the file changed this waiting key since: its value there now. */
+  fileValue?: { value: unknown }
   disabled: boolean
   onChange: (value: unknown) => void
   onReset: () => void
@@ -80,7 +82,7 @@ function Control({ entry, layer, value, disabled, onChange }: Pick<Props, 'entry
 }
 
 /** One catalog setting as a row: its words, raw key, control, default and the value that applies. */
-export function SettingField({ entry, layer, value, effective, changed, disabled, onChange, onReset }: Props) {
+export function SettingField({ entry, layer, value, effective, changed, fileValue, disabled, onChange, onReset }: Props) {
   const notHere = layerRule(entry, layer)
   const ignoredValue = notHere === null && value !== undefined ? layerRule(entry, layer, value) : null
   const risk = entry.risk?.(value) ?? null
@@ -103,6 +105,7 @@ export function SettingField({ entry, layer, value, effective, changed, disabled
           {risk && <Badge tone="warning">{risk}</Badge>}
           {entry.newChatsOnly && <Badge tone="quiet">Applies to new chats</Badge>}
           {changed && <Badge tone="muted">Changed</Badge>}
+          {fileValue && <Badge tone="quiet-warning">The file now has {formatSettingValue(entry, fileValue.value)}: Save asks which to keep</Badge>}
           {value !== undefined && (
             <Button variant="link" disabled={disabled} tooltip="Remove it from this layer’s file" onClick={onReset}>
               Reset

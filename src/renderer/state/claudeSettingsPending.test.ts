@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pendingChanges, shownValue, stage, type PendingFile } from './claudeSettingsPending'
+import { conflicts, pendingChanges, refreshed, settle, shownValue, stage, type PendingFile } from './claudeSettingsPending'
 
 const base = { model: 'sonnet', alwaysThinkingEnabled: true }
 
@@ -30,5 +30,42 @@ describe('staging Claude Code settings changes', () => {
     const later = { model: 'haiku' }
     const file = stage(stage(null, base, 'model', 'opus'), later, 'effortLevel', 'low')
     expect(file?.base).toBe(base)
+  })
+})
+
+describe('a settings file that changed on disk while changes wait', () => {
+  const waiting = (): PendingFile => stage(stage(null, base, 'model', 'opus'), base, 'effortLevel', 'high') as PendingFile
+
+  it('keeps the waiting changes and shows the file’s new values for every other key', () => {
+    const disk = { model: 'sonnet', alwaysThinkingEnabled: false, theme: 'dark' }
+    const file = refreshed(waiting(), disk)
+    expect(file.patch).toEqual({ set: { model: 'opus', effortLevel: 'high' }, remove: [] })
+    expect(shownValue(file, disk, 'model')).toBe('opus')
+    expect(shownValue(file, disk, 'alwaysThinkingEnabled')).toBe(false)
+    expect(shownValue(file, disk, 'theme')).toBe('dark')
+    expect(conflicts(file, disk)).toEqual([])
+  })
+
+  it('marks a waiting key whose value on disk changed, unless the file now holds the waiting value', () => {
+    const disk = { model: 'haiku', alwaysThinkingEnabled: true, effortLevel: 'high' }
+    expect(conflicts(refreshed(waiting(), disk), disk)).toEqual([{ key: 'model', before: 'sonnet', mine: 'opus', theirs: 'haiku' }])
+  })
+
+  it('does not mark a key staged after the file changed under an earlier one', () => {
+    const disk = { model: 'sonnet', alwaysThinkingEnabled: false }
+    const file = stage(refreshed(waiting(), disk), disk, 'alwaysThinkingEnabled', true)
+    expect(file?.patch.set.alwaysThinkingEnabled).toBe(true)
+    expect(conflicts(file, disk)).toEqual([])
+  })
+
+  it('settles each conflict as mine or the file’s, against the file as it is now', () => {
+    const disk = { model: 'haiku', alwaysThinkingEnabled: false, effortLevel: 'low' }
+    const file = refreshed(stage(waiting(), base, 'alwaysThinkingEnabled', undefined) as PendingFile, disk)
+    expect(conflicts(file, disk).map((c) => c.key)).toEqual(['model', 'effortLevel', 'alwaysThinkingEnabled'])
+
+    const settledFile = settle(file, disk, { model: 'mine', effortLevel: 'file', alwaysThinkingEnabled: 'mine' })
+    expect(settledFile).toEqual({ base: disk, patch: { set: { model: 'opus' }, remove: ['alwaysThinkingEnabled'] } })
+    expect(conflicts(settledFile, disk)).toEqual([])
+    expect(settle(file, disk, { model: 'file', effortLevel: 'file', alwaysThinkingEnabled: 'file' })).toBeNull()
   })
 })

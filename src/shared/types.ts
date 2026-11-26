@@ -11,7 +11,7 @@ import type { ZoomStep } from './zoom'
 import type { SidebarLayout } from './sidebarGroups'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
-import type { ClaudeSettingsRead, SettingsObject, SettingsPatch, SettingsSaveResult } from './claudeSettings'
+import type { ClaudeSettingsRead, SettingsFileChange, SettingsObject, SettingsPatch, SettingsSaveResult } from './claudeSettings'
 import type { DriftChecksView, FindingsRun, SkeletonResult } from './findings'
 import type { BackgroundProcess } from './backgroundProcesses'
 export type { AppView }
@@ -484,10 +484,15 @@ export interface RendererApi {
     writeFile: (workspaceId: string, path: string, content: string) => Promise<ContextFileResult>
   }
   claudeSettings: {
-    /** The account's settings.json, with a workspace its repo and local settings files, and the organisation's settings, read from disk. */
+    /**
+     * The account's settings.json, with a workspace its repo and local settings files, and the organisation's settings, read from disk.
+     * Until the next read or `unwatch`, main watches these files and calls `onChanged` when one's text changes.
+     */
     read: (profileId: string, workspaceId: string | null) => Promise<ClaudeSettingsRead>
     /** Writes the patch onto the file as it is on disk (ADR 0006); only account and workspace settings files are allowed. */
     save: (path: string, base: SettingsObject, patch: SettingsPatch) => Promise<SettingsSaveResult>
+    unwatch: () => void
+    onChanged: (cb: (change: SettingsFileChange) => void) => () => void
   }
   driftChecks: {
     /**

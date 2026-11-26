@@ -1,10 +1,10 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from './harness'
 
 test.use({ userSettings: { model: 'sonnet', someKeyThePageDoesNotKnow: { keep: [1, 2] } } })
 
-test('Claude Code settings: a Model & thinking change waits in the save bar, and Save writes only that key into the account’s file', async ({ launched }) => {
+test('Claude Code settings: a Model & thinking change waits in the save bar, and Save writes only that key into the account’s file; a change from outside then shows', async ({ launched }) => {
   const { page, configDir } = launched
   const file = join(configDir, 'settings.json')
 
@@ -25,4 +25,8 @@ test('Claude Code settings: a Model & thinking change waits in the save bar, and
   await bar.getByRole('button', { name: 'Save' }).click()
   await expect(bar).toBeHidden()
   expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({ model: 'opus', someKeyThePageDoesNotKnow: { keep: [1, 2] }, alwaysThinkingEnabled: true })
+
+  writeFileSync(file, JSON.stringify({ model: 'haiku', someKeyThePageDoesNotKnow: { keep: [1, 2] }, alwaysThinkingEnabled: true }, null, 2) + '\n')
+  await expect(model).toHaveValue('haiku')
+  await expect(bar).toBeHidden()
 })

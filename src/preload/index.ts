@@ -3,6 +3,7 @@ import type { IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import { observedRefreshMs } from '../shared/observedRefresh'
 import type { SubagentTailEvent } from '../shared/subagentTail'
+import type { SettingsFileChange } from '../shared/claudeSettings'
 import type {
   AccountProfile,
   AppExitEvent,
@@ -115,7 +116,13 @@ const api: RendererApi = {
   },
   claudeSettings: {
     read: (profileId, workspaceId) => ipcRenderer.invoke(IPC.CLAUDE_SETTINGS_READ, profileId, workspaceId),
-    save: (path, base, patch) => ipcRenderer.invoke(IPC.CLAUDE_SETTINGS_SAVE, path, base, patch)
+    save: (path, base, patch) => ipcRenderer.invoke(IPC.CLAUDE_SETTINGS_SAVE, path, base, patch),
+    unwatch: () => ipcRenderer.send(IPC.CLAUDE_SETTINGS_UNWATCH),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, change: SettingsFileChange) => cb(change)
+      ipcRenderer.on(IPC.CLAUDE_SETTINGS_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.CLAUDE_SETTINGS_CHANGED, handler)
+    }
   },
   driftChecks: {
     show: (workspaceId, fixing, live) => ipcRenderer.invoke(IPC.DRIFT_CHECKS_SHOW, workspaceId, fixing, live),

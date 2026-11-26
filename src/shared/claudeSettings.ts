@@ -38,6 +38,12 @@ export interface SettingsLayerFile {
   snapshot: SettingsSnapshot
 }
 
+/** A watched settings file that changed on disk, as it reads now. */
+export interface SettingsFileChange {
+  path: string
+  snapshot: SettingsSnapshot
+}
+
 export interface ClaudeSettingsRead {
   account: SettingsLayerFile & { profileId: string }
   /** Null without a workspace. */

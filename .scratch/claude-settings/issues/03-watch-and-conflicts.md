@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] The files of the layer and workspace on screen are watched (fs.watch with the polling backstop pattern used elsewhere). A change pushes a changed event with the new snapshot over the `claudeSettings:` domain.
 - [ ] An incoming changed event refreshes snapshots and keeps pending edits; a pending key whose disk value changed is marked so Save will ask.

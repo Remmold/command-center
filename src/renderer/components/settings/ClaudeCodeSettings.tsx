@@ -4,7 +4,7 @@ import { SETTINGS_CATALOG, SETTING_CATEGORIES, formatSettingValue, type SettingC
 import { changeCount, patchSize, withPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
 import { effectiveSetting, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
 import { shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
-import { pendingChanges, shownValue, type PendingFile } from '../../state/claudeSettingsPending'
+import { conflicts, pendingChanges, shownValue, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
 import { useContextStore } from '../../state/contextStore'
 import { useProfilesStore } from '../../state/profilesStore'
 import { setSettingsLeaveGuard, useViewStore } from '../../state/viewStore'
@@ -12,6 +12,7 @@ import { useWorkspacesStore } from '../../state/workspacesStore'
 import { Banner } from '../ui/Banner'
 import { Button } from '../ui/Button'
 import { Dialog, DialogActions } from '../ui/Dialog'
+import { FormRow } from '../ui/FormRow'
 import { ListRow, ListRowText } from '../ui/ListRow'
 import { NoticeLine } from '../ui/NoticeLine'
 import { Page, PageBody, PageGroup, PageHeader } from '../ui/Page'
@@ -69,13 +70,20 @@ function openInContext(workspaceId: string, path: string): void {
   if (useViewStore.getState().settings === null) useContextStore.getState().showFile(workspaceId, path)
 }
 
+function settingWords(key: string): { label: string; format: (value: unknown) => string } {
+  const entry = SETTINGS_CATALOG.find((e) => e.key === key)
+  return {
+    label: entry?.label ?? key,
+    format: (value) => (entry ? formatSettingValue(entry, value) : value === undefined ? 'not set' : JSON.stringify(value))
+  }
+}
+
 function ReviewDialog({ onClose }: { onClose: () => void }) {
   const { pending } = useEditedFile()
   const save = useClaudeSettingsStore((s) => s.save)
   const entries = pendingChanges(pending).map(({ key, before, after }): [string, string] => {
-    const entry = SETTINGS_CATALOG.find((e) => e.key === key)
-    const format = (value: unknown): string => (entry ? formatSettingValue(entry, value) : value === undefined ? 'not set' : JSON.stringify(value))
-    return [entry?.label ?? key, `${format(before)} → ${format(after)}`]
+    const { label, format } = settingWords(key)
+    return [label, `${format(before)} → ${format(after)}`]
   })
   return (
     <Dialog title="Review changes" onClose={onClose}>
@@ -90,6 +98,47 @@ function ReviewDialog({ onClose }: { onClose: () => void }) {
             void save()
           }}
         >
+          Save
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
+const CHOICES: { value: ConflictChoice; label: string }[] = [
+  { value: 'mine', label: 'Keep mine' },
+  { value: 'file', label: 'Keep the file’s' }
+]
+
+/** Save's question for each waiting key the file changed under; nothing is written until each is answered. */
+function ConflictDialog() {
+  const { file, pending } = useEditedFile()
+  const { settleConflicts, cancelSettling } = useClaudeSettingsStore.getState()
+  const [choices, setChoices] = useState<Record<string, ConflictChoice>>({})
+  const asked = conflicts(pending, file?.snapshot.value ?? null)
+  const answered = asked.every((c) => c.key in choices)
+  return (
+    <Dialog title="The file changed since your edit" onClose={cancelSettling} maxWidth={560}>
+      <p className="mb-2 text-muted">Claude or another program changed these settings in {file?.path} while your changes waited.</p>
+      {asked.map(({ key, mine, theirs }) => {
+        const { label, format } = settingWords(key)
+        return (
+          <FormRow
+            key={key}
+            label={label}
+            hint={key}
+            description={`Yours: ${format(mine)} · In the file: ${format(theirs)}`}
+            control={
+              <SegmentedControl label={`Keep for ${label}`} options={CHOICES} value={choices[key] ?? ''} onChange={(choice) => setChoices({ ...choices, [key]: choice })} />
+            }
+          />
+        )
+      })}
+      <DialogActions>
+        <Button variant="secondary" onClick={cancelSettling}>
+          Back
+        </Button>
+        <Button disabled={!answered} tooltip={answered ? undefined : 'Pick a value for each setting first'} onClick={() => void settleConflicts(choices)}>
           Save
         </Button>
       </DialogActions>
@@ -137,20 +186,24 @@ export function ClaudeCodeSettings() {
   const readError = useClaudeSettingsStore((s) => s.readError)
   const saving = useClaudeSettingsStore((s) => s.saving)
   const saveError = useClaudeSettingsStore((s) => s.saveError)
-  const { load, selectLayer, selectProfile, selectWorkspace, stage, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
+  const settling = useClaudeSettingsStore((s) => s.settling)
+  const { load, applyChange, selectLayer, selectProfile, selectWorkspace, stage, discard, save, confirmLeave, dropAll } = useClaudeSettingsStore.getState()
   const { file, pending } = useEditedFile()
   const [category, setCategory] = useState<SettingCategory>(CATEGORIES[0])
   const [reviewing, setReviewing] = useState(false)
 
   useEffect(() => {
     void loadProfiles()
+    const stopChanges = window.api.claudeSettings.onChanged(applyChange)
     void load()
     setSettingsLeaveGuard(confirmLeave)
     return () => {
+      stopChanges()
+      window.api.claudeSettings.unwatch()
       setSettingsLeaveGuard(null)
       dropAll()
     }
-  }, [loadProfiles, load, confirmLeave, dropAll])
+  }, [loadProfiles, load, applyChange, confirmLeave, dropAll])
 
   const snapshot = file?.snapshot
   const profile = profiles.find((p) => p.id === profileId)
@@ -158,6 +211,7 @@ export function ClaudeCodeSettings() {
   const rows = useMemo(() => SETTINGS_CATALOG.filter((e) => e.category === category && !e.advanced), [category])
   const layers = useMemo(() => layersWithPending(read, allPending), [read, allPending])
   const count = pending ? patchSize(pending.patch) : 0
+  const fileChanged = useMemo(() => new Map(conflicts(pending, snapshot?.value ?? null).map((c) => [c.key, { value: c.theirs }])), [pending, snapshot])
   const unreadable = snapshot?.value === null
   const noWorkspace = layer !== 'account' && workspaces.length === 0
 
@@ -213,6 +267,7 @@ export function ClaudeCodeSettings() {
                     value={shownValue(pending, snapshot?.value ?? null, entry.key)}
                     effective={shownEffective(entry, layers, layer)}
                     changed={pending !== null && (entry.key in pending.patch.set || pending.patch.remove.includes(entry.key))}
+                    fileValue={fileChanged.get(entry.key)}
                     disabled={!snapshot || unreadable || saving}
                     onChange={(value) => stage(entry.key, value)}
                     onReset={() => stage(entry.key, undefined)}
@@ -244,6 +299,7 @@ export function ClaudeCodeSettings() {
         />
       )}
       {reviewing && <ReviewDialog onClose={() => setReviewing(false)} />}
+      {settling && <ConflictDialog />}
     </Page>
   )
 }

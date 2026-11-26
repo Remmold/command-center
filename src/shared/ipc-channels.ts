@@ -68,6 +68,8 @@ export const IPC = {
   CLAUDE_SAVE_DEFAULTS: 'claude:saveDefaults',
   CLAUDE_SETTINGS_READ: 'claudeSettings:read',
   CLAUDE_SETTINGS_SAVE: 'claudeSettings:save',
+  CLAUDE_SETTINGS_UNWATCH: 'claudeSettings:unwatch',
+  CLAUDE_SETTINGS_CHANGED: 'claudeSettings:changed',
   CLAUDE_LIST_LOCAL_SESSIONS: 'claude:listLocalSessions',
   CLAUDE_RENAME_SESSION: 'claude:renameSession',
   SUBAGENTS_WATCH: 'subagents:watch',
