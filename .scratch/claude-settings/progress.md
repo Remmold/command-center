@@ -8,3 +8,4 @@ Base commit: b4df18a (main), branch feat/claude-settings, worktree C:\projects\p
 - 04 resolved: every documented setting in the catalog (157 keys, schema fixture with a 34-key skip list), stricter ladder, search, Show advanced, Hide terminal-only, All chats / Terminal only tags, Effort per model list — 2b09cc3 + review fixes
 - 05 resolved: Other keys (list in the edited layer, raw JSON box checked on leave, Remove/Keep, search), emptied parents removed, watch test flake fixed — 403f7a5, 9d584e6, 8f6a55f, ad35fdb
 - 06 resolved: carry-over fixes from 05 review, Permissions editor (rule lists in plain sentences, move/remove, rules from other layers, builder, shell risk warning) — 82763a5, 82964c8
+- 07 resolved: carry-overs from 06 (permission lists and extra folders saved per item, an emptied list removed), Hooks editor (per event in plain words, matcher groups, add/edit/retype/remove every hook type, other layers read only) and status line editor — 1907213, 929ed99
