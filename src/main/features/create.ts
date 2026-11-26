@@ -47,6 +47,7 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
   if (problem) return fail(problem)
   if (!(await deps.git.isRepo(source.path))) return fail(`${source.name} is not a git repository, so there is no worktree to make.`)
   const profile = await deps.profile(source.profileId)
+  if (profile.id !== source.profileId) return fail(`The account of ${source.name} was removed, so the feature would run on the default login. Pick an account for the workspace in Settings first.`)
   const noFlow = await flowProblem(profile)
   if (noFlow) return fail(noFlow)
   const base = await deps.git.mainBranch(source.path)

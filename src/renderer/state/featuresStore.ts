@@ -30,6 +30,11 @@ export function featurePanes(features: readonly FeatureRecord[]): ReadonlySet<st
   return new Set(features.map((f) => f.sessionId))
 }
 
+async function reload(): Promise<void> {
+  await useWorkspacesStore.getState().load()
+  await useFeaturesStore.getState().load()
+}
+
 /**
  * Makes the feature and starts its session, sent `/flow` at once. Resolves with why it failed, or null; a feature
  * whose session did not start is undone.
@@ -39,15 +44,13 @@ export async function startFeature(request: Omit<NewFeatureRequest, 'sessionId'>
   const made = await window.api.features.create({ ...request, sessionId })
   if (!made.ok) return made.error
   const { feature } = made
-  await useWorkspacesStore.getState().load()
-  await useFeaturesStore.getState().load()
+  await reload()
   const workspace = useWorkspacesStore.getState().workspaces.find((w) => w.id === feature.workspaceId)
   const started = workspace
     ? startSession(workspace, { send: { id: sessionId, prompt: featureFirstPrompt(feature, request.description) } })
     : false
   if (started) return null
   await window.api.features.discard(feature.name, request.workspaceId)
-  await useWorkspacesStore.getState().load()
-  await useFeaturesStore.getState().load()
+  await reload()
   return 'The feature session could not start.'
 }

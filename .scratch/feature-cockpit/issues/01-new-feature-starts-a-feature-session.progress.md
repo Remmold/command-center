@@ -1,3 +1,3 @@
-Done: New feature end to end (store, worktree on the source account, /flow first prompt, Features group, vitest, UI scenario); quick, full pnpm e2e (16 of 20) green; committed.
-Finding: the profile linker shares `skills` (also commands, plugins, hooks, agents, CLAUDE.md, settings.json) from Default into app-made profiles, so /flow reaches them when Default has skills/flow; an adopted folder gets no links, so New feature refuses it unless its own folder has skills/flow/SKILL.md or commands/flow.md. Check is src/main/features/flowProblem.ts.
-Next: code review since 9773bf6 (follow-up commit). Open reds: none. Not done on purpose: stage/tickets on the row (later ticket); Work list "jump to next waiting" skips feature sessions (they are out of the ordinary list).
+Done: ticket 01 committed (591d5da) and reviewed; review fixes committed.
+Next: ticket 02. Not handled: whether a feature session is re-hosted after an app restart (unverified); Work list jump-to-next-waiting skips feature sessions.
+Open reds: none.

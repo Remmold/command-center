@@ -33,6 +33,7 @@ export function featureRows(
 }
 
 /** The text after the feature's name: its account, or a plain note when the account is gone. */
-export function accountNote(row: Pick<FeatureRow, 'accountName'>): string {
+export function accountNote(row: Pick<FeatureRow, 'accountName' | 'workspace'>): string {
+  if (!row.workspace) return 'workspace removed'
   return row.accountName ?? 'account removed'
 }

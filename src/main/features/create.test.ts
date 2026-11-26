@@ -22,6 +22,7 @@ let records: FeatureRecord[]
 let workspaces: Workspace[]
 let profileAdopted: boolean
 let failAddingWorkspace: boolean
+let profileRemoved: boolean
 
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf-8' })
 
@@ -42,7 +43,7 @@ function deps(): CreateDeps {
       },
       remove: async (id) => void (workspaces = workspaces.filter((w) => w.id !== id))
     },
-    profile: async (id) => ({ id, name: 'Work', configDir, adopted: profileAdopted }),
+    profile: async (id) => ({ id: profileRemoved ? 'default' : id, name: 'Work', configDir, adopted: profileAdopted }),
     features: {
       list: async () => records,
       add: async (r) => void records.push(r),
@@ -70,6 +71,7 @@ beforeEach(() => {
   workspaces = [workspace(repo, 'work-profile', 'src')]
   profileAdopted = false
   failAddingWorkspace = false
+  profileRemoved = false
 })
 
 afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))
@@ -114,6 +116,13 @@ describe('createFeature', () => {
     expect(result).toEqual({ ok: false, error: expect.stringMatching(/cannot run \/flow/) })
     expect(existsSync(worktreePathFor(repo, 'login'))).toBe(false)
     expect(git(repo, 'branch', '--list', 'feat/login').trim()).toBe('')
+  })
+
+  it('refuses a workspace whose account was removed instead of falling back to the default login', async () => {
+    profileRemoved = true
+    const result = await createFeature(deps(), request)
+    expect(result).toEqual({ ok: false, error: expect.stringMatching(/account of .* was removed/) })
+    expect(existsSync(worktreePathFor(repo, 'login'))).toBe(false)
   })
 
   it('removes the worktree and branch it just made when a later step fails', async () => {

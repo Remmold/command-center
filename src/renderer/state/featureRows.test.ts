@@ -33,5 +33,6 @@ describe('featureRows', () => {
     const rows = featureRows([feature('c', 'nope'), feature('d', 'w1', 5)], workspaces, profiles, {})
     expect(rows.map((r) => r.name)).toEqual(['c'])
     expect(rows[0].workspace).toBeUndefined()
+    expect(accountNote(rows[0])).toBe('workspace removed')
   })
 })
