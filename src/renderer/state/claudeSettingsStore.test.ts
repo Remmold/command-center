@@ -10,7 +10,7 @@ vi.stubGlobal('localStorage', {
 const save = vi.fn()
 vi.stubGlobal('window', { api: { claudeSettings: { save }, claude: { readDefaults: vi.fn(async () => ({})) } } })
 
-const { useClaudeSettingsStore } = await import('./claudeSettingsStore')
+const { useClaudeSettingsStore, waitingFiles } = await import('./claudeSettingsStore')
 
 const PATH = 'C:/Users/me/.claude/settings.json'
 const KEYS_PATH = 'C:/Users/me/.claude/keybindings.json'
@@ -55,19 +55,44 @@ describe('saving Claude Code settings while a raw JSON box holds text', () => {
 describe('key bindings', () => {
   beforeEach(() => {
     save.mockReset()
-    useClaudeSettingsStore.setState({ layer: 'account', keybindings: false, read, pending: {}, unparsed: [], saving: false, saveError: null })
+    useClaudeSettingsStore.setState({ layer: 'account', keybindings: false, read, pending: {}, unparsed: [], saving: false, saveError: null, settling: null })
   })
 
-  it('wait and save in the account’s keybindings.json while they are on screen, apart from the settings file’s changes', async () => {
-    save.mockResolvedValue({ ok: true, snapshot: { value: { bindings: { Chat: { 'ctrl+s': null } } }, text: '{}', mtime: 2 } })
+  it('wait in one save bar with the settings file’s changes, even once a search shows the settings, and Save writes both files', async () => {
+    save.mockImplementation(async (path: string) => ({ ok: true, snapshot: { value: path === KEYS_PATH ? { bindings: { Chat: { 'ctrl+s': null } } } : { model: 'opus' }, text: '{}', mtime: 2 } }))
     store().stage('model', 'opus')
     store().showKeybindings(true)
     store().stage('bindings.Chat.ctrl+s', null)
+    // The page-wide search shows settings, so the form edits settings.json again; the key binding still waits.
+    store().showKeybindings(false)
+    expect(waitingFiles(store()).map((f) => f.slot)).toEqual(['account', 'keybindings'])
     await store().save()
+    expect(save).toHaveBeenCalledWith(PATH, { model: 'sonnet' }, { set: { model: 'opus' }, remove: [] })
     expect(save).toHaveBeenCalledWith(KEYS_PATH, {}, { set: { 'bindings.Chat.ctrl+s': null }, remove: [] })
     expect(store().read?.keybindings.snapshot.value).toEqual({ bindings: { Chat: { 'ctrl+s': null } } })
-    expect(store().read?.account.snapshot.value).toEqual({ model: 'sonnet' })
-    expect(Object.keys(store().pending)).toEqual([PATH])
+    expect(store().read?.account.snapshot.value).toEqual({ model: 'opus' })
+    expect(store().pending).toEqual({})
+  })
+
+  it('ask about the key-binding file’s conflicts before writing either file', async () => {
+    store().stage('model', 'opus')
+    store().showKeybindings(true)
+    store().stage('bindings.Chat.ctrl+s', null)
+    store().showKeybindings(false)
+    store().applyChange({ path: KEYS_PATH, snapshot: { value: { bindings: { Chat: { 'ctrl+s': 'chat:submit' } } }, text: '{}', mtime: 3 } })
+    await store().save()
+    expect(save).not.toHaveBeenCalled()
+    expect(store().settling).toBe('keybindings')
+  })
+
+  it('are dropped with the settings file’s changes by Discard', () => {
+    vi.stubGlobal('window', { ...window, api: { ...window.api, claudeSettings: { ...window.api.claudeSettings, read: vi.fn(async () => read) } } })
+    store().stage('model', 'opus')
+    store().showKeybindings(true)
+    store().stage('bindings.Chat.ctrl+s', null)
+    store().showKeybindings(false)
+    store().discard()
+    expect(store().pending).toEqual({})
   })
 
   it('are off again when the section is left, so it reopens on the settings file', () => {

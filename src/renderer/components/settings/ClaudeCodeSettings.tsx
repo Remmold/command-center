@@ -8,7 +8,7 @@ import { hookChangeText, hookEvent } from '../../../shared/hooks'
 import { keyEditWords } from '../../../shared/keybindings'
 import { isStatusLineKey } from '../../../shared/statusLine'
 import { RULE_LISTS, ruleListKey, ruleListOf, type RuleList } from '../../../shared/permissionRules'
-import { editedSlot, shownWorkspace, useClaudeSettingsStore } from '../../state/claudeSettingsStore'
+import { editedSlot, shownWorkspace, useClaudeSettingsStore, waitingFiles } from '../../state/claudeSettingsStore'
 import { conflicts, pendingChanges, type ConflictChoice, type PendingFile } from '../../state/claudeSettingsPending'
 import { useContextStore } from '../../state/contextStore'
 import { useProfilesStore } from '../../state/profilesStore'
@@ -128,17 +128,26 @@ function settingWords(key: string, keybindings: boolean): { label: string; forma
 /** The edited file is the account's keybindings.json. */
 const useKeybindingsEdited = (): boolean => useClaudeSettingsStore((s) => editedSlot(s) === 'keybindings')
 
-function ReviewDialog({ onClose }: { onClose: () => void }) {
-  const { pending } = useEditedFile()
-  const keybindings = useKeybindingsEdited()
-  const save = useClaudeSettingsStore((s) => s.save)
-  const entries = pendingChanges(pending).map(({ key, before, after }): [string, string] => {
+const KEY_BINDING_PREFIX = 'Key binding · '
+
+/** One line per waiting change of the save bar's files; key bindings say so, as both files can wait at once. */
+function reviewEntries(keybindings: boolean, pending: PendingFile): [string, string][] {
+  return pendingChanges(pending).map(({ key, before, after }): [string, string] => {
     const { label, format } = settingWords(key, keybindings)
-    if (keybindings) return [label, `${format(before)} → ${format(after)}`]
+    if (keybindings) return [KEY_BINDING_PREFIX + label, `${format(before)} → ${format(after)}`]
     const entry = entryOf(key)
     if (entry?.key === key) return [label, changeText(entry, before, after)]
     return [label, entry && isHooksEntry(entry) && pathKeys(key).length === 2 ? hookChangeText(before, after) : `${format(before)} → ${format(after)}`]
   })
+}
+
+function ReviewDialog({ onClose }: { onClose: () => void }) {
+  const read = useClaudeSettingsStore((s) => s.read)
+  const layer = useClaudeSettingsStore((s) => s.layer)
+  const pending = useClaudeSettingsStore((s) => s.pending)
+  const files = waitingFiles({ read, layer, pending })
+  const save = useClaudeSettingsStore((s) => s.save)
+  const entries = files.flatMap(({ slot, changes }) => reviewEntries(slot === 'keybindings', changes))
   return (
     <Dialog title="Review changes" onClose={onClose}>
       <PropertyList label="Pending changes" entries={entries} />
@@ -166,8 +175,10 @@ const CHOICES: { value: ConflictChoice; label: string }[] = [
 
 /** Save's question for each waiting key the file changed under; nothing is written until each is answered. */
 function ConflictDialog() {
-  const { file, pending } = useEditedFile()
-  const keybindings = useKeybindingsEdited()
+  const slot = useClaudeSettingsStore((s) => s.settling)
+  const file = useClaudeSettingsStore((s) => (slot ? (s.read?.[slot] ?? null) : null))
+  const pending = useClaudeSettingsStore((s) => (file ? s.pending[file.path] : undefined)) ?? null
+  const keybindings = slot === 'keybindings'
   const { settleConflicts, cancelSettling } = useClaudeSettingsStore.getState()
   // Each answer holds the file's value it was given against: if the file changes again, it is asked again.
   const [answers, setAnswers] = useState<Record<string, { choice: ConflictChoice; theirs: unknown }>>({})
@@ -276,7 +287,7 @@ export function ClaudeCodeSettings() {
   const groups = useMemo(() => shownSettings({ category, query, showAdvanced, hideTerminalOnly }), [category, query, showAdvanced, hideTerminalOnly])
   const searching = query.trim() !== ''
   const layers = useMemo(() => layersWithPending(read, allPending), [read, allPending])
-  const count = pending ? patchSize(pending.patch) : 0
+  const count = useMemo(() => waitingFiles({ read, layer, pending: allPending }).reduce((sum, { changes }) => sum + patchSize(changes.patch), 0), [read, layer, allPending])
   const fileChanged = useMemo(
     () => new Map(conflicts(pending, snapshot?.value ?? null).map((c) => [entryOf(c.key)?.key ?? c.key, { value: isMaskedKey(c.key) ? MASK : c.theirs }])),
     [pending, snapshot]
