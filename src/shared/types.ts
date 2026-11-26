@@ -16,6 +16,7 @@ import type { FeatureServersView } from './featureServers'
 import type { FeatureRecord, NewFeatureRequest, NewFeatureResult } from './features'
 import type { MainChatInfo } from './mainChat'
 import type { PreviewConfig } from './previewConfig'
+import type { PreviewDraftRead } from './previewSetup'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
 import type { ClaudeSettingsRead, SettingsFileChange, SettingsObject, SettingsPatch, SettingsSaveResult } from './claudeSettings'
@@ -505,6 +506,12 @@ export interface RendererApi {
     get: (workspaceId: string) => Promise<PreviewConfig | null>
     /** Validates, then saves; an empty config removes the entry. The refusal names the field. */
     save: (workspaceId: string, config: unknown) => Promise<{ ok: true; config: PreviewConfig | null } | { ok: false; error: string }>
+    /** Names a fresh draft file in the app's data folder for a Set up preview session to write; writes nothing. */
+    draftBegin: () => Promise<{ ok: true; file: string } | { ok: false; error: string }>
+    /** What Claude has written to the draft file: waiting until it holds JSON, then a validated config, the no-browser outcome, or a refusal with its reason. */
+    draftRead: (file: string) => Promise<PreviewDraftRead>
+    /** Removes a draft file once read or given up on. */
+    draftDiscard: (file: string) => Promise<void>
   }
   sidebarGroups: {
     /** null before the first save: the list then seeds one from its repo groups. */

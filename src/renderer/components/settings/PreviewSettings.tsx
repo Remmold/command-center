@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { readPreviewConfig, type PreviewConfig } from '../../../shared/previewConfig'
+import { endPreviewSetup, startPreviewSetup, usePreviewSetupStore } from '../../state/previewSetup'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { Button } from '../ui/Button'
 import { FormRow } from '../ui/FormRow'
@@ -44,6 +45,8 @@ export function PreviewSettings() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [setupNote, setSetupNote] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
 
   useEffect(() => {
     void load()
@@ -74,6 +77,48 @@ export function PreviewSettings() {
   }, [currentId])
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved)
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
+  const waitingOn = usePreviewSetupStore((s) => (currentId ? s.pending[currentId] : undefined))
+
+  useEffect(() => {
+    setSetupNote(null)
+  }, [currentId])
+
+  // Claude writes the proposal into the named file; the draft lands here unsaved, so Save stays the user's act.
+  useEffect(() => {
+    if (!currentId || !loaded || !waitingOn) return
+    let live = true
+    const poll = async (): Promise<void> => {
+      const read = await window.api.previewConfig.draftRead(waitingOn).catch(() => ({ kind: 'waiting' }) as const)
+      if (!live || read.kind === 'waiting') return
+      clearInterval(timer)
+      await endPreviewSetup(currentId)
+      if (!live) return
+      if (read.kind === 'refused') setError(`Claude's proposal was refused: ${read.error}`)
+      else if (read.kind === 'none') setSetupNote(read.reason ? `No browser needed: ${read.reason}` : 'No browser needed: this project has nothing to serve.')
+      else if (dirtyRef.current) setSetupNote("Claude's proposal arrived after you changed this page, so it was dropped. Discard your changes and set up again.")
+      else {
+        setDraft(toDraft(read.config))
+        setError(null)
+        setSetupNote("Claude's proposal is loaded below, not saved. Check it, then Save.")
+      }
+    }
+    const timer = setInterval(() => void poll(), 1500)
+    void poll()
+    return () => {
+      live = false
+      clearInterval(timer)
+    }
+  }, [currentId, loaded, waitingOn])
+
+  const setUp = async (): Promise<void> => {
+    if (!current) return
+    setStarting(true)
+    setSetupNote(null)
+    setError((await startPreviewSetup(current)) ?? null)
+    setStarting(false)
+  }
   const hasBrowser = saved.servers.length > 0
   const set = (patch: Partial<Draft>): void => setDraft((d) => ({ ...d, ...patch }))
   const setServer = (i: number, patch: Partial<ServerDraft>): void => set({ servers: draft.servers.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
@@ -113,6 +158,27 @@ export function PreviewSettings() {
               {dirty && <PageNote>Save or discard your changes before picking another workspace.</PageNote>}
               {!hasBrowser && !dirty && <NoticeLine>No browser, only the test flow: this workspace has no preview servers.</NoticeLine>}
             </PageGroup>
+            {!hasBrowser && (
+              <PageGroup title="Set up preview">
+                <FormRow
+                  label="Have Claude draft it"
+                  description="Starts a session in this workspace that reads the project and proposes the install command, servers and start page. The proposal waits here, unsaved, until you press Save."
+                  control={
+                    waitingOn ? (
+                      <Button variant="secondary" onClick={() => void endPreviewSetup(current.id)}>
+                        Cancel
+                      </Button>
+                    ) : (
+                      <Button disabled={dirty || starting} onClick={() => void setUp()}>
+                        Set up preview
+                      </Button>
+                    )
+                  }
+                />
+                {waitingOn && <NoticeLine>Claude is reading the project; the proposal appears here when it is written.</NoticeLine>}
+                {setupNote && <NoticeLine>{setupNote}</NoticeLine>}
+              </PageGroup>
+            )}
             <PageGroup title="Install">
               <FormRow
                 label="Install command"

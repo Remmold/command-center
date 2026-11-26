@@ -29,6 +29,11 @@ export function driftChecksFolder(): string {
   return userDataPath('drift-checks')
 }
 
+/** Where Set up preview sessions write their proposed preview configs, one JSON file per request. */
+export function previewDraftsFolder(): string {
+  return userDataPath('preview-drafts')
+}
+
 /** Packaging must ship resources/icons as the extra resource "icons". */
 export function iconPath(file: string): string {
   if (app.isPackaged) return join(process.resourcesPath, 'icons', file)

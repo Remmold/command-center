@@ -90,7 +90,10 @@ const api: RendererApi = {
   },
   previewConfig: {
     get: (workspaceId) => ipcRenderer.invoke(IPC.PREVIEW_CONFIG_GET, workspaceId),
-    save: (workspaceId, raw) => ipcRenderer.invoke(IPC.PREVIEW_CONFIG_SAVE, workspaceId, raw)
+    save: (workspaceId, raw) => ipcRenderer.invoke(IPC.PREVIEW_CONFIG_SAVE, workspaceId, raw),
+    draftBegin: () => ipcRenderer.invoke(IPC.PREVIEW_DRAFT_BEGIN),
+    draftRead: (file) => ipcRenderer.invoke(IPC.PREVIEW_DRAFT_READ, file),
+    draftDiscard: (file) => ipcRenderer.invoke(IPC.PREVIEW_DRAFT_DISCARD, file)
   },
   sidebarGroups: {
     load: () => ipcRenderer.invoke(IPC.SIDEBAR_GROUPS_LOAD),
