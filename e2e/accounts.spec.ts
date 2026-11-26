@@ -200,7 +200,7 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await expect(page.getByRole('region', { name: workLabel }).getByRole('listitem', { name: 'work-repo' })).toBeVisible()
   await expect(page.getByRole('region', { name: homeLabel }).getByRole('listitem', { name: 'e2e-workspace' })).toBeVisible()
 
-  await test.step('own groups: made from the account menu above Ungrouped, Ungrouped dragged to the top, a chat dragged into one, a group dragged above another, a drop on another account refused, Alt+Shift+Up into the group above, all kept after a reload', async () => {
+  await test.step('own groups: made from the account menu above Ungrouped, Ungrouped dragged to the top, a chat dragged into one, a group dragged above another, a chat dragged under another account as a tagged guest and moved back by menu, Alt+Shift+Up into the group above, all kept after a reload', async () => {
     await page.keyboard.press('Control+2')
     const homeChat = homeSection.getByRole('listitem')
     const groupNames = () => homeSection.locator('section').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
@@ -231,8 +231,16 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
     await drag(header('Later'), header('Today'), 'top')
     await expect.poll(groupNames).toEqual(['Later', 'Today'])
     await drag(homeChat, workWaiting, 'top')
-    await expect(workSection.getByRole('listitem')).toHaveCount(1)
+    const guest = workSection.getByRole('listitem').filter({ has: page.getByTitle('Runs on Personal · Ultra') })
+    await expect(workSection.getByRole('listitem')).toHaveCount(2)
+    await expect(guest).toHaveText(/Personal/)
+    await expect(homeSection).toBeHidden()
+    await guest.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Move to group' }).click()
+    await page.getByRole('menuitem', { name: 'Today', exact: true }).click()
     await expect(homeSection.getByRole('region', { name: 'Today' }).getByRole('listitem')).toHaveCount(1)
+    await expect(workSection.getByRole('listitem')).toHaveCount(1)
+    await expect(homeChat.getByTitle('Runs on Personal · Ultra')).toHaveCount(0)
     await homeChat.getByRole('button').first().focus()
     await page.keyboard.press('Alt+Shift+ArrowUp')
     await expect(homeSection.getByRole('region', { name: 'Later' }).getByRole('listitem')).toHaveCount(1)

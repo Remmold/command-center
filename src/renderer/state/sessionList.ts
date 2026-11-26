@@ -168,13 +168,22 @@ interface AccountRows {
   rows: SessionRow[]
 }
 
-/** The status groups split by the account of each row's workspace, accounts in Settings order; rows keep the status order. */
-export function accountRows(groups: readonly SessionGroup[], accounts: readonly Account[]): AccountRows[] {
+/** The account a row's session runs on: its workspace's. */
+export function rowAccount(row: SessionRow, accounts: readonly Account[]): Account {
+  return accountOf(accounts, row.workspace.profileId)
+}
+
+/** The status groups split by account, the workspace's unless `sectionOf` says otherwise, accounts in Settings order; rows keep the status order. */
+export function accountRows(
+  groups: readonly SessionGroup[],
+  accounts: readonly Account[],
+  sectionOf: (row: SessionRow) => string = (row) => rowAccount(row, accounts).profileId
+): AccountRows[] {
   const rank = accountRank(accounts)
   const byAccount = new Map<string, SessionRow[]>()
   for (const group of groups) {
     for (const row of group.rows) {
-      const id = accountOf(accounts, row.workspace.profileId).profileId
+      const id = sectionOf(row)
       byAccount.set(id, [...(byAccount.get(id) ?? []), row])
     }
   }
@@ -200,9 +209,11 @@ export function repoGroups(rows: readonly SessionRow[], workspaces: readonly Wor
 
 const placed = (row: SessionRow) => (row.session ? { id: row.placeId, session: row.session } : { id: row.placeId })
 
-/** Each account's chats for placing, in the compact order. */
+/** Every account's own chats for placing, in the compact order; an account without any gets an empty list, as it may hold guests. */
 export function accountChats(groups: readonly SessionGroup[], accounts: readonly Account[]): AccountChats[] {
-  return accountRows(groups, accounts).map(({ account, rows }) => ({ profileId: account.profileId, chats: rows.map(placed) }))
+  const own = new Map(accountRows(groups, accounts).map(({ account, rows }) => [account.profileId, rows.map(placed)]))
+  const ids = [...new Set([...accounts.map((a) => a.profileId), ...own.keys()])]
+  return ids.map((profileId) => ({ profileId, chats: own.get(profileId) ?? [] }))
 }
 
 /** How a repo group's fold was remembered before own groups: per account. */
@@ -238,11 +249,16 @@ function listGroup(id: string, name: string, folded: boolean, ids: readonly stri
  * them; a row not placed yet shows at the top of Ungrouped. Ungrouped shows only with chats in it; while searching, so does every group.
  */
 export function accountSections(groups: readonly SessionGroup[], accounts: readonly Account[], layout: SidebarLayout, searching = false): AccountSection[] {
-  return accountRows(groups, accounts).map(({ account, rows }) => {
+  const host = new Map<string, string>()
+  for (const { profileId } of accounts) {
+    const a = layout.accounts[profileId]
+    if (a) for (const id of [...a.ungrouped, ...a.groups.flatMap((g) => g.chats)]) if (!host.has(id)) host.set(id, profileId)
+  }
+  const sectionOf = (row: SessionRow) => host.get(row.placeId) ?? rowAccount(row, accounts).profileId
+  return accountRows(groups, accounts, sectionOf).map(({ account, rows }) => {
     const a = layout.accounts[account.profileId] ?? EMPTY_ACCOUNT
     const byId = new Map(rows.map((r) => [r.placeId, r]))
-    const placedIds = new Set([...a.ungrouped, ...a.groups.flatMap((g) => g.chats)])
-    const unplaced = rows.filter((r) => !placedIds.has(r.placeId)).map((r) => r.placeId)
+    const unplaced = rows.filter((r) => !host.has(r.placeId)).map((r) => r.placeId)
     const own = new Map(a.groups.map((g) => [g.id, g]))
     const list = groupOrder(a)
       .map((id) => {
@@ -251,6 +267,28 @@ export function accountSections(groups: readonly SessionGroup[], accounts: reado
       })
       .filter((g) => g.rows.length > 0 || (g.id !== UNGROUPED && !searching))
     return { account, groups: list, rows: list.flatMap((g) => g.rows), needsYou: list.reduce((n, g) => n + g.needsYou, 0) }
+  })
+}
+
+/** A guest row's own account, the one it runs on, while it sits under another account's section; null otherwise. */
+export function guestAccount(row: SessionRow, section: Pick<AccountSection, 'account'>, accounts: readonly Account[]): Account | null {
+  const own = rowAccount(row, accounts)
+  return own.profileId === section.account.profileId ? null : own
+}
+
+export interface MoveTargets {
+  account: Account
+  /** Its own groups and Ungrouped, in their order. */
+  groups: { id: string; name: string }[]
+}
+
+/** Where "Move to group" can send a chat: every account's own groups and Ungrouped, the account it sits under first. */
+export function moveTargets(layout: SidebarLayout, accounts: readonly Account[], current: string): MoveTargets[] {
+  const ordered = [...accounts.filter((a) => a.profileId === current), ...accounts.filter((a) => a.profileId !== current)]
+  return ordered.map((account) => {
+    const a = layout.accounts[account.profileId] ?? EMPTY_ACCOUNT
+    const names = new Map(a.groups.map((g) => [g.id, g.name]))
+    return { account, groups: groupOrder(a).map((id) => ({ id, name: names.get(id) ?? 'Ungrouped' })) }
   })
 }
 

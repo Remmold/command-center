@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { useAccountColor } from '../../state/useAccountColor'
 import { AccentDot } from '../ui/AccentDot'
 import { useMinuteClock } from '../../hooks/useMinuteClock'
@@ -7,10 +7,24 @@ import { useMenu } from '../../hooks/useMenu'
 import { ChevronLeft, Columns2, FolderInput, FolderPlus, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useSessionListStore } from '../../state/sessionListStore'
-import { groupOpen, isNeedsYouRow, sessionRowTooltip, waitingBadge, type AccountSection, type ListFold, type ListGroup, type SessionRow } from '../../state/sessionList'
+import {
+  groupOpen,
+  guestAccount,
+  isNeedsYouRow,
+  moveTargets,
+  sessionRowTooltip,
+  waitingBadge,
+  type AccountSection,
+  type ListFold,
+  type ListGroup,
+  type MoveTargets,
+  type SessionRow
+} from '../../state/sessionList'
 import { UNGROUPED } from '../../../shared/sidebarGroups'
 import { createGroup, deleteGroup, groupOf, moveChat, moveChatStep, moveChatToNextGroup, moveGroupBeside, renameGroup, setFolded } from '../../state/sidebarGroups'
-import { sectionTitle } from '../../state/accounts'
+import { sectionTitle, type Account } from '../../state/accounts'
+import { useAccounts } from '../../state/useAccounts'
+import { ACCENT_TAG } from '../ui/accountAccent'
 import { headerUsage, type HeaderTone } from '../../state/usageModel'
 import { useChatPairStore } from '../../state/chatPairStore'
 import { usePaneProcesses, useProcessServers } from '../../state/backgroundProcessesStore'
@@ -28,7 +42,7 @@ import { IconButton } from '../ui/IconButton'
 import { ListRow, ListRowLabel, ListRowMeta, ListRowSlot, ListRowText } from '../ui/ListRow'
 import { MenuItem } from '../ui/MenuItem'
 import { MeterReading, type MeterTone } from '../ui/Meter'
-import { Popover, PopoverMenu } from '../ui/Popover'
+import { Popover, PopoverHeading, PopoverMenu } from '../ui/Popover'
 import { SearchField } from '../ui/SearchField'
 import { EmptyHint } from '../ui/Section'
 import { useSortable, type DragItem } from '../ui/SortableItem'
@@ -58,17 +72,33 @@ function newGroup(profileId: string, chat?: string): GroupRef {
 
 const rowElement = (rowKey: string) => document.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(rowKey)}"]`)
 
-/** A chat that shows up in the list, like a new one at the top of Ungrouped, is scrolled into view. */
-function useScrollToAdded(sections: readonly AccountSection[], watching: boolean): void {
+/** Opens a folded account section, and a folded Ungrouped, that a chat just landed in; true when something had to open. */
+function unfoldFor(sections: readonly AccountSection[], fold: ListFold, rowKey: string): boolean {
+  const section = sections.find((s) => s.rows.some((r) => r.key === rowKey))
+  const group = section?.groups.find((g) => g.rows.some((r) => r.key === rowKey))
+  if (!section || !group) return false
+  const { profileId } = section.account
+  const accountFolded = fold.accounts.includes(profileId)
+  const ungroupedFolded = group.id === UNGROUPED && !groupOpen(group, fold)
+  if (accountFolded) useAccountSectionsStore.getState().expand(profileId)
+  if (ungroupedFolded) changeLayout((layout) => setFolded(layout, profileId, UNGROUPED, false))
+  return accountFolded || ungroupedFolded
+}
+
+/** A chat that shows up in the list, like a new one at the top of Ungrouped, is scrolled into view, its folded section and Ungrouped opened first. */
+function useScrollToAdded(sections: readonly AccountSection[], fold: ListFold, watching: boolean): void {
   const seen = useRef<ReadonlySet<string> | null>(null)
+  const opening = useRef<string | null>(null)
   useEffect(() => {
     if (!watching) return
     const keys = sections.flatMap((s) => s.rows.map((r) => r.key))
     const before = seen.current
     seen.current = new Set(keys)
     const added = before && keys.find((k) => !before.has(k))
-    if (added) rowElement(added)?.scrollIntoView({ block: 'nearest' })
-  }, [sections, watching])
+    const target = added || opening.current
+    opening.current = added && unfoldFor(sections, fold, added) ? added : null
+    if (target && !opening.current) rowElement(target)?.scrollIntoView({ block: 'nearest' })
+  }, [sections, fold, watching])
 }
 
 /** After a move remounts the row, focus follows it. */
@@ -77,17 +107,18 @@ function refocus(rowKey: string): void {
 }
 
 export function SessionList() {
-  const { sections, headed, loading } = useSessionSections()
+  const { sections, headed, loading, layout } = useSessionSections()
+  const accounts = useAccounts()
   const pair = useChatPairStore((s) => s.pair)
   const search = useWorkSearchStore((s) => s.search)
   const setSearch = useWorkSearchStore((s) => s.setSearch)
   const fold = useListFold(headed)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renamingGroup, setRenamingGroup] = useState<GroupRef | null>(null)
-  useScrollToAdded(sections, !loading && search.trim() === '')
+  useScrollToAdded(sections, fold, !loading && search.trim() === '')
   const groups = (section: AccountSection) => {
     const profileId = section.account.profileId
-    const targets = section.groups.filter((g) => g.id !== UNGROUPED).map((g) => ({ id: g.id, name: g.name }))
+    const targets = layout ? moveTargets(layout, accounts, profileId) : []
     return section.groups.map((group) => (
       <GroupSection
         key={group.id}
@@ -103,6 +134,7 @@ export function SessionList() {
           group={group}
           section={section}
           targets={targets}
+          accounts={accounts}
           pair={pair}
           renaming={renaming}
           setRenaming={setRenaming}
@@ -170,7 +202,7 @@ function GroupSection({ profileId, group, fold, renaming, onRename, onRenamed, c
   const menu = useMenu()
   const sortable = useSortable({
     item: { id: group.id, kind: GROUP, group: profileId },
-    accepts: (d) => d.group === profileId && (d.kind === CHAT || d.kind === GROUP),
+    accepts: (d) => d.kind === CHAT || (d.kind === GROUP && d.group === profileId),
     onDrop: (d, side) => dropOnGroup(profileId, group, d, side),
     sideFor: (d, pointer) => (d.kind === CHAT ? 'after' : pointer)
   })
@@ -315,15 +347,16 @@ interface SessionRowsProps {
   profileId: string
   group: ListGroup
   section: AccountSection
-  /** The account's own groups, for "Move to group". */
-  targets: { id: string; name: string }[]
+  /** Every account's groups, for "Move to group". */
+  targets: MoveTargets[]
+  accounts: readonly Account[]
   pair: ChatPair
   renaming: string | null
   setRenaming: (key: string | null) => void
   onNewGroup: (chat: string) => void
 }
 
-function SessionRows({ profileId, group, section, targets, pair, renaming, setRenaming, onNewGroup }: SessionRowsProps) {
+function SessionRows({ profileId, group, section, targets, accounts, pair, renaming, setRenaming, onNewGroup }: SessionRowsProps) {
   return group.rows.map((row, i) =>
     row.key === renaming && row.kind === 'hosted' ? (
       <RenameRow key={row.key} paneId={row.paneId} title={row.title} onDone={() => setRenaming(null)} />
@@ -332,6 +365,7 @@ function SessionRows({ profileId, group, section, targets, pair, renaming, setRe
         key={row.key}
         row={row}
         place={{ profileId, group, next: group.rows[i + 1]?.placeId ?? null, section, targets }}
+        guest={guestAccount(row, section, accounts)}
         active={isShown(row, pair)}
         onRename={row.kind === 'hosted' ? () => setRenaming(row.key) : undefined}
         onNewGroup={() => onNewGroup(row.placeId)}
@@ -405,7 +439,7 @@ interface RowPlace {
   /** The chat shown below it in its group. */
   next: string | null
   section: AccountSection
-  targets: { id: string; name: string }[]
+  targets: MoveTargets[]
 }
 
 /** Alt+↑/↓ steps the row within its group, Alt+Shift+↑/↓ moves it to the next or previous group, opening that group. */
@@ -427,18 +461,20 @@ interface SessionListRowProps {
   row: SessionRow
   place: RowPlace
   active: boolean
+  /** The account a guest row runs on; null when it sits under its own. */
+  guest: Account | null
   onRename?: () => void
   onNewGroup: () => void
 }
 
-function SessionListRow({ row, place, active, onRename, onNewGroup }: SessionListRowProps) {
+function SessionListRow({ row, place, active, guest, onRename, onNewGroup }: SessionListRowProps) {
   const { workspace } = row
   const { profileId, group } = place
   const menu = useMenu()
   const [page, setPage] = useState<'actions' | 'move'>('actions')
   const sortable = useSortable({
     item: { id: row.placeId, kind: CHAT, group: profileId },
-    accepts: (d) => d.kind === CHAT && d.group === profileId,
+    accepts: (d) => d.kind === CHAT,
     onDrop: (d, side) =>
       changeLayout((layout) => moveChat(layout, profileId, d.id, { group: group.id, before: side === 'before' ? row.placeId : place.next }))
   })
@@ -450,7 +486,7 @@ function SessionListRow({ row, place, active, onRename, onNewGroup }: SessionLis
     close()
     fn()
   }
-  const moveTo = (to: string) => changeLayout((layout) => moveChat(layout, profileId, row.placeId, { group: to, before: null }))
+  const moveTo = (account: string, to: string) => changeLayout((layout) => moveChat(layout, account, row.placeId, { group: to, before: null }))
   const onContextMenu = (e: MouseEvent) => {
     e.preventDefault()
     menu.show()
@@ -493,8 +529,22 @@ function SessionListRow({ row, place, active, onRename, onNewGroup }: SessionLis
             ) : (
               <PopoverMenu label="Move to group">
                 <MenuItem icon={ChevronLeft} label="Move to group" onClick={() => setPage('actions')} />
-                {[{ id: UNGROUPED, name: 'Ungrouped' }, ...place.targets].map((t) => (
-                  <MenuItem key={t.id} label={t.name} disabled={t.id === group.id} onClick={act(() => moveTo(t.id))} />
+                {place.targets.map(({ account, groups }) => (
+                  <Fragment key={account.profileId}>
+                    {place.targets.length > 1 && (
+                      <div className="pt-1.5">
+                        <PopoverHeading title={account.name} />
+                      </div>
+                    )}
+                    {groups.map((t) => (
+                      <MenuItem
+                        key={t.id}
+                        label={t.name}
+                        disabled={account.profileId === profileId && t.id === group.id}
+                        onClick={act(() => moveTo(account.profileId, t.id))}
+                      />
+                    ))}
+                  </Fragment>
                 ))}
               </PopoverMenu>
             )}
@@ -505,11 +555,23 @@ function SessionListRow({ row, place, active, onRename, onNewGroup }: SessionLis
       <RepoIcon repoGroupKey={workspace.repoGroupKey} repoName={workspace.repoName} />
       {workspace.worktreeTag && <Badge>{workspace.worktreeTag}</Badge>}
       <ListRowText primary={row.title} />
+      {guest && <GuestTag account={guest} />}
       {row.kind === 'hosted' && row.modelTag && <ListRowLabel tone="secondary" hideWhenNarrow>{row.modelTag}</ListRowLabel>}
       {row.kind === 'observed' && <VsCodeGlyph tooltip={VSCODE_TOOLTIP} />}
       {row.kind === 'hosted' && <ProcessesBadge paneId={row.paneId} />}
       <StatusDot status={row.status} look="soft" />
     </ListRow>
+  )
+}
+
+/** Names the account a guest session runs on, in its colour. */
+function GuestTag({ account }: { account: Account }) {
+  const color = useAccountColor(account.profileId)
+  const tone = color ? ACCENT_TAG[color] : 'bg-list-selected text-muted'
+  return (
+    <span title={`Runs on ${sectionTitle(account)}`} className={`shrink-0 whitespace-nowrap rounded px-1 text-[10px] leading-4 ${tone}`}>
+      {account.name}
+    </span>
   )
 }
 

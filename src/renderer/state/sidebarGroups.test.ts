@@ -130,6 +130,59 @@ describe('placing chats', () => {
   })
 })
 
+describe('placing guest chats', () => {
+  const both = (home: { id: string; session?: string }[], work: { id: string; session?: string }[]) => [
+    { profileId: 'home', chats: home },
+    { profileId: 'work', chats: work }
+  ]
+  /** home's pane:b sits in work's Review as a guest. */
+  const guest = () => {
+    const layout = seeded()
+    return moveChat(layout, 'work', 'pane:b', { group: layout.accounts.work.groups[0].id, before: null })
+  }
+
+  it('a chat placed under another account is not placed again under its own', () => {
+    const layout = guest()
+    expect(placeChats(layout, both([{ id: 'pane:a' }, { id: 'pane:b', session: 's-b' }], [{ id: 'session:v', session: 'v' }]), TODAY)).toBe(layout)
+  })
+
+  it('keeps a closed guest’s spot for a while, then prunes it; an open guest is never pruned', () => {
+    const closed = both([{ id: 'pane:a' }], [])
+    const soon = placeChats(guest(), closed, TODAY + PRUNE_AFTER_DAYS)
+    expect(shape(soon, 'work')).toEqual(['Review: session:v pane:b', `${UNGROUPED}: `])
+    expect(shape(placeChats(soon, closed, TODAY + PRUNE_AFTER_DAYS + 1), 'work')).toEqual([`Review: `, `${UNGROUPED}: `])
+    const open = both([{ id: 'pane:a' }, { id: 'pane:b', session: 's-b' }], [])
+    const kept = placeChats(placeChats(guest(), open, TODAY + PRUNE_AFTER_DAYS), open, TODAY + PRUNE_AFTER_DAYS + 5)
+    expect(shape(kept, 'work')).toEqual(['Review: pane:b', `${UNGROUPED}: `])
+    expect(kept.accounts.work.known['pane:b']).toEqual({ seen: TODAY + PRUNE_AFTER_DAYS + 5, session: 's-b' })
+  })
+
+  it('a guest resumed in a new pane, or taken over from VS Code, comes back to its guest spot', () => {
+    const resumed = placeChats(guest(), both([{ id: 'pane:a' }, { id: 'pane:r', session: 's-b' }], [{ id: 'session:v', session: 'v' }]), TODAY + 3)
+    expect(shape(resumed, 'work')).toEqual(['Review: session:v pane:r', `${UNGROUPED}: `])
+    expect(shape(resumed)).toEqual(['Today: pane:a', `${UNGROUPED}: `])
+    const vscode = moveChat(seeded(), 'home', 'session:v', { group: UNGROUPED, before: null })
+    const taken = placeChats(vscode, both([{ id: 'pane:a' }, { id: 'pane:b', session: 's-b' }], [{ id: 'pane:t', session: 'v' }]), TODAY)
+    expect(shape(taken)).toEqual(['Today: pane:a pane:b', `${UNGROUPED}: pane:t`])
+    expect(shape(taken, 'work')).toEqual(['Review: ', `${UNGROUPED}: `])
+  })
+
+  it('keeps one place for a chat saved under two accounts: its own account’s', () => {
+    const twice = moveChat(seeded(), 'work', 'pane:b', { group: UNGROUPED, before: null })
+    twice.accounts.home = seeded().accounts.home
+    const placed = placeChats(twice, both([{ id: 'pane:a' }, { id: 'pane:b' }], []), TODAY)
+    expect(shape(placed)).toEqual(['Today: pane:a pane:b', `${UNGROUPED}: `])
+    expect(shape(placed, 'work')).toEqual(['Review: session:v', `${UNGROUPED}: `])
+  })
+
+  it('ignores places under an account that is gone, so its chats show under their own', () => {
+    const layout = guest()
+    const placed = placeChats(layout, [{ profileId: 'home', chats: [{ id: 'pane:a' }, { id: 'pane:b', session: 's-b' }] }], TODAY)
+    expect(shape(placed)).toEqual(['Today: pane:a', `${UNGROUPED}: pane:b`])
+    expect(placed.accounts.work).toBe(layout.accounts.work)
+  })
+})
+
 /** home: Ungrouped [n], Today [a b c], Review [r]; work: Work [w]. */
 const three = (): SidebarLayout => {
   n = 0
@@ -163,12 +216,26 @@ describe('moving chats', () => {
     expect(shape(moveChat(three(), 'home', 'r', { group: UNGROUPED, before: 'n' }))).toEqual(['Today: a b c', 'Review: ', `${UNGROUPED}: r n`])
   })
 
-  it('refuses a drop onto another account, a missing group or a chat elsewhere', () => {
+  it('refuses a drop onto a group the target account lacks, a chat not placed anywhere, or a chat elsewhere', () => {
     const layout = three()
     expect(moveChat(layout, 'home', 'a', { group: WORK_ID, before: null })).toBe(layout)
-    expect(moveChat(layout, 'work', 'a', { group: WORK_ID, before: null })).toBe(layout)
+    expect(moveChat(layout, 'work', 'nowhere', { group: WORK_ID, before: null })).toBe(layout)
+    expect(moveChat(layout, 'work', 'a', { group: WORK_ID, before: 'b' })).toBe(layout)
     expect(moveChat(layout, 'home', 'a', { group: REVIEW_ID, before: 'b' })).toBe(layout)
     expect(moveChat(layout, 'home', 'a', { group: TODAY_ID, before: 'a' })).toBe(layout)
+  })
+
+  it('moves a chat into a group or Ungrouped of another account and back, one place per chat, its day seen going along', () => {
+    const guest = moveChat(three(), 'work', 'a', { group: WORK_ID, before: 'w' })
+    expect(shape(guest, 'work')).toEqual(['Work: a w', `${UNGROUPED}: `])
+    expect(shape(guest)).toEqual(['Today: b c', 'Review: r', `${UNGROUPED}: n`])
+    expect(guest.accounts.work.known.a).toEqual({ seen: TODAY })
+    expect(guest.accounts.home.known.a).toBeUndefined()
+    const back = moveChat(guest, 'home', 'a', { group: TODAY_ID, before: 'b' })
+    expect(shape(back)).toEqual(['Today: a b c', 'Review: r', `${UNGROUPED}: n`])
+    expect(shape(back, 'work')).toEqual(['Work: w', `${UNGROUPED}: `])
+    expect(shape(moveChat(three(), 'work', 'r', { group: UNGROUPED, before: null }), 'work')).toEqual(['Work: w', `${UNGROUPED}: r`])
+    expect(shape(moveChat(three(), 'fresh', 'r', { group: UNGROUPED, before: null }), 'fresh')).toEqual([`${UNGROUPED}: r`])
   })
 
   it('Alt+Up and Alt+Down step a chat past the next shown chat of its group, skipping closed ones, and stop at the ends', () => {
@@ -190,6 +257,15 @@ describe('moving chats', () => {
     const first = moveGroup(layout, 'home', UNGROUPED, TODAY_ID)
     expect(shape(moveChatToNextGroup(first, 'home', 'n', 1))).toEqual([`${UNGROUPED}: `, 'Today: n a b c', 'Review: r'])
     expect(shape(moveChatToNextGroup(first, 'home', 'a', -1))).toEqual([`${UNGROUPED}: n a`, 'Today: b c', 'Review: r'])
+  })
+
+  it('moves a guest by keyboard only within the account section it sits in', () => {
+    const guest = moveChat(three(), 'work', 'a', { group: WORK_ID, before: null })
+    expect(shape(moveChatStep(guest, 'work', 'a', new Set(['w', 'a']), -1), 'work')).toEqual(['Work: a w', `${UNGROUPED}: `])
+    expect(shape(moveChatToNextGroup(guest, 'work', 'a', 1), 'work')).toEqual(['Work: w', `${UNGROUPED}: a`])
+    expect(moveChatToNextGroup(guest, 'work', 'a', -1)).toBe(guest)
+    expect(moveChatStep(guest, 'home', 'a', new Set(['a', 'b']), 1)).toBe(guest)
+    expect(groupOf(guest, 'work', 'a')).toBe(WORK_ID)
   })
 })
 

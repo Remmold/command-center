@@ -54,47 +54,75 @@ function placedIds(a: AccountLayout): Set<string> {
   return new Set([...a.ungrouped, ...a.groups.flatMap((g) => g.chats)])
 }
 
-/** The closed chat whose place a chat takes: the VS Code row it was taken over from, or an earlier pane of the same session. */
-function earlierPlace(chat: PlacedChat, a: AccountLayout, placed: ReadonlySet<string>, open: ReadonlySet<string>): string | null {
+/** Each chat id's account, one per id: an id saved under two keeps its own account's place, else the first. */
+function hostsOf(work: ReadonlyMap<string, AccountLayout>, owner: ReadonlyMap<string, string>): Map<string, string> {
+  const host = new Map<string, string>()
+  for (const [profileId, a] of work) for (const id of placedIds(a)) if (!host.has(id) || owner.get(id) === profileId) host.set(id, profileId)
+  return host
+}
+
+/** The closed chat whose place a chat takes, own account first: the VS Code row it was taken over from, or an earlier pane of the same session. */
+function earlierPlace(chat: PlacedChat, accounts: readonly string[], work: ReadonlyMap<string, AccountLayout>, host: ReadonlyMap<string, string>, open: ReadonlyMap<string, PlacedChat>): string | null {
   if (!chat.session) return null
-  const free = (id: string) => placed.has(id) && !open.has(id)
+  const free = (id: string, profileId?: string) => !open.has(id) && host.has(id) && (profileId === undefined || host.get(id) === profileId)
   const direct = `session:${chat.session}`
   if (free(direct)) return direct
-  return Object.keys(a.known).find((id) => a.known[id].session === chat.session && free(id)) ?? null
+  for (const profileId of accounts) {
+    const { known } = work.get(profileId)!
+    const found = Object.keys(known).find((id) => known[id].session === chat.session && free(id, profileId))
+    if (found) return found
+  }
+  return null
 }
 
-function placeAccount(before: AccountLayout, chats: readonly PlacedChat[], today: number): AccountLayout {
-  const open = new Set(chats.map((c) => c.id))
-  let a = before
-  const placed = placedIds(a)
-  const fresh: string[] = []
+function settleAccount(a: AccountLayout, fresh: readonly string[], open: ReadonlyMap<string, PlacedChat>, today: number): AccountLayout {
+  const placed = new Set([...fresh, ...placedIds(a)])
   const known: Record<string, ChatSeen> = { ...a.known }
-  for (const chat of chats) {
-    if (!placed.has(chat.id)) {
-      const earlier = earlierPlace(chat, a, placed, open)
-      if (earlier) {
-        a = mapChats(a, (list) => list.map((id) => (id === earlier ? chat.id : id)))
-        placed.delete(earlier)
-        delete known[earlier]
-      } else fresh.push(chat.id)
-      placed.add(chat.id)
-    }
-    known[chat.id] = seenOf(chat, today)
+  for (const id of placed) {
+    const chat = open.get(id)
+    if (chat) known[id] = seenOf(chat, today)
+    else known[id] ??= { seen: today }
   }
-  for (const id of placed) known[id] ??= { seen: today }
   const stale = new Set([...placed].filter((id) => !open.has(id) && known[id].seen < today - PRUNE_AFTER_DAYS))
   for (const id of Object.keys(known)) if (stale.has(id) || !placed.has(id)) delete known[id]
-  a = mapChats({ ...a, ungrouped: [...fresh, ...a.ungrouped], known }, (list) => list.filter((id) => !stale.has(id)))
-  return sameAccount(a, before) ? before : a
+  return mapChats({ ...a, ungrouped: [...fresh, ...a.ungrouped], known }, (list) => list.filter((id) => !stale.has(id)))
 }
 
-/** Places every chat in the list: new ones at the top of Ungrouped, resumed and taken-over ones where they were; prunes long-closed ones. Same layout back when nothing changed. */
+/**
+ * Places every chat in the list, one place per chat across all accounts: a chat placed under any account stays there,
+ * new ones go to the top of their own account's Ungrouped, resumed and taken-over ones where they were; prunes long-closed ones.
+ * `accounts` are every account there is; places under one not listed are ignored and left as they are. Same layout back when nothing changed.
+ */
 export function placeChats(layout: SidebarLayout, accounts: readonly AccountChats[], today: number): SidebarLayout {
-  let next = layout
+  const live = accounts.map((a) => a.profileId)
+  const open = new Map<string, PlacedChat>()
+  const owner = new Map<string, string>()
   for (const { profileId, chats } of accounts) {
-    const before = layout.accounts[profileId] ?? EMPTY_ACCOUNT
-    const after = placeAccount(before, chats, today)
-    if (after !== before || !layout.accounts[profileId]) next = { accounts: { ...next.accounts, [profileId]: after } }
+    for (const chat of chats) {
+      open.set(chat.id, chat)
+      owner.set(chat.id, profileId)
+    }
+  }
+  const work = new Map(live.map((p) => [p, layout.accounts[p] ?? EMPTY_ACCOUNT]))
+  const host = hostsOf(work, owner)
+  for (const [p, a] of work) if ([...placedIds(a)].some((id) => host.get(id) !== p)) work.set(p, mapChats(a, (list) => list.filter((id) => host.get(id) === p)))
+  const fresh = new Map<string, string[]>(live.map((p) => [p, []]))
+  for (const [id, chat] of open) {
+    if (host.has(id)) continue
+    const own = owner.get(id)!
+    const earlier = earlierPlace(chat, [own, ...live.filter((p) => p !== own)], work, host, open)
+    const at = earlier ? host.get(earlier)! : own
+    if (earlier) {
+      work.set(at, mapChats(work.get(at)!, (list) => list.map((c) => (c === earlier ? id : c))))
+      host.delete(earlier)
+    } else fresh.get(own)!.push(id)
+    host.set(id, at)
+  }
+  let next = layout
+  for (const [p, a] of work) {
+    const before = layout.accounts[p]
+    const after = settleAccount(a, fresh.get(p)!, open, today)
+    if (before ? !sameAccount(after, before) : !sameAccount(after, EMPTY_ACCOUNT)) next = { accounts: { ...next.accounts, [p]: after } }
   }
   return next
 }
@@ -140,19 +168,27 @@ export function groupOf(layout: SidebarLayout, profileId: string, chat: string):
   return a ? (listsOf(a).find((l) => l.chats.includes(chat))?.id ?? null) : null
 }
 
-/** Moves a chat within its account; a drop into another account, or onto a chat not in the target group, changes nothing. */
+/** The account whose lists hold the chat; a chat sits in at most one. */
+export function hostOf(layout: SidebarLayout, chat: string): string | null {
+  return Object.keys(layout.accounts).find((p) => placedIds(layout.accounts[p]).has(chat)) ?? null
+}
+
+/** Moves a chat from wherever it is placed into a group of `profileId`, any account; a drop onto a chat not in the target group changes nothing. */
 export function moveChat(layout: SidebarLayout, profileId: string, chat: string, drop: ChatDrop): SidebarLayout {
-  return changeAccount(layout, profileId, (a) => {
-    const lists = listsOf(a)
-    const target = lists.find((l) => l.id === drop.group)
-    if (!target || !lists.some((l) => l.chats.includes(chat)) || drop.before === chat) return null
-    if (drop.before !== null && !target.chats.includes(drop.before)) return null
-    const removed = lists.map((l) => ({ id: l.id, chats: l.chats.filter((c) => c !== chat) }))
-    const into = removed.find((l) => l.id === drop.group)!
-    const at = drop.before === null ? into.chats.length : into.chats.indexOf(drop.before)
-    into.chats.splice(at, 0, chat)
-    return withLists(a, removed)
-  })
+  const from = hostOf(layout, chat)
+  if (!from || drop.before === chat) return layout
+  const source = layout.accounts[from]
+  const target = listsOf(from === profileId ? source : (layout.accounts[profileId] ?? EMPTY_ACCOUNT)).find((l) => l.id === drop.group)
+  if (!target || (drop.before !== null && !target.chats.includes(drop.before))) return layout
+  const { [chat]: seen, ...rest } = source.known
+  const accounts = { ...layout.accounts, [from]: mapChats({ ...source, known: rest }, (list) => list.filter((c) => c !== chat)) }
+  const into = accounts[profileId] ?? EMPTY_ACCOUNT
+  const lists = listsOf(into)
+  const list = lists.find((l) => l.id === drop.group)!
+  const chats = [...list.chats]
+  chats.splice(drop.before === null ? chats.length : chats.indexOf(drop.before), 0, chat)
+  accounts[profileId] = withLists({ ...into, known: seen ? { ...into.known, [chat]: seen } : into.known }, [{ id: list.id, chats }])
+  return { accounts }
 }
 
 /** Alt+↑/↓: steps a chat past the next chat of its group that is shown; nothing at either end. */
