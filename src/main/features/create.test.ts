@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,13 +6,13 @@ import { profileEnv } from '../../shared/profiles'
 import type { FeatureRecord } from '../../shared/features'
 import type { Workspace } from '../../shared/types'
 import { addWorktree, branchTaken, isGitRepo, mainBranch, removeNewWorktree } from '../git/service'
+import { git, isolateGitEnv, makeTempRepo } from '../util/testGit'
 import { createFeature, discardFeature, featureBranch, worktreePathFor, type CreateDeps } from './create'
 
 // Each test runs real git processes; a loaded machine must not turn that into a timeout.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
 
-// A pre-commit hook runs with GIT_DIR and GIT_INDEX_FILE set, which would point these repos at the real one.
-for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) vi.stubEnv(key, undefined as never)
+isolateGitEnv()
 
 let root: string
 let repo: string
@@ -28,8 +27,6 @@ let previewServers: number
 let installRuns: { cwd: string; command: string; env: Record<string, string> }[]
 let installingCalls: string[]
 let installError: string | null
-
-const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf-8' })
 
 function workspace(path: string, profileId: string, id: string): Workspace {
   return { id, name: path, path, createdAt: 1, profileId, repoGroupKey: 'k', repoName: 'r', worktreeTag: '' }
@@ -74,11 +71,7 @@ beforeEach(() => {
   configDir = join(root, 'claude-work')
   mkdirSync(join(configDir, 'skills', 'flow'), { recursive: true })
   writeFileSync(join(configDir, 'skills', 'flow', 'SKILL.md'), '# flow')
-  mkdirSync(repo)
-  git(repo, 'init', '-b', 'main')
-  writeFileSync(join(repo, 'a.txt'), 'a')
-  git(repo, 'add', '.')
-  git(repo, 'commit', '-m', 'first')
+  makeTempRepo(root)
   records = []
   workspaces = [workspace(repo, 'work-profile', 'src')]
   profileAdopted = false

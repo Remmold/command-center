@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -6,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ContextItem } from '../../shared/context'
 import { ensureProfileLinks } from '../profiles/linker'
 import { sanitizeCwd } from '../profiles/transcripts'
+import { git } from '../util/testGit'
 import { readContext, type ContextReaderInput } from './reader'
 
 let root: string
@@ -215,8 +215,7 @@ describe('context reader: subfolder CLAUDE.md files', () => {
   })
 
   it('leaves out a folder the repo gitignores', async () => {
-    // Under the pre-commit hook an inherited GIT_DIR makes this init rewrite the shared repo config as bare.
-    execFileSync('git', ['init', '-q'], { cwd: repo, env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))) })
+    git(repo, 'init', '-q')
     await put(join(repo, '.gitignore'), 'build/\n')
     await put(join(repo, 'build', 'CLAUDE.md'), chars(40))
     await put(join(repo, 'docs', 'CLAUDE.md'), chars(40))

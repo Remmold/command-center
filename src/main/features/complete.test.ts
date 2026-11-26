@@ -1,14 +1,13 @@
-import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeatureRecord } from '../../shared/features'
+import { git, isolateGitEnv, makeTempRepo } from '../util/testGit'
 import { commitsBeyond, completeFeature, removeFeatureWorktree, removeWorktreeOnly, reopenFeature } from './complete'
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
-// A pre-commit hook runs with GIT_DIR set, which would point the temp repos at the real one.
-for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) vi.stubEnv(key, undefined as never)
+isolateGitEnv()
 
 const record = (patch: Partial<FeatureRecord> = {}): FeatureRecord => ({
   name: 'login', workspaceId: 'w', worktreePath: 'C:/wt/login', branch: 'feat/login', sessionId: 's', ports: [4100, 4101], portNames: ['web', 'api'], startedAt: 1, completedAt: null, ...patch
@@ -87,7 +86,6 @@ describe('Remove worktree', () => {
   let repo: string
   let tree: string
   let forgotten: string[]
-  const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf-8' })
   const deps = (completedAt: number | null = 5) => ({
     feature: async () => record({ worktreePath: tree, completedAt }),
     repo: async () => ({ path: repo, base: 'main' }),
@@ -100,11 +98,7 @@ describe('Remove worktree', () => {
     root = mkdtempSync(join(tmpdir(), 'cc-complete-'))
     repo = join(root, 'repo')
     tree = join(root, 'repo-worktrees', 'login')
-    mkdirSync(repo)
-    git(repo, 'init', '-b', 'main')
-    writeFileSync(join(repo, 'a.txt'), 'a')
-    git(repo, 'add', '.')
-    git(repo, 'commit', '-m', 'first')
+    makeTempRepo(root)
     git(repo, 'worktree', 'add', '-b', 'feat/login', tree, 'main')
     forgotten = []
   })
