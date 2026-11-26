@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { proposalStates } from '../../../shared/featureProposal'
 import { workspaceOptions } from '../../../shared/workspaceLabel'
-import { goProposal, openFeatureSession, useFeaturesStore, useStartedProposalsStore } from '../../state/featuresStore'
+import { goProposal, openFeatureSession, tellMainChat, useFeaturesStore, useStartedProposalsStore } from '../../state/featuresStore'
 import { useRepoIdentitiesStore } from '../../state/repoIdentitiesStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import type { ChatItem } from './types'
@@ -28,8 +28,10 @@ export function useProposalHost(items: ChatItem[], busy: boolean, enabled: boole
             },
             go: async (key, proposal, workspaceId) => {
               const result = await goProposal({ workspaceId, name: proposal.name, description: proposal.description, brief: proposal.brief })
-              if (result.ran && result.error === null) useStartedProposalsStore.getState().remember(key)
-              return result.ran ? result.error : undefined
+              if (!result.ran) return undefined
+              if (result.error === null) useStartedProposalsStore.getState().remember(key)
+              tellMainChat(proposal.name, result.error)
+              return result.error
             },
             open: async (name) => {
               const feature = features.find((f) => f.name.toLowerCase() === name.toLowerCase())

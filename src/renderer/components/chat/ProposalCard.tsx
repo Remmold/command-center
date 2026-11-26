@@ -82,9 +82,10 @@ function ProposalCard({ cardKey, proposal, state }: { cardKey: string; proposal:
         <Field label="Starting brief">{proposal.brief}</Field>
       </dl>
       {error && (
-        <p data-proposal-error="" role="alert" className="mt-2 text-error">
-          {error}
-        </p>
+        <div data-proposal-error="" role="alert" className="mt-2 text-error">
+          <p className="font-medium">The feature did not start</p>
+          <p className="whitespace-pre-wrap break-words">{error}</p>
+        </div>
       )}
       {state === 'live' && typeof problem === 'string' && !starting && (
         <div data-proposal-problem="" role="alert" className="mt-2 text-error">

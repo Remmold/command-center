@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { featureFirstPrompt, featureOpenPlan } from './features'
+import { failureReport, featureFirstPrompt, featureOpenPlan, startOutcomeMessage } from './features'
 
 const feature = { name: 'x', sessionId: 'pane', claudeSessionId: 'abc' as string | undefined }
 
@@ -35,5 +35,32 @@ describe('featureFirstPrompt', () => {
   })
   it('adds the preview browser line right after the worktree line', () => {
     expect(featureFirstPrompt(made, 'Add login', true)).toBe([...base.slice(0, 4), 'Preview browser: yes', base[4]].join('\n'))
+  })
+})
+
+describe('failureReport', () => {
+  it('names the step and says nothing was left behind after a clean undo', () => {
+    expect(failureReport('install', 'network down.', [])).toBe('Could not make the feature while running the install command: network down. Nothing was left behind.')
+  })
+  it('lists what the undo could not remove', () => {
+    expect(failureReport('worktree', 'git failed', ['the worktree folder C:\w\a', 'the branch feat/a'])).toBe(
+      'Could not make the feature while making the worktree and branch: git failed. Left behind, to remove by hand: the worktree folder C:\w\a; the branch feat/a.'
+    )
+  })
+})
+
+describe('startOutcomeMessage', () => {
+  it('confirms a success and says where to continue', () => {
+    const text = startOutcomeMessage('login', null)
+    expect(text.startsWith('[Command Center]')).toBe(true)
+    expect(text).toContain('login started')
+    expect(text).toContain('Open session')
+  })
+  it('carries the failure report, says nothing was retried, and asks to wait', () => {
+    const text = startOutcomeMessage('login', 'Could not make the feature while saving the starting brief: disk full. Nothing was left behind.')
+    expect(text.startsWith('[Command Center]')).toBe(true)
+    expect(text).toContain('did not start')
+    expect(text).toContain('disk full. Nothing was left behind.')
+    expect(text).toContain('wait')
   })
 })

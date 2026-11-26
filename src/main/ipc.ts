@@ -425,9 +425,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
   ipcMain.handle(IPC.FEATURES_DISCARD, async (_e, name: string, workspaceId: string) => {
     const source = (await workspaces.list()).find((w) => w.id === workspaceId)
-    if (source) await discardFeature(featureDeps, name, source.path)
+    const left = source ? await discardFeature(featureDeps, name, source.path) : [`the feature ${name} with its worktree and workspace entry (its source workspace was not found, so nothing was undone)`]
     workspacesChanged()
     featureStages?.changed()
+    return left
   })
 
   const sidebarGroups = createSidebarGroupsStore(app.getPath('userData'))

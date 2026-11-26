@@ -4,10 +4,10 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A failure message names the failed step and what remains (worktree, branch, folder, workspace entry), read from the rollback's own results (what it could not remove), never assumed. A clean rollback says nothing was left behind.
-- [ ] A session that does not start after the worktree was made undoes the feature as today, and the message says what the undo left, if anything.
-- [ ] After success or failure the app sends the chat one short message beginning `[Command Center]`; no retry happens on its own. The chat's instructions (ticket 01) say to confirm a success in words and where to continue, and to report a failure and wait.
-- [ ] That message counts as a message after the card, so the used card is no longer live (story 10) and reads Started or Superseded per ticket 01.
-- [ ] Vitest: left-behind lists for a failed worktree add, a failed install, a failed brief write, a failed session start and a rollback that itself fails; the message text for success and failure.
+- [x] A failure message names the failed step and what remains (worktree, branch, folder, workspace entry), read from the rollback's own results (what it could not remove), never assumed. A clean rollback says nothing was left behind.
+- [x] A session that does not start after the worktree was made undoes the feature as today, and the message says what the undo left, if anything.
+- [x] After success or failure the app sends the chat one short message beginning `[Command Center]`; no retry happens on its own. The chat's instructions (ticket 01) say to confirm a success in words and where to continue, and to report a failure and wait.
+- [x] That message counts as a message after the card, so the used card is no longer live (story 10) and reads Started or Superseded per ticket 01.
+- [x] Vitest: left-behind lists for a failed worktree add, a failed install, a failed brief write, a failed session start and a rollback that itself fails; the message text for success and failure.

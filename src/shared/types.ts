@@ -469,8 +469,8 @@ export interface RendererApi {
     create: (request: NewFeatureRequest) => Promise<NewFeatureResult>
     /** The checks a start makes first, with nothing made; the proposal card shows a failure's message before Go. */
     preflight: (request: PreflightRequest) => Promise<PreflightResult>
-    /** Undoes a created feature whose session could not start. */
-    discard: (name: string, workspaceId: string) => Promise<void>
+    /** Undoes a created feature whose session could not start; resolves with what the undo could not remove. */
+    discard: (name: string, workspaceId: string) => Promise<string[]>
     /** Each feature's stage by name, read from its files. */
     stages: () => Promise<Record<string, FeatureStageView>>
     /** Keeps the feature session's Claude id on its record, so the session can be resumed once its chat is gone. */

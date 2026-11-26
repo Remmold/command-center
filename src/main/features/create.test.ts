@@ -304,6 +304,81 @@ describe('createFeature install step', () => {
   })
 })
 
+describe('failure report', () => {
+  const folder = () => worktreePathFor(repo, 'login')
+
+  it('says nothing was left behind when a failed worktree add is undone', async () => {
+    const d = deps()
+    d.git.addWorktree = async () => {
+      throw new Error('git exploded')
+    }
+    const result = await createFeature(d, request)
+    expect(result).toEqual({ ok: false, error: 'Could not make the feature while making the worktree and branch: git exploded. Nothing was left behind.' })
+  })
+
+  it('names the install step and says nothing was left behind after a clean undo', async () => {
+    installCommand = 'pnpm install'
+    installError = 'network down'
+    const result = await createFeature(deps(), request)
+    expect(result).toEqual({ ok: false, error: 'Could not make the feature while running the install command: network down. Nothing was left behind.' })
+  })
+
+  it('names the brief step when the brief cannot be saved', async () => {
+    briefWriteError = 'read-only folder'
+    const result = await createFeature(deps(), { ...request, brief: 'plan' })
+    expect(result.ok === false && result.error).toMatch(/^Could not make the feature while saving the starting brief: the starting brief could not be saved \(read-only folder\)\. Nothing was left behind\.$/)
+  })
+
+  it('names the workspace step and the record step', async () => {
+    failAddingWorkspace = true
+    const added = await createFeature(deps(), request)
+    expect(added.ok === false && added.error).toMatch(/while adding the worktree as a workspace: disk full\. Nothing was left behind\.$/)
+    failAddingWorkspace = false
+    const d = deps()
+    d.features.add = async () => {
+      throw new Error('store locked')
+    }
+    const recorded = await createFeature(d, request)
+    expect(recorded.ok === false && recorded.error).toMatch(/while recording the feature: store locked\. Nothing was left behind\./)
+    expect(workspaces).toHaveLength(1)
+  })
+
+  it('lists exactly what a rollback that itself fails could not remove', async () => {
+    installCommand = 'pnpm install'
+    installError = 'network down'
+    const d = deps()
+    d.git.removeNewWorktree = async () => undefined
+    const result = await createFeature(d, request)
+    expect(result).toEqual({
+      ok: false,
+      error: `Could not make the feature while running the install command: network down. Left behind, to remove by hand: the worktree folder ${folder()}; the branch feat/login.`
+    })
+  })
+
+  it('lists the workspace entry when removing it fails', async () => {
+    const d = deps()
+    d.features.add = async () => {
+      throw new Error('store locked')
+    }
+    d.workspaces.remove = async () => {
+      throw new Error('locked')
+    }
+    const result = await createFeature(d, request)
+    expect(result.ok === false && result.error).toMatch(/Left behind, to remove by hand: the workspace entry\.$/)
+  })
+
+  it('reports what the undo of a session that did not start could not remove', async () => {
+    await createFeature(deps(), request)
+    expect(await discardFeature(deps(), 'login', repo)).toEqual([])
+    await createFeature(deps(), { ...request, name: 'other' })
+    const d = deps()
+    d.git.removeNewWorktree = async () => undefined
+    d.features.remove = async () => undefined
+    const left = await discardFeature(d, 'other', repo)
+    expect(left).toEqual(['the feature record', `the worktree folder ${worktreePathFor(repo, 'other')}`, 'the branch feat/other'])
+  })
+})
+
 describe('discardFeature', () => {
   it('leaves no record, workspace or worktree behind', async () => {
     await createFeature(deps(), request)
