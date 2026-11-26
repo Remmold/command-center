@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 
 interface Props {
   label: string
@@ -15,16 +15,20 @@ interface Props {
   onCancel?: () => void
   /** Called with the text on every keystroke, for a caller that shows what it will do. */
   onChange?: (value: string) => void
+  /** Values the browser offers to complete as you type. */
+  suggestions?: readonly string[]
 }
 
 /** A one-line input that submits on Enter and cancels on Escape. */
-export function TextField({ label, placeholder, initialValue = '', autoFocus, submitOnBlur, keepOnSubmit = false, disabled = false, onSubmit, onCancel, onChange }: Props) {
+export function TextField({ label, placeholder, initialValue = '', autoFocus, submitOnBlur, keepOnSubmit = false, disabled = false, onSubmit, onCancel, onChange, suggestions }: Props) {
   const [value, setValue] = useState(initialValue)
+  const listId = useId()
   // Enter and Escape unmount the field in most callers; the blur that follows must not act again.
   const settled = useRef(false)
-  return (
+  const input = (
     <input
       aria-label={label}
+      list={suggestions ? listId : undefined}
       placeholder={placeholder}
       autoFocus={autoFocus}
       disabled={disabled}
@@ -58,5 +62,16 @@ export function TextField({ label, placeholder, initialValue = '', autoFocus, su
       }}
       className="w-full min-w-0 rounded border border-strong bg-input px-2 py-1 text-xs text-fg placeholder:text-faint focus:border-focus focus:outline-none"
     />
+  )
+  if (!suggestions) return input
+  return (
+    <>
+      {input}
+      <datalist id={listId}>
+        {suggestions.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+    </>
   )
 }

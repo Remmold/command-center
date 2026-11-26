@@ -4,7 +4,7 @@
 
 **Blocked by:** 05
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] A table of name and value for the edited layer's `env`, with the effective values for the workspace.
 - [ ] The name field autocompletes every documented variable name.

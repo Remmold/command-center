@@ -1,4 +1,5 @@
 import { ITEM_LISTS, isSettingsObject, keyPath, pathKeys, sameValue, type SettingsLayer, type SettingsObject, type SourceLayer } from './claudeSettings'
+import { envLeftOut } from './envCatalog'
 import { hooksLeftOut, readHookEvents } from './hooks'
 import { isRuleList, ruleRisk } from './permissionRules'
 import { statusLineLeftOut } from './statusLine'
@@ -412,7 +413,7 @@ const MEMORY_AND_CONTEXT: SettingEntry[] = [
 ]
 
 const ENVIRONMENT: SettingEntry[] = [
-  inCategory('Environment')('env', 'Environment variables', 'Variables set for every chat and for the commands Claude runs.', { kind: 'editor', editor: 'environment' }, { defaultLabel: 'none' })
+  inCategory('Environment')('env', 'Environment variables', 'Variables set for every chat and for the commands Claude runs.', { kind: 'editor', editor: 'environment' }, { defaultLabel: 'none', leavesOut: envLeftOut })
 ]
 
 const git = inCategory('Git & attribution')
@@ -678,6 +679,8 @@ export const isRuleListEntry = (entry: SettingEntry): boolean => entry.control.k
 
 export const isHooksEntry = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'hooks'
 
+export const isEnvironmentEntry = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'environment'
+
 export const isStatusLineEntry = (entry: SettingEntry): boolean => entry.control.kind === 'editor' && entry.control.editor === 'statusLine'
 
 const counted = (n: number, one: string): string => (n === 0 ? 'none' : `${n} ${one}${n === 1 ? '' : 's'}`)
@@ -700,6 +703,7 @@ export function formatSettingValue(entry: SettingEntry, value: unknown): string 
   }
   if (isRuleListEntry(entry) && Array.isArray(value)) return counted(value.length, 'rule')
   if (isHooksEntry(entry) && isSettingsObject(value)) return counted(readHookEvents(value).reduce((n, e) => n + e.groups.reduce((m, g) => m + g.hooks.length, 0), 0), 'hook')
+  if (isEnvironmentEntry(entry) && isSettingsObject(value)) return counted(Object.keys(value).length, 'variable')
   if (isStatusLineEntry(entry) && isSettingsObject(value) && typeof value.command === 'string') return value.command
   if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return value.length === 0 ? 'none' : value.join(', ')
   return typeof value === 'string' ? value : JSON.stringify(value)

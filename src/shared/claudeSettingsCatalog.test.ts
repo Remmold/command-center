@@ -95,6 +95,11 @@ describe('the settings catalog', () => {
     expect(changeText(entryFor('model'), 'sonnet', 'opus')).toBe('Sonnet → Opus')
   })
 
+  it('counts the environment variables, so no value shows in a summary', () => {
+    expect(formatSettingValue(entryFor('env'), { ANTHROPIC_API_KEY: 'sk-1', API_TIMEOUT_MS: '1' })).toBe('2 variables')
+    expect(formatSettingValue(entryFor('env'), {})).toBe('none')
+  })
+
   it('warns for an Allow list with a rule that lets every shell command through, not for Ask or Deny', () => {
     expect(entryFor('permissions.allow').risk?.(['Read', 'PowerShell'])).toMatch(/PowerShell/)
     expect(entryFor('permissions.allow').risk?.(['Read', 'Bash(git status:*)'])).toBeNull()
@@ -168,6 +173,11 @@ describe('the other keys of a file', () => {
       subagentStatusLine: { type: 'command', command: 'x', padding: 2 }
     }
     expect(otherKeys(file)).toEqual(['hooks.FutureEvent', 'subagentStatusLine'])
+  })
+
+  it('include an environment variable that isn’t text, and an env that isn’t an object', () => {
+    expect(otherKeys({ env: { API_TIMEOUT_MS: '600000', MAX_THINKING_TOKENS: 1024 } })).toEqual(['env.MAX_THINKING_TOKENS'])
+    expect(otherKeys({ env: 'nope' })).toEqual(['env'])
   })
 
   it('take a split object whole when it is not an object, so its value is still shown', () => {

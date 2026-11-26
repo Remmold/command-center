@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_PROFILE_ID, type AccountProfile } from '../../../shared/types'
-import { SETTINGS_CATALOG, SETTING_CATEGORIES, changeText, entryFor, entryOf, formatSettingValue, isHooksEntry, matchesSearch, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
+import { SETTINGS_CATALOG, SETTING_CATEGORIES, changeText, entryFor, entryOf, formatSettingValue, isEnvironmentEntry, isHooksEntry, matchesSearch, shownSettings, type SettingCategory, type SettingEntry } from '../../../shared/claudeSettingsCatalog'
 import { changeCount, getAt, pathKeys, patchPaths, patchSize, sameValue, withPatch, type SettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../../../shared/claudeSettings'
 import { effectiveSetting, ruleSources, sourceBadge, type LayerSettings } from '../../../shared/claudeSettingsEffective'
+import { MASK, isSecretName } from '../../../shared/envCatalog'
 import { hookChangeText, hookEvent } from '../../../shared/hooks'
 import { isStatusLineKey } from '../../../shared/statusLine'
 import { RULE_LISTS, ruleListKey, ruleListOf, type RuleList } from '../../../shared/permissionRules'
@@ -27,6 +28,7 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { Toolbar } from '../ui/Toolbar'
+import { EnvironmentEditor } from './EnvironmentEditor'
 import { HooksEditor } from './HooksEditor'
 import { OtherKeysList } from './OtherKeysList'
 import { PermissionRuleList } from './PermissionRuleList'
@@ -91,13 +93,20 @@ function openInContext(workspaceId: string, path: string): void {
 /** Whether the patch changes the entry's key or a path inside it no other entry owns. */
 const touches = (patch: SettingsPatch, entry: SettingEntry): boolean => patchPaths(patch).some((path) => entryOf(path)?.key === entry.key)
 
+/** An environment variable whose value stays hidden wherever a change to it is shown. */
+function isMaskedKey(key: string): boolean {
+  const entry = entryOf(key)
+  return entry !== undefined && isEnvironmentEntry(entry) && entry.key !== key && isSecretName(pathKeys(key)[1])
+}
+
 function settingWords(key: string): { label: string; format: (value: unknown) => string } {
   const entry = entryOf(key)
   const inside = entry && entry.key !== key ? pathKeys(key.slice(entry.key.length + 1)) : []
   if (entry && isHooksEntry(entry) && inside.length > 0) inside[0] = hookEvent(inside[0])?.label ?? inside[0]
+  const masked = isMaskedKey(key)
   return {
     label: entry ? [entry.label, ...inside].join(' · ') : key,
-    format: (value) => (entry ? formatSettingValue(entry, value) : value === undefined ? 'not set' : JSON.stringify(value))
+    format: (value) => (value !== undefined && masked ? MASK : entry ? formatSettingValue(entry, value) : value === undefined ? 'not set' : JSON.stringify(value))
   }
 }
 
@@ -246,7 +255,10 @@ export function ClaudeCodeSettings() {
   const searching = query.trim() !== ''
   const layers = useMemo(() => layersWithPending(read, allPending), [read, allPending])
   const count = pending ? patchSize(pending.patch) : 0
-  const fileChanged = useMemo(() => new Map(conflicts(pending, snapshot?.value ?? null).map((c) => [entryOf(c.key)?.key ?? c.key, { value: c.theirs }])), [pending, snapshot])
+  const fileChanged = useMemo(
+    () => new Map(conflicts(pending, snapshot?.value ?? null).map((c) => [entryOf(c.key)?.key ?? c.key, { value: isMaskedKey(c.key) ? MASK : c.theirs }])),
+    [pending, snapshot]
+  )
   const unreadable = snapshot?.value === null
   const otherRows = useMemo(() => {
     const rows = otherKeyRows(snapshot?.value ?? null, layers[layer], pending)
@@ -260,6 +272,7 @@ export function ClaudeCodeSettings() {
     const list = ruleListOf(entry.key)
     if (list) return <PermissionRuleList list={list} lists={ruleLists} sources={ruleSources(list, layers)} layer={layer} disabled={disabled} onStage={stage} />
     if (isHooksEntry(entry)) return <HooksEditor value={getAt(layers[layer], entry.key)} layers={layers} layer={layer} disabled={disabled} onStage={stage} onUnparsed={markUnparsed} />
+    if (isEnvironmentEntry(entry)) return <EnvironmentEditor value={getAt(layers[layer], entry.key)} layers={layers} layer={layer} disabled={disabled} onStage={stage} />
     if (isStatusLineKey(entry.key)) return <StatusLineEditor settingKey={entry.key} value={getAt(layers[layer], entry.key)} disabled={disabled} onStage={stage} />
     return null
   }
