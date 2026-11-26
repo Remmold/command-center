@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { useAccountColor } from '../../state/useAccountColor'
 import { AccentDot } from '../ui/AccentDot'
 import { useMinuteClock } from '../../hooks/useMinuteClock'
@@ -9,7 +9,7 @@ import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useSessionListStore } from '../../state/sessionListStore'
 import { groupOpen, isNeedsYouRow, sessionRowTooltip, waitingBadge, type AccountSection, type ListFold, type ListGroup, type SessionRow } from '../../state/sessionList'
 import { UNGROUPED } from '../../../shared/sidebarGroups'
-import { createGroup, deleteGroup, groupOf, moveChat, moveChatStep, moveChatToNextGroup, moveGroup, renameGroup, setFolded } from '../../state/sidebarGroups'
+import { createGroup, deleteGroup, EMPTY_ACCOUNT, groupOf, groupOrder, moveChat, moveChatStep, moveChatToNextGroup, moveGroup, renameGroup, setFolded } from '../../state/sidebarGroups'
 import { sectionTitle } from '../../state/accounts'
 import { headerUsage, type HeaderTone } from '../../state/usageModel'
 import { useChatPairStore } from '../../state/chatPairStore'
@@ -56,6 +56,19 @@ function newGroup(profileId: string, chat?: string): GroupRef {
   return { profileId, groupId }
 }
 
+/** A chat that shows up in the list, like a new one at the top of Ungrouped, is scrolled into view. */
+function useScrollToAdded(sections: readonly AccountSection[], watching: boolean): void {
+  const seen = useRef<ReadonlySet<string> | null>(null)
+  useEffect(() => {
+    if (!watching) return
+    const keys = sections.flatMap((s) => s.rows.map((r) => r.key))
+    const before = seen.current
+    seen.current = new Set(keys)
+    const added = before && keys.find((k) => !before.has(k))
+    if (added) document.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(added)}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [sections, watching])
+}
+
 /** After a move remounts the row, focus follows it. */
 function refocus(rowKey: string): void {
   requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(rowKey)}"]`)?.focus())
@@ -69,6 +82,7 @@ export function SessionList() {
   const fold = useListFold(headed)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renamingGroup, setRenamingGroup] = useState<GroupRef | null>(null)
+  useScrollToAdded(sections, !loading && search.trim() === '')
   const groups = (section: AccountSection) => {
     const profileId = section.account.profileId
     const targets = section.groups.filter((g) => g.id !== UNGROUPED).map((g) => ({ id: g.id, name: g.name }))
@@ -154,7 +168,6 @@ function GroupSection({ profileId, group, fold, renaming, onRename, onRenamed, c
   const menu = useMenu()
   const sortable = useSortable({
     item: { id: group.id, kind: GROUP, group: profileId },
-    armed: own,
     accepts: (d) => d.group === profileId && (d.kind === CHAT || d.kind === GROUP),
     onDrop: (d, side) => dropOnGroup(profileId, group, d, side),
     sideFor: (d, pointer) => (d.kind === CHAT ? 'after' : pointer)
@@ -227,14 +240,13 @@ function GroupSection({ profileId, group, fold, renaming, onRename, onRenamed, c
   )
 }
 
-/** A chat dropped on a header goes to the top of that group; a group goes before or after it, never above Ungrouped. */
+/** A chat dropped on a header goes to the top of that group; a group, Ungrouped included, goes before or after it. */
 function dropOnGroup(profileId: string, group: ListGroup, dragged: DragItem, side: 'before' | 'after'): void {
   changeLayout((layout) => {
     if (dragged.kind === CHAT) return moveChat(layout, profileId, dragged.id, { group: group.id, before: group.rows[0]?.placeId ?? null })
-    const groups = layout.accounts[profileId]?.groups ?? []
-    if (group.id === UNGROUPED) return moveGroup(layout, profileId, dragged.id, groups[0]?.id ?? null)
-    const at = groups.findIndex((g) => g.id === group.id)
-    return moveGroup(layout, profileId, dragged.id, side === 'before' ? group.id : (groups[at + 1]?.id ?? null))
+    if (side === 'before') return moveGroup(layout, profileId, dragged.id, group.id)
+    const order = groupOrder(layout.accounts[profileId] ?? EMPTY_ACCOUNT).filter((id) => id !== dragged.id)
+    return moveGroup(layout, profileId, dragged.id, order[order.indexOf(group.id) + 1] ?? null)
   })
 }
 

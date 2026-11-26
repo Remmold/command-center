@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] `AccountLayout` gains Ungrouped's position among the own groups, as an index into the group order: `ungroupedAt: number`. A missing value means last. On load, layouts without it get it set to last, once. This is how existing layouts move Ungrouped to the bottom.
 - [ ] `listsOf` / `accountSections` place Ungrouped at `ungroupedAt` instead of first. Ungrouped is still hidden when empty.

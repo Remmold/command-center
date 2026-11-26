@@ -3,7 +3,7 @@ import { accountOf, accountRank, type Account } from './accounts'
 import { repoDisplayName, type RepoIdentityViews } from '../../shared/repoIdentity'
 import { UNGROUPED, type SidebarLayout } from '../../shared/sidebarGroups'
 import { OBSERVED_STATUS_LABEL, type ObservedSession, type ObservedStatus, type SessionStatus, type SessionStatusEntry, type Workspace } from '../../shared/types'
-import type { AccountChats, SeedRepo } from './sidebarGroups'
+import { EMPTY_ACCOUNT, groupOrder, type AccountChats, type SeedRepo } from './sidebarGroups'
 
 export interface HostedSessionInput {
   paneId: string
@@ -155,7 +155,7 @@ export interface ListGroup {
 
 export interface AccountSection {
   account: Account
-  /** Ungrouped first when it has chats, then the account's own groups in their order. */
+  /** The account's own groups in their order, Ungrouped where it sits when it has chats. */
   groups: ListGroup[]
   /** Every row of the section, top to bottom with all groups open. */
   rows: SessionRow[]
@@ -234,20 +234,22 @@ function listGroup(id: string, name: string, folded: boolean, ids: readonly stri
 }
 
 /**
- * The rows split by account, accounts in Settings order, each in its own groups in their saved order; a row not
- * placed yet shows at the top of Ungrouped. Ungrouped shows only with chats in it; while searching, so does every group.
+ * The rows split by account, accounts in Settings order, each in its own groups in their saved order, Ungrouped among
+ * them; a row not placed yet shows at the top of Ungrouped. Ungrouped shows only with chats in it; while searching, so does every group.
  */
 export function accountSections(groups: readonly SessionGroup[], accounts: readonly Account[], layout: SidebarLayout, searching = false): AccountSection[] {
   return accountRows(groups, accounts).map(({ account, rows }) => {
-    const a = layout.accounts[account.profileId]
+    const a = layout.accounts[account.profileId] ?? EMPTY_ACCOUNT
     const byId = new Map(rows.map((r) => [r.placeId, r]))
-    const ungrouped = a?.ungrouped ?? []
-    const placedIds = new Set([...ungrouped, ...(a?.groups.flatMap((g) => g.chats) ?? [])])
+    const placedIds = new Set([...a.ungrouped, ...a.groups.flatMap((g) => g.chats)])
     const unplaced = rows.filter((r) => !placedIds.has(r.placeId)).map((r) => r.placeId)
-    const list = [
-      listGroup(UNGROUPED, 'Ungrouped', a?.ungroupedFolded ?? false, [...unplaced, ...ungrouped], byId),
-      ...(a?.groups ?? []).map((g) => listGroup(g.id, g.name, g.folded, g.chats, byId))
-    ].filter((g) => g.rows.length > 0 || (g.id !== UNGROUPED && !searching))
+    const own = new Map(a.groups.map((g) => [g.id, g]))
+    const list = groupOrder(a)
+      .map((id) => {
+        const g = own.get(id)
+        return g ? listGroup(g.id, g.name, g.folded, g.chats, byId) : listGroup(UNGROUPED, 'Ungrouped', a.ungroupedFolded, [...unplaced, ...a.ungrouped], byId)
+      })
+      .filter((g) => g.rows.length > 0 || (g.id !== UNGROUPED && !searching))
     return { account, groups: list, rows: list.flatMap((g) => g.rows), needsYou: list.reduce((n, g) => n + g.needsYou, 0) }
   })
 }

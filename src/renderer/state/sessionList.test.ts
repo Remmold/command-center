@@ -16,7 +16,7 @@ import {
   type ListFold,
   type SessionListInput
 } from './sessionList'
-import { createGroup, moveChat, placeChats, seedLayout, setFolded } from './sidebarGroups'
+import { createGroup, moveChat, moveGroup, placeChats, seedLayout, setFolded } from './sidebarGroups'
 import type { Account } from './accounts'
 
 const workspace = (id: string, repoName: string, worktreeTag = ''): Workspace => ({
@@ -304,12 +304,28 @@ describe('own groups', () => {
     expect(waitingRows(accountSections(list(), ACCOUNTS, layout)).map((r) => r.title)).toEqual(['main waiting', 'ct waiting'])
   })
 
-  it('shows Ungrouped first with a new chat, and hides it when empty', () => {
+  it('shows a new chat at the top of Ungrouped, which is last, and hides Ungrouped when empty', () => {
     const more = list({ hosted: [...sessions.hosted!, hosted('new', 'brand new', 0, 'cc')] })
     const layout = placeChats(seeded(), accountChats(more, ACCOUNTS), 0)
     const [home] = accountSections(more, ACCOUNTS, layout)
-    expect(home.groups.map((g) => [g.id, g.rows.map((r) => r.title)])[0]).toEqual([UNGROUPED, ['brand new']])
+    expect(home.groups.map((g) => g.name)).toEqual(['mmorpg', 'command-center', 'Ungrouped'])
+    expect(home.groups[2].rows.map((r) => r.title)).toEqual(['brand new'])
+    expect(home.rows.at(-1)?.title).toBe('brand new')
     expect(accountSections(list(), ACCOUNTS, seeded())[0].groups.map((g) => g.id)).not.toContain(UNGROUPED)
+  })
+
+  it('shows Ungrouped where it was moved, a new chat at its top', () => {
+    const moved = moveGroup(seeded(), 'default', UNGROUPED, 'repo:key-command-center')
+    const withOld = placeChats(moved, accountChats(list({ hosted: [...sessions.hosted!, hosted('old', 'older', 0, 'cc')] }), ACCOUNTS), 0)
+    const more = list({ hosted: [...sessions.hosted!, hosted('old', 'older', 0, 'cc'), hosted('new', 'brand new', 0, 'cc')] })
+    const [home] = accountSections(more, ACCOUNTS, placeChats(withOld, accountChats(more, ACCOUNTS), 0))
+    expect(home.groups.map((g) => [g.name, g.rows.map((r) => r.title)])).toEqual([
+      ['mmorpg', ['main waiting', 'shard idle']],
+      ['Ungrouped', ['brand new', 'older']],
+      ['command-center', ['cc idle', 'cc vscode']]
+    ])
+    const unplaced = accountSections(more, ACCOUNTS, withOld)[0]
+    expect(unplaced.groups[1].rows.map((r) => r.title)).toEqual(['brand new', 'older'])
   })
 
   it('shows an empty own group so a chat can be dropped in, but hides it during a search; matches stay under their group', () => {

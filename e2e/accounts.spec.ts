@@ -200,7 +200,7 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
   await expect(page.getByRole('region', { name: workLabel }).getByRole('listitem', { name: 'work-repo' })).toBeVisible()
   await expect(page.getByRole('region', { name: homeLabel }).getByRole('listitem', { name: 'e2e-workspace' })).toBeVisible()
 
-  await test.step('own groups: made from the account menu, a chat dragged into one, a group dragged above another, a drop on another account refused, Alt+Shift+Up into the group above, all kept after a reload', async () => {
+  await test.step('own groups: made from the account menu above Ungrouped, Ungrouped dragged to the top, a chat dragged into one, a group dragged above another, a drop on another account refused, Alt+Shift+Up into the group above, all kept after a reload', async () => {
     await page.keyboard.press('Control+2')
     const homeChat = homeSection.getByRole('listitem')
     const groupNames = () => homeSection.locator('section').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
@@ -222,6 +222,8 @@ test('Work shows a one-line header per account with a waiting badge, the Board g
     await page.getByRole('menuitem', { name: 'Personal', exact: true }).click()
     await homeSection.getByRole('textbox', { name: 'Group name' }).fill('Later')
     await page.keyboard.press('Enter')
+    await expect.poll(groupNames).toEqual(['Today', 'Later', 'Ungrouped'])
+    await drag(header('Ungrouped'), header('Today'), 'top')
     await expect.poll(groupNames).toEqual(['Ungrouped', 'Today', 'Later'])
 
     await drag(homeChat, header('Today'), 'top')

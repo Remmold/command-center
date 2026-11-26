@@ -13,11 +13,11 @@ export interface SeedRepo {
   chats: readonly PlacedChat[]
 }
 
-export const EMPTY_ACCOUNT: AccountLayout = { ungrouped: [], ungroupedFolded: false, groups: [], known: {} }
+export const EMPTY_ACCOUNT: AccountLayout = { ungrouped: [], ungroupedFolded: false, ungroupedAt: 0, groups: [], known: {} }
 
 const seenOf = (chat: PlacedChat, today: number): ChatSeen => (chat.session ? { seen: today, session: chat.session } : { seen: today })
 
-/** The first layout: every account's repo groups become its own groups, so nothing moves. */
+/** The first layout: every account's repo groups become its own groups, so nothing moves; Ungrouped goes last. */
 export function seedLayout(accounts: readonly { profileId: string; repos: readonly SeedRepo[] }[], today: number): SidebarLayout {
   const out: Record<string, AccountLayout> = {}
   for (const { profileId, repos } of accounts) {
@@ -26,6 +26,7 @@ export function seedLayout(accounts: readonly { profileId: string; repos: readon
     out[profileId] = {
       ...EMPTY_ACCOUNT,
       groups: repos.map((r) => ({ id: r.id, name: r.name, folded: r.folded, chats: r.chats.map((c) => c.id) })),
+      ungroupedAt: repos.length,
       known
     }
   }
@@ -106,7 +107,21 @@ export interface ChatDrop {
 
 type Lists = { id: string; chats: string[] }[]
 
-const listsOf = (a: AccountLayout): Lists => [{ id: UNGROUPED, chats: a.ungrouped }, ...a.groups.map((g) => ({ id: g.id, chats: g.chats }))]
+/** The account's group ids top to bottom, `UNGROUPED` among them. */
+export function groupOrder(a: AccountLayout): string[] {
+  const ids = a.groups.map((g) => g.id)
+  ids.splice(Math.min(a.ungroupedAt, ids.length), 0, UNGROUPED)
+  return ids
+}
+
+/** Puts the groups in the given order, `UNGROUPED` among them. */
+function withOrder(a: AccountLayout, order: readonly string[], groups: readonly OwnGroup[] = a.groups): AccountLayout {
+  const byId = new Map(groups.map((g) => [g.id, g]))
+  return { ...a, groups: order.flatMap((id) => byId.get(id) ?? []), ungroupedAt: order.indexOf(UNGROUPED) }
+}
+
+const listsOf = (a: AccountLayout): Lists =>
+  groupOrder(a).map((id) => ({ id, chats: id === UNGROUPED ? a.ungrouped : a.groups.find((g) => g.id === id)!.chats }))
 
 function withLists(a: AccountLayout, lists: Lists): AccountLayout {
   const byId = new Map(lists.map((l) => [l.id, l.chats]))
@@ -152,7 +167,7 @@ export function moveChatStep(layout: SidebarLayout, profileId: string, chat: str
   return moveChat(layout, profileId, chat, { group: list.id, before })
 }
 
-/** Alt+Shift+↓ to the top of the next group, Alt+Shift+↑ to the end of the previous one; Ungrouped counts as the first. */
+/** Alt+Shift+↓ to the top of the next group, Alt+Shift+↑ to the end of the previous one; Ungrouped counts where it sits. */
 export function moveChatToNextGroup(layout: SidebarLayout, profileId: string, chat: string, dir: -1 | 1): SidebarLayout {
   const a = layout.accounts[profileId]
   if (!a) return layout
@@ -162,34 +177,37 @@ export function moveChatToNextGroup(layout: SidebarLayout, profileId: string, ch
   return moveChat(layout, profileId, chat, { group: target.id, before: dir === 1 ? (target.chats[0] ?? null) : null })
 }
 
-/** Puts a group before another, or last. */
+/** Puts a group, or Ungrouped, before another of its account, or last. */
 export function moveGroup(layout: SidebarLayout, profileId: string, group: string, before: string | null): SidebarLayout {
   return changeAccount(layout, profileId, (a) => {
-    const moved = a.groups.find((g) => g.id === group)
-    if (!moved || before === group) return null
-    const rest = a.groups.filter((g) => g.id !== group)
-    const at = before === null ? rest.length : rest.findIndex((g) => g.id === before)
+    const order = groupOrder(a)
+    if (!order.includes(group) || before === group) return null
+    const rest = order.filter((id) => id !== group)
+    const at = before === null ? rest.length : rest.indexOf(before)
     if (at < 0) return null
-    rest.splice(at, 0, moved)
-    return { ...a, groups: rest }
+    rest.splice(at, 0, group)
+    const next = withOrder(a, rest)
+    return sameAccount(next, a) ? a : next
   })
 }
 
-/** A new group goes last; made from a chat, it takes the chat and goes right after the chat's group. */
+/** A new group goes last; made from a chat, it takes the chat and goes right after the chat's group. Never below an Ungrouped that is last. */
 export function createGroup(layout: SidebarLayout, profileId: string, spec: { id: string; name: string; chat?: string }): SidebarLayout {
   const name = spec.name.trim()
   if (!name) return layout
   return changeAccount(layout, profileId, (a) => {
     const fresh: OwnGroup = { id: spec.id, name, folded: false, chats: [] }
-    if (!spec.chat) return { ...a, groups: [...a.groups, fresh] }
-    const from = listsOf(a).find((l) => l.chats.includes(spec.chat!))
-    if (!from) return null
-    const at = from.id === UNGROUPED ? 0 : a.groups.findIndex((g) => g.id === from.id) + 1
-    const groups = [...a.groups]
-    groups.splice(at, 0, fresh)
-    return withLists({ ...a, groups }, [
+    const from = spec.chat ? listsOf(a).find((l) => l.chats.includes(spec.chat!)) : undefined
+    if (spec.chat && !from) return null
+    const order = groupOrder(a)
+    const after = from ? order.indexOf(from.id) + 1 : order.length
+    const ungroupedLast = order[order.length - 1] === UNGROUPED
+    order.splice(ungroupedLast && after === order.length ? after - 1 : after, 0, spec.id)
+    const placed = withOrder(a, order, [...a.groups, fresh])
+    if (!from) return placed
+    return withLists(placed, [
       { id: from.id, chats: from.chats.filter((c) => c !== spec.chat) },
-      { id: spec.id, chats: [spec.chat] }
+      { id: spec.id, chats: [spec.chat!] }
     ])
   })
 }
@@ -207,7 +225,7 @@ export function deleteGroup(layout: SidebarLayout, profileId: string, group: str
   return changeAccount(layout, profileId, (a) => {
     const gone = a.groups.find((g) => g.id === group)
     if (!gone) return null
-    return { ...a, ungrouped: [...a.ungrouped, ...gone.chats], groups: a.groups.filter((g) => g.id !== group) }
+    return withOrder({ ...a, ungrouped: [...a.ungrouped, ...gone.chats] }, groupOrder(a).filter((id) => id !== group))
   })
 }
 

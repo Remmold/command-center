@@ -1,6 +1,6 @@
 /** The Work list's own groups, saved in `sidebar-groups.json`; each account keeps its own. */
 
-/** The group id of an account's Ungrouped chats, always first. */
+/** The group id of an account's Ungrouped chats. */
 export const UNGROUPED = 'ungrouped'
 
 export interface OwnGroup {
@@ -21,6 +21,8 @@ export interface ChatSeen {
 export interface AccountLayout {
   ungrouped: string[]
   ungroupedFolded: boolean
+  /** Ungrouped sits before `groups[ungroupedAt]`; `groups.length` is last. */
+  ungroupedAt: number
   groups: OwnGroup[]
   known: Record<string, ChatSeen>
 }
@@ -53,6 +55,11 @@ function parseKnown(x: unknown): Record<string, ChatSeen> {
   return out
 }
 
+/** A layout saved before Ungrouped could move has no place for it; it then goes last, which the next save keeps. */
+function ungroupedPlace(x: unknown, groups: number): number {
+  return typeof x === 'number' && Number.isInteger(x) && x >= 0 ? Math.min(x, groups) : groups
+}
+
 function parseAccount(x: unknown): AccountLayout | null {
   if (!isRecord(x)) return null
   const groups = (Array.isArray(x.groups) ? x.groups : []).map(parseGroup).filter((g): g is OwnGroup => g !== null)
@@ -60,10 +67,12 @@ function parseAccount(x: unknown): AccountLayout | null {
   const unique = (list: string[]) => list.filter((id) => !ids.has(id) && ids.add(id))
   const ungrouped = unique(strings(x.ungrouped))
   const groupIds = new Set<string>([UNGROUPED])
+  const own = groups.filter((g) => !groupIds.has(g.id) && groupIds.add(g.id)).map((g) => ({ ...g, chats: unique(g.chats) }))
   return {
     ungrouped,
     ungroupedFolded: x.ungroupedFolded === true,
-    groups: groups.filter((g) => !groupIds.has(g.id) && groupIds.add(g.id)).map((g) => ({ ...g, chats: unique(g.chats) })),
+    ungroupedAt: ungroupedPlace(x.ungroupedAt, own.length),
+    groups: own,
     known: parseKnown(x.known)
   }
 }
