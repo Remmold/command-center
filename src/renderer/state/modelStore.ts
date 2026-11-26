@@ -29,6 +29,8 @@ interface ModelState {
   init: () => void
   loadDefaults: (profileId: string) => Promise<void>
   saveDefaults: (patch: ModelDefaultsPatch) => Promise<void>
+  /** Re-reads every profile's defaults loaded so far, e.g. after their settings files were saved. */
+  reloadDefaults: () => Promise<void>
   recordPick: (profileId: string, pick: PickChange) => void
   refreshApplied: (paneId: string) => Promise<void>
 }
@@ -85,6 +87,9 @@ export const useModelStore = create<ModelState>()(
       saveDefaults: async (patch) => {
         const result = await window.api.claude.saveDefaults(patch)
         if (!result.ok) console.error('model defaults not saved:', result.error)
+        await get().reloadDefaults()
+      },
+      reloadDefaults: async () => {
         const loaded = new Set([DEFAULT_PROFILE_ID, ...Object.keys(get().settingsByProfile)])
         await Promise.all([...loaded].map((id) => get().loadDefaults(id)))
       },

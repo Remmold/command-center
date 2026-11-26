@@ -80,6 +80,10 @@ interface ContextState {
   openInFiles: (target: ContextFileTarget) => void
   /** Picks the workspace, then reads everything again; stays put when unsaved edits are kept. */
   select: (workspaceId: string | null) => void
+  /** A file to open once the selected workspace's report lists it; the view's own start pick then stands aside. */
+  wantedFile: string | null
+  /** Files of that workspace, with the file open once its report is read. */
+  showFile: (workspaceId: string, path: string) => void
   /** Reads the selected workspace's report, every start total and the open file (if unedited) again. */
   refresh: () => void
   /** Opens a file in the editor, after asking about unsaved edits to another one. */
@@ -114,6 +118,7 @@ export const useContextStore = create<ContextState>((set, get) => {
 
   return {
     selectedId: null,
+    wantedFile: null,
     report: null,
     totals: {},
     editor: null,
@@ -165,12 +170,23 @@ export const useContextStore = create<ContextState>((set, get) => {
       }
       get().refresh()
     },
+    showFile: (workspaceId, path) => {
+      set({ pane: 'files', wantedFile: path })
+      get().select(workspaceId)
+      if (get().selectedId !== workspaceId) set({ wantedFile: null })
+    },
     refresh: () => {
       const { selectedId, editor } = get()
       if (selectedId) {
         window.api.context.report(selectedId).then(
           (report) => {
-            if (get().selectedId === selectedId) set({ report })
+            if (get().selectedId !== selectedId) return
+            set({ report })
+            const { wantedFile } = get()
+            if (wantedFile === null) return
+            set({ wantedFile: null })
+            const item = Object.values(report?.layers ?? {}).flat().find((i) => i.path !== null && i.path.toLowerCase() === wantedFile.toLowerCase())
+            if (item?.path) get().open(fileTarget(item, item.path))
           },
           (err) => console.error('[context] could not read the report', err)
         )

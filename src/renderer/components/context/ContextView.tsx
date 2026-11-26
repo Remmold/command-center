@@ -62,8 +62,8 @@ export function ContextView() {
 
   useEffect(() => {
     if (!loaded) return
-    const { select, selectedId: picked } = useContextStore.getState()
-    select(startWorkspace(useWorkspacesStore.getState().workspaces, useProjectViewsStore.getState().activeProjectId, picked))
+    const { select, selectedId: picked, wantedFile } = useContextStore.getState()
+    if (wantedFile === null) select(startWorkspace(useWorkspacesStore.getState().workspaces, useProjectViewsStore.getState().activeProjectId, picked))
   }, [loaded])
 
   useEffect(() => {

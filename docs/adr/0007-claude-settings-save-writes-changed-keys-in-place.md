@@ -1,0 +1,9 @@
+# Claude Code settings saves only the changed keys, in place, onto the file as it is on disk
+
+Claude Code writes its own settings files while the app is open (an "always allow" adds a permission rule, `/model` saves a model), so the Claude Code settings page is never the only writer. On Save the app re-reads the file, applies only the keys Andreas changed (a removed key is deleted, along with any parent object that leaves empty; a changed one is replaced), and writes the result back into the same file rather than through a temp file and rename. Anything else in the file, including keys the page doesn't know, stays as Claude left it. If Claude changed one of the keys Andreas edited since the page read it, Save asks which value to keep. The permission rule lists and extra folders (`permissions.allow`, `ask`, `deny`, `additionalDirectories`), which Claude appends to itself, are saved per item instead: the rules Andreas added go onto the list as it is on disk and the ones he removed come out of it, so a rule Claude added meanwhile is kept and never makes Save ask; a list left empty is removed. Writing in place keeps the hard links that make app-made accounts share Personal's settings.json (see `src/main/profiles/linker.ts`). keybindings.json is patched the same way through a view of one object of keys per context: a changed key changes in the blocks that hold it, a new key joins the last block of its context, and only a block the change emptied goes.
+
+## Considered Options
+
+- **Write the whole form state back**: simplest, but it silently drops whatever Claude added while the page was open.
+- **Temp file and rename, like the app's own data files**: atomic, but it replaces the linked file with a new one, so app-made accounts stop sharing Personal's settings.
+- **Lock the file while the page is open**: Claude Code doesn't honour a lock, so it would only look safe.

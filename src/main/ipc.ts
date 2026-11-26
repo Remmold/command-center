@@ -36,6 +36,9 @@ import { contextReport, readListedFile, startTotals, writeListedFile } from './c
 import { getDiff, getStatus, getUntrackedFilePreview } from './git/service'
 import { approvalBroker } from './claude/approvals'
 import { readDefaultMode, readModelDefaults, readPromptSuggestionsAllowed, saveModelDefaults } from './claude/userSettings'
+import { MANAGED_SETTINGS_FILE, readOrganisationLayer, readSettingsFile, saveSettingsFile, settingsTargetProblem } from './claude/settingsFile'
+import { SettingsFileWatch } from './claude/settingsWatch'
+import { isSettingsObject, isSettingsPatch, type ClaudeSettingsRead, type SettingsLayer, type SettingsLayerFile } from '../shared/claudeSettings'
 import type { ApprovalReply } from '../shared/approval'
 import { sessionStatusTracker } from './sessions/tracker'
 import { backgroundProcessTracker } from './sessions/backgroundProcesses'
@@ -387,6 +390,42 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     return readDefaultMode(join(profile.configDir, 'settings.json'))
   })
   ipcMain.handle(IPC.CLAUDE_SAVE_DEFAULTS, (_e, patch: ModelDefaultsPatch) => saveModelDefaults(userSettingsFile(), patch))
+  const layerFile = async (layer: SettingsLayer, path: string): Promise<SettingsLayerFile> => ({ layer, path, snapshot: await readSettingsFile(path) })
+  const settingsWatch = new SettingsFileWatch((change) => sendAll(IPC.CLAUDE_SETTINGS_CHANGED, change))
+  unsubscribers.push(() => settingsWatch.clear())
+  // A read that finishes after a newer read or an unwatch must not watch its files.
+  let watchTurn = 0
+  ipcMain.handle(IPC.CLAUDE_SETTINGS_READ, async (_e, profileId: string, workspaceId: string | null): Promise<ClaudeSettingsRead> => {
+    const turn = ++watchTurn
+    const profile = await profiles.get(profileId)
+    const workspace = workspaceId ? (await workspaces.list()).find((w) => w.id === workspaceId) : undefined
+    const remoteFile = join(profile.configDir, 'remote-settings.json')
+    const [account, keybindings, repo, local, organisation, ...organisationFiles] = await Promise.all([
+      layerFile('account', join(profile.configDir, 'settings.json')),
+      layerFile('account', join(profile.configDir, 'keybindings.json')),
+      workspace ? layerFile('repo', join(workspace.path, '.claude', 'settings.json')) : null,
+      workspace ? layerFile('local', join(workspace.path, '.claude', 'settings.local.json')) : null,
+      readOrganisationLayer(remoteFile, MANAGED_SETTINGS_FILE),
+      ...[remoteFile, MANAGED_SETTINGS_FILE].map(async (path) => ({ path, snapshot: await readSettingsFile(path) }))
+    ])
+    if (turn === watchTurn) settingsWatch.set([account, keybindings, repo, local, ...organisationFiles].filter((file) => file !== null))
+    return { account: { ...account, profileId: profile.id }, keybindings, repo, local, organisation }
+  })
+  ipcMain.on(IPC.CLAUDE_SETTINGS_UNWATCH, () => {
+    watchTurn++
+    settingsWatch.clear()
+  })
+  ipcMain.handle(IPC.CLAUDE_SETTINGS_SAVE, async (_e, path: unknown, base: unknown, patch: unknown) => {
+    if (typeof path !== 'string' || !isSettingsObject(base) || !isSettingsPatch(patch)) return { ok: false, error: 'malformed save' }
+    const problem = await settingsTargetProblem(path, {
+      configDirs: (await profiles.list()).map((p) => p.configDir),
+      workspacePaths: (await workspaces.list()).map((w) => w.path)
+    })
+    if (problem) return { ok: false, error: problem }
+    const saved = await saveSettingsFile(path, base, patch)
+    if (saved.ok) settingsWatch.saved({ path, snapshot: saved.snapshot })
+    return saved
+  })
   ipcMain.on(
     IPC.CLAUDE_SEND,
     (

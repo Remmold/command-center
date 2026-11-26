@@ -1,51 +1,39 @@
 import { promises as fs } from 'node:fs'
 import type { ModelDefaults, ModelDefaultsPatch, SaveDefaultsResult } from '../../shared/types'
-
-type Settings = Record<string, unknown>
+import { isSettingsObject, keyPath, saveFailure, type SettingsObject, type SettingsPatch } from '../../shared/claudeSettings'
+import { parseSettings, patchText, saveSettingsFile } from './settingsFile'
 
 /** The CLI keeps Max for the current session only. */
 const SESSION_ONLY_EFFORT = 'max'
 
-function isObject(value: unknown): value is Settings {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+function parse(text: string | null): { ok: true; settings: SettingsObject } | { ok: false; error: string } {
+  const parsed = parseSettings(text)
+  return parsed.ok ? { ok: true, settings: parsed.value } : { ok: false, error: `settings.json is ${parsed.error}` }
 }
 
-function parse(text: string | null): { ok: true; settings: Settings } | { ok: false; error: string } {
-  if (text === null || text.trim() === '') return { ok: true, settings: {} }
-  let value: unknown
-  try {
-    value = JSON.parse(text)
-  } catch (err) {
-    return { ok: false, error: `settings.json is not valid JSON: ${(err as Error).message}` }
-  }
-  return isObject(value) ? { ok: true, settings: value } : { ok: false, error: 'settings.json is not a JSON object' }
+function modelDefaultsPatch(patch: ModelDefaultsPatch): SettingsPatch {
+  const out: SettingsPatch = { set: {}, remove: [] }
+  if (patch.model === null) out.remove.push('model')
+  else if (patch.model !== undefined) out.set.model = patch.model
+  if (patch.effort && patch.effort.level !== SESSION_ONLY_EFFORT) out.set[keyPath('modelSettings', patch.effort.resolvedModel, 'effortLevel')] = patch.effort.level
+  return out
 }
 
 export function mergeModelDefaults(
   text: string | null,
   patch: ModelDefaultsPatch
 ): { ok: true; text: string } | { ok: false; error: string } {
-  const parsed = parse(text)
-  if (!parsed.ok) return parsed
-  const settings = { ...parsed.settings }
-  if (patch.model === null) delete settings.model
-  else if (patch.model !== undefined) settings.model = patch.model
-  if (patch.effort && patch.effort.level !== SESSION_ONLY_EFFORT) {
-    const { resolvedModel, level } = patch.effort
-    const byModel = isObject(settings.modelSettings) ? settings.modelSettings : {}
-    const current = isObject(byModel[resolvedModel]) ? byModel[resolvedModel] : {}
-    settings.modelSettings = { ...byModel, [resolvedModel]: { ...current, effortLevel: level } }
-  }
-  return { ok: true, text: JSON.stringify(settings, null, 2) + '\n' }
+  const merged = patchText(text, modelDefaultsPatch(patch))
+  return merged.ok ? merged : { ok: false, error: `settings.json is ${merged.error}` }
 }
 
 export function parseModelDefaults(text: string | null): ModelDefaults {
   const parsed = parse(text)
   const settings = parsed.ok ? parsed.settings : {}
   const effortByModel: Record<string, string> = {}
-  if (isObject(settings.modelSettings)) {
+  if (isSettingsObject(settings.modelSettings)) {
     for (const [model, entry] of Object.entries(settings.modelSettings)) {
-      if (isObject(entry) && typeof entry.effortLevel === 'string') effortByModel[model] = entry.effortLevel
+      if (isSettingsObject(entry) && typeof entry.effortLevel === 'string') effortByModel[model] = entry.effortLevel
     }
   }
   return typeof settings.model === 'string' ? { model: settings.model, effortByModel } : { effortByModel }
@@ -54,7 +42,7 @@ export function parseModelDefaults(text: string | null): ModelDefaults {
 /** `permissions.defaultMode` as the CLI reads it ("manual" is its alias for "default"); null when unset. */
 export function parseDefaultMode(text: string | null): string | null {
   const parsed = parse(text)
-  if (!parsed.ok || !isObject(parsed.settings.permissions)) return null
+  if (!parsed.ok || !isSettingsObject(parsed.settings.permissions)) return null
   const mode = parsed.settings.permissions.defaultMode
   if (typeof mode !== 'string') return null
   return mode === 'manual' ? 'default' : mode
@@ -93,30 +81,13 @@ export async function readDefaultMode(file: string): Promise<string | null> {
   }
 }
 
-let queue: Promise<unknown> = Promise.resolve()
-
-/**
- * Merges the patch into the file. Writes in place rather than by rename: other profiles share the
- * file through a hard link, which a rename would break.
- */
-export function saveModelDefaults(file: string, patch: ModelDefaultsPatch): Promise<SaveDefaultsResult> {
-  const run = async (): Promise<SaveDefaultsResult> => {
-    try {
-      const merged = mergeModelDefaults(await readText(file), patch)
-      if (!merged.ok) {
-        console.error('[settings] not saved:', file, merged.error)
-        return merged
-      }
-      await fs.writeFile(file, merged.text, 'utf-8')
-      return { ok: true }
-    } catch (err) {
-      console.error('[settings] could not save', file, (err as Error).message)
-      return { ok: false, error: (err as Error).message }
-    }
-  }
-  const next = queue.then(run, run)
-  queue = next
-  return next
+/** Goes through the Claude Code settings writer's queue; a model pick wins over whatever the file holds. */
+export async function saveModelDefaults(file: string, patch: ModelDefaultsPatch): Promise<SaveDefaultsResult> {
+  const saved = await saveSettingsFile(file, null, modelDefaultsPatch(patch))
+  if (saved.ok) return { ok: true }
+  const error = saveFailure(saved)
+  console.error('[settings] not saved:', file, error)
+  return { ok: false, error }
 }
 
 export async function readPromptSuggestionsAllowed(file: string): Promise<boolean> {
