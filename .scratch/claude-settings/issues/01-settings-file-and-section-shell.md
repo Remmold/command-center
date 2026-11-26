@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved
 
 - [x] A settings file module in the main process: read a file into `{ value, text, mtime, error? }`; apply a patch `{ set: {path: value}, remove: [path] }` against a base snapshot, returning the new text or the list of conflicting keys; write in place.
 - [x] A patch touches only the paths it names. Unknown keys and key order stay; new keys go at the end. Output is 2-space JSON with a final newline.
