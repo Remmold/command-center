@@ -40,4 +40,12 @@ describe('saving Claude Code settings while a raw JSON box holds text', () => {
     await store().save()
     expect(save).toHaveBeenCalledWith(PATH, { model: 'sonnet' }, { set: { model: 'opus' }, remove: [] })
   })
+
+  it('asks before leaving while a box holds text, even with no change waiting', () => {
+    const confirm = vi.fn(() => false)
+    vi.stubGlobal('window', { ...window, confirm })
+    store().markUnparsed('modelOverrides', true)
+    expect(store().confirmLeave()).toBe(false)
+    expect(confirm).toHaveBeenCalledOnce()
+  })
 })

@@ -1,7 +1,17 @@
 import { getAt, type SettingsObject, type SettingsSnapshot } from '../../../shared/claudeSettings'
 import { otherKeys } from '../../../shared/claudeSettingsCatalog'
 import { conflicts, type PendingFile } from '../../state/claudeSettingsPending'
-import type { OtherKeyRow } from './OtherKeysList'
+
+export interface OtherKeyRow {
+  path: string
+  /** With its waiting change; undefined once its removal waits for Save. */
+  value: unknown
+  /** As the file had it when its change was made. */
+  before: unknown
+  changed: boolean
+  /** Set when the file on disk changed this waiting key since it was edited; holds the file's value now. */
+  fileValue?: { value: unknown }
+}
 
 /** The file's other keys with their waiting changes, a key waiting to be removed included. */
 export function otherKeyRows(disk: SettingsObject | null, edited: SettingsObject | null, pending: PendingFile | null): OtherKeyRow[] {

@@ -47,7 +47,7 @@ export function buildRule({ tool, name, pattern }: BuiltRule): string {
   const typed = pattern.trim()
   switch (tool) {
     case 'mcp':
-      return `${MCP_PREFIX}${typed}`
+      return typed.startsWith(MCP_PREFIX) ? typed : `${MCP_PREFIX}${typed}`
     case 'WebFetch':
       return withPattern('WebFetch', typed && `${WEB_DOMAIN}${typed}`)
     case 'WebSearch':

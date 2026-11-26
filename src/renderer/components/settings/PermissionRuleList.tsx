@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import type { SettingsLayer } from '../../../shared/claudeSettings'
 import { layerList } from '../../../shared/claudeSettingsCatalog'
 import type { RuleSource } from '../../../shared/claudeSettingsEffective'
-import { RULE_LISTS, RULE_TOOLS, buildRule, describeRule, isRuleList, moveRule, ruleListKey, ruleRisk, type RuleList, type RuleTool } from '../../../shared/permissionRules'
+import { RULE_LISTS, RULE_TOOLS, buildRule, describeRule, isRuleList, moveRule, ruleListKey, ruleRisk, type RuleList, type RuleLists, type RuleTool } from '../../../shared/permissionRules'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { CollapsibleSection } from '../ui/CollapsibleSection'
@@ -53,7 +53,17 @@ function RuleBuilder({ list, rules, disabled, onAdd }: { list: RuleList; rules: 
       description={missing ? 'Pick a tool and type what it may do.' : known ? 'This list has that rule already.' : describeRule(list, rule)}
       control={
         <>
-          <Select label={`Tool for a new ${LIST_NAMES[list]} rule`} options={RULE_TOOLS} value={tool} disabled={disabled} onChange={(next) => setTool(next as RuleTool)} />
+          <Select
+            label={`Tool for a new ${LIST_NAMES[list]} rule`}
+            options={RULE_TOOLS}
+            value={tool}
+            disabled={disabled}
+            onChange={(next) => {
+              setTool(next as RuleTool)
+              setName('')
+              setPattern('')
+            }}
+          />
           <Button variant="secondary" disabled={disabled || missing || known} onClick={add}>
             Add
           </Button>
@@ -80,18 +90,18 @@ export function PermissionRuleList({ list, lists, sources, layer, disabled, onSt
   const fromOthers = sources.filter((s) => !rules.includes(s.rule))
   const moveTargets = RULE_LISTS.filter((to) => to !== list && isRuleList(lists[to]))
   const move = (rule: string, to: RuleList) => {
-    const changed = moveRule({ allow: rulesIn(lists.allow), ask: rulesIn(lists.ask), deny: rulesIn(lists.deny) }, rule, list, to)
+    const changed = moveRule(Object.fromEntries(RULE_LISTS.map((l) => [l, rulesIn(lists[l])])) as RuleLists, rule, list, to)
     for (const [changedList, next] of Object.entries(changed)) onStage(ruleListKey(changedList as RuleList), next)
   }
   return (
     <div>
       {rules.length === 0 && <NoticeLine>No {LIST_NAMES[list]} rules in this layer.</NoticeLine>}
-      {rules.map((rule) => {
+      {rules.map((rule, index) => {
         const risky = list === 'allow' && ruleRisk(rule) !== null
         const also = otherLayers(rule)
         return (
           <FormRow
-            key={rule}
+            key={`${index}:${rule}`}
             label={describeRule(list, rule)}
             hint={rule}
             notes={
@@ -112,7 +122,7 @@ export function PermissionRuleList({ list, lists, sources, layer, disabled, onSt
                   onChange={(to) => to !== NO_MOVE && move(rule, to as RuleList)}
                 />
                 {!disabled && (
-                  <IconButton label={`Remove ${rule}`} tooltip="Remove the rule from this layer" onClick={() => onStage(ruleListKey(list), rules.filter((r) => r !== rule))}>
+                  <IconButton label={`Remove ${rule}`} tooltip="Remove the rule from this layer" onClick={() => onStage(ruleListKey(list), rules.filter((_, i) => i !== index))}>
                     <X size={12} />
                   </IconButton>
                 )}
@@ -124,7 +134,12 @@ export function PermissionRuleList({ list, lists, sources, layer, disabled, onSt
       {fromOthers.length > 0 && (
         <CollapsibleSection level="group" title={`From other layers (${fromOthers.length})`} open={othersOpen} onToggle={() => setOthersOpen(!othersOpen)}>
           {fromOthers.map(({ rule, layers }) => (
-            <FormRow key={rule} label={describeRule(list, rule)} hint={rule} notes={<Badge tone="quiet">From {layerList(layers)}</Badge>} control={null} />
+            <FormRow key={rule} label={describeRule(list, rule)} hint={rule} notes={
+                <>
+                  {list === 'allow' && ruleRisk(rule) !== null && <Badge tone="warning">Every command runs without asking</Badge>}
+                  <Badge tone="quiet">From {layerList(layers)}</Badge>
+                </>
+              } control={null} />
           ))}
         </CollapsibleSection>
       )}

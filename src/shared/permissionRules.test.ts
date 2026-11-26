@@ -73,6 +73,10 @@ describe('building a permission rule', () => {
     }
   })
 
+  it('does not repeat the mcp__ prefix when it is typed', () => {
+    expect(buildRule({ tool: 'mcp', name: '', pattern: 'mcp__unity-mcp' })).toBe('mcp__unity-mcp')
+  })
+
   it('trims the pattern and tool name typed', () => {
     expect(buildRule({ tool: 'Bash', name: '', pattern: '  git log * ' })).toBe('Bash(git log *)')
     expect(buildRule({ tool: 'other', name: ' Glob ', pattern: '' })).toBe('Glob')

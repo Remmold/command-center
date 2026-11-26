@@ -250,7 +250,7 @@ export function ClaudeCodeSettings() {
   const ruleLists = useMemo(() => Object.fromEntries(RULE_LISTS.map((list) => [list, getAt(layers[layer], ruleListKey(list))])) as Record<RuleList, unknown>, [layers, layer])
   const rulesEditor = (entry: SettingEntry) => {
     const list = ruleListOf(entry.key)
-    return list && <PermissionRuleList list={list} lists={ruleLists} sources={ruleSources(list, layers)} layer={layer} disabled={!snapshot || unreadable || saving} onStage={stage} />
+    return list && !unreadable && <PermissionRuleList list={list} lists={ruleLists} sources={ruleSources(list, layers)} layer={layer} disabled={!snapshot || unreadable || saving} onStage={stage} />
   }
   const noWorkspace = layer !== 'account' && workspaces.length === 0
 
@@ -302,7 +302,8 @@ export function ClaudeCodeSettings() {
             </nav>
           }
         >
-          <PageBody key={discards}>
+          {/* A new file or a Discard starts every box afresh, dropping text typed for the file before. */}
+          <PageBody key={`${discards}:${file?.path}`}>
             <FileLine note={layer === 'account' ? accountNote(profile, defaultName) : LAYER_NOTES[layer]} />
             {read?.organisation && <NoticeLine tone="warning">Your organisation’s settings in {read.organisation.path} apply over every layer and can’t be changed here.</NoticeLine>}
             {read?.organisation?.snapshot.error && (

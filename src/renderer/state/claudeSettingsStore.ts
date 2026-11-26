@@ -140,8 +140,9 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
       set({ pending: next ? { ...rest, [file.path]: next } : rest, saveError: null })
     },
     markUnparsed: (key, unparsed) => {
-      const others = get().unparsed.filter((k) => k !== key)
-      if (unparsed !== others.length < get().unparsed.length) set({ unparsed: unparsed ? [...others, key] : others })
+      const marked = get().unparsed.includes(key)
+      if (unparsed && !marked) set({ unparsed: [...get().unparsed, key] })
+      else if (!unparsed && marked) set({ unparsed: get().unparsed.filter((k) => k !== key) })
     },
     discard: () => {
       const file = editedFile(get().read, get().layer)
@@ -197,7 +198,10 @@ export const useClaudeSettingsStore = create<ClaudeSettingsState>((set, get) => 
     pendingCount: () => Object.values(get().pending).reduce((sum, file) => sum + patchSize(file.patch), 0),
     confirmLeave: () => {
       const count = get().pendingCount()
-      return count === 0 || window.confirm(`Discard ${changeCount(count)} to Claude Code settings?`)
+      const boxes = get().unparsed.length
+      if (count === 0 && boxes === 0) return true
+      const lost = [count > 0 && changeCount(count), boxes > 0 && `JSON typed in ${boxes === 1 ? 'a box' : `${boxes} boxes`}`].filter(Boolean).join(' and ')
+      return window.confirm(`Discard ${lost} to Claude Code settings?`)
     },
     dropAll: () => set({ pending: {}, saveError: null, settling: false })
   }

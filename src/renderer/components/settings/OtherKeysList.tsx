@@ -3,17 +3,7 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { FormRow } from '../ui/FormRow'
 import { JsonField } from '../ui/JsonField'
-
-export interface OtherKeyRow {
-  path: string
-  /** With its waiting change; undefined once its removal waits for Save. */
-  value: unknown
-  /** As the file had it when its change was made. */
-  before: unknown
-  changed: boolean
-  /** Set when the file on disk changed this waiting key since it was edited; holds the file's value now. */
-  fileValue?: { value: unknown }
-}
+import type { OtherKeyRow } from './otherKeysView'
 
 interface Props {
   rows: readonly OtherKeyRow[]
