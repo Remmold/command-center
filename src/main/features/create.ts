@@ -1,6 +1,7 @@
+import { promises as fs } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { nameProblem } from '../../shared/featureName'
-import type { FeatureRecord, NewFeatureRequest, NewFeatureResult } from '../../shared/features'
+import { BRIEF_LIMIT, briefRelativePath, type FeatureRecord, type NewFeatureRequest, type NewFeatureResult } from '../../shared/features'
 import type { Workspace } from '../../shared/types'
 import { flowProblem } from './flowProblem'
 
@@ -29,6 +30,8 @@ export interface CreateDeps {
   /** Told when the install starts and when it ends, so the dialog can say one is running. */
   installing?: (name: string, running: boolean) => void
   pathExists: (path: string) => Promise<boolean>
+  /** Saves a new file, making its folders; rejects when the file exists, never overwriting it. */
+  writeNewFile: (path: string, text: string) => Promise<void>
   now: () => number
 }
 
@@ -37,6 +40,11 @@ export const featureBranch = (name: string): string => `feat/${name}`
 /** Where a workspace's feature worktrees live: a sibling folder, so the repo itself stays clean. */
 export function worktreePathFor(workspacePath: string, name: string): string {
   return join(dirname(workspacePath), `${basename(workspacePath)}-worktrees`, name)
+}
+
+export async function writeNewFile(path: string, text: string): Promise<void> {
+  await fs.mkdir(dirname(path), { recursive: true })
+  await fs.writeFile(path, text, { flag: 'wx' })
 }
 
 const fail = (error: string): NewFeatureResult => ({ ok: false, error })
@@ -48,6 +56,7 @@ const reason = (err: unknown): string => (err instanceof Error ? err.message : S
  */
 export async function createFeature(deps: CreateDeps, request: NewFeatureRequest): Promise<NewFeatureResult> {
   const source = await deps.workspaces.get(request.workspaceId)
+  if (request.brief !== undefined && request.brief.length > BRIEF_LIMIT) return fail(`The starting brief is ${request.brief.length} characters; the limit is ${BRIEF_LIMIT}.`)
   if (!source) return fail('That workspace no longer exists.')
   if (request.description.trim() === '') return fail('Describe the feature first.')
   const taken = (await deps.features.list()).map((f) => f.name)
@@ -62,6 +71,7 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
   if (!base) return fail(`${source.name} has no main or master branch to start the feature from.`)
   const branch = featureBranch(request.name)
   const worktreePath = worktreePathFor(source.path, request.name)
+  const briefPath = join(worktreePath, ...briefRelativePath(request.name).split('/'))
   if (await deps.pathExists(worktreePath)) return fail(`The folder ${worktreePath} already exists.`)
   if (await deps.git.branchTaken(source.path, branch)) return fail(`The branch ${branch} already exists.`)
 
@@ -70,6 +80,12 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
   try {
     await deps.git.addWorktree(source.path, worktreePath, branch, base)
     madeWorktree = true
+    if (request.brief !== undefined) {
+      if (await deps.pathExists(briefPath)) throw new Error(`${briefRelativePath(request.name)} already exists in the new worktree, so the starting brief was not saved over it`)
+      await deps.writeNewFile(briefPath, request.brief).catch((err) => {
+        throw new Error(`the starting brief could not be saved (${reason(err)})`)
+      })
+    }
     const install = await deps.installCommand(source.id)
     if (install) {
       deps.installing?.(request.name, true)
@@ -92,7 +108,8 @@ export async function createFeature(deps: CreateDeps, request: NewFeatureRequest
       completedAt: null
     }
     await deps.features.add(feature)
-    return { ok: true, feature, previewBrowser: await deps.hasPreviewBrowser(source.id) }
+    const previewBrowser = await deps.hasPreviewBrowser(source.id)
+    return request.brief === undefined ? { ok: true, feature, previewBrowser } : { ok: true, feature, previewBrowser, briefPath }
   } catch (err) {
     if (workspace) await deps.workspaces.remove(workspace.id).catch(() => undefined)
     if (madeWorktree) await deps.git.removeNewWorktree(source.path, worktreePath, branch).catch(() => undefined)

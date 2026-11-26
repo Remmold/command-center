@@ -3,7 +3,7 @@ import type { ToolPairs } from './toolCall'
 import type { ChatItem } from './types'
 import type { SubagentTasks } from './subagents'
 import type { BackgroundOutcome, ForegroundCalls } from './runInBackground'
-import type { ProposalState, WorkspaceOption } from '../../../shared/featureProposal'
+import type { FeatureProposal, ProposalState, WorkspaceOption } from '../../../shared/featureProposal'
 
 /** A hosted or followed session whose transcripts folder holds its subagents' own files. */
 export interface TranscriptSource {
@@ -36,6 +36,10 @@ export interface BackgroundHost {
 export interface ProposalHost {
   states: ReadonlyMap<string, ProposalState>
   options: readonly WorkspaceOption[]
+  /** Go: starts the proposed feature in the workspace; resolves with why it failed, null on success, or undefined when one is already starting. */
+  go: (proposal: FeatureProposal, workspaceId: string) => Promise<string | null | undefined>
+  /** Shows the session of the feature with this name; resolves with why it cannot, or null. */
+  open: (name: string) => Promise<string | null>
 }
 
 interface ToolContextValue {

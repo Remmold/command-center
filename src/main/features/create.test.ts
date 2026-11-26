@@ -1,13 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { profileEnv } from '../../shared/profiles'
-import type { FeatureRecord } from '../../shared/features'
+import { BRIEF_LIMIT, type FeatureRecord } from '../../shared/features'
 import type { Workspace } from '../../shared/types'
 import { addWorktree, branchTaken, isGitRepo, mainBranch, removeNewWorktree } from '../git/service'
 import { git, isolateGitEnv, makeTempRepo } from '../util/testGit'
-import { createFeature, discardFeature, featureBranch, worktreePathFor, type CreateDeps } from './create'
+import { createFeature, discardFeature, featureBranch, worktreePathFor, writeNewFile, type CreateDeps } from './create'
 
 // Each test runs real git processes; a loaded machine must not turn that into a timeout.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
@@ -27,6 +27,7 @@ let previewServers: number
 let installRuns: { cwd: string; command: string; env: Record<string, string> }[]
 let installingCalls: string[]
 let installError: string | null
+let briefWriteError: string | null
 
 function workspace(path: string, profileId: string, id: string): Workspace {
   return { id, name: path, path, createdAt: 1, profileId, repoGroupKey: 'k', repoName: 'r', worktreeTag: '' }
@@ -59,6 +60,10 @@ function deps(): CreateDeps {
     },
     installing: (name, running) => void installingCalls.push(`${name}:${running}`),
     pathExists: async (p) => existsSync(p),
+    writeNewFile: async (path, text) => {
+      if (briefWriteError) throw new Error(briefWriteError)
+      await writeNewFile(path, text)
+    },
     now: () => 42
   }
 }
@@ -82,6 +87,7 @@ beforeEach(() => {
   installRuns = []
   installingCalls = []
   installError = null
+  briefWriteError = null
 })
 
 afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))
@@ -152,6 +158,65 @@ describe('createFeature', () => {
     expect(git(repo, 'worktree', 'list', '--porcelain')).not.toMatch(/login/)
     expect(records).toEqual([])
     expect(workspaces).toHaveLength(1)
+  })
+})
+
+describe('createFeature starting brief', () => {
+  const brief = 'Plan.\n\n```ts\nconst a = 1\n```'
+  const briefFile = () => join(worktreePathFor(repo, 'login'), '.scratch', 'login', 'brief.md')
+  const nothingLeft = () => {
+    expect(existsSync(worktreePathFor(repo, 'login'))).toBe(false)
+    expect(git(repo, 'branch', '--list', 'feat/login').trim()).toBe('')
+    expect(records).toEqual([])
+    expect(workspaces).toHaveLength(1)
+  }
+
+  it('saves the brief in the new worktree and says where', async () => {
+    const result = await createFeature(deps(), { ...request, brief })
+    expect(result).toMatchObject({ ok: true, briefPath: briefFile() })
+    expect(readFileSync(briefFile(), 'utf8')).toBe(brief)
+  })
+
+  it('writes nothing and names no path without a brief', async () => {
+    const result = await createFeature(deps(), request)
+    expect(result.ok && result.briefPath).toBeUndefined()
+    expect(existsSync(join(worktreePathFor(repo, 'login'), '.scratch'))).toBe(false)
+  })
+
+  it('writes the brief before the install runs', async () => {
+    installCommand = 'pnpm install'
+    let briefAtInstall: boolean | null = null
+    const d = deps()
+    d.runInstall = async () => void (briefAtInstall = existsSync(briefFile()))
+    await createFeature(d, { ...request, brief })
+    expect(briefAtInstall).toBe(true)
+  })
+
+  it('fails and undoes everything when the brief cannot be saved', async () => {
+    briefWriteError = 'read-only folder'
+    const result = await createFeature(deps(), { ...request, brief })
+    expect(result).toEqual({ ok: false, error: expect.stringMatching(/starting brief could not be saved \(read-only folder\)/) })
+    nothingLeft()
+  })
+
+  it('fails and undoes everything when brief.md already exists, leaving the existing text alone', async () => {
+    const d = deps()
+    const add = d.git.addWorktree
+    d.git.addWorktree = async (...args) => {
+      await add(...args)
+      mkdirSync(join(args[1], '.scratch', 'login'), { recursive: true })
+      writeFileSync(briefFile(), 'old')
+    }
+    const result = await createFeature(d, { ...request, brief })
+    expect(result).toEqual({ ok: false, error: expect.stringMatching(/brief.md already exists/) })
+    nothingLeft()
+  })
+
+  it('refuses a brief over the limit before making anything, and accepts one at the limit', async () => {
+    const over = await createFeature(deps(), { ...request, brief: 'x'.repeat(BRIEF_LIMIT + 1) })
+    expect(over).toEqual({ ok: false, error: expect.stringMatching(/limit is 20000/) })
+    nothingLeft()
+    expect((await createFeature(deps(), { ...request, brief: 'x'.repeat(BRIEF_LIMIT) })).ok).toBe(true)
   })
 })
 

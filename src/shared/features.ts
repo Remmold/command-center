@@ -25,19 +25,35 @@ export interface NewFeatureRequest {
   description: string
   /** The id the renderer starts the feature session under. */
   sessionId: string
+  /** The plan agreed in the main chat; main saves it in the new worktree and the session reads it first. */
+  brief?: string
 }
 
+/** The longest starting brief `createFeature` accepts, in characters. */
+export const BRIEF_LIMIT = 20_000
+
+/** Where a feature's starting brief is saved, relative to its worktree. */
+export const briefRelativePath = (name: string): string => `.scratch/${name}/brief.md`
+
 export type NewFeatureResult =
-  | { ok: true; feature: FeatureRecord; /** The source workspace's preview config has a server, so the feature has a preview browser. */ previewBrowser: boolean }
+  | {
+      ok: true
+      feature: FeatureRecord
+      /** The source workspace's preview config has a server, so the feature has a preview browser. */
+      previewBrowser: boolean
+      /** The saved starting brief, when the request had one. */
+      briefPath?: string
+    }
   | { ok: false; error: string }
 
-/** The first prompt of a feature session: `/flow`, the description, and where it works. */
-export function featureFirstPrompt(feature: Pick<FeatureRecord, 'name' | 'worktreePath'>, description: string, previewBrowser = false): string {
+/** The first prompt of a feature session: `/flow`, the description, and where it works; with a brief, where to read it first. */
+export function featureFirstPrompt(feature: Pick<FeatureRecord, 'name' | 'worktreePath'>, description: string, previewBrowser = false, briefPath?: string): string {
   return [
     `/flow ${description.trim()}`,
     '',
     `Feature name: ${feature.name}`,
     `Feature worktree: ${feature.worktreePath}`,
+    ...(briefPath ? [`Starting brief: ${briefPath} (agreed in the main chat; read it first, it holds what was already decided)`] : []),
     ...(previewBrowser ? ['Preview browser: yes'] : []),
     'Work in this worktree; do not make another one.'
   ].join('\n')

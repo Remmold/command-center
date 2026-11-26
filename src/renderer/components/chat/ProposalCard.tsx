@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { PROPOSAL_NOT_UNDERSTOOD, proposalKey, proposalSegments, resolveWorkspace, type FeatureProposal, type ProposalState } from '../../../shared/featureProposal'
+import { Button } from '../ui/Button'
 import { Markdown } from '../ui/Markdown'
 import { useToolContext } from './toolContext'
 
@@ -26,6 +27,20 @@ function ProposalCard({ proposal, state }: { proposal: FeatureProposal; state: P
   const { proposals } = useToolContext()
   const workspace = useMemo(() => resolveWorkspace(proposal.workspace, proposals?.options ?? []), [proposal.workspace, proposals])
   const note = STATE_NOTE[state]
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const go = async () => {
+    if (!proposals || workspace.kind !== 'ok') return
+    setStarting(true)
+    setError(null)
+    const failed = await proposals.go(proposal, workspace.id)
+    setStarting(false)
+    if (failed) setError(failed)
+  }
+  const open = async () => {
+    const failed = await proposals?.open(proposal.name)
+    if (failed) setError(failed)
+  }
   return (
     <section data-proposal-card="" data-proposal-state={state} aria-label={`Feature proposal ${proposal.name}`} className="my-2 rounded-md border border-strong bg-sidebar px-3 py-2 text-xs">
       <div className="mb-1.5 flex items-center justify-between gap-3">
@@ -47,6 +62,25 @@ function ProposalCard({ proposal, state }: { proposal: FeatureProposal; state: P
         <Field label="Description">{proposal.description}</Field>
         <Field label="Starting brief">{proposal.brief}</Field>
       </dl>
+      {error && (
+        <p data-proposal-error="" role="alert" className="mt-2 text-error">
+          {error}
+        </p>
+      )}
+      {state === 'live' && (
+        <div className="mt-2 flex justify-end">
+          <Button onClick={() => void go()} disabled={starting || workspace.kind !== 'ok'}>
+            {starting ? 'Starting…' : 'Go'}
+          </Button>
+        </div>
+      )}
+      {state === 'started' && (
+        <div className="mt-2 flex justify-end">
+          <Button variant="secondary" onClick={() => void open()}>
+            Open session
+          </Button>
+        </div>
+      )}
     </section>
   )
 }

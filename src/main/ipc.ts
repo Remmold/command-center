@@ -53,7 +53,7 @@ import { rateLimitOf, type DigestFeature } from './features/digest'
 import { workspaceOptions } from '../shared/workspaceLabel'
 import { createDigestWriter, type DigestWriter } from './features/digestWriter'
 import { readTestFlowsFolder } from './testFlow/settings'
-import { createFeature, discardFeature, type CreateDeps } from './features/create'
+import { createFeature, discardFeature, writeNewFile, type CreateDeps } from './features/create'
 import type { FeatureRecord, NewFeatureRequest } from '../shared/features'
 import type { PreviewConfig } from '../shared/previewConfig'
 import { approvalBroker } from './claude/approvals'
@@ -290,6 +290,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     runInstall,
     installing: (name, running) => sendAll(IPC.FEATURES_INSTALLING, { name, running }),
     pathExists: (path) => fs.access(path).then(() => true, () => false),
+    writeNewFile,
     now: () => Date.now()
   }
   featureStages = createStageService({

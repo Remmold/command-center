@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { FeatureServersView } from '../../shared/featureServers'
 import type { FeatureStageView } from '../../shared/featureStage'
+import { onePerName } from './proposalGo'
 import { featureFirstPrompt, featureOpenPlan, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
 import type { ChatItem } from '../components/chat/types'
 import { useChatItemsStore } from './chatItemsStore'
@@ -63,13 +64,16 @@ export async function startFeature(request: Omit<NewFeatureRequest, 'sessionId'>
   await reload()
   const workspace = useWorkspacesStore.getState().workspaces.find((w) => w.id === feature.workspaceId)
   const started = workspace
-    ? startSession(workspace, { send: { id: sessionId, prompt: featureFirstPrompt(feature, request.description, previewBrowser) } })
+    ? startSession(workspace, { send: { id: sessionId, prompt: featureFirstPrompt(feature, request.description, previewBrowser, made.briefPath) } })
     : false
   if (started) return null
   await window.api.features.discard(feature.name, request.workspaceId)
   await reload()
   return 'The feature session could not start.'
 }
+
+/** Go on a proposal card: the same start as New feature, with the brief; a press while the same name is starting does nothing. */
+export const goProposal = onePerName(startFeature)
 
 /** Follows stage changes from main; call once. */
 export function followFeatureStages(): () => void {

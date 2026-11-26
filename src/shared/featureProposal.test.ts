@@ -96,6 +96,12 @@ describe('proposal card state', () => {
     expect(states.get(key('a2'))).toBe('superseded')
   })
 
+  it('reads the newest card as Started, not live, once a feature has its name', () => {
+    const items = [reply('a1', card('one'))]
+    expect(proposalStates(items, true, ['one']).get(key('a1'))).toBe('started')
+    expect(proposalStates(items, true, ['other']).get(key('a1'))).toBe('live')
+  })
+
   it('does not let a newer block that did not parse leave the older card live', () => {
     const items = [reply('a1', card('one')), reply('a2', '````feature-proposal\nname: x\n````')]
     expect(proposalStates(items, true, []).get(key('a1'))).toBe('superseded')

@@ -27,6 +27,12 @@ describe('featureFirstPrompt', () => {
     expect(featureFirstPrompt(made, ' Add login ')).toBe(base.join('\n'))
     expect(featureFirstPrompt(made, 'Add login', false)).toBe(base.join('\n'))
   })
+  it('names the starting brief right after the worktree line, and only when there is one', () => {
+    const path = 'C:/w/login/.scratch/login/brief.md'
+    const line = `Starting brief: ${path} (agreed in the main chat; read it first, it holds what was already decided)`
+    expect(featureFirstPrompt(made, 'Add login', false, path)).toBe([...base.slice(0, 4), line, base[4]].join('\n'))
+    expect(featureFirstPrompt(made, 'Add login', false, undefined)).toBe(base.join('\n'))
+  })
   it('adds the preview browser line right after the worktree line', () => {
     expect(featureFirstPrompt(made, 'Add login', true)).toBe([...base.slice(0, 4), 'Preview browser: yes', base[4]].join('\n'))
   })
