@@ -1,6 +1,4 @@
-import type { ChatItem } from './chatItems'
-
-export const PROPOSAL_TAG = 'feature-proposal'
+import { actionSegments, writeActionBlock, type ActionBlockKind } from './actionBlocks'
 
 /** The four parts of a proposal, as the card shows them. */
 export interface FeatureProposal {
@@ -11,109 +9,67 @@ export interface FeatureProposal {
   brief: string
 }
 
+export const PROPOSAL_TAG = 'feature-proposal'
+
+const PARTS: ActionBlockKind<keyof FeatureProposal>['parts'] = [
+  { label: 'workspace', oneLine: true },
+  { label: 'name', oneLine: true },
+  { label: 'description', oneLine: false },
+  { label: 'brief', oneLine: false }
+]
+
+/** The block the chat is told to write. */
+export const writeProposal = (p: FeatureProposal): string =>
+  writeActionBlock({ tag: PROPOSAL_TAG, parts: PARTS, instructions: [] }, { workspace: p.workspace, name: p.name, description: p.description, brief: p.brief })
+
+const EXAMPLE = writeProposal({
+  workspace: '<a label from the Workspaces section of the digest, without its folder>',
+  name: '<folder-and-branch name: lowercase letters, digits and dashes>',
+  description: '<what New feature would take as its description>',
+  brief: '<the agreed plan: goal, scope, out of scope, open questions, first steps; it may hold fenced code>'
+})
+
+const INSTRUCTIONS = [
+  'Starting a feature: when the user asks you to start a feature, write one feature-proposal block in that reply, exactly in this form (the fence is four backticks so the brief may hold fenced code):',
+  EXAMPLE,
+  'Rules for a feature proposal:',
+  '- Fill the brief from the discussion and from what you read; list anything still undecided under open questions rather than holding the proposal back.',
+  '- The workspace is a label copied exactly from the Workspaces section of the feature digest. When it is unclear which workspace the feature belongs in, ask the user instead of proposing.',
+  '- Write one proposal at a time. For several features from one discussion, propose them one after another, each after the user has dealt with the one before.',
+  '- After the block, tell the user to press Go on the card. Typing "go" does nothing; point at the button.',
+  '- To change anything, write a new proposal block; the old card then goes read-only.',
+  '- After Go, the app starts a fresh main chat, and the feature session reads the brief first. The brief is all that carries over, so put everything agreed into it. A failed start is reported to you instead; tell the user and wait for them.'
+]
+
+/** The start-feature kind: Go makes the feature. An older card reads Started once a feature has its name. */
+export const FEATURE_PROPOSAL_BLOCK: ActionBlockKind<keyof FeatureProposal> = {
+  tag: PROPOSAL_TAG,
+  parts: PARTS,
+  instructions: INSTRUCTIONS,
+  doneEarlier: (fields, facts) => facts.featureNames.some((n) => n.toLowerCase() === fields.name.toLowerCase())
+}
+
 export type ProposalSegment =
   | { kind: 'text'; text: string }
   | { kind: 'proposal'; proposal: FeatureProposal }
   /** A closed `feature-proposal` block whose parts are missing, empty or out of order. */
   | { kind: 'invalid'; raw: string }
 
-const PARTS = ['workspace', 'name', 'description', 'brief'] as const
-type Part = (typeof PARTS)[number]
-
-const OPEN = new RegExp('^(`{3,})' + PROPOSAL_TAG + '[ \\t]*$')
-const closes = (line: string, ticks: number): boolean => new RegExp('^`{' + ticks + ',}[ \\t]*$').test(line)
-const LABEL = /^(workspace|name|description|brief):[ \t]*(.*)$/
-
-const longestRun = (text: string): number => Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
-
-/** The block the chat is told to write; the fence is longer than any run of backticks inside it, so a brief may hold fenced code. */
-export function writeProposal(p: FeatureProposal): string {
-  const fence = '`'.repeat(Math.max(4, longestRun(`${p.workspace}${p.name}${p.description}${p.brief}`) + 1))
-  return [fence + PROPOSAL_TAG, `workspace: ${p.workspace}`, `name: ${p.name}`, `description: ${p.description}`, 'brief:', p.brief, fence].join('\n')
-}
-
-function parseBody(lines: readonly string[]): FeatureProposal | null {
-  const parts: Record<Part, string[]> = { workspace: [], name: [], description: [], brief: [] }
-  let at = -1
-  for (const line of lines) {
-    const label = at < 3 ? LABEL.exec(line) : null
-    if (label && label[1] === PARTS[at + 1]) {
-      at++
-      if (label[2] !== '') parts[PARTS[at]].push(label[2])
-    } else if (at >= 0) parts[PARTS[at]].push(line)
-    else if (line.trim() !== '') return null
-  }
-  if (at < 3) return null
-  const text = (part: Part): string => parts[part].join('\n').trim()
-  const oneLine = (part: Part): string => {
-    const lines = parts[part].filter((l) => l.trim() !== '')
-    return lines.length === 1 ? lines[0].trim() : ''
-  }
-  const proposal = { workspace: oneLine('workspace'), name: oneLine('name'), description: text('description'), brief: text('brief') }
-  return Object.values(proposal).some((v) => v === '') ? null : proposal
-}
+/** The proposal a parsed `feature-proposal` block holds. */
+export const proposalOf = (fields: Record<string, string>): FeatureProposal => ({
+  workspace: fields.workspace,
+  name: fields.name,
+  description: fields.description,
+  brief: fields.brief
+})
 
 /** A reply's text split into ordinary text and proposal blocks. A block with no closing fence yet (still streaming) stays text. */
 export function proposalSegments(text: string): ProposalSegment[] {
-  if (!text.includes(PROPOSAL_TAG)) return [{ kind: 'text', text }]
-  const lines = text.split('\n')
-  const segments: ProposalSegment[] = []
-  let plain: string[] = []
-  const flush = (): void => {
-    if (plain.join('').trim() !== '') segments.push({ kind: 'text', text: plain.join('\n') })
-    plain = []
-  }
-  for (let i = 0; i < lines.length; i++) {
-    const open = OPEN.exec(lines[i])
-    const end = open ? lines.findIndex((l, j) => j > i && closes(l, open[1].length)) : -1
-    if (!open || end < 0) {
-      plain.push(lines[i])
-      continue
-    }
-    flush()
-    const proposal = parseBody(lines.slice(i + 1, end))
-    segments.push(proposal ? { kind: 'proposal', proposal } : { kind: 'invalid', raw: lines.slice(i, end + 1).join('\n') })
-    i = end
-  }
-  flush()
-  return segments
-}
-
-/** What the card says about its proposal. `waiting`: the newest card while the chat is still answering. */
-export type ProposalState = 'live' | 'waiting' | 'started' | 'superseded'
-
-export const proposalKey = (itemId: string, block: number, segment: number): string => `${itemId}:${block}:${segment}`
-
-/**
- * Each proposal block of the transcript, keyed by `proposalKey`. The newest block, even one that did not parse, is the only
- * one that can be live, and only while no user message follows it. The live card reads Started only when this session
- * pressed Go on it (`started`); a name another feature has leaves it live, for preflight to explain. An older card reads
- * Started when a feature of its name exists, else Superseded.
- */
-export function proposalStates(
-  items: readonly ChatItem[],
-  settled: boolean,
-  featureNames: readonly string[],
-  started: ReadonlySet<string> = new Set()
-): Map<string, ProposalState> {
-  const entries: { key: string; name: string | null; itemIndex: number }[] = []
-  items.forEach((item, itemIndex) => {
-    if (item.kind !== 'assistant' || item.parentToolUseId) return
-    item.content.forEach((block, b) => {
-      if (block.type !== 'text' || typeof block.text !== 'string') return
-      proposalSegments(block.text).forEach((segment, s) => {
-        if (segment.kind !== 'text') entries.push({ key: proposalKey(item.id, b, s), name: segment.kind === 'proposal' ? segment.proposal.name : null, itemIndex })
-      })
-    })
+  return actionSegments(text, [FEATURE_PROPOSAL_BLOCK]).map((segment): ProposalSegment => {
+    if (segment.kind === 'text') return segment
+    if (segment.kind === 'invalid') return { kind: 'invalid', raw: segment.raw }
+    return { kind: 'proposal', proposal: proposalOf(segment.fields) }
   })
-  const states = new Map<string, ProposalState>()
-  const last = entries[entries.length - 1]
-  const taken = new Set(featureNames.map((n) => n.toLowerCase()))
-  for (const e of entries) {
-    if (e === last && !items.slice(e.itemIndex + 1).some((i) => i.kind === 'user')) states.set(e.key, started.has(e.key) ? 'started' : settled ? 'live' : 'waiting')
-    else states.set(e.key, e.name !== null && taken.has(e.name.toLowerCase()) ? 'started' : 'superseded')
-  }
-  return states
 }
 
 export interface WorkspaceOption {
@@ -129,24 +85,3 @@ export function resolveWorkspace(text: string, options: readonly WorkspaceOption
 }
 
 export const PROPOSAL_NOT_UNDERSTOOD = 'Proposal not understood, ask the chat to write it again'
-
-const EXAMPLE = writeProposal({
-  workspace: '<a label from the Workspaces section of the digest>',
-  name: '<folder-and-branch name: lowercase letters, digits and dashes>',
-  description: '<what New feature would take as its description>',
-  brief: '<the agreed plan: what to build and why, decisions made, limits; it may hold fenced code>'
-})
-
-/** The main chat's rules for proposing; appended to its system prompt so a chat resumed from before this feature has them too. */
-export const FEATURE_PROPOSAL_INSTRUCTIONS = [
-  'You may propose a feature for the user to start. You never start one yourself: you have no tool for it, and the app starts it only when the user presses the Go button on the card your proposal becomes.',
-  'When a plan is agreed and the user asks to start it, write one proposal block in your reply, exactly in this form (the fence is four backticks so the brief may hold fenced code):',
-  EXAMPLE,
-  'Rules:',
-  '- Write one proposal at a time. For several features from one discussion, propose them one after another, each after the user has dealt with the one before.',
-  '- The workspace must be copied exactly from the Workspaces section of the feature digest. When it is unclear which workspace the feature belongs in, ask the user instead of proposing.',
-  '- After the block, tell the user to press Go on the card. Never say a feature has been started, created or is running until a message beginning [Command Center] says so.',
-  '- To change anything, write a new proposal block; the old card then goes read-only.',
-  'Apart from proposing, you stay read-only: you cannot write files, run commands, or stop, complete, reopen or delete a feature.',
-  'A message beginning [Command Center] comes from the app: after a success, confirm it in words and say where to continue; after a failure, report it and wait for the user.'
-].join('\n')

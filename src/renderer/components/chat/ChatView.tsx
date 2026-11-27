@@ -28,6 +28,8 @@ import { promptContent, terminalSnapshots, type PromptAttachment } from './attac
 import { readTerminal } from '../../state/terminalBuffers'
 import { overlayOpen } from '../ui/overlay'
 import { useHeldPromptsStore } from '../../state/heldPromptsStore'
+import { useFreshStartStore } from '../../state/freshStartStore'
+import { MainChatNotice } from './MainChatNotice'
 import { deliver, takeChatSends, takeSendRequest, takeStartRequest, useChatSendsStore } from '../../state/startRequests'
 import { committedLength, thinkingDurations } from './liveItems'
 import { applyDeltas, frameBatch, landAfterWaitingDeltas, type FrameBatch, type StreamDelta } from './streamDeltas'
@@ -676,6 +678,54 @@ export const ChatView = memo(function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [switchTo, processRunning, turnActive, held.length])
 
+  // A fresh start keeps this pane mounted (ADR 0004): stop the process, wait for its exit, clear the conversation, then send the new first prompt.
+  const freshStart = useFreshStartStore((s) => s.pending[paneId] ?? null)
+  const freshRef = useRef<{ preparing: boolean; stoppedLaunch: number } | null>(null)
+  const [freshPrompt, setFreshPrompt] = useState<string | null>(null)
+  useEffect(() => {
+    if (!freshStart) return
+    const fresh = (freshRef.current ??= { preparing: false, stoppedLaunch: -1 })
+    if (fresh.preparing) return
+    if (processRunning || startingRef.current) {
+      if (processRunning && fresh.stoppedLaunch !== launchCountRef.current) {
+        fresh.stoppedLaunch = launchCountRef.current
+        window.api.claude.stop(paneId)
+      }
+      return
+    }
+    fresh.preparing = true
+    const done = (): void => {
+      freshRef.current = null
+      useFreshStartStore.getState().clear(paneId)
+    }
+    freshStart.prepare().then(
+      (prompt) => {
+        useChatItemsStore.getState().clearItems(paneId)
+        useHeldPromptsStore.getState().set(paneId, [])
+        useSubagentTasksStore.getState().end(paneId)
+        setContextUsage(null)
+        clearSuggestion('restarted')
+        useProjectViewsStore.getState().startOver(paneId)
+        done()
+        setFreshPrompt(prompt)
+      },
+      (err) => {
+        console.error('[claude] a fresh start could not be prepared', paneId, err)
+        done()
+        setError('The new conversation could not be started; this one is kept.')
+      }
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [freshStart, processRunning, error])
+
+  // Sent only once the cleared id has reached this render, so the launch starts a new session instead of resuming the old one.
+  useEffect(() => {
+    if (freshPrompt === null || resumeSessionId) return
+    setFreshPrompt(null)
+    void handleSend(freshPrompt)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [freshPrompt, resumeSessionId])
+
   /** False when the process failed to start; true once the prompt went to the running process, or a command was handled here. */
   const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []): Promise<boolean> => {
     if (attachments.length === 0 && remoteControlShown && isRemoteControlCommand(text)) {
@@ -826,6 +876,7 @@ export const ChatView = memo(function ChatView({
           {/* Positioned so the screen-reader status below stays inside the scroll box instead of stretching the Layer stack. */}
           <div ref={contentRef} className="relative">
             <MessageColumn className="space-y-3">
+              {paneId === MAIN_CHAT_PANE_ID && <MainChatNotice />}
               {error && (
                 <ChatBanner tone="error" action={<Button variant="secondary" onClick={() => setError(null)}>dismiss</Button>}>
                   {error}

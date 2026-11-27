@@ -1,6 +1,7 @@
 import { ipcMain, dialog, BrowserWindow, app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { IPC } from '../shared/ipc-channels'
 import * as workspaces from './workspaces/store'
@@ -11,7 +12,7 @@ import { pathKey } from '../shared/findings'
 import { isHistoryChange } from '../shared/chatHistory'
 import { liveConfigDir } from './observed/turn'
 import * as vscodeMatch from './profiles/vscodeMatch'
-import { transcriptsDirForCwd, transcriptsDirForWorkspace } from './profiles/transcripts'
+import { transcriptsDir, transcriptsDirForCwd, transcriptsDirForWorkspace } from './profiles/transcripts'
 import { ObservedService } from './observed/service'
 import { observedRefreshMs } from '../shared/observedRefresh'
 import * as apps from './apps/store'
@@ -52,6 +53,9 @@ import { createStageService, type StageService } from './features/stageService'
 import { rateLimitOf, type DigestFeature } from './features/digest'
 import { workspaceOptions } from '../shared/workspaceLabel'
 import { createDigestWriter, type DigestWriter } from './features/digestWriter'
+import { coalesce, createLastReplies } from './features/featureActivity'
+import { listTranscripts, scanGit, scanOpenWork } from './features/openWork'
+import { createOpenWorkSection } from './features/openWorkSection'
 import { readTestFlowsFolder } from './testFlow/settings'
 import { createFeature, discardFeature, preflightFeature, writeNewFile, type CreateDeps } from './features/create'
 import type { FeatureRecord, NewFeatureRequest, PreflightRequest, PreflightResult } from '../shared/features'
@@ -73,7 +77,7 @@ import type { RateLimitInfo } from './usage/usageReply'
 import { featureDigestFile, legacyFeatureDigestFile, mainChatDir, previewDraftsFolder, userDataPath } from './util/paths'
 import { realPathFrom } from './features/realPath'
 import { createMainChatStore } from './features/mainChatStore'
-import { MAIN_CHAT_PANE_ID, mainChatLaunch, mainChatReply, type MainChatInfo } from '../shared/mainChat'
+import { MAIN_CHAT_PANE_ID, mainChatLaunch, mainChatReply, type JustStarted, type MainChatInfo, type MainChatScope } from '../shared/mainChat'
 import { setScreenFocus } from './sessions/screenFocus'
 import {
   DEFAULT_PROFILE_ID,
@@ -111,6 +115,10 @@ interface IpcDeps {
 export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void {
   let featureStages: StageService | undefined
   let featureDigest: DigestWriter | undefined
+  // A feature session's state or reply asks for the digest at most every 2 s, not on every event of a turn.
+  const featureActivity = coalesce(() => featureDigest?.changed())
+  const lastReplies = createLastReplies(() => featureActivity.poke())
+  unsubscribers.push(() => featureActivity.stop())
   const board = new BoardService(workspaces.list, (model) => {
     featureStages?.changed()
     for (const win of BrowserWindow.getAllWindows()) {
@@ -244,9 +252,22 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const profileId = saved.profileId && (await profiles.list()).some((p) => p.id === saved.profileId) ? saved.profileId : DEFAULT_PROFILE_ID
     let workspace = (await workspaces.list()).find(isMainChatFolder) ?? (await workspaces.add(path, profileId))
     if (workspace.profileId !== profileId) workspace = (await workspaces.setProfile(workspace.id, profileId)) ?? workspace
-    return { workspaceId: workspace.id, path, profileId, claudeSessionId: saved.claudeSessionId, digestFile: featureDigestFile() }
+    return {
+      workspaceId: workspace.id,
+      path,
+      profileId,
+      claudeSessionId: saved.claudeSessionId,
+      digestFile: featureDigestFile(),
+      ...(saved.justStarted ? { justStarted: saved.justStarted } : {})
+    }
   }
   ipcMain.handle(IPC.MAIN_CHAT_INFO, mainChatInfo)
+  ipcMain.handle(IPC.MAIN_CHAT_RESET, async (_e, justStarted: unknown) => {
+    const text = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v.length <= 200
+    const started = justStarted as Partial<JustStarted> | null | undefined
+    await mainChatStore.reset(started && text(started.name) && text(started.workspace) ? { name: started.name.trim(), workspace: started.workspace.trim() } : undefined)
+    return mainChatInfo()
+  })
   ipcMain.handle(IPC.MAIN_CHAT_SET_PROFILE, async (_e, profileId: unknown) => {
     const before = await mainChatInfo()
     if (typeof profileId === 'string' && profileId !== before.profileId && (await profiles.list()).some((p) => p.id === profileId)) await mainChatStore.setProfile(profileId)
@@ -439,7 +460,10 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   const chatHistory = createChatHistoryStore(join(app.getPath('userData'), 'chat-history'))
   ipcMain.on(IPC.CHAT_HISTORY_LOAD, (e) => {
     chatHistory.load().then(
-      (items) => (e.returnValue = items),
+      (items) => {
+        lastReplies.loaded(items)
+        e.returnValue = items
+      },
       (err) => {
         console.error('could not read the chat history', err)
         e.returnValue = {}
@@ -452,7 +476,9 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   })
   ipcMain.on(IPC.CHAT_HISTORY_APPLY, (_e, paneId: unknown, changes: unknown) => {
     if (typeof paneId !== 'string' || paneId === '' || !Array.isArray(changes)) return
-    chatHistory.apply(paneId, changes.filter(isHistoryChange)).catch((err) => console.error(`could not save the chat history of ${paneId}`, err))
+    const valid = changes.filter(isHistoryChange)
+    lastReplies.applied(paneId, valid)
+    chatHistory.apply(paneId, valid).catch((err) => console.error(`could not save the chat history of ${paneId}`, err))
   })
 
   ipcMain.handle(IPC.REPO_IDENTITIES_LIST, () => repoIdentities.list())
@@ -526,9 +552,29 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     }
   })
   usage.start()
+  const labelled = async () => {
+    const known = listed(await workspaces.list())
+    const options = workspaceOptions(known, await repoIdentities.list())
+    return known.map((w, i) => ({ ...w, label: options[i].label }))
+  }
+  const openWork = createOpenWorkSection({
+    scan: async () =>
+      scanOpenWork(await labelled(), await featureStore.list(), {
+        git: scanGit(),
+        mainBranch,
+        pathExists: (path) => fs.access(path).then(() => true, () => false),
+        transcriptsDir: async (profileId, cwd) => transcriptsDir((await profiles.get(profileId)).configDir, cwd),
+        listFiles: listTranscripts,
+        mainChatDir: mainChatDir(),
+        now: Date.now
+      })
+  })
   featureDigest = createDigestWriter({
     file: featureDigestFile(),
-    workspaceLabels: async () => workspaceOptions(listed(await workspaces.list()), await repoIdentities.list()).map((o) => o.label),
+    places: async () => {
+      const [known, openWorkText, testFlowsFolder] = await Promise.all([labelled(), openWork(), readTestFlowsFolder()])
+      return { workspaces: known.map((w) => ({ label: w.label, path: w.path })), openWork: openWorkText, testFlowsFolder }
+    },
     features: async (): Promise<DigestFeature[]> => {
       const [features, allWorkspaces, allProfiles, stages] = await Promise.all([featureStore.list(), workspaces.list(), profiles.list(), featureStages?.snapshot() ?? {}])
       const servers = serverRunner.all()
@@ -544,6 +590,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
           completedAt: f.completedAt,
           accountName: (workspace && allProfiles.find((p) => p.id === workspace.profileId)?.name) ?? null,
           status: statuses.find((s) => s.paneId === f.sessionId)?.status ?? 'idle',
+          lastReply: lastReplies.get(f.sessionId),
           stage: stages[f.name],
           servers: servers[f.name]?.servers ?? [],
           rateLimit: workspace ? rateLimitOf(limits.find((u) => u.profileId === workspace.profileId), now) : null
@@ -645,15 +692,28 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     return started.ok ? { ...started, profileId: claudeManager.profileOf(options.paneId) } : started
   })
   // Read-only by construction: the process is given read tools only, and the app answers its permission requests itself.
-  const mainChatRoots = async (): Promise<string[]> => [dirname(featureDigestFile()), mainChatDir(), ...(await featureStore.list()).map((f) => f.worktreePath)]
+  // Gathered per launch and per request, so a workspace or worktree added after the process started is covered.
+  const mainChatScope = async (): Promise<MainChatScope> => {
+    const [features, known, accounts, testFlowsFolder] = await Promise.all([featureStore.list(), workspaces.list(), profiles.list(), readTestFlowsFolder()])
+    return {
+      digestFile: featureDigestFile(),
+      chatDir: mainChatDir(),
+      worktrees: features.map((f) => f.worktreePath),
+      workspaces: listed(known).map((w) => w.path),
+      testFlowsFolder,
+      fenced: [userDataPath(), join(homedir(), '.claude'), profiles.defaultConfigDir(), ...accounts.map((p) => p.configDir)]
+    }
+  }
+  const isFolder = (path: string): Promise<boolean> => fs.stat(path).then((s) => s.isDirectory(), () => false)
   const startMainChat = async (options: ClaudeStartOptions) => {
     const info = await mainChatInfo()
     const { env } = await profiles.prepareSession(info.profileId)
-    const launch = mainChatLaunch(featureDigestFile(), (await featureStore.list()).map((f) => f.worktreePath))
+    const launch = mainChatLaunch(await mainChatScope())
+    const present = await Promise.all(launch.addDirs.map(isFolder))
     const started = claudeManager.start({
       ...options,
       cwd: info.path,
-      addDirs: launch.addDirs,
+      addDirs: launch.addDirs.filter((_, i) => present[i]),
       permissionMode: 'default',
       allowBypass: false,
       extraArgs: launch.cliArgs,
@@ -805,7 +865,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     return async (raw) => {
       if (raw.subtype !== 'can_use_tool') throw new Error(`Unsupported control request: ${raw.subtype}`)
       const input = typeof raw.input === 'object' && raw.input !== null ? (raw.input as Record<string, unknown>) : {}
-      return { ...(await mainChatReply(typeof raw.tool_name === 'string' ? raw.tool_name : '', input, await mainChatRoots(), realPathFrom(mainChatDir()))), toolUseID: raw.tool_use_id }
+      return { ...(await mainChatReply(typeof raw.tool_name === 'string' ? raw.tool_name : '', input, await mainChatScope(), realPathFrom(mainChatDir()))), toolUseID: raw.tool_use_id }
     }
   })
   unsubscribers.push(
@@ -842,7 +902,7 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     }),
     () => agentSweep.stop(),
     sessionStatusTracker.onChange((entry) => {
-      featureDigest?.changed()
+      featureActivity.poke()
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) win.webContents.send(IPC.SESSION_STATUS_CHANGED, entry)
       }

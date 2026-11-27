@@ -31,8 +31,9 @@ import { RunInBackgroundLine } from './RunInBackgroundLine'
 import { AnsweredQuestions } from './QuestionCard'
 import { questionOutcome } from './questionCardModel'
 import { QUESTION_TOOL, parseQuestions } from '../../../shared/approval'
-import { PROPOSAL_TAG } from '../../../shared/featureProposal'
-import { ProposalText } from './ProposalCard'
+import { mentionsActionBlock } from '../../../shared/actionBlocks'
+import { ACTION_BLOCKS } from '../../../shared/mainChatActions'
+import { ActionBlocksText } from './ActionCard'
 
 const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
 
@@ -193,12 +194,12 @@ interface BlockProps {
 }
 
 function ContentBlockView({ block, itemId, index, streaming, durationMs, thinkingTokens, stamp, footer }: BlockProps) {
-  const { proposals } = useToolContext()
+  const { actions } = useToolContext()
   if (block.type === 'text') {
     const text = (block as { text: string }).text
     return (
       <TimelineRow dot="neutral" stamp={stamp}>
-        {proposals && text.includes(PROPOSAL_TAG) ? <ProposalText text={text} itemId={itemId} block={index} /> : <Markdown text={text} />}
+        {actions && mentionsActionBlock(text, ACTION_BLOCKS) ? <ActionBlocksText text={text} itemId={itemId} block={index} /> : <Markdown text={text} />}
         {footer}
       </TimelineRow>
     )

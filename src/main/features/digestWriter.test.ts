@@ -21,6 +21,7 @@ const feature = (over: Partial<DigestFeature> = {}): DigestFeature => ({
   completedAt: null,
   accountName: 'Work',
   status: 'idle',
+  lastReply: null,
   stage: { missing: false, stage: 'Spec', done: 0, total: 0 },
   servers: [],
   rateLimit: null,
@@ -58,14 +59,14 @@ describe('digest writer', () => {
 
   it('writes again when only the workspace list changed', async () => {
     const file = join(root, 'd.md')
-    let labels = ['app']
-    const writer = createDigestWriter({ file, features: async () => [feature()], workspaceLabels: async () => labels })
+    let workspaces = [{ label: 'app', path: 'C:\\app' }]
+    const writer = createDigestWriter({ file, features: async () => [feature()], places: async () => ({ workspaces }) })
     await writer.flush()
-    expect(readFileSync(file, 'utf-8')).toContain('- app\n')
+    expect(readFileSync(file, 'utf-8')).toContain('- app (C:\\app)\n')
     expect(await writer.flush()).toBe(false)
-    labels = ['app', 'api']
+    workspaces = [...workspaces, { label: 'api', path: 'C:\\api' }]
     expect(await writer.flush()).toBe(true)
-    expect(readFileSync(file, 'utf-8')).toContain('- api\n')
+    expect(readFileSync(file, 'utf-8')).toContain('- api (C:\\api)\n')
     writer.stop()
   })
 
@@ -76,7 +77,7 @@ describe('digest writer', () => {
     await writer.flush()
     features = [feature({ status: 'running' })]
     expect(await writer.flush()).toBe(true)
-    expect(readFileSync(file, 'utf-8')).toContain('- Session: running')
+    expect(readFileSync(file, 'utf-8')).toContain('- State: running')
     writer.stop()
   })
 

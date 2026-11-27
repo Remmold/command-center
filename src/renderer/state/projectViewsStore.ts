@@ -21,6 +21,7 @@ import {
   NEW_SESSION_TITLE,
   migratedTitle,
   titleAfterClaude,
+  titleAfterFreshStart,
   titleAfterPrompt,
   titleAfterRename,
   type SessionTitle
@@ -111,6 +112,8 @@ interface ProjectViewsState {
   setActiveClaudeSession: (projectId: string, sessionId: string) => void
   setClaudeSessionId: (paneId: string, claudeSessionId: string) => void
   clearClaudeSessionId: (paneId: string) => void
+  /** The session drops its Claude id and its title, so its next start is a new conversation named afresh. */
+  startOver: (paneId: string) => void
   setSessionPermissionMode: (paneId: string, mode: PermissionMode) => void
   /** A new model drops the effort pick; the CLI applies the new model's own default. */
   setSessionModel: (paneId: string, model: ClaudeModel) => void
@@ -411,6 +414,11 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
             }
           }
         }),
+
+      startOver: (paneId) => {
+        get().clearClaudeSessionId(paneId)
+        retitle(set, paneId, titleAfterFreshStart)
+      },
 
       setSessionPermissionMode: (paneId, mode) => updateSession(set, paneId, { permissionMode: mode }),
       setSessionModel: (paneId, model) => updateSession(set, paneId, { model, effort: undefined }),

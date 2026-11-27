@@ -28,6 +28,24 @@ describe('the main chat store', () => {
     expect(await store.setProfile('work')).toEqual({ profileId: 'work' })
   })
 
+  it('a reset forgets the conversation and keeps the account; after a Go it remembers the feature, across a restart', async () => {
+    const file = join(dir, 'm.json')
+    const store = createMainChatStore(file)
+    await store.setProfile('work')
+    await store.setClaudeSession('abc')
+    expect(await store.reset({ name: 'hello-footer', workspace: 'Test' })).toEqual({ profileId: 'work', justStarted: { name: 'hello-footer', workspace: 'Test' } })
+    await store.setClaudeSession('fresh')
+    expect(await createMainChatStore(file).get()).toEqual({ profileId: 'work', claudeSessionId: 'fresh', justStarted: { name: 'hello-footer', workspace: 'Test' } })
+  })
+
+  it('a plain reset clears the feature an earlier Go named, and a new account clears it too', async () => {
+    const store = createMainChatStore(join(dir, 'm.json'))
+    await store.reset({ name: 'a', workspace: 'w' })
+    expect(await store.reset()).toEqual({})
+    await store.reset({ name: 'a', workspace: 'w' })
+    expect(await store.setProfile('work')).toEqual({ profileId: 'work' })
+  })
+
   it('reads a broken file as empty', async () => {
     const file = join(dir, 'm.json')
     await import('node:fs').then((fs) => fs.writeFileSync(file, '{nope'))

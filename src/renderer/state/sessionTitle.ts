@@ -48,6 +48,11 @@ export function wantsClaudeTitle(
   return { ask: true, requests: requests + 1 }
 }
 
+/** A session that starts a new conversation in place is named again by its next prompt, unless the user named it. */
+export function titleAfterFreshStart(session: SessionTitle): SessionTitle {
+  return session.titleRenamed ? session : { title: NEW_SESSION_TITLE }
+}
+
 export function titleAfterRename(session: SessionTitle, name: string): SessionTitle {
   const title = name.trim()
   return title ? { ...session, title, titleRenamed: true } : session

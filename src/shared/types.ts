@@ -14,7 +14,7 @@ import type { SidebarLayout } from './sidebarGroups'
 import type { FeatureStageView } from './featureStage'
 import type { FeatureServersView } from './featureServers'
 import type { FeatureRecord, NewFeatureRequest, NewFeatureResult, PreflightRequest, PreflightResult } from './features'
-import type { MainChatInfo } from './mainChat'
+import type { JustStarted, MainChatInfo } from './mainChat'
 import type { PreviewConfig } from './previewConfig'
 import type { PreviewDraftRead } from './previewSetup'
 import type { HistoryChange } from './chatHistory'
@@ -502,6 +502,8 @@ export interface RendererApi {
     /** Chooses the account the main chat runs on; its conversation starts afresh, since the old one lives in the old account's folder. */
     setProfile: (profileId: string) => Promise<MainChatInfo>
     setClaudeSession: (claudeSessionId: string) => Promise<void>
+    /** Forgets the conversation so the next start is fresh; after a Go, names the feature it started. The account stays. */
+    reset: (justStarted?: JustStarted) => Promise<MainChatInfo>
   }
   previewConfig: {
     /** The workspace's saved preview config; null when it has none (no browser, only the test flow). */

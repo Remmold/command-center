@@ -3,7 +3,9 @@ import type { ToolPairs } from './toolCall'
 import type { ChatItem } from './types'
 import type { SubagentTasks } from './subagents'
 import type { BackgroundOutcome, ForegroundCalls } from './runInBackground'
-import type { FeatureProposal, ProposalState, WorkspaceOption } from '../../../shared/featureProposal'
+import type { ActionState } from '../../../shared/actionBlocks'
+import type { FeatureProposal, WorkspaceOption } from '../../../shared/featureProposal'
+import type { FeatureRecord } from '../../../shared/features'
 
 /** A hosted or followed session whose transcripts folder holds its subagents' own files. */
 export interface TranscriptSource {
@@ -32,18 +34,28 @@ export interface BackgroundHost {
   move: (toolUseIds: readonly string[]) => Promise<BackgroundOutcome>
 }
 
-/** The main chat only: how each feature proposal in its transcript stands, and the workspaces a proposal may name. */
-export interface ProposalHost {
-  states: ReadonlyMap<string, ProposalState>
+/** What a card's button resolves with: why the action failed, null when it ran, or undefined when it did not run (one already under way). */
+export type ActionRun = Promise<string | null | undefined>
+
+/** The main chat only: how each card in its transcript stands, and each kind's preflight and action. */
+export interface ActionHost {
+  states: ReadonlyMap<string, ActionState>
   options: readonly WorkspaceOption[]
-  /** The names of the existing features; a change means the card's preflight is asked again. */
+  features: readonly FeatureRecord[]
+  /** The names of the existing features; a change means every live card's preflight is asked again. */
   featureNames: readonly string[]
-  /** Preflight: why Go would fail for the proposal in the workspace, or null when nothing stands in its way. */
-  check: (proposal: FeatureProposal, workspaceId: string) => Promise<string | null>
-  /** Go: starts the proposed feature in the workspace; resolves with why it failed, null on success, or undefined when one is already starting. */
-  go: (key: string, proposal: FeatureProposal, workspaceId: string) => Promise<string | null | undefined>
-  /** Shows the session of the feature with this name; resolves with why it cannot, or null. */
-  open: (name: string) => Promise<string | null>
+  proposal: {
+    /** Preflight: why Go would fail for the proposal in the workspace, or null when nothing stands in its way. */
+    check: (proposal: FeatureProposal, workspaceId: string) => Promise<string | null>
+    go: (key: string, proposal: FeatureProposal, workspaceId: string) => ActionRun
+    /** Shows the session of the feature with this name; resolves with why it cannot, or null. */
+    open: (name: string) => Promise<string | null>
+  }
+  openSession: {
+    /** Preflight: why no session can be opened for the name, or null when exactly one feature has it. */
+    check: (name: string) => string | null
+    open: (name: string) => ActionRun
+  }
 }
 
 interface ToolContextValue {
@@ -57,7 +69,7 @@ interface ToolContextValue {
   /** Tool calls still waiting on their result while the turn runs. */
   running: ReadonlySet<string>
   background?: BackgroundHost
-  proposals?: ProposalHost
+  actions?: ActionHost
 }
 
 const NO_PAIRS: ToolPairs = { resultFor: new Map(), isPaired: () => false }

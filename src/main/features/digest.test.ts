@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { FeatureServerView } from '../../shared/featureServers'
 import type { FeatureStageView } from '../../shared/featureStage'
-import { digestBody, digestFileName, digestHeader, rateLimitOf, renderFeatureDigest, type DigestFeature } from './digest'
+import { REPLY_LINE_MAX, digestBody, digestFileName, digestHeader, rateLimitOf, renderFeatureDigest, replyLine, type DigestFeature } from './digest'
 
 const NOW = Date.UTC(2026, 10, 26, 12, 0, 0)
 const WT = join('C:', 'wt', 'dark-mode')
@@ -14,6 +14,7 @@ const feature = (over: Partial<DigestFeature> = {}): DigestFeature => ({
   completedAt: null,
   accountName: 'Work',
   status: 'idle',
+  lastReply: null,
   stage: { missing: false, stage: 'Building', done: 1, total: 3 },
   servers: [],
   rateLimit: null,
@@ -28,7 +29,8 @@ const blockLines = (): string[] => [
   '- Workspace: app (dark-mode)',
   '- Stage: Building',
   '- Tickets: 1/3 done',
-  '- Session: idle',
+  '- State: idle',
+  '- Last reply: none known',
   '- Account: Work',
   '- Rate limit: no',
   '- Last test result: none yet',
@@ -39,6 +41,26 @@ const blockLines = (): string[] => [
 ]
 
 describe('feature digest', () => {
+  it.each([
+    ['running', 'running'],
+    ['needs-approval', 'waiting on approval'],
+    ['your-turn', 'idle'],
+    ['idle', 'idle']
+  ] as const)('reads session status %s as State: %s', (status, state) => {
+    expect(digestBody([feature({ status })])).toContain(`- State: ${state}\n`)
+  })
+
+  it("puts the session's last reply on the line after its state", () => {
+    expect(digestBody([feature({ lastReply: 'Built the toggle.' })])).toContain('- State: idle\n- Last reply: Built the toggle.\n')
+  })
+
+  it('puts the Open work section after the Workspaces and before the test flows', () => {
+    const text = digestBody([feature()], { workspaces: [{ label: 'app', path: 'C:\\app' }], openWork: '# Open work, not tracked\n\nNothing open.\n', testFlowsFolder: 'C:\\tf' })
+    expect(text).toContain('# Open work, not tracked\n\nNothing open.\n\n# Test flows')
+    expect(text.indexOf('# Workspaces')).toBeLessThan(text.indexOf('# Open work'))
+    expect(digestBody([feature()])).not.toContain('Open work')
+  })
+
   it.each(['Grilling', 'Spec', 'Tickets', 'Building', 'Testing'] as const)('names the %s stage with tickets done out of total', (stage) => {
     const text = digestBody([feature({ stage: stageOf(stage, 2, 5) })])
     expect(text).toContain(`- Stage: ${stage}`)
@@ -50,7 +72,7 @@ describe('feature digest', () => {
     expect(text).toContain('## dark-mode')
     expect(text).toContain('- Workspace: app (dark-mode)')
     expect(text).toContain('- Account: Work')
-    expect(text).toContain('- Session: needs-approval')
+    expect(text).toContain('- State: waiting on approval')
     expect(text).toContain(`- Worktree: ${WT}`)
     expect(text).toContain(`- Read: ${join(WT, '.scratch', 'dark-mode')}`)
   })
@@ -61,17 +83,25 @@ describe('feature digest', () => {
     expect(text).toContain('- Account: Personal')
   })
 
-  it('lists the workspace labels in a Workspaces section after the feature blocks', () => {
-    const text = digestBody([feature()], ['app', 'app · dark-mode'])
+  it('lists each workspace label with its folder in a Workspaces section after the feature blocks', () => {
+    const text = digestBody([feature()], { workspaces: [{ label: 'app', path: 'C:\\app' }, { label: 'app · dark-mode', path: WT }] })
     const section = text.slice(text.indexOf('# Workspaces'))
-    expect(section).toContain(['- app', '- app · dark-mode', ''].join('\n'))
+    expect(section).toContain(['- app (C:\\app)', `- app · dark-mode (${WT})`, ''].join('\n'))
+    expect(section).toMatch(/names the label exactly, without the folder/)
     expect(text.indexOf('## dark-mode')).toBeLessThan(text.indexOf('# Workspaces'))
+  })
+
+  it('names the test-flows folder last, and leaves it out when none is given', () => {
+    const text = digestBody([feature()], { testFlowsFolder: 'C:\\projects\\test-flows' })
+    expect(text.slice(text.indexOf('# Test flows'))).toContain('C:\\projects\\test-flows')
+    expect(text.indexOf('# Workspaces')).toBeLessThan(text.indexOf('# Test flows'))
+    expect(digestBody([feature()])).not.toContain('# Test flows')
   })
 
   it('keeps every per-feature block exactly as it was, whatever the workspace list says', () => {
     const features = [feature(), feature({ name: 'b', completedAt: 5 })]
     const before = digestBody(features)
-    expect(digestBody(features, ['one', 'two']).startsWith(before.slice(0, before.indexOf('# Workspaces')))).toBe(true)
+    expect(digestBody(features, { workspaces: [{ label: 'one', path: 'C:\\one' }] }).startsWith(before.slice(0, before.indexOf('# Workspaces')))).toBe(true)
     expect(before.slice(0, before.indexOf('# Workspaces'))).toBe(
       ['# Features in progress', '', ...blockLines(), '# Completed', '', '- b (app (dark-mode), Work)', '', ''].join('\n')
     )
@@ -158,5 +188,17 @@ describe('rateLimitOf', () => {
   it('is not limited below the allowance or without a reading', () => {
     expect(rateLimitOf({ fiveHour: { utilization: 99, resetsAt: NOW + 1 } }, NOW)).toBeNull()
     expect(rateLimitOf(undefined, NOW)).toBeNull()
+  })
+})
+
+describe('the last reply line', () => {
+  it('collapses every run of whitespace, newlines included, to one space', () => {
+    expect(replyLine('  Done.\n\n  Tests\tpass,   all  3.\r\n')).toBe('Done. Tests pass, all 3.')
+  })
+
+  it('keeps a reply of exactly 300 characters whole and cuts a longer one after 300', () => {
+    expect(replyLine('a'.repeat(REPLY_LINE_MAX))).toBe('a'.repeat(300))
+    expect(replyLine(`${'b'.repeat(299)}\n\ncd${'e'.repeat(50)}`)).toBe(`${'b'.repeat(299)} …`)
+    expect(replyLine('x'.repeat(400))).toBe(`${'x'.repeat(300)}…`)
   })
 })
