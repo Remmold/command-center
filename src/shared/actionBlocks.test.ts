@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { actionKey, actionStates, writeActionBlock, type ActionBlockKind } from './actionBlocks'
+import { actionKey, actionSegments, actionStates, writeActionBlock, type ActionBlockKind } from './actionBlocks'
 import type { ChatItem } from './chatItems'
 import { FEATURE_PROPOSAL_BLOCK, writeProposal } from './featureProposal'
 
@@ -58,5 +58,43 @@ describe('card liveness, the same for every kind', () => {
 
   it('writes a single one-line part on the tag line\'s next line, label and value together', () => {
     expect(jumpTo('dark-mode')).toBe('````jump-to\nfeature: dark-mode\n````')
+  })
+})
+
+describe('optional parts', () => {
+  const pick: ActionBlockKind<'workspace' | 'path' | 'name' | 'items'> = {
+    tag: 'pick',
+    parts: [
+      { label: 'workspace', oneLine: true },
+      { label: 'path', oneLine: true, optional: true },
+      { label: 'name', oneLine: true, optional: true },
+      { label: 'items', oneLine: false, optional: true }
+    ],
+    instructions: []
+  }
+  const parse = (body: string) => actionSegments(['````pick', body, '````'].join('\n'), [pick])[0]
+
+  it('may be left out, one or all of them', () => {
+    expect(parse('workspace: app')).toEqual({ kind: 'block', tag: 'pick', fields: { workspace: 'app' } })
+    expect(parse('workspace: app\nname: x')).toEqual({ kind: 'block', tag: 'pick', fields: { workspace: 'app', name: 'x' } })
+    expect(parse('workspace: app\npath: C:\a\nitems:\none\ntwo')).toEqual({ kind: 'block', tag: 'pick', fields: { workspace: 'app', path: 'C:\a', items: 'one\ntwo' } })
+  })
+
+  it('still keeps the order, needs every required part, and refuses an empty optional part', () => {
+    expect(parse('name: x\nworkspace: app').kind).toBe('invalid')
+    expect(parse('path: C:\a').kind).toBe('invalid')
+    expect(parse('workspace: app\nname:').kind).toBe('invalid')
+  })
+
+  it('are left out of a written block without a value', () => {
+    expect(writeActionBlock(pick, { workspace: 'app', items: 'a\nb' })).toBe('````pick\nworkspace: app\nitems:\na\nb\n````')
+  })
+})
+
+describe('a card this app session carried out', () => {
+  it('reads Done once a later message makes it older, as the outcome line does at once', () => {
+    const items = [reply('a1', jumpTo('one')), user('u2')]
+    expect(actionStates(items, true, kinds, facts, new Set([key('a1')])).get(key('a1'))).toBe('done')
+    expect(actionStates(items, true, kinds, facts).get(key('a1'))).toBe('superseded')
   })
 })

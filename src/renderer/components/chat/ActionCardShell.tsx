@@ -3,11 +3,13 @@ import type { ActionState } from '../../../shared/actionBlocks'
 import { Button } from '../ui/Button'
 import type { ActionRun } from './toolContext'
 
-export function CardField({ label, children, error = false }: { label: string; children: string; error?: boolean }) {
+/** One part of a card. `verbatim` shows text exactly as it will be used, in the code look, set off like a quote. */
+export function CardField({ label, children, error = false, verbatim = false }: { label: string; children: string; error?: boolean; verbatim?: boolean }) {
+  const look = verbatim ? 'border-l-[3px] border-strong pl-3 font-mono text-[12px] leading-[18px]' : ''
   return (
     <div>
       <dt className="text-[11px] uppercase tracking-wide text-muted">{label}</dt>
-      <dd data-action-field={label.toLowerCase()} className={`whitespace-pre-wrap break-words ${error ? 'text-error' : 'text-fg'}`}>
+      <dd data-action-field={label.toLowerCase()} className={`whitespace-pre-wrap break-words ${look} ${error ? 'text-error' : 'text-fg'}`}>
         {children}
       </dd>
     </div>

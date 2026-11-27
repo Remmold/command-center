@@ -43,6 +43,12 @@ export interface MissingWorktree {
   branch: string | null
 }
 
+/** A local branch housekeeping may delete. */
+export interface MergedBranch {
+  branch: string
+  lastCommitAt: number | null
+}
+
 /** One repo, named after its main checkout's workspace when that is added, else the first of its workspaces. */
 export interface OpenWorkspaceReport {
   workspaceId: string
@@ -51,6 +57,8 @@ export interface OpenWorkspaceReport {
   mainBranch: string | null
   items: OpenWorkItem[]
   missing: MissingWorktree[]
+  /** Local branches merged into main or origin's main, checked out nowhere, no feature's and not main: what housekeeping may delete. */
+  merged: MergedBranch[]
   /** Set when a git command failed; the items are then empty. */
   error?: string
 }
@@ -65,7 +73,7 @@ export const OPEN_WORK_CAP = 15
 
 const DAY_MS = 86_400_000
 
-const newestFirst = (a: OpenWorkItem, b: OpenWorkItem): number => (b.lastCommitAt ?? -Infinity) - (a.lastCommitAt ?? -Infinity)
+const newestFirst = (a: { lastCommitAt: number | null }, b: { lastCommitAt: number | null }): number => (b.lastCommitAt ?? -Infinity) - (a.lastCommitAt ?? -Infinity)
 
 function ageOf(at: number | null, now: number): string {
   return at === null ? 'no commits' : `${Math.max(0, Math.floor((now - at) / DAY_MS))}d`
@@ -81,8 +89,8 @@ function line(item: OpenWorkItem, now: number): string {
 
 /** The digest section the main chat reads: per workspace, its untracked work newest first, at most 15 items each. */
 export function formatOpenWork(report: OpenWorkReport): string {
-  const out = ['# Open work, not tracked', '', 'Per item: kind, branch, path, days since last commit, commits ahead of main, dirty, last Claude session.']
-  const shown = report.workspaces.filter((w) => w.error !== undefined || w.items.length > 0 || w.missing.length > 0)
+  const out = ['# Open work, not tracked', '', 'Per item: kind, branch, path, days since last commit, commits ahead of main, dirty, last Claude session. Merged, deletable: local branches already merged into main, checked out nowhere and owned by no feature, newest first.']
+  const shown = report.workspaces.filter((w) => w.error !== undefined || w.items.length > 0 || w.missing.length > 0 || w.merged.length > 0)
   if (shown.length === 0) out.push('', 'Nothing open.')
   for (const w of shown) {
     out.push('', `## ${w.label} (${w.path}${w.mainBranch ? `, main ${w.mainBranch}` : ''})`)
@@ -96,6 +104,11 @@ export function formatOpenWork(report: OpenWorkReport): string {
     const missing = w.missing.slice(0, OPEN_WORK_CAP).map((m) => `${m.path} (${m.branch ?? 'detached'})`)
     if (w.missing.length > OPEN_WORK_CAP) missing.push(`and ${w.missing.length - OPEN_WORK_CAP} more`)
     if (missing.length > 0) out.push(`- missing worktrees: ${missing.join('; ')}`)
+    const merged = [...w.merged].sort(newestFirst)
+    if (merged.length > 0) {
+      const more = merged.length > OPEN_WORK_CAP ? ` … and ${merged.length - OPEN_WORK_CAP} more` : ''
+      out.push(`- Merged, deletable: ${merged.slice(0, OPEN_WORK_CAP).map((b) => b.branch).join(', ')}${more}`)
+    }
   }
   return `${out.join('\n')}\n`
 }

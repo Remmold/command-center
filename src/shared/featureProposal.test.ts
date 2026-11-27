@@ -53,9 +53,9 @@ describe('feature proposal parser', () => {
     expect(MAIN_CHAT_INSTRUCTIONS).toMatch(/press Go on the card/)
   })
 
-  it('holds the rules of every registered kind and names no kind that is not built', () => {
+  it('holds the rules of every registered kind, every kind of the spec now built', () => {
     for (const kind of ACTION_BLOCKS) for (const line of kind.instructions) expect(MAIN_CHAT_INSTRUCTIONS).toContain(line)
-    for (const unbuilt of ['send-message', 'adopt-work', 'housekeeping']) expect(MAIN_CHAT_INSTRUCTIONS).not.toContain(unbuilt)
+    expect(ACTION_BLOCKS.map((k) => k.tag)).toEqual(['feature-proposal', 'open-session', 'adopt-work', 'send-message', 'housekeeping'])
   })
 })
 
@@ -133,10 +133,11 @@ describe('proposal card state', () => {
     expect(proposalStates(items, true, ['one'], new Set([key('other')])).get(key('a1'))).toBe('live')
   })
 
-  it('ignores a remembered Go once the card is no longer the newest and no feature has its name', () => {
+  it('keeps a remembered Go Done once the card is no longer the newest; without one, a feature of its name makes it Done', () => {
     const items = [reply('a1', card('one')), user('u2')]
-    expect(proposalStates(items, true, [], new Set([key('a1')])).get(key('a1'))).toBe('superseded')
+    expect(proposalStates(items, true, [], new Set([key('a1')])).get(key('a1'))).toBe('done')
     expect(proposalStates(items, true, ['one'], new Set()).get(key('a1'))).toBe('done')
+    expect(proposalStates(items, true, [], new Set()).get(key('a1'))).toBe('superseded')
   })
 
   it('does not let a newer block that did not parse leave the older card live', () => {

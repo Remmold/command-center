@@ -4,7 +4,7 @@ import { formatOpenWork, type OpenBranch, type OpenWorkReport, type OpenWorkspac
 const DAY = 86_400_000
 const NOW = 100 * DAY
 
-const ws = (over: Partial<OpenWorkspaceReport>): OpenWorkspaceReport => ({ workspaceId: 'a', label: 'repo', path: 'C:\\r\\a', mainBranch: 'main', items: [], missing: [], ...over })
+const ws = (over: Partial<OpenWorkspaceReport>): OpenWorkspaceReport => ({ workspaceId: 'a', label: 'repo', path: 'C:\\r\\a', mainBranch: 'main', items: [], missing: [], merged: [], ...over })
 const branch = (name: string, daysAgo: number): OpenBranch => ({ kind: 'branch', branch: name, lastCommitAt: NOW - daysAgo * DAY, ahead: 1 })
 
 describe('formatOpenWork', () => {
@@ -48,5 +48,26 @@ describe('formatOpenWork', () => {
 
   it('says so when nothing is open', () => {
     expect(formatOpenWork({ scannedAt: NOW, workspaces: [ws({})] })).toContain('Nothing open.')
+  })
+})
+
+describe('the Merged, deletable line', () => {
+  const merged = (name: string, daysAgo: number | null) => ({ branch: name, lastCommitAt: daysAgo === null ? null : NOW - daysAgo * DAY })
+  const lineOf = (w: OpenWorkspaceReport): string[] => formatOpenWork({ scannedAt: NOW, workspaces: [w] }).split('\n').filter((l) => l.startsWith('- Merged, deletable:'))
+
+  it('is left out when there are none', () => {
+    expect(lineOf(ws({ items: [branch('wip', 1)] }))).toEqual([])
+  })
+
+  it('lists a few newest first, and alone still shows its workspace', () => {
+    const text = formatOpenWork({ scannedAt: NOW, workspaces: [ws({ merged: [merged('old', 40), merged('new', 1), merged('none', null), merged('mid', 9)] })] })
+    expect(text).not.toContain('Nothing open.')
+    expect(text).toContain('## repo (C:\\r\\a, main main)')
+    expect(lineOf(ws({ merged: [merged('old', 40), merged('new', 1), merged('none', null), merged('mid', 9)] }))).toEqual(['- Merged, deletable: new, mid, old, none'])
+  })
+
+  it('names at most 15, then "and N more"', () => {
+    const all = Array.from({ length: 19 }, (_, i) => merged(`m${i}`, i))
+    expect(lineOf(ws({ merged: all }))).toEqual([`- Merged, deletable: ${all.slice(0, 15).map((b) => b.branch).join(', ')} … and 4 more`])
   })
 })

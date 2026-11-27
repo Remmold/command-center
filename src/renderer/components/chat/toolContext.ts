@@ -6,6 +6,9 @@ import type { BackgroundOutcome, ForegroundCalls } from './runInBackground'
 import type { ActionState } from '../../../shared/actionBlocks'
 import type { FeatureProposal, WorkspaceOption } from '../../../shared/featureProposal'
 import type { FeatureRecord } from '../../../shared/features'
+import type { AdoptBlock, AdoptPreflight } from '../../../shared/adoptWork'
+import type { HousekeepingCheck, HousekeepingRequest, HousekeepingRun } from '../../../shared/housekeeping'
+import type { SendMessageBlock } from '../../../shared/sendMessage'
 
 /** A hosted or followed session whose transcripts folder holds its subagents' own files. */
 export interface TranscriptSource {
@@ -55,6 +58,23 @@ export interface ActionHost {
     /** Preflight: why no session can be opened for the name, or null when exactly one feature has it. */
     check: (name: string) => string | null
     open: (name: string) => ActionRun
+  }
+  adopt: {
+    /** Preflight: a fresh scan resolving the block to one open-work item, with what adopting it would do. */
+    check: (block: AdoptBlock, workspaceId: string) => Promise<AdoptPreflight>
+    go: (key: string, block: AdoptBlock, workspaceId: string) => ActionRun
+  }
+  sendMessage: {
+    /** Preflight: why the message cannot reach the feature's session, or null. */
+    check: (name: string) => string | null
+    /** Sends now, or queues until the session's turn ends; only a live card's click sends. */
+    send: (key: string, block: SendMessageBlock) => ActionRun
+  }
+  housekeeping: {
+    /** Preflight: every item checked now, as Will and Will skip. */
+    check: (request: HousekeepingRequest) => Promise<HousekeepingCheck>
+    /** Undefined when the card was not live, so nothing ran. */
+    run: (key: string, request: HousekeepingRequest) => Promise<HousekeepingRun | undefined>
   }
 }
 

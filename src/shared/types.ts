@@ -14,6 +14,8 @@ import type { SidebarLayout } from './sidebarGroups'
 import type { FeatureStageView } from './featureStage'
 import type { FeatureServersView } from './featureServers'
 import type { FeatureRecord, NewFeatureRequest, NewFeatureResult, PreflightRequest, PreflightResult } from './features'
+import type { AdoptPreflight, AdoptRequest, AdoptWorkResult } from './adoptWork'
+import type { HousekeepingCheck, HousekeepingRequest, HousekeepingRun } from './housekeeping'
 import type { JustStarted, MainChatInfo } from './mainChat'
 import type { PreviewConfig } from './previewConfig'
 import type { PreviewDraftRead } from './previewSetup'
@@ -495,6 +497,17 @@ export interface RendererApi {
     /** Every started feature's servers by feature name. */
     servers: () => Promise<Record<string, FeatureServersView>>
     onServersChanged: (cb: (name: string, view: FeatureServersView) => void) => () => void
+    /** An adopt-work card's check: a fresh scan of the workspace's repo, resolved to one item; nothing is changed. */
+    adoptPreflight: (request: AdoptRequest) => Promise<AdoptPreflight>
+    /** Makes the open work a feature; the caller then starts or resumes its session under `request.sessionId`. */
+    adopt: (request: AdoptRequest & { sessionId: string }) => Promise<AdoptWorkResult>
+    /** Undoes the last adopt of this feature, whose session did not start; resolves with what could not be put back. */
+    undoAdopt: (name: string) => Promise<string[]>
+  }
+  /** A housekeeping card's check and click: every item checked again, then only the safe ones done. */
+  housekeeping: {
+    check: (request: HousekeepingRequest) => Promise<HousekeepingCheck>
+    run: (request: HousekeepingRequest) => Promise<HousekeepingRun>
   }
   mainChat: {
     /** Makes the main chat's folder and workspace record when missing, and says how to host it. */
