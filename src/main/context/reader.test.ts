@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ContextItem } from '../../shared/context'
 import { ensureProfileLinks } from '../profiles/linker'
 import { sanitizeCwd } from '../profiles/transcripts'
-import { git } from '../util/testGit'
+import { git, isolateGitEnv } from '../util/testGit'
 import { readContext, type ContextReaderInput } from './reader'
+
+isolateGitEnv()
 
 let root: string
 let account: string
