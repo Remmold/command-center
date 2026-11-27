@@ -4,7 +4,7 @@ import type { FeatureStageView } from '../../shared/featureStage'
 import { MAIN_CHAT_PANE_ID } from '../../shared/mainChat'
 import { onePerName } from './proposalGo'
 import { sendToChat } from './startRequests'
-import { failureReport, featureFirstPrompt, featureOpenPlan, startOutcomeMessage, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
+import { failureReport, featureFirstPrompt, featureOpenPlan, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
 import type { ChatItem } from '../components/chat/types'
 import { useChatItemsStore } from './chatItemsStore'
 import { hostedSessions, openSession, startSession } from './sessionNavigation'
@@ -20,6 +20,8 @@ interface FeaturesState {
   servers: Record<string, FeatureServersView>
   /** Features whose New feature install command is running now, by name. */
   installing: Record<string, boolean>
+  /** Starts under way, from New feature or a proposal's Go; the main chat's Reset waits for them. */
+  starting: number
   dialogOpen: boolean
   load: () => Promise<void>
   openDialog: () => void
@@ -31,6 +33,7 @@ export const useFeaturesStore = create<FeaturesState>((set) => ({
   stages: {},
   servers: {},
   installing: {},
+  starting: 0,
   dialogOpen: false,
   load: async () => {
     try {
@@ -59,6 +62,16 @@ async function reload(): Promise<void> {
  * whose session did not start is undone.
  */
 export async function startFeature(request: Omit<NewFeatureRequest, 'sessionId'>): Promise<string | null> {
+  const count = (by: number): void => useFeaturesStore.setState((s) => ({ starting: Math.max(0, s.starting + by) }))
+  count(1)
+  try {
+    return await makeAndStart(request)
+  } finally {
+    count(-1)
+  }
+}
+
+async function makeAndStart(request: Omit<NewFeatureRequest, 'sessionId'>): Promise<string | null> {
   const sessionId = crypto.randomUUID()
   const made = await window.api.features.create({ ...request, sessionId })
   if (!made.ok) return made.error
@@ -74,19 +87,13 @@ export async function startFeature(request: Omit<NewFeatureRequest, 'sessionId'>
   return failureReport('session', 'the session did not start', left)
 }
 
-/** Cards this app session pressed Go on and that started, by `proposalKey`; the live card then reads Started. In memory only: a restart derives the state from the feature list. */
-export const useStartedProposalsStore = create<{ keys: ReadonlySet<string>; remember: (key: string) => void }>((set) => ({
-  keys: new Set(),
-  remember: (key) => set((s) => ({ keys: new Set(s.keys).add(key) }))
-}))
-
 /** Go on a proposal card: the same start as New feature, with the brief; a press while the same name is starting does nothing. */
 export const goProposal = onePerName(startFeature)
 
-/** Tells the main chat how a start that ran ended, as a message sent the way a typed prompt is. The start's result is already final: a send that fails only shows a toast. */
-export function tellMainChat(name: string, error: string | null): void {
-  const unreached = (): void => useToastStore.getState().show('The main chat could not be told how the feature start ended; its error shows in that chat.')
-  sendToChat(MAIN_CHAT_PANE_ID, startOutcomeMessage(name, error)).then((reached) => (reached ? undefined : unreached()), unreached)
+/** Sends the main chat one line about how a card's action ended, the way a typed prompt is sent. The action is already final: a send that fails only shows a toast. */
+export function tellMainChat(text: string): void {
+  const unreached = (): void => useToastStore.getState().show('The main chat could not be told how the action ended; the card shows the outcome.')
+  sendToChat(MAIN_CHAT_PANE_ID, text).then((reached) => (reached ? undefined : unreached()), unreached)
 }
 
 /** Follows stage changes from main; call once. */

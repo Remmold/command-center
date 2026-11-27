@@ -1,13 +1,19 @@
 import { promises as fs } from 'node:fs'
 import { dirname } from 'node:path'
+import type { JustStarted } from '../../shared/mainChat'
 
 export interface MainChatSaved {
   /** The account chosen in Settings; unset until chosen. */
   profileId?: string
   claudeSessionId?: string
+  /** The feature whose Go started the current conversation. */
+  justStarted?: JustStarted
 }
 
-/** The main chat's own small file: its account choice and the Claude id that resumes it. */
+const isJustStarted = (v: unknown): v is JustStarted =>
+  typeof v === 'object' && v !== null && typeof (v as JustStarted).name === 'string' && typeof (v as JustStarted).workspace === 'string'
+
+/** The main chat's own small file: its account choice, the Claude id that resumes it, and the feature that began it. */
 export function createMainChatStore(file: string) {
   let queue: Promise<unknown> = Promise.resolve()
   const serial = <T>(op: () => Promise<T>): Promise<T> => {
@@ -18,9 +24,11 @@ export function createMainChatStore(file: string) {
   const read = async (): Promise<MainChatSaved> => {
     try {
       const raw = JSON.parse(await fs.readFile(file, 'utf-8')) as Record<string, unknown> | null
+      const started = raw?.justStarted
       return {
         ...(typeof raw?.profileId === 'string' ? { profileId: raw.profileId } : {}),
-        ...(typeof raw?.claudeSessionId === 'string' ? { claudeSessionId: raw.claudeSessionId } : {})
+        ...(typeof raw?.claudeSessionId === 'string' ? { claudeSessionId: raw.claudeSessionId } : {}),
+        ...(isJustStarted(started) ? { justStarted: { name: started.name, workspace: started.workspace } } : {})
       }
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT' || err instanceof SyntaxError) return {}
@@ -47,6 +55,14 @@ export function createMainChatStore(file: string) {
       serial(async () => {
         const saved = await read()
         if (saved.claudeSessionId !== claudeSessionId) await write({ ...saved, claudeSessionId })
+      }),
+    /** Forgets the conversation so the next start is a fresh one; after a Go, remembers the feature it started. The account stays. */
+    reset: (justStarted?: JustStarted): Promise<MainChatSaved> =>
+      serial(async () => {
+        const { profileId } = await read()
+        const next: MainChatSaved = { ...(profileId ? { profileId } : {}), ...(justStarted ? { justStarted } : {}) }
+        await write(next)
+        return next
       })
   }
 }

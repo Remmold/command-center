@@ -1,8 +1,10 @@
 import { create } from 'zustand'
-import { MAIN_CHAT_PANE_ID, MAIN_CHAT_TITLE, mainChatFirstPrompt, type MainChatInfo } from '../../shared/mainChat'
+import { MAIN_CHAT_PANE_ID, MAIN_CHAT_TITLE, mainChatFirstPrompt, type JustStarted, type MainChatInfo } from '../../shared/mainChat'
 import type { Workspace } from '../../shared/types'
 import type { ChatItem } from '../components/chat/types'
 import { useChatItemsStore } from './chatItemsStore'
+import { useDoneActionsStore } from './doneActionsStore'
+import { useFreshStartStore } from './freshStartStore'
 import { useProjectViewsStore } from './projectViewsStore'
 import { hostedSessions, openSession, startSession } from './sessionNavigation'
 import { useToastStore } from './toastStore'
@@ -46,7 +48,7 @@ export async function openMainChat(): Promise<void> {
     const views = useProjectViewsStore.getState()
     if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
     if (!info.claudeSessionId) {
-      if (startSession(workspace, { send: { id: MAIN_CHAT_PANE_ID, prompt: mainChatFirstPrompt(info.digestFile) } })) openSession(MAIN_CHAT_PANE_ID)
+      if (startSession(workspace, { send: { id: MAIN_CHAT_PANE_ID, prompt: mainChatFirstPrompt(info.digestFile, info.justStarted) } })) openSession(MAIN_CHAT_PANE_ID)
       return
     }
     const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { id: MAIN_CHAT_PANE_ID, claudeSessionId: info.claudeSessionId })
@@ -70,6 +72,22 @@ export function rememberMainChatSession(paneId: string, claudeSessionId: string)
   void window.api.mainChat.setClaudeSession(claudeSessionId).catch((err) => console.error('failed to save the main chat session id', err))
 }
 
+/**
+ * Starts the main chat on a new Claude session; after a Go, its first prompt names the feature just started. A hosted chat
+ * restarts in place, keeping its pane (ADR 0004): it stops its process first, so no late event from the old one saves the
+ * old id back, and only then is the stored id forgotten. A chat not hosted starts fresh when next opened.
+ */
+export async function resetMainChat(justStarted?: JustStarted): Promise<void> {
+  const prepare = async (): Promise<string> => {
+    const info = await window.api.mainChat.reset(justStarted)
+    useMainChatStore.setState({ info })
+    useDoneActionsStore.getState().forget()
+    return mainChatFirstPrompt(info.digestFile, info.justStarted)
+  }
+  if (isHosted()) useFreshStartStore.getState().request(MAIN_CHAT_PANE_ID, { prepare })
+  else await prepare()
+}
+
 /** Settings: runs the main chat on another account; its old conversation stays in the old account's folder, so a new one starts. */
 export async function chooseMainChatAccount(profileId: string): Promise<void> {
   const info = await window.api.mainChat.setProfile(profileId)
@@ -77,5 +95,6 @@ export async function chooseMainChatAccount(profileId: string): Promise<void> {
   const { views } = useProjectViewsStore.getState()
   if (hosted) useProjectViewsStore.getState().closeClaudeSession(info.workspaceId, MAIN_CHAT_PANE_ID)
   if (views[info.workspaceId]) useProjectViewsStore.getState().closeProject(info.workspaceId)
+  useDoneActionsStore.getState().forget()
   useMainChatStore.setState({ info })
 }

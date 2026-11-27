@@ -124,7 +124,7 @@ test('New feature on a workspace of each of two accounts makes two Features rows
   await expect(rowOf('export-reports')).toContainText('Testing')
 })
 
-test('The main chat proposes a feature; Go on the card starts it with brief.md in its worktree and a first prompt that names it, while the main chat keeps only the read tools', async ({ launched }) => {
+test('The main chat proposes a feature; Go on the card starts it with brief.md in its worktree and a first prompt that names it, then the main chat starts afresh in place, naming the feature, with only the read tools and every workspace to read', async ({ launched }) => {
   const { page, app, root, configDir, log } = launched
   mkdirSync(join(configDir, 'skills', 'flow'), { recursive: true })
   writeFileSync(join(configDir, 'skills', 'flow', 'SKILL.md'), '# flow')
@@ -140,28 +140,50 @@ test('The main chat proposes a feature; Go on the card starts it with brief.md i
   await page.keyboard.press('Control+2')
 
   await sessionList(page).getByRole('button', { name: /Main chat/ }).click()
-  const card = chatPane(page).locator('[data-proposal-card]')
-  await expect(card).toHaveAttribute('data-proposal-state', 'live')
-  const field = (name: string) => card.locator(`[data-proposal-field="${name}"]`)
+  const card = chatPane(page).locator('[data-action-card="feature-proposal"]')
+  await expect(card).toHaveAttribute('data-action-state', 'live')
+  const field = (name: string) => card.locator(`[data-action-field="${name}"]`)
   await expect(field('workspace')).toHaveText('proposal-repo')
   await expect(field('name')).toHaveText('add-export')
   await expect(field('description')).toHaveText('Export the report as CSV')
   await expect(field('starting brief')).toContainText('exportCsv(report)')
 
   await card.getByRole('button', { name: 'Go' }).click()
-  await expect(card).toHaveAttribute('data-proposal-state', 'started')
-  await expect(card.getByRole('button', { name: 'Open session' })).toBeVisible()
-  await expect(card.locator('[data-proposal-error]')).toHaveCount(0)
 
   const worktree = join(root, 'proposal-repo-worktrees', 'add-export')
   const brief = join(worktree, '.scratch', 'add-export', 'brief.md')
-  expect(existsSync(brief)).toBe(true)
+  await expect.poll(() => existsSync(brief)).toBe(true)
   expect(readFileSync(brief, 'utf-8')).toContain('exportCsv(report)')
   await expect.poll(() => log.userTexts().some((t) => t.startsWith('/flow Export the report as CSV') && t.includes('Starting brief:') && t.includes(brief))).toBe(true)
-  await expect.poll(() => log.userTexts().some((t) => t.startsWith('[Command Center] The feature add-export started in its own session.'))).toBe(true)
 
-  const mainArgs = log.entries().find((e) => e.kind === 'argv' && (e.argv as string[]).some((a) => a.startsWith('--append-system-prompt=')))
-  const args = mainArgs?.argv as string[]
+  // A successful Go starts the main chat afresh in the same pane: the old transcript and its card go, a notice leads to the feature.
+  const notice = chatPane(page).locator('[data-main-chat-notice]')
+  await expect(notice).toContainText('Started add-export in proposal-repo')
+  await expect(chatPane(page).getByText('Fresh main chat. add-export continues in its own session')).toBeVisible()
+  await expect(chatPane(page).locator('[data-action-card="feature-proposal"]')).toHaveCount(0)
+  expect(log.userTexts().some((t) => t.startsWith('[Command Center]'))).toBe(false)
+  const fresh = log.userTexts().filter((t) => t.startsWith('You are the main chat of Command Center'))
+  expect(fresh).toHaveLength(2)
+  expect(fresh[1]).toContain('Just started: the feature add-export in workspace proposal-repo')
+
+  const mainStarts = log.entries().filter((e) => e.kind === 'argv' && (e.argv as string[]).some((a) => a.startsWith('--append-system-prompt=')))
+  expect(mainStarts).toHaveLength(2)
+  const args = mainStarts[1].argv as string[]
+  expect(args).not.toContain('--resume')
   expect(args).toContain('--tools=Read,Grep,Glob')
   expect(args).toContain('--strict-mcp-config')
+  expect((mainStarts[1].addDirs as string[]).map((d) => d.toLowerCase())).toEqual(expect.arrayContaining([repo.toLowerCase(), worktree.toLowerCase()]))
+
+  // An open-session card shows the feature's session as the Features group does, and the app sends the chat nothing.
+  const jump = chatPane(page).locator('[data-action-card="open-session"]')
+  await expect(jump).toHaveAttribute('data-action-state', 'live')
+  await expect(jump.locator('[data-action-field="feature"]')).toHaveText('add-export')
+  await jump.getByRole('button', { name: 'Open session' }).click()
+  await expect(chatPane(page).locator('[data-main-chat-notice]')).toHaveCount(0)
+  await expect(chatPane(page).getByText('Hello! This is a scripted reply from the fake Claude.')).toBeVisible()
+  expect(log.userTexts().some((t) => t.startsWith('[Command Center]'))).toBe(false)
+
+  await sessionList(page).getByRole('button', { name: /Main chat/ }).click()
+  await notice.getByRole('button', { name: 'Open session' }).click()
+  await expect(notice.getByRole('alert')).toHaveCount(0)
 })

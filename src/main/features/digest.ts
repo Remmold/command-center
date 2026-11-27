@@ -23,6 +23,8 @@ export interface DigestFeature {
   /** Null when the account's profile was removed. */
   accountName: string | null
   status: SessionStatus
+  /** The session's last reply as one line (see `replyLine`); null when none is known. */
+  lastReply: string | null
   /** Undefined until the stage was first read. */
   stage: FeatureStageView | undefined
   servers: readonly FeatureServerView[]
@@ -60,13 +62,25 @@ function rateLimitLine(limit: DigestRateLimit | null): string {
   return `limited (${limit.window} window${reset})`
 }
 
+/** How long the digest's Last reply line may get before it is cut. */
+export const REPLY_LINE_MAX = 300
+
+/** A reply as the digest shows it: whitespace collapsed to single spaces, cut after its first 300 characters. */
+export function replyLine(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return flat.length > REPLY_LINE_MAX ? `${flat.slice(0, REPLY_LINE_MAX)}…` : flat
+}
+
+const STATE: Record<SessionStatus, string> = { running: 'running', 'needs-approval': 'waiting on approval', 'your-turn': 'idle', idle: 'idle' }
+
 function block(f: DigestFeature): string[] {
   return [
     `## ${f.name}`,
     `- Workspace: ${f.workspaceName ?? 'removed'}`,
     `- Stage: ${stageLine(f.stage)}`,
     `- Tickets: ${ticketsLine(f.stage)}`,
-    `- Session: ${f.status}`,
+    `- State: ${STATE[f.status]}`,
+    `- Last reply: ${f.lastReply || 'none known'}`,
     `- Account: ${f.accountName ?? 'removed'}`,
     `- Rate limit: ${rateLimitLine(f.rateLimit)}`,
     `- Last test result: ${testLine(f.stage)}`,
@@ -77,8 +91,23 @@ function block(f: DigestFeature): string[] {
   ]
 }
 
+/** A workspace as the New feature dialog's picker labels it, with the folder the main chat may read. */
+export interface DigestWorkspace {
+  label: string
+  path: string
+}
+
+/** What the digest says besides the features: the workspaces, the work in them no feature tracks, and where test flows are kept. */
+export interface DigestPlaces {
+  workspaces?: readonly DigestWorkspace[]
+  /** The Open work section as written, or the line saying its scan failed. */
+  openWork?: string
+  testFlowsFolder?: string
+}
+
 /** Everything after the header; what decides whether the file needs writing again. */
-export function digestBody(features: readonly DigestFeature[], workspaceLabels: readonly string[] = []): string {
+export function digestBody(features: readonly DigestFeature[], places: DigestPlaces = {}): string {
+  const workspaces = places.workspaces ?? []
   const active = features.filter((f) => f.completedAt === null)
   const completed = features.filter((f) => f.completedAt !== null)
   const lines: string[] = ['# Features in progress', '']
@@ -89,15 +118,22 @@ export function digestBody(features: readonly DigestFeature[], workspaceLabels: 
     for (const f of completed) lines.push(`- ${f.name} (${f.workspaceName ?? 'workspace removed'}, ${f.accountName ?? 'account removed'})`)
     lines.push('')
   }
-  lines.push('# Workspaces', '', 'A feature proposal names one of these exactly; they are the labels of the New feature dialog.', '')
-  if (workspaceLabels.length === 0) lines.push('No workspaces.')
-  for (const label of workspaceLabels) lines.push(`- ${label}`)
+  lines.push(
+    '# Workspaces',
+    '',
+    'Each line is a workspace label, then its folder in brackets. A feature proposal names the label exactly, without the folder; they are the labels of the New feature dialog. You may read anything inside the folders.',
+    ''
+  )
+  if (workspaces.length === 0) lines.push('No workspaces.')
+  for (const w of workspaces) lines.push(`- ${w.label} (${w.path})`)
   lines.push('')
+  if (places.openWork) lines.push(places.openWork.trimEnd(), '')
+  if (places.testFlowsFolder) lines.push('# Test flows', '', `Manual test-flow documents, one per feature, are kept in ${places.testFlowsFolder}. You may read them.`, '')
   return lines.join('\n')
 }
 
-export function renderFeatureDigest(features: readonly DigestFeature[], writtenAt: number, workspaceLabels: readonly string[] = []): string {
-  return `${digestHeader(writtenAt)}\n${digestBody(features, workspaceLabels)}`
+export function renderFeatureDigest(features: readonly DigestFeature[], writtenAt: number, places: DigestPlaces = {}): string {
+  return `${digestHeader(writtenAt)}\n${digestBody(features, places)}`
 }
 
 const WINDOWS = [

@@ -25,6 +25,7 @@ export const IPC = {
   MAIN_CHAT_INFO: 'mainChat:info',
   MAIN_CHAT_SET_PROFILE: 'mainChat:setProfile',
   MAIN_CHAT_SET_CLAUDE_SESSION: 'mainChat:setClaudeSession',
+  MAIN_CHAT_RESET: 'mainChat:reset',
   PREVIEW_CONFIG_GET: 'previewConfig:get',
   PREVIEW_CONFIG_SAVE: 'previewConfig:save',
   PREVIEW_DRAFT_BEGIN: 'previewConfig:draftBegin',

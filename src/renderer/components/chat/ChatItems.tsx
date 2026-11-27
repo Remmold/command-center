@@ -13,7 +13,7 @@ import { pairCompactions } from './compaction'
 import { rowKind, timelineJoins, type RowKind } from './timelineRows'
 import { FileOpenerProvider } from './fileOpener'
 import { LabeledDivider } from '../ui/LabeledDivider'
-import { useProposalHost } from './useProposalHost'
+import { useActionHost } from './useActionHost'
 
 interface Props {
   items: ChatItem[]
@@ -80,10 +80,10 @@ export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents
   const joins = useMemo(() => timelineJoins(kinds), [kinds])
   const latestTodoId = useMemo(() => latestTodoCallId(groups.main, pairs), [groups, pairs])
   const running = useRunningCalls(view.items, busy)
-  const proposals = useProposalHost(items, busy, proposalCards)
+  const actions = useActionHost(items, busy, proposalCards)
   const context = useMemo(
-    () => ({ pairs, cwd, latestTodoId, subagentItems: groups.byCall, agents, running, background, proposals }),
-    [pairs, cwd, latestTodoId, groups, agents, running, background, proposals]
+    () => ({ pairs, cwd, latestTodoId, subagentItems: groups.byCall, agents, running, background, actions }),
+    [pairs, cwd, latestTodoId, groups, agents, running, background, actions]
   )
   const stamps = useMemo(() => groups.main.map((item) => stampTime(item, view.live?.id)), [groups, view.live])
   const days = useMemo(() => dayBreaks(stamps), [stamps])

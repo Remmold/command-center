@@ -56,7 +56,8 @@ const api: RendererApi = {
   mainChat: {
     info: () => ipcRenderer.invoke(IPC.MAIN_CHAT_INFO),
     setProfile: (profileId) => ipcRenderer.invoke(IPC.MAIN_CHAT_SET_PROFILE, profileId),
-    setClaudeSession: (claudeSessionId) => ipcRenderer.invoke(IPC.MAIN_CHAT_SET_CLAUDE_SESSION, claudeSessionId)
+    setClaudeSession: (claudeSessionId) => ipcRenderer.invoke(IPC.MAIN_CHAT_SET_CLAUDE_SESSION, claudeSessionId),
+    reset: (justStarted) => ipcRenderer.invoke(IPC.MAIN_CHAT_RESET, justStarted)
   },
   features: {
     list: () => ipcRenderer.invoke(IPC.FEATURES_LIST),

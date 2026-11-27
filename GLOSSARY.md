@@ -130,8 +130,16 @@ The git worktree and branch made for one feature, so two features of one repo ca
 _Avoid_: Sandbox, checkout
 
 **Main chat**:
-The one permanent hosted session pinned at the top of Work, for asking general questions about every feature in progress and for planning new ones. It answers and proposes only: it can write a **feature proposal**, but the app starts the feature, and only when Andreas presses Go. It never stops or completes anything.
+The one permanent hosted session pinned at the top of Work: Andreas's orchestrator for planning work across every workspace. It reads the digest, every workspace, every feature worktree and the test flows, and acts only through cards it writes, such as a **feature proposal**, which the app carries out when Andreas clicks. Its tools only read. After a successful Go, and on Reset, it starts a new conversation in the same place; a fresh chat after a Go names the feature just started.
 _Avoid_: Conductor, assistant, master session
+
+**Reset (main chat)**:
+Starting the main chat on a new Claude session in place: the old conversation and its cards go, and the chat knows only the digest again. It happens after every successful Go and from the Reset button.
+_Avoid_: Clear, new chat, restart
+
+**Action card**:
+A card the app draws in the main chat for a block the chat wrote, showing exactly what will happen, with one button. Every kind follows the same rules: only the newest card is live, and only once the chat's reply has finished; a newer card or any later message makes it read-only. The app checks the card before its button enables, and tells the chat how the action ended in one message beginning [Command Center], except where a kind says otherwise. The kinds so far are the feature proposal and Open session, which shows a feature's session and reports nothing.
+_Avoid_: Action button, tool card
 
 **Feature proposal**:
 What the main chat writes when a plan is agreed: a workspace, a name, a description and a starting brief, shown in the chat as a card with a Go button. Nothing is made until Andreas presses Go. Only the newest card is live; an older one reads as superseded, or as Started when its feature exists.
@@ -142,7 +150,7 @@ The agreed plan (goal, scope, out of scope, open questions, first steps) of a fe
 _Avoid_: Plan file, handoff
 
 **Feature digest**:
-The file the app keeps up to date for the main chat: the workspaces it can propose a feature in, then each feature with its stage, tickets done out of total, session status, test result and server state.
+The file the app keeps up to date for the main chat: each feature with its stage, tickets done out of total, state (running, waiting on approval or idle), the start of its last reply, test result and server state, then the workspaces with their folders, which it can read and propose a feature in, the open work no feature tracks, and the test-flows folder.
 _Avoid_: Status report, summary file
 
 **Feature stage**:

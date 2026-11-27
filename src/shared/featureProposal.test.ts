@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { actionKey, actionSegments, writeActionBlock, type ActionBlockKind } from './actionBlocks'
 import type { ChatItem } from './chatItems'
-import {
-  FEATURE_PROPOSAL_INSTRUCTIONS,
-  proposalKey,
-  proposalSegments,
-  proposalStates,
-  resolveWorkspace,
-  writeProposal,
-  type FeatureProposal
-} from './featureProposal'
+import { proposalSegments, resolveWorkspace, writeProposal, type FeatureProposal } from './featureProposal'
+import { ACTION_BLOCKS, MAIN_CHAT_INSTRUCTIONS, mainChatCardStates } from './mainChatActions'
 
 const proposal: FeatureProposal = { workspace: 'app · dark-mode', name: 'dark-mode', description: 'Add a dark theme', brief: 'Plan.\n\nBuild the toggle first.' }
 
@@ -55,17 +49,48 @@ describe('feature proposal parser', () => {
   })
 
   it('shows the same format in the chat instructions', () => {
-    expect(FEATURE_PROPOSAL_INSTRUCTIONS).toContain('````feature-proposal')
-    expect(FEATURE_PROPOSAL_INSTRUCTIONS).toMatch(/Go button/)
+    expect(MAIN_CHAT_INSTRUCTIONS).toContain('````feature-proposal')
+    expect(MAIN_CHAT_INSTRUCTIONS).toMatch(/press Go on the card/)
+  })
+
+  it('holds the rules of every registered kind and names no kind that is not built', () => {
+    for (const kind of ACTION_BLOCKS) for (const line of kind.instructions) expect(MAIN_CHAT_INSTRUCTIONS).toContain(line)
+    for (const unbuilt of ['send-message', 'adopt-work', 'housekeeping']) expect(MAIN_CHAT_INSTRUCTIONS).not.toContain(unbuilt)
+  })
+})
+
+describe('action blocks of more than one kind', () => {
+  const other: ActionBlockKind<'feature' | 'note'> = { tag: 'open-thing', parts: [{ label: 'feature', oneLine: true }, { label: 'note', oneLine: false }], instructions: [] }
+  const kinds = [...ACTION_BLOCKS, other]
+
+  it('reads a second kind beside a proposal with the same parser, each tagged', () => {
+    const text = `${writeProposal(proposal)}\n\nthen\n\n${writeActionBlock(other, { feature: 'dark-mode', note: 'Look at\nthe toggle.' })}`
+    const segments = actionSegments(text, kinds)
+    expect(segments.map((s) => (s.kind === 'text' ? 'text' : `${s.kind}:${s.tag}`))).toEqual(['block:feature-proposal', 'text', 'block:open-thing'])
+    expect(segments[2]).toEqual({ kind: 'block', tag: 'open-thing', fields: { feature: 'dark-mode', note: 'Look at\nthe toggle.' } })
+  })
+
+  it('leaves a block of a kind it was not given as text', () => {
+    const text = writeActionBlock(other, { feature: 'a', note: 'b' })
+    expect(actionSegments(text, ACTION_BLOCKS)).toEqual([{ kind: 'text', text }])
+    expect(proposalSegments(text)).toEqual([{ kind: 'text', text }])
+  })
+
+  it('counts a block of an unknown kind as one text segment before a proposal', () => {
+    const text = `${writeActionBlock(other, { feature: 'a', note: 'b' })}\n\n${writeProposal(proposal)}`
+    const segments = actionSegments(text, ACTION_BLOCKS)
+    expect(segments.map((s) => s.kind)).toEqual(['text', 'block'])
   })
 })
 
 const reply = (id: string, text: string): ChatItem => ({ kind: 'assistant', id, content: [{ type: 'text', text }], raw: {} as never })
 const user = (id: string): ChatItem => ({ kind: 'user', id, text: 'hi' })
-const key = (id: string, segment = 0): string => proposalKey(id, 0, segment)
+const key = (id: string, segment = 0): string => actionKey(id, 0, segment)
 const card = (name: string): string => writeProposal({ ...proposal, name })
 
 describe('proposal card state', () => {
+  const proposalStates = (items: ChatItem[], settled: boolean, featureNames: string[], done?: Set<string>) => mainChatCardStates(items, settled, { featureNames }, done)
+
   it('makes the newest card live once the chat has settled, and waiting before', () => {
     const items = [user('u1'), reply('a1', card('one'))]
     expect(proposalStates(items, true, []).get(key('a1'))).toBe('live')
@@ -92,7 +117,7 @@ describe('proposal card state', () => {
   it('reads an old card as Started when a feature has its name, else Superseded', () => {
     const items = [reply('a1', card('one')), user('u2'), reply('a2', card('two')), user('u3')]
     const states = proposalStates(items, true, ['One'])
-    expect(states.get(key('a1'))).toBe('started')
+    expect(states.get(key('a1'))).toBe('done')
     expect(states.get(key('a2'))).toBe('superseded')
   })
 
@@ -104,14 +129,14 @@ describe('proposal card state', () => {
 
   it('reads the newest card as Started only once this session pressed Go on it', () => {
     const items = [reply('a1', card('one'))]
-    expect(proposalStates(items, true, ['one'], new Set([key('a1')])).get(key('a1'))).toBe('started')
+    expect(proposalStates(items, true, ['one'], new Set([key('a1')])).get(key('a1'))).toBe('done')
     expect(proposalStates(items, true, ['one'], new Set([key('other')])).get(key('a1'))).toBe('live')
   })
 
   it('ignores a remembered Go once the card is no longer the newest and no feature has its name', () => {
     const items = [reply('a1', card('one')), user('u2')]
     expect(proposalStates(items, true, [], new Set([key('a1')])).get(key('a1'))).toBe('superseded')
-    expect(proposalStates(items, true, ['one'], new Set()).get(key('a1'))).toBe('started')
+    expect(proposalStates(items, true, ['one'], new Set()).get(key('a1'))).toBe('done')
   })
 
   it('does not let a newer block that did not parse leave the older card live', () => {

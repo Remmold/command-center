@@ -1,6 +1,10 @@
 {
   "turns": [
     {
+      "match": "^You are the main chat of Command Center[\\s\\S]*\\nJust started: the feature add-export",
+      "events": [{ "type": "text", "text": "Fresh main chat. add-export continues in its own session: press Open session above.\n\n````open-session\nfeature: add-export\n````" }]
+    },
+    {
       "match": "^You are the main chat of Command Center",
       "events": [
         {
@@ -11,7 +15,7 @@
     },
     {
       "match": "^\\[Command Center\\]",
-      "events": [{ "type": "text", "text": "Started. Continue in the feature session." }]
+      "events": [{ "type": "text", "text": "That start failed. Waiting for you." }]
     },
     {
       "match": "",
