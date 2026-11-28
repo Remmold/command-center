@@ -90,6 +90,24 @@ describe('a dropped request', () => {
   })
 })
 
+describe('a prompt job', () => {
+  it('ends done with its pictures for approval and no models, and keeps them after a restart', async () => {
+    await boot()
+    const job = request({ argv: ['--prompt', 'iron ore'] })
+    await submit(job)
+    const worker = fakes.workers.last()
+    worker.events.stdout(join(root, 'ore_1_input.png'))
+    worker.events.stdout(join(root, 'ore_2_input.png'))
+    worker.events.exit(0)
+    await service!.settled()
+    expect(await readStatus(job.id)).toMatchObject({ state: 'done', error: null, outputs: [], pictures: [join(root, 'ore_1_input.png'), join(root, 'ore_2_input.png')] })
+
+    service!.dispose()
+    await boot()
+    expect(service!.view().jobs.find((j) => j.request.id === job.id)?.status.pictures).toEqual([join(root, 'ore_1_input.png'), join(root, 'ore_2_input.png')])
+  })
+})
+
 /** Lets a job's worker finish with one model. */
 async function finish(worker = fakes.workers.last(), code = 0, glb = join(root, 'm.glb')): Promise<void> {
   if (code === 0) worker.events.stdout(glb)

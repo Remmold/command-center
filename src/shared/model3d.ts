@@ -54,6 +54,8 @@ export interface Model3dStatus {
   endedAt: string | null
   error: string | null
   outputs: Model3dOutput[]
+  /** A prompt job's pictures, made for approval before any goes to 3D; absent when there are none. */
+  pictures?: string[]
 }
 
 /** `service.json`, written only by the app. */

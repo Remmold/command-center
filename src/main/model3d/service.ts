@@ -15,7 +15,7 @@ import {
   type Model3dView
 } from '../../shared/model3d'
 import type { JobsFolder } from './jobsFolder'
-import { failedItems, progressMarker, workerError, workerOutputs } from './workerOutput'
+import { failedItems, progressMarker, workerError, workerOutputs, workerPictures } from './workerOutput'
 
 /** The app's job name on the coord board. */
 export const COORD_JOB = 'command-center-3d'
@@ -232,6 +232,7 @@ function readStoredStatus(value: unknown): Model3dStatus | null {
   if (typeof value !== 'object' || value === null) return null
   const s = value as Record<string, unknown>
   if (!STATES.includes(s.state as Model3dJobState)) return null
+  const pictures = Array.isArray(s.pictures) ? s.pictures.filter((p): p is string => typeof p === 'string' && p !== '') : []
   return {
     state: s.state as Model3dJobState,
     waitReason: textOrNull(s.waitReason),
@@ -239,7 +240,8 @@ function readStoredStatus(value: unknown): Model3dStatus | null {
     startedAt: textOrNull(s.startedAt),
     endedAt: textOrNull(s.endedAt),
     error: textOrNull(s.error),
-    outputs: Array.isArray(s.outputs) ? s.outputs.map(storedOutput).filter((o): o is Model3dOutput => o !== null) : []
+    outputs: Array.isArray(s.outputs) ? s.outputs.map(storedOutput).filter((o): o is Model3dOutput => o !== null) : [],
+    ...(pictures.length > 0 ? { pictures } : {})
   }
 }
 
@@ -735,13 +737,15 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     job.worker = null
     if (job.status.state !== 'running') return
     const outputs = await workerOutputs(job.stdout, job.request.cwd)
-    if (code === 0 && outputs.length > 0) {
+    const pictures = workerPictures(job.stdout, job.request.cwd)
+    if (code === 0 && outputs.length + pictures.length > 0) {
       const failed = failedItems(job.stderr)
-      const total = Math.max(job.status.progress?.of ?? 0, outputs.length + failed.length)
+      const total = Math.max(job.status.progress?.of ?? 0, outputs.length + pictures.length + failed.length)
+      if (pictures.length > 0) job.status = { ...job.status, pictures }
       end(job, 'done', failed.length > 0 ? `${failed.length} of ${total} failed: ${failed.join('; ')}` : null, outputs)
     }
     else {
-      const fallback = code === 0 ? 'The batch made no models.' : `The worker ended with exit code ${code ?? 'unknown'}.`
+      const fallback = code === 0 ? 'The batch made no models or pictures.' : `The worker ended with exit code ${code ?? 'unknown'}.`
       end(job, 'failed', workerError(job.stderr) ?? fallback, outputs)
     }
     await prune()

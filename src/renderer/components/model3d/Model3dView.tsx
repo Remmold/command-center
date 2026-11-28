@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Box } from 'lucide-react'
+import { Box, Image as ImageIcon } from 'lucide-react'
 import type { Model3dOutput, Model3dServerState, Model3dView as ServiceView } from '../../../shared/model3d'
 import { fileBaseName } from '../../../shared/fileLinks'
 import { useTicking } from '../../hooks/useTicking'
@@ -8,6 +8,7 @@ import { useModel3dStore } from '../../state/model3dStore'
 import { useProfilesStore } from '../../state/profilesStore'
 import { useFeaturesStore } from '../../state/featuresStore'
 import { useSessionStatusStore } from '../../state/sessionStatusStore'
+import { useToastStore } from '../../state/toastStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { duration } from '../chat/subagents'
 import { Button } from '../ui/Button'
@@ -149,7 +150,13 @@ function JobItem({ row, now }: { row: Model3dJobRow; now: number }) {
   const runAnyway = useModel3dStore((s) => s.runAnyway)
   const where = [row.session, row.workspace, row.account].filter((part): part is string => !!part).join(' · ')
   const line = row.error ?? row.waitReason ?? row.progress
-  const models = row.state === 'done' && row.outputs.length > 0 ? <JobModels outputs={row.outputs} /> : null
+  const models =
+    row.state !== 'done' || row.outputs.length + row.pictures.length === 0 ? null : (
+      <>
+        {row.outputs.length > 0 && <JobModels outputs={row.outputs} />}
+        {row.pictures.length > 0 && <JobPictures pictures={row.pictures} />}
+      </>
+    )
   return (
     <ListItem
       alignWithRows
@@ -189,6 +196,28 @@ function JobItem({ row, now }: { row: Model3dJobRow; now: number }) {
         </Button>
       )}
     </ListItem>
+  )
+}
+
+async function openPicture(path: string): Promise<void> {
+  const error = await window.api.files.openWithSystem(path)
+  if (error) useToastStore.getState().show(`Could not open ${path}: ${error}`)
+}
+
+/** A prompt job's pictures: approved in the session, an approved one goes to 3D as its own job. */
+function JobPictures({ pictures }: { pictures: string[] }) {
+  return (
+    <>
+      <NoticeLine tone="muted">Pictures to approve in the session; an approved one goes to 3D.</NoticeLine>
+      <ul aria-label="Pictures">
+        {pictures.map((p) => (
+          <ListRow key={p} nested tooltip={p} onClick={() => void openPicture(p)}>
+            <ImageIcon size={14} strokeWidth={1.75} />
+            <ListRowText primary={fileBaseName(p)} />
+          </ListRow>
+        ))}
+      </ul>
+    </>
   )
 }
 

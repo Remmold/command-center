@@ -45,9 +45,15 @@ export const useModel3dStore = create<Model3dState>((set) => {
     openError: null,
     follow: () => {
       let live = true
-      const off = window.api.model3d.onChanged((view) => set({ view }))
+      // The store outlives the 3D view, so its view may be from before the last unfollow: only a change pushed since
+      // this follow began is newer than the fresh read.
+      let pushed = false
+      const off = window.api.model3d.onChanged((view) => {
+        pushed = true
+        set({ view })
+      })
       void window.api.model3d.view().then((view) => {
-        if (live) set((s) => (s.view ? {} : { view }))
+        if (live && !pushed) set({ view })
       })
       return () => {
         live = false

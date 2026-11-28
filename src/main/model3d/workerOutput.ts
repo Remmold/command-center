@@ -50,6 +50,11 @@ export async function workerOutputs(stdout: readonly string[], cwd: string): Pro
   return outputs
 }
 
+/** The pictures a prompt job printed on stdout for approval: each `_input.png` line. */
+export function workerPictures(stdout: readonly string[], cwd: string): string[] {
+  return stdout.map((l) => l.trim()).filter((l) => l.toLowerCase().endsWith('_input.png')).map((l) => resolve(cwd, l))
+}
+
 /** `<name>: <why>` from gen3d.py's `FAILED` line for each batch item it could not make, in order. */
 export function failedItems(stderr: readonly string[]): string[] {
   return stderr.map((l) => /^\s*FAILED\s+(.+)$/.exec(l)?.[1]?.trim()).filter((l): l is string => !!l)

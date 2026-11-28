@@ -33,6 +33,8 @@ export interface Model3dJobRow {
   progress: string | null
   error: string | null
   outputs: Model3dOutput[]
+  /** A prompt job's pictures, waiting for the user's approval in the session before any goes to 3D. */
+  pictures: string[]
   /** Epoch ms the duration counts from and, once finished, to. */
   from: number
   to: number | null
@@ -103,6 +105,7 @@ export function model3dJobRows({ view, features, hosted, workspaces, profiles }:
         // A done batch keeps the lines of the items that failed.
         error: s.state === 'queued' || s.state === 'running' ? null : s.error,
         outputs: s.outputs,
+        pictures: s.pictures ?? [],
         from: Date.parse(s.startedAt ?? r.submittedAt),
         to: s.endedAt ? Date.parse(s.endedAt) : null
       }
