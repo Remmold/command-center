@@ -256,6 +256,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
       jobs.delete(old.id)
       rejected.delete(old.id)
       await (writes.get(old.id) ?? Promise.resolve())
+      writes.delete(old.id)
       await removeJobFiles(folder, old.id)
     }
     if (finished.length > HISTORY_KEEP) changed()
