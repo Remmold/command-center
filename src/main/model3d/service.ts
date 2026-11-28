@@ -28,7 +28,7 @@ export const STOP_REFUSED_RUNNING = 'A job is running. Wait for it to finish, th
 export const CANCELLED = 'Cancelled in Command Center'
 export const DROPPED_ORPHAN = 'Dropped: waiting gen3d.py ended'
 const ALREADY_FINISHED = 'The job has already finished.'
-const NO_SUCH_JOB = 'There is no such job.'
+export const NO_SUCH_JOB = 'There is no such job.'
 const CLAIM_REFUSED = 'Waiting: the coord board refused the gpu claim'
 const STDERR_KEEP = 200
 
