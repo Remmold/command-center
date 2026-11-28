@@ -4,3 +4,4 @@ Base commit: c4815e9 (main, Release 0.1.35). Branch `feat/model3d-service`, work
 
 - grill done: glossary + ADR 0011 — 49a61fa
 - 01 built: 3D service core (src/main/model3d: queue, GPU turn, server lifecycle, coord claim, idle stop, restart cleanup, history cap; session env) — b950c99, review fix e6e17d2
+- 02 resolved: gen3d.py client of the 3D service (request + wait, wait reasons, --no-wait, ui editor turn, stop refusal, --service-worker markers and client_id; fallback unchanged; pytest 20 in the skill folder; skill snapshot in model3d-skill/) — 6c5d426
