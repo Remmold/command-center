@@ -10,7 +10,7 @@ Spec: `.scratch/model3d-service/spec.md`.
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] The jobs folder is `CC_MODEL3D_JOBS`, or the default `%APPDATA%\command-center\model3d-jobs\`. The service counts as up when `service.json`'s `heartbeatAt` is under 15 s old and its pid is alive; otherwise the fallback path runs (today's code).
 - [ ] When the service is up:
