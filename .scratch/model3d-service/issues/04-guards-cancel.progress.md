@@ -1,3 +1,3 @@
-- done: wait reasons in order, Run anyway (flag + button), Cancel queued/running, orphan drop, heartbeat via a fakeable port (the two slow tests ~130 ms under full load, default limit); Vitest + e2e (b), 19 of 20
-- next: commit, then self code review of 100789b..HEAD
-- open reds: none; one unreproduced red of scenario (a) seen once (barrel stuck waiting after crate done), 0 of 16 reruns
+- done: ticket 04 resolved — 49a8114, review fix 88b7b17; Vitest 31 in service.test (each wait reason and order, Run anyway, both cancels, orphan drop), e2e (b) 4.9 s, 19 of 20
+- next: ticket 05 (viewer)
+- open reds: none; scenario (a) failed once (barrel stayed 'Waiting: crate running' 10 s after crate was done), 0 of 16 reruns, likely a slow tasklist/coord check holding the serial chain
