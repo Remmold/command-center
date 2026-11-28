@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AppPrompt } from '../../shared/appPrompts'
 import type { ContextReport } from '../../shared/context'
 import type { DriftRunView, FindingsRun, ShownFinding } from '../../shared/findings'
 import type { Workspace } from '../../shared/types'
@@ -80,9 +81,10 @@ function hosting(paneIds: string[]): void {
 
 function started(): { addDirs: string[]; prompt: string } {
   expect(startSession).toHaveBeenCalledTimes(1)
-  const [ws, options] = startSession.mock.calls[0] as [Workspace, { addDirs: string[]; send: { prompt: string } }]
+  const [ws, options] = startSession.mock.calls[0] as [Workspace, { addDirs: string[]; send: { prompt: AppPrompt } }]
   expect(ws).toBe(APP)
-  return { addDirs: options.addDirs, prompt: options.send.prompt }
+  expect(options.send.prompt).toMatchObject({ kind: 'fix-findings', title: 'Apply fixes' })
+  return { addDirs: options.addDirs, prompt: options.send.prompt.text }
 }
 
 beforeEach(() => {
@@ -101,7 +103,7 @@ describe('applyFixes', () => {
     const run = runView('r1', 'project', [APP.path])
     hosting([run.run.sessionId])
     await expect(applyFixes({ workspace: APP, report: APP_REPORT, drift: { runs: [run] }, ticked: [ticked('F1', 'r1')] })).resolves.toBeNull()
-    expect(sendToChat).toHaveBeenCalledWith(run.run.sessionId, expect.stringContaining(`${run.file}\nIds: F1`))
+    expect(sendToChat).toHaveBeenCalledWith(run.run.sessionId, expect.objectContaining({ kind: 'fix-findings', text: expect.stringContaining(`${run.file}\nIds: F1`) }))
     expect(startSession).not.toHaveBeenCalled()
   })
 

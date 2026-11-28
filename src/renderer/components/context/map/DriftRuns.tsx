@@ -1,4 +1,5 @@
 import type { DriftChecksView, DriftRunView, FindingsRun } from '../../../../shared/findings'
+import { driftCheckTitle } from '../../../../shared/driftCheck'
 import { timeAgo } from '../../../state/nowBuilding'
 import { useProjectViewsStore } from '../../../state/projectViewsStore'
 import { isHosted } from '../../../state/chatDrawer'
@@ -7,8 +8,6 @@ import { Badge } from '../../ui/Badge'
 import { Button } from '../../ui/Button'
 import { Checklist, type CheckState } from '../../ui/Checklist'
 import { SectionLabel } from '../../ui/SectionLabel'
-
-const SCOPE_TITLES: Record<FindingsRun['scope'], string> = { project: 'This project', account: 'Account', 'cross-project': 'Across projects' }
 
 const STEP_STATES: Record<FindingsRun['steps'][number]['status'], CheckState> = { pending: 'unchecked', running: 'mixed', done: 'checked' }
 
@@ -19,7 +18,7 @@ function DriftRun({ shown, now }: { shown: DriftRunView; now: number }) {
   return (
     <section aria-label={`Drift check ${run.runId}`} className="flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted">
-        <SectionLabel as="h3">Drift check · {SCOPE_TITLES[run.scope]}</SectionLabel>
+        <SectionLabel as="h3">{driftCheckTitle(run.scope)}</SectionLabel>
         {Number.isNaN(at) ? <span>checked at an unknown time</span> : <span title={new Date(at).toLocaleString()}>checked {timeAgo(at, now)}</span>}
         {shown.state === 'running' && <Badge tone="quiet">running</Badge>}
         {shown.state === 'stopped' && (

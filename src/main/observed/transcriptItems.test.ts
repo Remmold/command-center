@@ -148,6 +148,18 @@ describe('createTranscriptParser', () => {
     expect(items).toEqual([{ kind: 'user', id: 'u4', text: '/tdd', at: Date.parse(base.timestamp) }])
   })
 
+  it("marks the app's own prompts on replay, as the transcript keeps no origin: a feature's /flow start and an outcome line", () => {
+    const args = ['Export the report as CSV', '', 'Feature name: add-export', 'Feature worktree: C:\wt\add-export', 'Work in this worktree; do not make another one.'].join('\n')
+    const flow = { ...slashCommand, uuid: 'u5', message: { role: 'user', content: `<command-message>flow</command-message>\n<command-name>/flow</command-name>\n<command-args>${args}</command-args>` } }
+    const outcome = { ...humanPrompt, uuid: 'u6', message: { role: 'user', content: [{ type: 'text', text: '[Command Center] Sent to add-export. Confirm this to the user in words.' }] } }
+    const items = transcriptLinesToItems(jsonl([flow, outcome, slashCommand]).trim().split('\n'))
+    expect(items.map((i) => (i.kind === 'user' ? [i.text.split('\n')[0], i.appPrompt] : null))).toEqual([
+      ['/flow Export the report as CSV', 'feature-start'],
+      ['[Command Center] Sent to add-export. Confirm this to the user in words.', 'outcome'],
+      ['/tdd', undefined]
+    ])
+  })
+
   it('holds back a partial last line until the rest of it arrives', () => {
     const parser = createTranscriptParser()
     const text = jsonl([humanPrompt, reply])

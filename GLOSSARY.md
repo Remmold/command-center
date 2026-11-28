@@ -37,7 +37,7 @@ Moving an observed session into the command center: it is resumed as a hosted se
 _Avoid_: Handover, import
 
 **Session title**:
-The name a session goes by in lists and headers. It is "New session" before any prompt, then the first prompt, shortened, until Claude names the session (as in the extension). A rename beats both for good, and reaches the CLI, so VS Code's history shows it too.
+The name a session goes by in lists and headers. It is "New session" before any prompt, then the first prompt, shortened, until Claude names the session (as in the extension). A session the app starts with its own prompt takes the name the app knows it by, for good: the main chat is "Main chat", a feature session its feature's name, a drift check its name in Context; Claude is never asked to name it from that prompt. A rename beats all of these for good, and reaches the CLI, so VS Code's history shows it too.
 _Avoid_: Chat name, label, tab name
 
 **Session status**:

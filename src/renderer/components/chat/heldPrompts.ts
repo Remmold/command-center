@@ -1,3 +1,4 @@
+import type { AppPromptKind } from '../../../shared/appPrompts'
 import type { UserAttachment } from './types'
 
 /** A prompt sent while Claude works: already on the CLI's stdin, shown under the live turn until the CLI takes it. */
@@ -5,6 +6,7 @@ export interface HeldPrompt {
   uuid: string
   text: string
   attachments?: UserAttachment[]
+  appPrompt?: AppPromptKind
   notice?: string
 }
 

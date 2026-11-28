@@ -1,5 +1,6 @@
 import type { ContextReport } from '../../shared/context'
-import { buildDriftCheck, driftRunSkeleton, type DriftCheckKind, type DriftCheckProject } from '../../shared/driftCheck'
+import { buildDriftCheck, driftCheckTitle, driftRunSkeleton, type DriftCheckKind, type DriftCheckProject } from '../../shared/driftCheck'
+import { appPrompt } from '../../shared/appPrompts'
 import type { Workspace } from '../../shared/types'
 import { useContextStore } from './contextStore'
 import type { Picked } from './lastPick'
@@ -40,7 +41,7 @@ export async function startDriftCheck({ workspace, report, accountName, kind, pr
     file = written.file
     const { prompt, addDirs } = buildDriftCheck({ kind, sessionPath: workspace.path, account, projects, findingsFile: file })
     try {
-      started = startSession(workspace, { addDirs, send: { prompt, id: sessionId, delivered: reached.settle, ...choice } })
+      started = startSession(workspace, { addDirs, send: { prompt: appPrompt('drift-check', prompt, driftCheckTitle(kind)), id: sessionId, delivered: reached.settle, ...choice } })
     } finally {
       // A run whose session never started would show as running forever.
       if (!started) await window.api.driftChecks.discard(file)

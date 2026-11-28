@@ -1,4 +1,5 @@
 import { StringDecoder } from 'node:string_decoder'
+import { markAppPrompts } from '../../shared/appPrompts'
 import type { ChatItem, ToolResultItem, UserAttachment } from '../../shared/chatItems'
 import type { ClaudeAssistantEvent, ContentBlock } from '../../shared/types'
 import { parseVideoHeader } from '../../shared/videoContext'
@@ -85,7 +86,8 @@ function toItems(line: TranscriptLine, sidechain: boolean): ChatItem[] {
   if (!line.uuid || (line.isSidechain && !sidechain) || line.isMeta) return []
   if (line.type === 'system' && line.subtype === 'compact_boundary') return [compactBoundary(line.uuid, line)]
   if (!line.message) return []
-  return line.type === 'user' ? userItems(line.uuid, line) : line.type === 'assistant' ? assistantItems(line.uuid, line) : []
+  // The transcript keeps no origin, so the app's own prompts are known by their shape.
+  return line.type === 'user' ? markAppPrompts(userItems(line.uuid, line)) : line.type === 'assistant' ? assistantItems(line.uuid, line) : []
 }
 
 function compactBoundary(id: string, line: TranscriptLine): ChatItem {

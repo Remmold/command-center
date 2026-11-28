@@ -1,3 +1,4 @@
+import type { AppPromptKind } from './appPrompts'
 import type { ClaudeAssistantEvent, ClaudeResultEvent, ContentBlock } from './types'
 
 interface Timed {
@@ -29,6 +30,8 @@ export interface UserMessageItem extends Timed {
   text: string
   /** In the order sent; missing on items saved before attachments were kept. */
   attachments?: UserAttachment[]
+  /** Set when the app wrote and sent the prompt itself; the chat shows it as one collapsed line. */
+  appPrompt?: AppPromptKind
 }
 
 export interface AssistantMessageItem extends Timed {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { appPrompt } from '../../shared/appPrompts'
 import { deliver, dropSendsOfClosed, requestSendOnMount, sendToChat, takeChatSends, takeSendRequest } from './startRequests'
 
 describe('chat sends', () => {
@@ -9,6 +10,21 @@ describe('chat sends', () => {
     for (const send of takeChatSends('b')) deliver(send, async () => false)
     await expect(first).resolves.toBe(true)
     await expect(outside).resolves.toBe(false)
+  })
+
+  it("hand the chat an app prompt's origin with its text, and none with a typed one", async () => {
+    const sent: unknown[][] = []
+    const record = async (...args: unknown[]): Promise<boolean> => (sent.push(args), true)
+    void requestSendOnMount('m', appPrompt('main-chat', 'You are the main chat of Command Center. Hi', 'Main chat'))
+    void sendToChat('n', appPrompt('outcome', '[Command Center] Sent to x.', 'Main chat'))
+    void sendToChat('n', 'typed')
+    deliver(takeSendRequest('m')!, record)
+    for (const send of takeChatSends('n')) deliver(send, record)
+    expect(sent).toEqual([
+      ['You are the main chat of Command Center. Hi', { kind: 'main-chat', title: 'Main chat' }],
+      ['[Command Center] Sent to x.', { kind: 'outcome', title: 'Main chat' }],
+      ['typed', undefined]
+    ])
   })
 
   it('count a send that throws as not reached', async () => {

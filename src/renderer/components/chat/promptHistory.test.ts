@@ -15,6 +15,11 @@ describe('prompt history entries', () => {
     expect(historyEntries([user('look at this\n\n_[2 images attached]_'), user('\n\n_[1 file attached]_'), user('')], [])).toEqual(['look at this'])
   })
 
+  it("leave out the app's own prompts, sent or queued", () => {
+    const app: ChatItem = { kind: 'user', id: 'a', text: 'You are the main chat of Command Center. Hi', appPrompt: 'main-chat' }
+    expect(historyEntries([app, user('typed')], [{ uuid: 'q', text: '[Command Center] Sent to x.', appPrompt: 'outcome' }])).toEqual(['typed'])
+  })
+
   it('trim the prompt and skip blank ones', () => {
     expect(historyEntries([user('  padded  '), user('   ')], [])).toEqual(['padded'])
   })

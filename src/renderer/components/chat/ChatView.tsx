@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardE
 import { compactMetadata } from './compaction'
 import { ChatItems } from './ChatItems'
 import { MAIN_CHAT_PANE_ID } from '../../../shared/mainChat'
+import { outgoing, type AppOrigin, type OutgoingPrompt } from '../../../shared/appPrompts'
 import { HostedMediaTabs } from './MediaTabs'
 import { MessageColumn } from './MessageColumn'
 import { ChatBanner } from './ChatBanner'
@@ -351,7 +352,7 @@ export const ChatView = memo(function ChatView({
     })
 
     const first = takeSendRequest(paneId)
-    if (first !== undefined) deliver(first, (prompt) => handleSend(prompt))
+    if (first !== undefined) deliver(first, (text, origin) => handleSend(text, [], origin))
     else if (takeStartRequest(paneId) || (initialItemsCountRef.current === 0 && !resumeSessionId)) {
       void ensureStarted()
     }
@@ -413,7 +414,7 @@ export const ChatView = memo(function ChatView({
     appendItems(
       paneId,
       prompts.flatMap((p): ChatItem[] => [
-        { kind: 'user', id: p.uuid, text: p.text, ...(p.attachments ? { attachments: p.attachments } : {}), at: Date.now() },
+        { kind: 'user', id: p.uuid, text: p.text, ...(p.attachments ? { attachments: p.attachments } : {}), ...(p.appPrompt ? { appPrompt: p.appPrompt } : {}), at: Date.now() },
         ...(p.notice ? [{ kind: 'system' as const, id: crypto.randomUUID(), text: p.notice, at: Date.now() }] : [])
       ])
     )
@@ -681,7 +682,7 @@ export const ChatView = memo(function ChatView({
   // A fresh start keeps this pane mounted (ADR 0004): stop the process, wait for its exit, clear the conversation, then send the new first prompt.
   const freshStart = useFreshStartStore((s) => s.pending[paneId] ?? null)
   const freshRef = useRef<{ preparing: boolean; stoppedLaunch: number } | null>(null)
-  const [freshPrompt, setFreshPrompt] = useState<string | null>(null)
+  const [freshPrompt, setFreshPrompt] = useState<OutgoingPrompt | null>(null)
   useEffect(() => {
     if (!freshStart) return
     const fresh = (freshRef.current ??= { preparing: false, stoppedLaunch: -1 })
@@ -722,19 +723,23 @@ export const ChatView = memo(function ChatView({
   useEffect(() => {
     if (freshPrompt === null || resumeSessionId) return
     setFreshPrompt(null)
-    void handleSend(freshPrompt)
+    const { text, origin } = outgoing(freshPrompt)
+    void handleSend(text, [], origin)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [freshPrompt, resumeSessionId])
 
-  /** False when the process failed to start; true once the prompt went to the running process, or a command was handled here. */
-  const handleSend = async (text: string, attachments: readonly PromptAttachment[] = []): Promise<boolean> => {
+  /**
+   * False when the process failed to start; true once the prompt went to the running process, or a command was handled here.
+   * `origin` is set for a prompt the app wrote: its kind is kept on its item, and its title names a new session.
+   */
+  const handleSend = async (text: string, attachments: readonly PromptAttachment[] = [], origin?: AppOrigin): Promise<boolean> => {
     if (attachments.length === 0 && remoteControlShown && isRemoteControlCommand(text)) {
       void toggleRemoteControl()
       return true
     }
     clearSuggestion('sent')
     const uuid = crypto.randomUUID()
-    const shown = attachments.length > 0 ? { attachments: sentAttachments(attachments) } : {}
+    const shown = { ...(attachments.length > 0 ? { attachments: sentAttachments(attachments) } : {}), ...(origin ? { appPrompt: origin.kind } : {}) }
     useChatMediaStore.getState().addAttachments(paneId, mediaAttachments(uuid, attachments))
     // As the extension's `turnRunningOrQueued`: the CLI queues it and says when it starts.
     const queued = turnActive || held.length > 0
@@ -743,7 +748,7 @@ export const ChatView = memo(function ChatView({
     if (attachments.length > 0) fillThumbnails(paneId, uuid, attachments)
     toBottom()
     const firstPrompt = isFirstPrompt(paneId)
-    useProjectViewsStore.getState().notePrompt(paneId, text)
+    useProjectViewsStore.getState().notePrompt(paneId, text, origin?.title)
     const ok = await ensureStarted()
     if (!ok) {
       if (queued) {
@@ -755,7 +760,7 @@ export const ChatView = memo(function ChatView({
     if (!queued) setTurnActive(true)
     const terminals = terminalSnapshots(text, shellTabsOfSession(paneId), readTerminal)
     window.api.claude.send(paneId, promptContent(text, attachments, terminals), uuid)
-    requestClaudeTitle(paneId, text, firstPrompt)
+    requestClaudeTitle(paneId, text, firstPrompt, origin !== undefined)
     return true
   }
 
@@ -813,7 +818,7 @@ export const ChatView = memo(function ChatView({
   const onSend = useStableCallback(handleSend)
   useEffect(() => {
     if (outsideSends === 0) return
-    for (const send of takeChatSends(paneId)) deliver(send, (prompt) => onSend(prompt))
+    for (const send of takeChatSends(paneId)) deliver(send, (text, origin) => onSend(text, [], origin))
   }, [outsideSends, paneId, onSend])
   const onInterrupt = useStableCallback(handleInterrupt)
   const onDismissSuggestion = useStableCallback(() => clearSuggestion('dismissed'))
@@ -904,7 +909,7 @@ export const ChatView = memo(function ChatView({
               ))}
               {turnActive && pendingApprovals.length === 0 && <WorkingLine mode={mode} compacting={compacting} />}
               {held.map((p) => (
-                <UserPrompt key={p.uuid} id={p.uuid} text={p.text} attachments={p.attachments} queued />
+                <UserPrompt key={p.uuid} id={p.uuid} text={p.text} attachments={p.attachments} appPrompt={p.appPrompt} queued />
               ))}
               <div role="status" className="sr-only">
                 {held.length > 0 ? 'Message queued.' : ''}

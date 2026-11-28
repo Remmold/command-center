@@ -42,6 +42,13 @@ describe('chat history store', () => {
     expect(await restart().load()).toEqual({ 'pane-1': [user('u1', 'hi'), reply('m1', 'hello')], 'pane-2': [user('u2', 'other')] })
   })
 
+  it("keeps an app prompt's origin across a restart", async () => {
+    const sent: ChatItem = { kind: 'user', id: 'u1', text: '[Command Center] Sent to x. Confirm this to the user in words.', appPrompt: 'outcome', at: 5 }
+    await store.apply('pane-1', [{ kind: 'append', items: [sent, user('u2', 'typed')] }])
+    expect((await restart().load())['pane-1']).toEqual([sent, user('u2', 'typed')])
+    expect((await restart().load())['pane-1']).toEqual([sent, user('u2', 'typed')])
+  })
+
   it('applies changes in the order they came, even when not awaited', async () => {
     void store.apply('pane-1', [{ kind: 'append', items: [user('u1', 'one')] }])
     void store.apply('pane-1', [{ kind: 'clear' }])

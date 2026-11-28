@@ -95,10 +95,15 @@ const COMPONENTS: Components = {
   td: ({ children }) => <td className="border border-strong px-2 py-1">{children}</td>
 }
 
-/** Memoised: a long chat re-renders often, and parsing plus highlighting every message again is what made clicks slow. */
-export const Markdown = memo(function Markdown({ text, tone = 'normal' }: { text: string; tone?: 'normal' | 'muted' }) {
+const SIZE = { chat: 'text-[13px] leading-[1.6]', card: 'text-xs leading-[1.5]' }
+
+/**
+ * Memoised: a long chat re-renders often, and parsing plus highlighting every message again is what made clicks slow.
+ * `size` "card" sets body text at an action card's size.
+ */
+export const Markdown = memo(function Markdown({ text, tone = 'normal', size = 'chat' }: { text: string; tone?: 'normal' | 'muted'; size?: keyof typeof SIZE }) {
   return (
-    <div className={`markdown break-words text-[13px] leading-[1.6] ${tone === 'muted' ? 'text-muted' : 'text-fg'}`}>
+    <div className={`markdown break-words ${SIZE[size]} ${tone === 'muted' ? 'text-muted' : 'text-fg'}`}>
       <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={COMPONENTS} urlTransform={urlTransform}>
         {text}
       </ReactMarkdown>

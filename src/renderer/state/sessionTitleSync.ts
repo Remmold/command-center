@@ -20,11 +20,11 @@ export function isFirstPrompt(paneId: string): boolean {
   return hosted(paneId)?.session.title === NEW_SESSION_TITLE
 }
 
-/** The extension's `requestGeneratedTitle`: asks the CLI to name the session from this prompt, up to three prompts. */
-export function requestClaudeTitle(paneId: string, prompt: string, firstPrompt: boolean): void {
+/** The extension's `requestGeneratedTitle`: asks the CLI to name the session from this prompt, up to three prompts; never from a prompt the app wrote. */
+export function requestClaudeTitle(paneId: string, prompt: string, firstPrompt: boolean, fromApp = false): void {
   const found = hosted(paneId)
   if (!found || prompt.trim() === '') return
-  const next = wantsClaudeTitle(requestsByPane.get(paneId) ?? titleRequests(), found.session, firstPrompt)
+  const next = wantsClaudeTitle(requestsByPane.get(paneId) ?? titleRequests(), found.session, firstPrompt, fromApp)
   requestsByPane.set(paneId, next.requests)
   if (!next.ask) return
   void window.api.claude

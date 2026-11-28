@@ -1,16 +1,28 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ActionState } from '../../../shared/actionBlocks'
 import { Button } from '../ui/Button'
+import { Markdown } from '../ui/Markdown'
 import type { ActionRun } from './toolContext'
 
-/** One part of a card. `verbatim` shows text exactly as it will be used, in the code look, set off like a quote. */
-export function CardField({ label, children, error = false, verbatim = false }: { label: string; children: string; error?: boolean; verbatim?: boolean }) {
-  const look = verbatim ? 'border-l-[3px] border-strong pl-3 font-mono text-[12px] leading-[18px]' : ''
+export interface CardFieldProps {
+  label: string
+  children: string
+  error?: boolean
+  /** Text exactly as it will be used, set off like a quote; in the code look unless it is `markdown`. */
+  verbatim?: boolean
+  /** Long free text the chat wrote, drawn as the chat draws its replies; short fields stay plain. */
+  markdown?: boolean
+}
+
+/** One part of a card. */
+export function CardField({ label, children, error = false, verbatim = false, markdown = false }: CardFieldProps) {
+  const quote = verbatim ? 'border-l-[3px] border-strong pl-3' : ''
+  const look = markdown ? '' : `whitespace-pre-wrap ${verbatim ? 'font-mono text-[12px] leading-[18px]' : ''}`
   return (
     <div>
       <dt className="text-[11px] uppercase tracking-wide text-muted">{label}</dt>
-      <dd data-action-field={label.toLowerCase()} className={`whitespace-pre-wrap break-words ${look} ${error ? 'text-error' : 'text-fg'}`}>
-        {children}
+      <dd data-action-field={label.toLowerCase()} data-markdown={markdown || undefined} className={`break-words ${quote} ${look} ${error ? 'text-error' : 'text-fg'}`}>
+        {markdown ? <Markdown text={children} size="card" /> : children}
       </dd>
     </div>
   )

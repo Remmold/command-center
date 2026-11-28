@@ -8,6 +8,7 @@ import {
   titleRequests,
   wantsClaudeTitle
 } from './sessionTitle'
+import { MAIN_CHAT_TITLE } from '../../shared/mainChat'
 
 const fresh = { title: NEW_SESSION_TITLE }
 
@@ -107,6 +108,42 @@ describe('session title', () => {
     it('never asks for a session that was named before this process, e.g. a resumed one', () => {
       const resumed = titleAfterPrompt(fresh, 'old prompt')
       expect(wantsClaudeTitle(titleRequests(), resumed, false).ask).toBe(false)
+    })
+  })
+
+  describe('of a session whose first prompt the app wrote', () => {
+    const MAIN = 'You are the main chat of Command Center. Your instructions describe your role.'
+    const FLOW = '/flow Export the report as CSV\n\nFeature name: add-export\nFeature worktree: C:\\wt'
+
+    it('is the main chat\'s title for the main chat, never the prompt\'s text', () => {
+      expect(titleAfterPrompt(fresh, MAIN, MAIN_CHAT_TITLE).title).toBe('Main chat')
+    })
+
+    it("is the feature's name for a feature session", () => {
+      expect(titleAfterPrompt(fresh, FLOW, 'add-export').title).toBe('add-export')
+    })
+
+    it('is the name the app gave a session it hosts again, before any prompt', () => {
+      expect(titleAfterPrompt(fresh, '', 'add-export').title).toBe('add-export')
+    })
+
+    it('never asks Claude to name it from the app prompt, so a later typed prompt neither renames it nor asks', () => {
+      const first = wantsClaudeTitle(titleRequests(), fresh, true, true)
+      expect(first.ask).toBe(false)
+      const named = titleAfterPrompt(fresh, MAIN, MAIN_CHAT_TITLE)
+      expect(titleAfterPrompt(named, 'plan the export').title).toBe('Main chat')
+      expect(wantsClaudeTitle(first.requests, named, false).ask).toBe(false)
+    })
+
+    it('keeps a rename the user made, before or after', () => {
+      const renamed = titleAfterRename(fresh, 'Planning')
+      expect(titleAfterPrompt(renamed, MAIN, MAIN_CHAT_TITLE).title).toBe('Planning')
+      expect(titleAfterRename(titleAfterPrompt(fresh, FLOW, 'add-export'), 'Export').title).toBe('Export')
+    })
+
+    it('leaves a typed first prompt naming the session as before', () => {
+      expect(titleAfterPrompt(fresh, 'Fix the login bug').title).toBe('Fix the login bug')
+      expect(wantsClaudeTitle(titleRequests(), fresh, true).ask).toBe(true)
     })
   })
 })

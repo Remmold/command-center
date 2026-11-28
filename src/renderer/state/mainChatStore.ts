@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { MAIN_CHAT_PANE_ID, MAIN_CHAT_TITLE, mainChatFirstPrompt, type JustStarted, type MainChatInfo } from '../../shared/mainChat'
 import type { Workspace } from '../../shared/types'
+import { appPrompt, type AppPrompt } from '../../shared/appPrompts'
 import type { ChatItem } from '../components/chat/types'
 import { useChatItemsStore } from './chatItemsStore'
 import { useDoneActionsStore } from './doneActionsStore'
@@ -48,10 +49,10 @@ export async function openMainChat(): Promise<void> {
     const views = useProjectViewsStore.getState()
     if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
     if (!info.claudeSessionId) {
-      if (startSession(workspace, { send: { id: MAIN_CHAT_PANE_ID, prompt: mainChatFirstPrompt(info.digestFile, info.justStarted) } })) openSession(MAIN_CHAT_PANE_ID)
+      if (startSession(workspace, { send: { id: MAIN_CHAT_PANE_ID, prompt: appPrompt('main-chat', mainChatFirstPrompt(info.digestFile, info.justStarted), MAIN_CHAT_TITLE) } })) openSession(MAIN_CHAT_PANE_ID)
       return
     }
-    const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { id: MAIN_CHAT_PANE_ID, claudeSessionId: info.claudeSessionId })
+    const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { id: MAIN_CHAT_PANE_ID, claudeSessionId: info.claudeSessionId, appTitle: MAIN_CHAT_TITLE })
     if (!created) return
     const read = await window.api.observed.read(workspace.id, info.claudeSessionId)
     const history: ChatItem[] = read.ok
@@ -78,11 +79,11 @@ export function rememberMainChatSession(paneId: string, claudeSessionId: string)
  * old id back, and only then is the stored id forgotten. A chat not hosted starts fresh when next opened.
  */
 export async function resetMainChat(justStarted?: JustStarted): Promise<void> {
-  const prepare = async (): Promise<string> => {
+  const prepare = async (): Promise<AppPrompt> => {
     const info = await window.api.mainChat.reset(justStarted)
     useMainChatStore.setState({ info })
     useDoneActionsStore.getState().forget()
-    return mainChatFirstPrompt(info.digestFile, info.justStarted)
+    return appPrompt('main-chat', mainChatFirstPrompt(info.digestFile, info.justStarted), MAIN_CHAT_TITLE)
   }
   if (isHosted()) useFreshStartStore.getState().request(MAIN_CHAT_PANE_ID, { prepare })
   else await prepare()

@@ -146,7 +146,7 @@ test('The main chat proposes a feature; Go on the card starts it with brief.md i
   await expect(field('workspace')).toHaveText('proposal-repo')
   await expect(field('name')).toHaveText('add-export')
   await expect(field('description')).toHaveText('Export the report as CSV')
-  await expect(field('starting brief')).toContainText('exportCsv(report)')
+  await expect(field('starting brief').locator('pre')).toContainText('exportCsv(report)')
 
   await card.getByRole('button', { name: 'Go' }).click()
 
@@ -165,6 +165,9 @@ test('The main chat proposes a feature; Go on the card starts it with brief.md i
   const fresh = log.userTexts().filter((t) => t.startsWith('You are the main chat of Command Center'))
   expect(fresh).toHaveLength(2)
   expect(fresh[1]).toContain('Just started: the feature add-export in workspace proposal-repo')
+  // The app's own first prompt shows as one collapsed app line, never as a typed prompt.
+  await expect(chatPane(page).locator('[data-app-prompt="main-chat"]')).toHaveText('Command Center · main chat instructions')
+  await expect(chatPane(page).locator('[data-user-prompt]')).toHaveCount(0)
 
   const mainStarts = log.entries().filter((e) => e.kind === 'argv' && (e.argv as string[]).some((a) => a.startsWith('--append-system-prompt=')))
   expect(mainStarts).toHaveLength(2)
@@ -207,13 +210,15 @@ test('The main chat proposes a feature; Go on the card starts it with brief.md i
   await expect(sessionList(page).getByRole('region', { name: 'Features' }).getByRole('button', { name: /old-idea/ })).toBeVisible()
   await expect.poll(() => log.userTexts().some((t) => t.startsWith('[Command Center] Adopted spike/old-idea in proposal-repo as the feature old-idea'))).toBe(true)
   await expect(adopt).toHaveAttribute('data-action-state', 'done')
+  await expect(chatPane(page).locator('[data-app-prompt="outcome"]')).toHaveText('Command Center · Adopted spike/old-idea in proposal-repo as the feature old-idea')
 
   // A send-message card shows the message verbatim and delivers it to the idle feature session as a typed prompt.
   await send(page, 'tell add-export to run its tests')
   const message = chatPane(page).locator('[data-action-card="send-message"]')
   await expect(message).toHaveAttribute('data-action-state', 'live')
   const text = 'Run the tests, then report.\n\n```sh\npnpm test\n```'
-  await expect(message.locator('[data-action-field="message"]')).toHaveText(text)
+  await expect(message.locator('[data-action-field="message"] p')).toHaveText('Run the tests, then report.')
+  await expect(message.locator('[data-action-field="message"] pre')).toContainText('pnpm test')
   await message.getByRole('button', { name: 'Send' }).click()
   await expect.poll(() => log.userTexts().filter((t) => t === text)).toHaveLength(1)
   await expect.poll(() => log.userTexts().some((t) => t.startsWith('[Command Center] Sent to add-export.'))).toBe(true)

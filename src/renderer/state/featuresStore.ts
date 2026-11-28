@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import type { FeatureServersView } from '../../shared/featureServers'
 import type { FeatureStageView } from '../../shared/featureStage'
-import { MAIN_CHAT_PANE_ID } from '../../shared/mainChat'
+import { MAIN_CHAT_PANE_ID, MAIN_CHAT_TITLE } from '../../shared/mainChat'
 import { onePerName } from './proposalGo'
 import { sendToChat } from './startRequests'
+import { appPrompt } from '../../shared/appPrompts'
 import { adoptFailureReport, adoptedFirstPrompt, movedWorkPrompt, type AdoptRequest } from '../../shared/adoptWork'
 import { failureReport, featureFirstPrompt, featureOpenPlan, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
 import type { ChatItem } from '../components/chat/types'
@@ -80,7 +81,7 @@ async function makeAndStart(request: Omit<NewFeatureRequest, 'sessionId'>): Prom
   await reload()
   const workspace = useWorkspacesStore.getState().workspaces.find((w) => w.id === feature.workspaceId)
   const started = workspace
-    ? startSession(workspace, { send: { id: sessionId, prompt: featureFirstPrompt(feature, request.description, previewBrowser, made.briefPath) } })
+    ? startSession(workspace, { send: { id: sessionId, prompt: appPrompt('feature-start', featureFirstPrompt(feature, request.description, previewBrowser, made.briefPath), feature.name) } })
     : false
   if (started) return null
   const left = await window.api.features.discard(feature.name, request.workspaceId).catch(() => [`the feature ${feature.name} with its worktree, branch and workspace entry (the undo itself failed)`])
@@ -91,10 +92,10 @@ async function makeAndStart(request: Omit<NewFeatureRequest, 'sessionId'>): Prom
 /** Go on a proposal card: the same start as New feature, with the brief; a press while the same name is starting does nothing. */
 export const goProposal = onePerName(startFeature)
 
-/** Sends the main chat one line about how a card's action ended, the way a typed prompt is sent. The action is already final: a send that fails only shows a toast. */
+/** Sends the main chat one line about how a card's action ended, queued like a typed prompt but shown as an app line. The action is already final: a send that fails only shows a toast. */
 export function tellMainChat(text: string): void {
   const unreached = (): void => useToastStore.getState().show('The main chat could not be told how the action ended; the card shows the outcome.')
-  sendToChat(MAIN_CHAT_PANE_ID, text).then((reached) => (reached ? undefined : unreached()), unreached)
+  sendToChat(MAIN_CHAT_PANE_ID, appPrompt('outcome', text, MAIN_CHAT_TITLE)).then((reached) => (reached ? undefined : unreached()), unreached)
 }
 
 /** Follows stage changes from main; call once. */
@@ -182,7 +183,7 @@ export async function hostFeatureSession(feature: FeatureRecord): Promise<string
   if (plan.kind === 'open' || !workspace) return null
   const views = useProjectViewsStore.getState()
   if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
-  const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { id: feature.sessionId, claudeSessionId: plan.claudeSessionId })
+  const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { id: feature.sessionId, claudeSessionId: plan.claudeSessionId, appTitle: feature.name })
   if (!created) return `The session of ${feature.name} could not be hosted again.`
   useChatItemsStore.getState().appendItems(created.id, await readHistory(feature, workspace.id, plan.claudeSessionId))
   return null
@@ -228,9 +229,9 @@ export async function adoptOpenWork(request: AdoptRequest): Promise<{ ok: true; 
   let started = false
   if (workspace && preview.session) {
     started = (await hostFeatureSession(feature)) === null
-    if (started && preview.kind === 'main-checkout') void sendToChat(sessionId, movedWorkPrompt(feature, preview.mainPath, preview.mainBranch))
+    if (started && preview.kind === 'main-checkout') void sendToChat(sessionId, appPrompt('work-moved', movedWorkPrompt(feature, preview.mainPath, preview.mainBranch), feature.name))
   } else if (workspace) {
-    started = startSession(workspace, { send: { id: sessionId, prompt: adoptedFirstPrompt(feature) } })
+    started = startSession(workspace, { send: { id: sessionId, prompt: appPrompt('adopt-start', adoptedFirstPrompt(feature), feature.name) } })
   }
   if (started) return { ok: true, feature, resumed: preview.session?.id ?? null }
   const left = await window.api.features.undoAdopt(feature.name).catch(() => [`the feature ${feature.name} and what adopting changed (the undo itself failed)`])

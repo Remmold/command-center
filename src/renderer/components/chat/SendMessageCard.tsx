@@ -28,7 +28,7 @@ export function SendMessageCard({ cardKey, fields, state }: { cardKey: string; f
       failed="The message was not sent"
     >
       <CardField label="Feature">{block.feature}</CardField>
-      <CardField label="Message" verbatim>
+      <CardField label="Message" verbatim markdown>
         {block.message}
       </CardField>
       {sent?.state === 'queued' && (

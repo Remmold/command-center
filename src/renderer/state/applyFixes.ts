@@ -2,12 +2,16 @@ import type { ContextReport } from '../../shared/context'
 import { buildDriftCheck, type DriftCheckProject } from '../../shared/driftCheck'
 import { isUnder, pathKey, type DriftChecksView, type DriftRunView, type ShownFinding } from '../../shared/findings'
 import { fixMessage } from '../../shared/fixMessage'
+import { appPrompt } from '../../shared/appPrompts'
 import type { Workspace } from '../../shared/types'
 import { isHosted } from './chatDrawer'
 import { useProjectViewsStore } from './projectViewsStore'
 import { startSession } from './sessionNavigation'
 import { sendToChat, settleable } from './startRequests'
 import { useWorkspacesStore } from './workspacesStore'
+
+/** A new fix session's title, as the button that starts it. */
+const FIX_TITLE = 'Apply fixes'
 
 export interface ApplyFixes {
   workspace: Workspace
@@ -44,14 +48,14 @@ function healthAddDirs(ticked: readonly ShownFinding[], workspace: Workspace, re
 }
 
 /**
- * Sends the ticked findings to the latest shown run's session as one message, as if typed there; with that session
+ * Sends the ticked findings to the latest shown run's session as one app message; with that session
  * gone, or no run at all, a new session on the workspace is started and sent it. Resolves once the message reached a
  * running process, with null, or with what went wrong.
  */
 export async function applyFixes({ workspace, report, drift, ticked }: ApplyFixes): Promise<string | null> {
   if (ticked.length === 0) return null
   const runs = drift?.runs ?? []
-  const prompt = fixMessage(ticked, Object.fromEntries(runs.map((r) => [r.run.runId, r.file])))
+  const prompt = appPrompt('fix-findings', fixMessage(ticked, Object.fromEntries(runs.map((r) => [r.run.runId, r.file]))), FIX_TITLE)
   // The account run shows only when it is newer than the covering run, so the last one is the latest.
   const latest = runs.at(-1) ?? null
   if (latest && isHosted(useProjectViewsStore.getState().views, latest.run.sessionId)) {
