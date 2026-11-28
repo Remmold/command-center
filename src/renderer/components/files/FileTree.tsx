@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, Folder, FolderOpen, RefreshCw } from 'lucide-react'
 import { buildTree, type TreeNode } from './fileTreeUtil'
 import { getFileIcon } from './fileIcons'
@@ -7,9 +7,11 @@ interface Props {
   cwd: string
   onOpenFile: (relativePath: string) => void
   activeFilePath?: string | null
+  /** The left of the top row, beside the refresh button. */
+  heading: ReactNode
 }
 
-export function FileTree({ cwd, onOpenFile, activeFilePath }: Props) {
+export function FileTree({ cwd, onOpenFile, activeFilePath, heading }: Props) {
   const [files, setFiles] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
@@ -47,10 +49,8 @@ export function FileTree({ cwd, onOpenFile, activeFilePath }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
-      <header className="flex shrink-0 items-center justify-between border-b border-subtle px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">
-          explorer
-        </span>
+      <header className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-subtle px-2">
+        {heading}
         <button
           onClick={refresh}
           className="rounded p-1 text-muted hover:bg-list-hover hover:text-fg"

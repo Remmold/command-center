@@ -5,12 +5,11 @@ import { useChatPairStore } from '../../state/chatPairStore'
 import { useDrawerBorrow, type DrawerSlot } from '../../state/chatDrawer'
 import { useObservedStore } from '../../state/observedStore'
 import { chatOnScreen } from '../../state/projectViewLayout'
-import { useProjectViewsStore, type ProjectView } from '../../state/projectViewsStore'
+import { useProjectViewsStore, type ActivityView, type ProjectView } from '../../state/projectViewsStore'
 import { focusChatHalf } from '../../state/sessionNavigation'
 import { useShownChats } from '../../state/workSessions'
 import { mainChatWorkspace, useMainChatStore } from '../../state/mainChatStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
-import { ActivityBar } from '../ActivityBar'
 import { ChatView } from '../chat/ChatView'
 import { ObservedChatView } from '../chat/ObservedChatView'
 import { DiffPane } from '../DiffPane'
@@ -19,6 +18,7 @@ import { FileTree } from '../files/FileTree'
 import { ShellTabs } from '../ShellTabs'
 import { SourceControlPanel } from '../SourceControlPanel'
 import { EmptyState } from '../ui/EmptyState'
+import { SegmentedControl } from '../ui/SegmentedControl'
 import { EditorTabs } from './EditorTabs'
 import { EmptyHalfHeader, HostedSessionHeader, ObservedSessionHeader, type HalfPlace } from './SessionHeader'
 import { SessionList } from './SessionList'
@@ -136,7 +136,6 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
   return (
     <div className="relative flex h-full min-w-0 flex-col bg-editor">
       <div className="flex min-h-0 flex-1">
-        {ideOpen && <ActivityBar />}
         <div className="min-w-0 flex-1">
           <WorkspaceTools view={toolsView}>
             {toolsView && ideOpen && <EditorTabs view={toolsView} />}
@@ -235,6 +234,17 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
   )
 }
 
+const SIDE_VIEWS: { value: ActivityView; label: string }[] = [
+  { value: 'explorer', label: 'Files' },
+  { value: 'sourceControl', label: 'Changes' }
+]
+
+function SideViewSwitch() {
+  const activityView = useProjectViewsStore((s) => s.activityView)
+  const setActivityView = useProjectViewsStore((s) => s.setActivityView)
+  return <SegmentedControl label="Side panel" options={SIDE_VIEWS} value={activityView} onChange={setActivityView} />
+}
+
 /** The open workspace's file tree / source control on the left and its shell drawer below. */
 function WorkspaceTools({ view, children }: { view: ProjectView | undefined; children: React.ReactNode }) {
   const activityView = useProjectViewsStore((s) => s.activityView)
@@ -244,7 +254,7 @@ function WorkspaceTools({ view, children }: { view: ProjectView | undefined; chi
   const openFile = useProjectViewsStore((s) => s.openFile)
   const drawerRef = useRef<PanelImperativeHandle>(null)
 
-  const sidePanelOpen = !!view?.idePanelsOpen && activityView !== null
+  const sidePanelOpen = !!view?.idePanelsOpen
   const drawerOpen = !!view && view.shellDrawerOpen && view.shellTabs.length > 0
   const anyShells = order.some((id) => (views[id]?.shellTabs.length ?? 0) > 0)
 
@@ -287,11 +297,16 @@ function WorkspaceTools({ view, children }: { view: ProjectView | undefined; chi
       {view && sidePanelOpen && (
         <>
           <Panel id="side" defaultSize="20%" minSize="10%" collapsible>
-            {activityView === 'explorer' && (
-              <FileTree key={view.projectId} cwd={view.projectPath} onOpenFile={handleOpenFile} activeFilePath={view.activeFilePath} />
-            )}
-            {activityView === 'sourceControl' && (
-              <SourceControlPanel key={view.projectId} cwd={view.projectPath} projectId={view.projectId} />
+            {activityView === 'explorer' ? (
+              <FileTree
+                key={view.projectId}
+                cwd={view.projectPath}
+                onOpenFile={handleOpenFile}
+                activeFilePath={view.activeFilePath}
+                heading={<SideViewSwitch />}
+              />
+            ) : (
+              <SourceControlPanel key={view.projectId} cwd={view.projectPath} projectId={view.projectId} heading={<SideViewSwitch />} />
             )}
           </Panel>
           <Separator className="w-px bg-subtle hover:w-1 hover:bg-focus" />

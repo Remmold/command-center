@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronRight, GitBranch, RefreshCw } from 'lucide-react'
 import { getFileIcon } from './files/fileIcons'
 import { basename } from './files/fileTreeUtil'
@@ -8,6 +8,8 @@ import type { GitFile, GitStatusResult } from '../../shared/types'
 interface Props {
   cwd: string
   projectId: string
+  /** The left of the top row, beside the refresh button. */
+  heading: ReactNode
 }
 
 interface StagedRow {
@@ -43,7 +45,7 @@ function categorize(file: GitFile): StagedRow[] {
   return rows
 }
 
-export function SourceControlPanel({ cwd, projectId }: Props) {
+export function SourceControlPanel({ cwd, projectId, heading }: Props) {
   const [status, setStatus] = useState<GitStatusResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState('')
@@ -99,10 +101,8 @@ export function SourceControlPanel({ cwd, projectId }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
-      <header className="flex shrink-0 items-center justify-between border-b border-subtle px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">
-          source control
-        </span>
+      <header className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-subtle px-2">
+        {heading}
         <button
           onClick={refresh}
           className="rounded p-1 text-muted hover:bg-list-hover hover:text-fg"

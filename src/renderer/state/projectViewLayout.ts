@@ -26,6 +26,14 @@ export function migrateLayout(persisted: { views?: Record<string, SavedLayout> }
   }
 }
 
+/** What the side panel shows while the IDE panels are open. */
+export type ActivityView = 'explorer' | 'sourceControl'
+
+/** A saved side panel choice, falling back to the file tree; older builds could save null for a hidden side panel. */
+export function loadedActivityView(saved: unknown): ActivityView {
+  return saved === 'sourceControl' ? 'sourceControl' : 'explorer'
+}
+
 export function toggleIdePanels(view: ProjectView): ProjectView {
   return { ...view, idePanelsOpen: !view.idePanelsOpen }
 }
