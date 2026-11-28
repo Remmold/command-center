@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Model3dRequest } from '../src/shared/model3d'
 import { expect, model3dView, test, titleBar, type Model3dFakes } from './harness'
@@ -110,7 +110,7 @@ test('the 3D view on Ctrl+6: a dropped request goes queued, running with progres
   }
 })
 
-test('a job held by another job’s gpu claim waits with that reason and Cancel ends it; Run anyway skips the claim, and Cancel on the running job interrupts ComfyUI', async ({ launched }) => {
+test('a job held by another job’s gpu claim waits with that reason and Cancel ends it; Run anyway skips the claim, and Cancel on the running job interrupts ComfyUI; Open editor takes the turn and opens the editor URL, Done with editor ends it', async ({ launched }) => {
   const { page, workspace, model3d } = launched
   const view = model3dView(page)
   const job = (name: string) => view.getByRole('list', { name: '3D jobs' }).getByRole('listitem').filter({ hasText: new RegExp(`^${name}\\.png · prop`) })
@@ -135,4 +135,16 @@ test('a job held by another job’s gpu claim waits with that reason and Cancel 
   await expect(view.getByRole('button', { name: 'Stop server' })).toBeEnabled()
   const posts = (): string[] => readFileSync(join(model3d.engineDir, 'calls.log'), 'utf8').split(/\r?\n/)
   await expect.poll(posts).toEqual(expect.arrayContaining(['/interrupt', '/queue']))
+
+  writeFileSync(model3d.coordBoard, '[]')
+  const editor = view.getByRole('list', { name: '3D jobs' }).getByRole('listitem').filter({ hasText: /^Editor turn/ })
+  await view.getByRole('button', { name: 'Open editor' }).click()
+  await expect(editor).toContainText('Running')
+  await expect(editor).toContainText('Command Center')
+  const opened = (): string => (existsSync(model3d.browserLog) ? readFileSync(model3d.browserLog, 'utf8') : '')
+  await expect.poll(opened).toBe(`http://127.0.0.1:${model3d.port}\n`)
+  await expect(view.getByRole('button', { name: 'Stop server' })).toBeDisabled()
+  await view.getByRole('button', { name: 'Done with editor' }).click()
+  await expect(editor).toContainText('Done')
+  await expect(view.getByRole('button', { name: 'Open editor' })).toBeEnabled()
 })

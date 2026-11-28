@@ -28,13 +28,15 @@ export function assertFakeClaude(bin: string | undefined): void {
 
 const inside = (root: string, path: string | undefined): boolean => !!path && resolve(path).toLowerCase().startsWith(join(resolve(root), sep).toLowerCase())
 
-/** A real ComfyUI3D run may be live on the machine: the 3D service must only ever see the test's own fakes. */
+/** A real ComfyUI3D run may be live on the machine: the 3D service must only ever see the test's own fakes, and never open a browser. */
 export function assertFakeModel3d(env: Record<string, string | undefined>, root: string): void {
   const port = Number(env.CC_MODEL3D_PORT)
   const problems = [
     !Number.isInteger(port) || port <= 0 || port === 8189 ? `CC_MODEL3D_PORT is ${env.CC_MODEL3D_PORT ?? '(unset)'}` : null,
     inside(root, env.CC_MODEL3D_ENGINE_DIR) ? null : `CC_MODEL3D_ENGINE_DIR ${env.CC_MODEL3D_ENGINE_DIR ?? '(unset)'} is outside ${root}`,
-    inside(root, env.CC_MODEL3D_COORD) ? null : `CC_MODEL3D_COORD ${env.CC_MODEL3D_COORD ?? '(unset)'} is outside ${root}`
+    inside(root, env.CC_MODEL3D_COORD) ? null : `CC_MODEL3D_COORD ${env.CC_MODEL3D_COORD ?? '(unset)'} is outside ${root}`,
+    // Unset, the editor turn would open the real browser.
+    inside(root, env.CC_MODEL3D_BROWSER_LOG) ? null : `CC_MODEL3D_BROWSER_LOG ${env.CC_MODEL3D_BROWSER_LOG ?? '(unset)'} is outside ${root}`
   ].filter((p): p is string => p !== null)
   if (problems.length > 0) throw new Error(`e2e refuses to run: ${problems.join('; ')}`)
 }

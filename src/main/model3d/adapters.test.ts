@@ -137,8 +137,26 @@ describe('service.json', () => {
     const folder = await fs.mkdtemp(join(tmpdir(), 'model3d-service-'))
     const config = model3dConfig({ CC_MODEL3D_PORT: '1', CC_MODEL3D_COORD: join(folder, 'no-coord.py') }, folder)
     const file = { pid: 1, heartbeatAt: '2026-11-28T10:00:00.000Z', server: 'stopped' as const, startedByApp: false }
-    await realModel3dPorts(config).writeServiceFile(file)
+    await realModel3dPorts(config, async () => undefined).writeServiceFile(file)
     expect(JSON.parse(await fs.readFile(join(folder, 'service.json'), 'utf8'))).toEqual(file)
+    await fs.rm(folder, { recursive: true, force: true })
+  })
+})
+
+describe('opening the editor', () => {
+  it("opens http://127.0.0.1:<port> in the browser, or only logs it when e2e points the browser at a file", async () => {
+    const folder = await fs.mkdtemp(join(tmpdir(), 'model3d-browser-'))
+    const opened: string[] = []
+    const open = async (url: string): Promise<void> => void opened.push(url)
+    await realModel3dPorts(model3dConfig({ CC_MODEL3D_PORT: '4321' }, folder), open).openEditor()
+    expect(opened).toEqual(['http://127.0.0.1:4321'])
+
+    const log = join(folder, 'browser.log')
+    const config = model3dConfig({ CC_MODEL3D_PORT: '4321', CC_MODEL3D_BROWSER_LOG: log }, folder)
+    expect(config.browserLog).toBe(log)
+    await realModel3dPorts(config, open).openEditor()
+    expect(opened).toHaveLength(1)
+    expect(await fs.readFile(log, 'utf8')).toBe('http://127.0.0.1:4321\n')
     await fs.rm(folder, { recursive: true, force: true })
   })
 })

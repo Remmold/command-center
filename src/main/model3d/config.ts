@@ -10,6 +10,8 @@ export interface Model3dConfig {
   clusterProcesses: string[]
   unityProcesses: string[]
   serverLog: string
+  /** e2e only: the editor's URL is appended here instead of opening a browser. */
+  browserLog: string | null
 }
 
 export const MODEL3D_ENV = {
@@ -18,7 +20,8 @@ export const MODEL3D_ENV = {
   port: 'CC_MODEL3D_PORT',
   coordScript: 'CC_MODEL3D_COORD',
   clusterProcesses: 'CC_MODEL3D_CLUSTER_PROCESSES',
-  unityProcesses: 'CC_MODEL3D_UNITY_PROCESSES'
+  unityProcesses: 'CC_MODEL3D_UNITY_PROCESSES',
+  browserLog: 'CC_MODEL3D_BROWSER_LOG'
 } as const
 
 const list = (value: string | undefined, fallback: string[]): string[] => {
@@ -37,6 +40,7 @@ export function model3dConfig(env: Record<string, string | undefined>, folder: s
     coordScript: env[MODEL3D_ENV.coordScript] || 'C:\\dfst_coord\\coord.py',
     clusterProcesses: list(env[MODEL3D_ENV.clusterProcesses], ['SFGamelogicServer.exe', 'SFGamelogicDistributor.exe']),
     unityProcesses: list(env[MODEL3D_ENV.unityProcesses], ['Unity.exe']),
-    serverLog: join(engineDir, 'server.log')
+    serverLog: join(engineDir, 'server.log'),
+    browserLog: env[MODEL3D_ENV.browserLog] || null
   }
 }

@@ -9,9 +9,9 @@ Spec: `.scratch/model3d-service/spec.md`.
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** built — Lane 2: Open editor opens the real browser on 8189 with the real engine, and the quit question reads right
 
-- [ ] Open editor / Done with editor sit in the service header. While the editor turn is held, queued jobs read "Waiting: editor open" and the idle stop is paused.
-- [ ] An `editor` request in the jobs folder takes the same turn and opens the browser when it starts.
-- [ ] The existing quit question counts queued and running 3D jobs and an editor turn, next to sessions and terminals. Confirming cancels them with "Cancelled: app closed", stops an app-started server and unclaims `gpu`.
-- [ ] Vitest (seam 1) covers the editor turn and the quit cleanup; the quit question's count is tested next to its existing tests.
+- [x] Open editor / Done with editor sit in the service header. While the editor turn is held, queued jobs read "Waiting: editor open" and the idle stop is paused.
+- [x] An `editor` request in the jobs folder takes the same turn and opens the browser when it starts.
+- [x] The existing quit question counts queued and running 3D jobs and an editor turn, next to sessions and terminals. Confirming cancels them with "Cancelled: app closed", stops an app-started server and unclaims `gpu`.
+- [x] Vitest (seam 1) covers the editor turn and the quit cleanup; the quit question's count is tested next to its existing tests.

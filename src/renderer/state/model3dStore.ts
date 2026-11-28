@@ -5,7 +5,7 @@ import { useViewStore } from './viewStore'
 interface Model3dState {
   /** Null until main has answered once. */
   view: Model3dView | null
-  /** The last refusal of Stop server, Cancel or Run anyway, shown until the next try. */
+  /** The last refusal of Stop server, Cancel, Run anyway or the editor buttons, shown until the next try. */
   actionError: string | null
   /** The model in the viewer; it stays open while the app shows another view. */
   model: Model3dModel | null
@@ -16,6 +16,8 @@ interface Model3dState {
   stopServer: () => Promise<void>
   cancel: (id: string) => Promise<void>
   runAnyway: (id: string) => Promise<void>
+  openEditor: () => Promise<void>
+  doneWithEditor: () => Promise<void>
   openModel: (path: string) => Promise<void>
   /** Open model…: the native picker; cancelling it keeps the open model. */
   pickModel: () => Promise<void>
@@ -55,6 +57,8 @@ export const useModel3dStore = create<Model3dState>((set) => {
     stopServer: () => act(() => window.api.model3d.stopServer()),
     cancel: (id) => act(() => window.api.model3d.cancel(id)),
     runAnyway: (id) => act(() => window.api.model3d.runAnyway(id)),
+    openEditor: () => act(() => window.api.model3d.openEditor()),
+    doneWithEditor: () => act(() => window.api.model3d.doneWithEditor()),
     openModel: (path) => show(() => window.api.model3d.openModel(path)),
     pickModel: () => show(() => window.api.model3d.pickModel())
   }

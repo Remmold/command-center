@@ -1,3 +1,4 @@
+import { shell } from 'electron'
 import { model3dJobsFolder } from '../util/paths'
 import { realModel3dPorts } from './adapters'
 import { model3dConfig } from './config'
@@ -11,7 +12,7 @@ export function model3dSessionEnv(jobsFolder: string, sessionId: string): Record
 /** Starts the app's 3D service on the real engine, or the fakes the env points at. */
 export function startModel3dService(): Model3dService {
   const config = model3dConfig(process.env, model3dJobsFolder())
-  const service = createModel3dService(realModel3dPorts(config), {
+  const service = createModel3dService(realModel3dPorts(config, (url) => shell.openExternal(url)), {
     folder: config.folder,
     pid: process.pid,
     clusterProcesses: config.clusterProcesses,

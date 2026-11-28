@@ -193,6 +193,8 @@ export const IPC = {
   MODEL3D_STOP_SERVER: 'model3d:stopServer',
   MODEL3D_CANCEL: 'model3d:cancel',
   MODEL3D_RUN_ANYWAY: 'model3d:runAnyway',
+  MODEL3D_OPEN_EDITOR: 'model3d:openEditor',
+  MODEL3D_DONE_WITH_EDITOR: 'model3d:doneWithEditor',
   MODEL3D_OPEN_MODEL: 'model3d:openModel',
   MODEL3D_PICK_MODEL: 'model3d:pickModel'
 } as const

@@ -79,6 +79,9 @@ export interface Model3dView {
 /** The answer to Stop server, Cancel or Run anyway: done, or why it was refused. */
 export type Model3dActionResult = { ok: true } | { ok: false; error: string }
 
+/** The `sessionId` of a request the app made itself: Open editor in the 3D view. */
+export const MODEL3D_APP_SESSION = 'command-center'
+
 export const MODEL3D_JOB_ID = /^[A-Za-z0-9_-]{1,80}$/
 
 const isString = (v: unknown): v is string => typeof v === 'string'

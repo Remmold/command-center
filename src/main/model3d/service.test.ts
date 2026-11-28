@@ -2,7 +2,8 @@ import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { CHECKING, createModel3dService, type Model3dService } from './service'
+import { MODEL3D_APP_SESSION } from '../../shared/model3d'
+import { CHECKING, createModel3dService, IDLE_STOP_MS, type Model3dService } from './service'
 import { drop, fakePorts, readStatus, request } from './testFakes'
 
 let root: string
@@ -524,6 +525,118 @@ describe('history', () => {
   })
 })
 
+describe('the editor turn', () => {
+  const editor = (patch: Partial<ReturnType<typeof request>> = {}) => request({ kind: 'editor', argv: ['ui'], summary: 'editor', wait: false, ...patch })
+  const state = (id: string) => service!.view().jobs.find((j) => j.request.id === id)?.status
+
+  it('an editor request takes the GPU turn like a job, starts the server, opens the browser and holds the turn with the idle stop paused until Done with editor', async () => {
+    await boot()
+    const ui = editor()
+    await submit(ui)
+    expect(await readStatus(folder, ui.id)).toMatchObject({ state: 'running', waitReason: null })
+    expect(fakes.server.starts).toBe(1)
+    expect(fakes.coord.holds()).toBe(true)
+    expect(fakes.browser.opened).toBe(1)
+    expect(fakes.workers.runs).toHaveLength(0)
+
+    const job = request()
+    await submit(job)
+    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: editor open' })
+    await service!.cancel(job.id)
+    await advance(IDLE_STOP_MS + 5000)
+    expect(fakes.server.stops).toBe(0)
+    expect(state(ui.id)?.state).toBe('running')
+
+    expect(await service!.doneWithEditor()).toEqual({ ok: true })
+    await service!.settled()
+    expect(await readStatus(folder, ui.id)).toMatchObject({ state: 'done', error: null })
+    expect(fakes.browser.opened).toBe(1)
+    await advance(10 * 60_000)
+    expect(fakes.server.stops).toBe(1)
+    expect(fakes.coord.holds()).toBe(false)
+  })
+  it('Open editor drops an editor request that queues behind a running job, is refused while one is queued, and opens the browser at its turn', async () => {
+    await boot()
+    const job = request({ summary: 'crate.png, prop' })
+    await submit(job)
+    expect(await service!.openEditor()).toEqual({ ok: true })
+    await service!.settled()
+    const ui = service!.view().jobs.find((j) => j.request.kind === 'editor')!
+    expect(JSON.parse(await fs.readFile(join(folder, `${ui.request.id}.request.json`), 'utf8'))).toMatchObject({
+      kind: 'editor',
+      argv: ['ui'],
+      sessionId: MODEL3D_APP_SESSION,
+      wait: false,
+      summary: 'editor'
+    })
+    expect(await readStatus(folder, ui.request.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: crate.png, prop running' })
+    expect(await service!.openEditor()).toEqual({ ok: false, error: 'The editor is already open or queued.' })
+    expect(await service!.doneWithEditor()).toEqual({ ok: false, error: 'The editor is not open.' })
+    expect(fakes.browser.opened).toBe(0)
+
+    await finish()
+    await advance(5000)
+    expect(await readStatus(folder, ui.request.id)).toMatchObject({ state: 'running' })
+    expect(fakes.browser.opened).toBe(1)
+    expect(await service!.stopServer()).toEqual({ ok: false, error: 'The editor is open. Click Done with editor, then stop the server.' })
+    expect(service!.view().jobs.filter((j) => j.request.kind === 'editor')).toHaveLength(1)
+  })
+
+  it('Cancel on a held editor turn interrupts ComfyUI, clears its queue, ends it cancelled and gives the next job its turn', async () => {
+    await boot()
+    const ui = editor()
+    await submit(ui)
+    const job = request()
+    await submit(job)
+    expect(await service!.cancel(ui.id)).toEqual({ ok: true })
+    await service!.settled()
+    expect(await readStatus(folder, ui.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled in Command Center' })
+    expect(fakes.comfy.calls).toEqual(['interrupt', 'clearQueue'])
+    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'running' })
+    expect(fakes.workers.runs).toHaveLength(1)
+  })
+
+  it('an editor turn cancelled while the server starts leaves one server start for the next job, which waits for it', async () => {
+    fakes.server.answersOnStart = false
+    await boot()
+    const ui = editor()
+    const job = request()
+    await submit(ui)
+    await submit(job)
+    expect(service!.view().server).toBe('starting')
+    await service!.cancel(ui.id)
+    await service!.settled()
+    expect(state(job.id)?.state).toBe('running')
+    fakes.comfy.answering = true
+    await advance(1000)
+    expect(fakes.server.starts).toBe(1)
+    expect(fakes.workers.runs).toHaveLength(1)
+    expect(fakes.browser.opened).toBe(0)
+  })
+
+  it('Done with editor drops "Waiting: editor open" at once, and only a round begun after it may start the next job', async () => {
+    await boot()
+    const ui = editor()
+    const job = request()
+    await submit(ui)
+    await submit(job)
+    expect(state(job.id)?.waitReason).toBe('Waiting: editor open')
+
+    fakes.processes.hold = true
+    await service!.doneWithEditor()
+    await expect.poll(() => state(job.id)?.waitReason, { timeout: 1000 }).toBe(CHECKING)
+    expect(fakes.processes.held).toHaveLength(1)
+
+    fakes.processes.hold = false
+    await fakes.clock.advance(5000, () => new Promise((resolve) => setTimeout(resolve, 20)))
+    await expect.poll(() => state(job.id)?.state, { timeout: 1000 }).toBe('running')
+    fakes.processes.held[0]!(['Unity.exe'])
+    await service!.settled()
+    expect(state(job.id)).toMatchObject({ state: 'running', waitReason: null })
+    expect(fakes.workers.runs).toHaveLength(1)
+  })
+})
+
 describe('quitting', () => {
   it('cancels running and queued jobs, kills the worker, stops an app-started server and unclaims', async () => {
     await boot()
@@ -535,5 +648,38 @@ describe('quitting', () => {
     expect(fakes.coord.holds()).toBe(false)
     for (const r of [a, b]) expect(await readStatus(folder, r.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled: app closed' })
     expect(fakes.serviceFile.last()).toMatchObject({ server: 'stopped' })
+  })
+
+  it('counts queued and running jobs and an editor turn for the quit question, and cancels the editor turn too', async () => {
+    await boot()
+    expect(service!.unfinished()).toEqual({ jobs: 0, editor: false })
+    const ui = request({ kind: 'editor', argv: ['ui'], summary: 'editor', wait: false })
+    const [a, b, done] = [request(), request(), request()]
+    await submit(done)
+    await finish()
+    await submit(ui, a, b)
+    expect(service!.unfinished()).toEqual({ jobs: 2, editor: true })
+    await service!.shutdown()
+    for (const r of [ui, a, b]) expect(await readStatus(folder, r.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled: app closed' })
+    expect(await readStatus(folder, done.id)).toMatchObject({ state: 'done' })
+    expect(fakes.server.stops).toBe(1)
+    expect(fakes.coord.holds()).toBe(false)
+  })
+
+  it('stops a server that was still starting when the app quit, and leaves no claim', async () => {
+    let started: () => void = () => undefined
+    const start = fakes.server.start.bind(fakes.server)
+    fakes.server.start = () => new Promise((resolve) => (started = () => resolve(start())))
+    await boot()
+    await drop(folder, request())
+    await fakes.clock.advance(5000, () => new Promise((resolve) => setTimeout(resolve, 20)))
+    await expect.poll(() => service!.view().server, { timeout: 1000 }).toBe('starting')
+    const quit = service!.shutdown()
+    started()
+    await quit
+    await service!.settled()
+    expect(fakes.server.starts).toBe(1)
+    expect(fakes.server.stops).toBe(1)
+    expect(fakes.coord.holds()).toBe(false)
   })
 })

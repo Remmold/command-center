@@ -77,10 +77,15 @@ export function Model3dView() {
 function ServiceHeader({ view }: { view: ServiceView | null }) {
   const actionError = useModel3dStore((s) => s.actionError)
   const stopServer = useModel3dStore((s) => s.stopServer)
+  const openEditor = useModel3dStore((s) => s.openEditor)
+  const doneWithEditor = useModel3dStore((s) => s.doneWithEditor)
   const [confirming, setConfirming] = useState(false)
   const server = view?.server ?? 'stopped'
   const outside = server === 'ready' && view?.startedByApp === false
-  const running = view?.jobs.some((j) => j.status.state === 'running') ?? false
+  const jobs = view?.jobs ?? []
+  const running = jobs.some((j) => j.status.state === 'running')
+  const editorOpen = jobs.some((j) => j.request.kind === 'editor' && j.status.state === 'running')
+  const editorQueued = jobs.some((j) => j.request.kind === 'editor' && j.status.state === 'queued')
   const stop = (): void => {
     setConfirming(false)
     void stopServer()
@@ -90,14 +95,30 @@ function ServiceHeader({ view }: { view: ServiceView | null }) {
     <>
       <Toolbar
         actions={
-          <Button
-            variant="danger"
-            disabled={server !== 'ready' || running}
-            tooltip={running ? 'A job is running; the server stops once it is done' : 'Stop the 3D server now and free the GPU'}
-            onClick={() => (outside ? setConfirming(true) : stop())}
-          >
-            Stop server
-          </Button>
+          <>
+            {editorOpen ? (
+              <Button variant="secondary" tooltip="End the editor turn so queued jobs get the GPU" onClick={() => void doneWithEditor()}>
+                Done with editor
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={editorQueued}
+                tooltip={editorQueued ? 'The editor is queued; it opens in the browser at its GPU turn' : 'Take an editor turn and open the ComfyUI3D editor in the browser'}
+                onClick={() => void openEditor()}
+              >
+                Open editor
+              </Button>
+            )}
+            <Button
+              variant="danger"
+              disabled={server !== 'ready' || running}
+              tooltip={editorOpen ? 'The editor is open; click Done with editor first' : running ? 'A job is running; the server stops once it is done' : 'Stop the 3D server now and free the GPU'}
+              onClick={() => (outside ? setConfirming(true) : stop())}
+            >
+              Stop server
+            </Button>
+          </>
         }
       >
         <HeaderRow title="3D server" note={note} />

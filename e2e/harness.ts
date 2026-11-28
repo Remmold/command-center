@@ -193,6 +193,8 @@ export interface Model3dFakes {
   engineDir: string
   /** The fake coord board's claims file. */
   coordBoard: string
+  /** Where the app writes the editor's URL instead of opening a browser. */
+  browserLog: string
 }
 
 /** A port nothing listens on right now. */
@@ -214,7 +216,7 @@ function seedModel3dFakes(root: string, userData: string, port: number): Model3d
   for (const dir of [engineDir, coordDir]) mkdirSync(dir, { recursive: true })
   copyFileSync(join(FAKES, 'fake_comfy.py'), join(engineDir, 'main.py'))
   copyFileSync(join(FAKES, 'fake_coord.py'), join(coordDir, 'coord.py'))
-  return { jobs: join(userData, 'model3d-jobs'), port, worker: join(FAKES, 'fake_gen3d.py'), engineDir, coordBoard: join(coordDir, 'board.json') }
+  return { jobs: join(userData, 'model3d-jobs'), port, worker: join(FAKES, 'fake_gen3d.py'), engineDir, coordBoard: join(coordDir, 'board.json'), browserLog: join(root, 'model3d-browser.log') }
 }
 
 function model3dEnv(fakes: Model3dFakes): Record<string, string> {
@@ -223,6 +225,7 @@ function model3dEnv(fakes: Model3dFakes): Record<string, string> {
     CC_MODEL3D_ENGINE_PYTHON: 'python',
     CC_MODEL3D_PORT: String(fakes.port),
     CC_MODEL3D_COORD: join(dirname(fakes.coordBoard), 'coord.py'),
+    CC_MODEL3D_BROWSER_LOG: fakes.browserLog,
     // Darkfall or Unity may run on this machine; the fakes' jobs must not wait on them.
     CC_MODEL3D_CLUSTER_PROCESSES: 'cc-e2e-no-cluster.exe',
     CC_MODEL3D_UNITY_PROCESSES: 'cc-e2e-no-unity.exe'

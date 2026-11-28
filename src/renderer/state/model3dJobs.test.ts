@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Model3dJob, Model3dRequest, Model3dStatus, Model3dView } from '../../shared/model3d'
+import { MODEL3D_APP_SESSION, type Model3dJob, type Model3dRequest, type Model3dStatus, type Model3dView } from '../../shared/model3d'
 import { jobDuration, model3dJobRows, type Model3dRowsInput } from './model3dJobs'
 
 const req = (id: string, over: Partial<Model3dRequest> = {}): Model3dRequest => ({
@@ -67,6 +67,21 @@ describe('3D view job rows', () => {
   it('reads "Outside the app · <cwd folder>" for an unknown session, the default account for an empty configDir, and no workspace outside them all', () => {
     const [row] = model3dJobRows({ ...INPUT, view: view({ request: req('a', { sessionId: 'pane-9', cwd: 'D:\\art\\props\\' }), status: status() }) })
     expect(row).toMatchObject({ session: 'Outside the app · props', workspace: null, account: 'Personal' })
+  })
+
+  it('reads an editor turn as "Editor turn", and one from Open editor as asked by Command Center, in no workspace', () => {
+    const editor = { kind: 'editor' as const, argv: ['ui'], summary: 'editor', wait: false }
+    const rows = model3dJobRows({
+      ...INPUT,
+      view: view(
+        { request: req('app', { ...editor, sessionId: MODEL3D_APP_SESSION, cwd: 'C:/src/game/model3d-jobs', submittedAt: '2026-11-28T10:00:05.000Z' }), status: status() },
+        { request: req('ui', { ...editor, sessionId: 'pane-1' }), status: status() }
+      )
+    })
+    expect(rows.map((r) => [r.summary, r.session, r.workspace])).toEqual([
+      ['Editor turn', 'Command Center', null],
+      ['Editor turn', 'Make the axe', 'game']
+    ])
   })
 
   it('shows an unknown configDir as its folder', () => {

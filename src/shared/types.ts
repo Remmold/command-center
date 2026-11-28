@@ -804,6 +804,10 @@ export interface RendererApi {
     cancel: (id: string) => Promise<Model3dActionResult>
     /** Run anyway on a waiting job: skips the cluster, Unity and coord checks, never the GPU turn. */
     runAnyway: (id: string) => Promise<Model3dActionResult>
+    /** Open editor: an editor turn, queued like a job; the browser opens at its turn. */
+    openEditor: () => Promise<Model3dActionResult>
+    /** Done with editor: ends the held editor turn. */
+    doneWithEditor: () => Promise<Model3dActionResult>
     /** A `.glb` for the viewer, through the media gate, with its sheet and `.json` stats. */
     openModel: (path: string) => Promise<Model3dOpenResult>
     /** Open model…: a native picker for one `.glb`, then as openModel; null when cancelled. */

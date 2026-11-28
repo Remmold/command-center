@@ -1,4 +1,4 @@
-import type { Model3dJobState, Model3dOutput, Model3dProgress, Model3dView } from '../../shared/model3d'
+import { MODEL3D_APP_SESSION, type Model3dJobState, type Model3dOutput, type Model3dProgress, type Model3dView } from '../../shared/model3d'
 import { DEFAULT_PROFILE_ID } from '../../shared/types'
 
 export interface Model3dRowsInput {
@@ -15,7 +15,7 @@ export interface Model3dJobRow {
   summary: string
   state: Model3dJobState
   stateLabel: string
-  /** The session title, or "Outside the app · <cwd folder>". */
+  /** The session title, "Command Center" for Open editor, or "Outside the app · <cwd folder>". */
   session: string
   workspace: string | null
   account: string
@@ -59,15 +59,16 @@ export function model3dJobRows({ view, sessions, workspaces, profiles }: Model3d
     .sort((a, b) => Date.parse(b.request.submittedAt) - Date.parse(a.request.submittedAt) || b.request.id.localeCompare(a.request.id))
     .map(({ request: r, status: s }) => {
       const cwd = pathKey(r.cwd)
-      const title = r.sessionId ? titles.get(r.sessionId) : undefined
+      const fromApp = r.sessionId === MODEL3D_APP_SESSION
+      const title = fromApp ? 'Command Center' : r.sessionId ? titles.get(r.sessionId) : undefined
       return {
         id: r.id,
         kind: r.kind,
-        summary: r.summary,
+        summary: r.kind === 'editor' ? 'Editor turn' : r.summary,
         state: s.state,
         stateLabel: STATE_LABEL[s.state],
         session: title ?? `Outside the app · ${folderName(r.cwd)}`,
-        workspace: folders.find((f) => isInside(f.key, cwd))?.name ?? null,
+        workspace: fromApp ? null : (folders.find((f) => isInside(f.key, cwd))?.name ?? null),
         account: account(r.configDir),
         waitReason: s.state === 'queued' ? s.waitReason : null,
         runAnyway: r.runAnyway,

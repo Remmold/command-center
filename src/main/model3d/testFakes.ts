@@ -169,6 +169,14 @@ export class FakeProcesses {
   }
 }
 
+/** The browser: counts each time the app opens the editor's page. */
+export class FakeBrowser {
+  opened = 0
+  async openEditor(): Promise<void> {
+    this.opened++
+  }
+}
+
 /** service.json kept in memory: the heartbeat writes it every 5 s of fake time, and an hour of that on disk is slow. */
 export class FakeServiceFile {
   writes: Model3dServiceFile[] = []
@@ -191,6 +199,7 @@ export function fakePorts(): {
   workers: FakeWorkers
   processes: FakeProcesses
   serviceFile: FakeServiceFile
+  browser: FakeBrowser
 } {
   const clock = new FakeClock()
   const coord = new FakeCoord()
@@ -199,6 +208,7 @@ export function fakePorts(): {
   const workers = new FakeWorkers(comfy.calls)
   const processes = new FakeProcesses()
   const serviceFile = new FakeServiceFile()
+  const browser = new FakeBrowser()
   const ports: Model3dPorts = {
     clock,
     coord,
@@ -207,9 +217,10 @@ export function fakePorts(): {
     workers,
     processes,
     watchFolder: () => () => undefined,
-    writeServiceFile: (file) => serviceFile.write(file)
+    writeServiceFile: (file) => serviceFile.write(file),
+    openEditor: () => browser.openEditor()
   }
-  return { ports, clock, coord, comfy, server, workers, processes, serviceFile }
+  return { ports, clock, coord, comfy, server, workers, processes, serviceFile, browser }
 }
 
 let seq = 0

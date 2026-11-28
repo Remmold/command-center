@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import {
+  MODEL3D_APP_SESSION,
   parseModel3dRequest,
   type Model3dActionResult,
   type Model3dJob,
@@ -25,6 +26,9 @@ export const READY_POLL_MS = 1_000
 export const HISTORY_KEEP = 50
 export const CANCELLED_APP_CLOSED = 'Cancelled: app closed'
 export const STOP_REFUSED_RUNNING = 'A job is running. Wait for it to finish, then stop the server.'
+export const STOP_REFUSED_EDITOR = 'The editor is open. Click Done with editor, then stop the server.'
+const EDITOR_NOT_OPEN = 'The editor is not open.'
+const EDITOR_TAKEN = 'The editor is already open or queued.'
 export const CANCELLED = 'Cancelled in Command Center'
 export const DROPPED_ORPHAN = 'Dropped: waiting gen3d.py ended'
 const ALREADY_FINISHED = 'The job has already finished.'
@@ -118,6 +122,8 @@ export interface Model3dPorts {
   watchFolder(folder: string, onChange: () => void): () => void
   /** Writes `service.json` atomically: on start, on each server change and as the 5 s heartbeat. */
   writeServiceFile(file: Model3dServiceFile): Promise<void>
+  /** Opens the editor's page, `http://127.0.0.1:<port>`, in the browser. */
+  openEditor(): Promise<void>
 }
 
 export interface Model3dServiceConfig {
@@ -401,18 +407,15 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     turn = job
     setStatus(job, { state: 'running', waitReason: null, startedAt: iso(clock.now()), progress: null })
     cancelIdleTimer()
-    if (job.request.kind === 'editor') {
-      end(job, 'failed', 'The editor turn is not supported yet.')
-      return
-    }
     track(() => runTurn(job))
   }
 
   async function runTurn(job: Job): Promise<void> {
     const result = await ensureServer(job.request.runAnyway)
     await serial(async () => {
-      if (turn !== job || job.status.state !== 'running') return
-      if (result.kind === 'ready') return launchWorker(job)
+      // Ended while the server came up: the idle stop is weighed again, or a server started for nobody would run on.
+      if (turn !== job || job.status.state !== 'running') return reconsiderIdle()
+      if (result.kind === 'ready') return job.request.kind === 'editor' ? openEditor() : launchWorker(job)
       freeTurn()
       if (result.kind === 'requeue') {
         // Checks again on the next 5 s round, not at once: a board that refuses without showing a holder must not spin.
@@ -426,9 +429,19 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     })
   }
 
+  function openEditor(): void {
+    track(() => ports.openEditor())
+  }
+
   async function takeClaim(runAnyway: boolean): Promise<boolean> {
     if (claimed) return true
     claimed = await coord.claim()
+    // The app quit while the board answered: shutdown has already let go of the claim, so this one is given back.
+    if (disposed && claimed) {
+      claimed = false
+      await coord.unclaim()
+      return false
+    }
     return claimed || runAnyway
   }
 
@@ -438,8 +451,27 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     await coord.unclaim()
   }
 
-  /** The server for a turn: the app's own, one already answering outside the app, or a fresh start; the `gpu` claim is taken first. */
+  // A turn that takes over while an earlier one still brings the server up waits for it, so the server starts once.
+  // That wait is on the earlier start, which counts itself, so `settled()` does not count the waiter.
+  let bringing: Promise<TurnResult> | null = null
   async function ensureServer(runAnyway: boolean): Promise<TurnResult> {
+    while (bringing) {
+      const earlier = bringing
+      done()
+      await earlier.catch(() => undefined)
+      inflight++
+    }
+    const mine = bringUpServer(runAnyway)
+    bringing = mine
+    try {
+      return await mine
+    } finally {
+      if (bringing === mine) bringing = null
+    }
+  }
+
+  /** The server for a turn: the app's own, one already answering outside the app, or a fresh start; the `gpu` claim is taken first. */
+  async function bringUpServer(runAnyway: boolean): Promise<TurnResult> {
     if (stopping) await stopping
     if (server === 'ready' && startedByApp && proc) return { kind: 'ready' }
     if (await comfy.up()) {
@@ -463,6 +495,11 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     } catch (err) {
       await serverGone()
       return { kind: 'failed', error: `The 3D server could not start: ${err instanceof Error ? err.message : String(err)}` }
+    }
+    if (disposed) {
+      await started.stop()
+      await serverGone()
+      return { kind: 'failed', error: CANCELLED_APP_CLOSED }
     }
     proc = started
     started.onExit(() => track(() => serial(async () => {
@@ -625,10 +662,15 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
       return new Promise<void>((resolve) => settledWaiters.push(resolve)).then(() => this.settled())
     },
     view,
+    /** What the quit question counts: queued and running 3D jobs, and whether an editor turn is queued or held. */
+    unfinished(): { jobs: number; editor: boolean } {
+      const open = [...jobs.values()].filter((j) => !isFinished(j.status.state))
+      return { jobs: open.filter((j) => j.request.kind !== 'editor').length, editor: open.some((j) => j.request.kind === 'editor') }
+    },
     /** Stop server: at once, whoever started it; refused while a job holds the GPU turn. */
     stopServer(): Promise<Model3dActionResult> {
       return serial(async () => {
-        if (turn) return { ok: false as const, error: STOP_REFUSED_RUNNING }
+        if (turn) return { ok: false as const, error: turn.request.kind === 'editor' ? STOP_REFUSED_EDITOR : STOP_REFUSED_RUNNING }
         cancelIdleTimer()
         if (server === 'ready' && !startedByApp) {
           server = 'stopping'
@@ -648,6 +690,44 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
         if (isFinished(job.status.state)) return { ok: false as const, error: ALREADY_FINISHED }
         if (job.status.state === 'running') await cancelRunning(job)
         else end(job, 'cancelled', CANCELLED)
+        await prune()
+        await pump()
+        return { ok: true as const }
+      })
+    },
+    /** Open editor: an editor request from the app itself, queued like a job; one editor turn at a time. */
+    openEditor(): Promise<Model3dActionResult> {
+      return serial(async () => {
+        if ([...jobs.values()].some((j) => j.request.kind === 'editor' && !isFinished(j.status.state))) return { ok: false as const, error: EDITOR_TAKEN }
+        const request: Model3dRequest = {
+          id: `editor-${randomUUID()}`,
+          kind: 'editor',
+          argv: ['ui'],
+          cwd: folder,
+          python: '',
+          script: '',
+          waiterPid: config.pid,
+          wait: false,
+          sessionId: MODEL3D_APP_SESSION,
+          configDir: '',
+          submittedAt: iso(clock.now()),
+          summary: 'editor',
+          runAnyway: false
+        }
+        await writeJsonAtomic(requestFile(folder, request.id), request)
+        const job: Job = { request, status: freshStatus(), stdout: [], stderr: [], worker: null, waitIsTurn: false }
+        jobs.set(request.id, job)
+        needFresh()
+        persist(job)
+        await pump()
+        return { ok: true as const }
+      })
+    },
+    /** Done with editor: the held editor turn ends done and the next job gets the GPU. */
+    doneWithEditor(): Promise<Model3dActionResult> {
+      return serial(async () => {
+        if (turn?.request.kind !== 'editor') return { ok: false as const, error: EDITOR_NOT_OPEN }
+        end(turn, 'done', null)
         await prune()
         await pump()
         return { ok: true as const }

@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { appendFile } from 'node:fs/promises'
 import { existsSync, openSync, closeSync, watch } from 'node:fs'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -239,8 +240,9 @@ function watchFolder(folder: string, onChange: () => void): () => void {
   }
 }
 
-/** The real outside world: tasklist, coord.py, ComfyUI3D over HTTP and `/ws`, and child processes. */
-export function realModel3dPorts(config: Model3dConfig): Model3dPorts {
+/** The real outside world: tasklist, coord.py, ComfyUI3D over HTTP and `/ws`, child processes and the browser (`openExternal`). */
+export function realModel3dPorts(config: Model3dConfig, openExternal: (url: string) => Promise<void>): Model3dPorts {
+  const editorUrl = `http://127.0.0.1:${config.port}`
   return {
     clock,
     processes: processList,
@@ -249,6 +251,7 @@ export function realModel3dPorts(config: Model3dConfig): Model3dPorts {
     server: serverLauncher(config),
     workers: workerRunner,
     watchFolder,
-    writeServiceFile: (file) => writeJsonAtomic(join(config.folder, SERVICE_FILE), file)
+    writeServiceFile: (file) => writeJsonAtomic(join(config.folder, SERVICE_FILE), file),
+    openEditor: () => (config.browserLog ? appendFile(config.browserLog, `${editorUrl}\n`): openExternal(editorUrl))
   }
 }
