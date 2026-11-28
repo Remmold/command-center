@@ -74,14 +74,39 @@ def test_a_cancelled_job_exits_non_zero_with_cancelled_in_command_center(app):
     assert '"mossy stone gargoyle" x3' in summary and "prop" in summary
 
 
-def test_exits_non_zero_when_the_app_stops_while_it_waits(app):
+def test_exits_non_zero_when_the_app_stops_while_it_waits_three_reads_in_a_row(app):
     app.heartbeat()
-    app.script = [lambda: app.heartbeat(age_s=60)]
+    app.script = [lambda: app.heartbeat(age_s=60), lambda: None, lambda: None]
 
     with pytest.raises(SystemExit) as end:
         gen3d.main(["--image", "axe.png"])
 
     assert "Command Center stopped" in str(end.value.code)
+
+
+def test_keeps_waiting_through_stale_reads_that_are_not_three_in_a_row(app, capsys):
+    def done():
+        app.heartbeat()
+        app.write_status(state="done", outputs=[{"glb": "C:/art/axe.glb"}])
+
+    app.heartbeat()
+    app.script = [lambda: app.heartbeat(age_s=60), lambda: None, app.heartbeat, lambda: app.heartbeat(age_s=60), lambda: None, done]
+
+    gen3d.main(["--image", "axe.png"])
+
+    assert capsys.readouterr().out.splitlines() == ["C:/art/axe.glb"]
+
+
+def test_a_done_batch_with_failed_items_prints_its_models_and_the_failed_items_on_stderr(app, capsys):
+    app.heartbeat()
+    app.script = [{"state": "done", "error": "1 of 2 failed: lid: generation failed: out of memory",
+                   "outputs": [{"glb": "C:/art/axe.glb"}]}]
+
+    gen3d.main(["--image", "axe.png", "lid.png"])
+
+    out = capsys.readouterr()
+    assert out.out.splitlines() == ["C:/art/axe.glb"]
+    assert "1 of 2 failed: lid: generation failed: out of memory" in out.err.splitlines()
 
 
 def test_no_wait_submits_prints_the_job_id_and_returns(app, capsys):

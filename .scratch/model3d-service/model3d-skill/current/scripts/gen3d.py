@@ -62,6 +62,8 @@ HEARTBEAT_MAX_AGE_S = 15
 POLL_S = 2
 SERVICE_READ_TRIES = 5
 SERVICE_READ_RETRY_S = 0.1
+# A slow heartbeat write or a busy disk can make one read stale; about 6 s of stale reads in a row means the app is gone.
+STALE_READS_TO_GIVE_UP = 3
 STOP_REFUSAL = "The 3D server belongs to Command Center; stop it in the 3D view"
 CLIENT_ID = None  # the worker's ComfyUI client_id, so the app sees its /ws progress
 
@@ -168,6 +170,7 @@ def wait_for(folder, job_id):
     """Polls the job's status: prints each new wait reason and stage on stderr, the models on stdout when done."""
     reason = None
     step = None
+    stale = 0
     status_file = folder / f"{job_id}.status.json"
     try:
         while True:
@@ -184,6 +187,8 @@ def wait_for(folder, job_id):
                     item = f"[{p['item']}/{p['of']}] {p.get('name') or ''}: " if p.get("item") and p.get("of") else ""
                     log(f"running in Command Center: {item}{p.get('stage') or 'starting'}")
                 if state == "done":
+                    if st.get("error"):
+                        log(st["error"])
                     for o in st.get("outputs") or []:
                         print(o["glb"])
                         if o.get("sheet"):
@@ -193,7 +198,8 @@ def wait_for(folder, job_id):
                     sys.exit(st.get("error") or f"job {job_id} failed in Command Center")
                 if state == "cancelled":
                     sys.exit(st.get("error") or "Cancelled in Command Center")
-            if not service_live(folder):
+            stale = 0 if service_live(folder) else stale + 1
+            if stale >= STALE_READS_TO_GIVE_UP:
                 sys.exit(f"Command Center stopped before job {job_id} finished")
             pause()
     except KeyboardInterrupt:
