@@ -310,3 +310,29 @@ _Avoid_: Detected logo, auto avatar
 **Worktree tag**:
 The short label that tells worktrees of one repo group apart, e.g. "shard-2".
 _Avoid_: Suffix, shard name
+
+## 3D models
+
+**3D service**:
+The one ComfyUI3D server the app runs for every session, together with its queue. It starts when a 3D job or the editor needs it and stops after 10 minutes with nothing to do, unless it was started outside the app.
+_Avoid_: 3D server (for the whole service), ComfyUI (the image install on 8188)
+
+**3D job**:
+One request from a session to make 3D models: a picture, a folder of pictures, or a text prompt with a count. It runs as a whole, waits its GPU turn, and ends as done, failed or cancelled.
+_Avoid_: Generation, task, run
+
+**GPU turn**:
+The single slot that lets one 3D job, or the open editor, use the 3D service at a time. Everyone else waits.
+_Avoid_: Lock, lease
+
+**Wait reason**:
+The one line that says why a 3D job has no GPU turn yet, e.g. "Darkfall cluster running" or "gpu claimed by model3d since 10:27".
+_Avoid_: Blocker, refusal
+
+**Editor turn**:
+A GPU turn held by the ComfyUI3D visual editor while Andreas tweaks workflows by hand. It ends with Done with editor.
+_Avoid_: UI mode
+
+**3D view**:
+The top-level view that lists 3D jobs and previews any model with its contact sheet and stats.
+_Avoid_: Model viewer tab, 3D tab
