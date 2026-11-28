@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { shutdown } from '../harness'
-import { captureWindow } from './capture'
+import { shootSizes } from './capture'
 import { env, resize, seed, startIn } from './seed'
 
 /**
@@ -18,13 +18,7 @@ const ELECTRON = require('electron') as unknown as string
 const OUT = process.env.SHOTS_DIR ?? join(REPO, '.scratch', 'polish', 'shots')
 const PREFIX = process.env.SHOTS_PREFIX ?? 'shot'
 
-async function shoot(app: ElectronApplication, page: Page, name: string): Promise<void> {
-  for (const [label, w, h] of [['1440', 1440, 900], ['1100', 1100, 800]] as const) {
-    await resize(app, w, h)
-    await page.waitForTimeout(400)
-    await captureWindow(app, page, join(OUT, `${PREFIX}-${name}-${label}.png`))
-  }
-}
+const shoot = (app: ElectronApplication, page: Page, name: string): Promise<void> => shootSizes(app, page, OUT, PREFIX, name)
 
 test('dashboard and board screenshots', async () => {
   const root = mkdtempSync(join(tmpdir(), 'cc-shots-'))

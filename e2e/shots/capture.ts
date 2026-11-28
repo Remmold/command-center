@@ -1,5 +1,7 @@
 import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { expect, type ElectronApplication, type Page } from '@playwright/test'
+import { resize } from './seed'
 
 /** A part of the page in CSS pixels, as `Locator.boundingBox()` gives it. */
 export interface CssRect {
@@ -40,4 +42,16 @@ export async function captureWindow(app: ElectronApplication, page: Page, path: 
   expect(size, `${path} is the whole ${rect ? 'part' : 'window'}`).toEqual({ width: Math.round(shot.width * shot.scale), height: Math.round(shot.height * shot.scale) })
   writeFileSync(path, png)
   return size
+}
+
+/** The window sizes every view is shot at, labelled by width for the `<prefix>-<view>-<width>.png` names. */
+const SIZES = [['1440', 1440, 900], ['1100', 1100, 800]] as const
+
+/** Shoots the window at each size, as `<prefix>-<name>-<width>.png` in `dir`. */
+export async function shootSizes(app: ElectronApplication, page: Page, dir: string, prefix: string, name: string): Promise<void> {
+  for (const [label, w, h] of SIZES) {
+    await resize(app, w, h)
+    await page.waitForTimeout(400)
+    await captureWindow(app, page, join(dir, `${prefix}-${name}-${label}.png`))
+  }
 }
