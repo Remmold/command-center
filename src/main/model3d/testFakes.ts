@@ -134,12 +134,15 @@ export interface FakeWorker {
 
 export class FakeWorkers {
   runs: FakeWorker[] = []
+  /** Each kill is logged into the ComfyUI client's calls, so a test sees it in order with `/interrupt` and the queue clear. */
+  constructor(private readonly comfyCalls: string[]) {}
   run(spec: WorkerSpec, events: WorkerEvents): { kill: () => Promise<void> } {
     const worker: FakeWorker = { spec, events, killed: false }
     this.runs.push(worker)
     return {
       kill: async () => {
         worker.killed = true
+        this.comfyCalls.push('kill worker')
       }
     }
   }
@@ -152,8 +155,26 @@ export class FakeWorkers {
 
 export class FakeProcesses {
   names: string[] = []
+  /** Pids that have ended; every other pid is alive. */
+  ended = new Set<number>()
   async list(): Promise<string[]> {
     return [...this.names]
+  }
+  async alive(pid: number): Promise<boolean> {
+    return !this.ended.has(pid)
+  }
+}
+
+/** service.json kept in memory: the heartbeat writes it every 5 s of fake time, and an hour of that on disk is slow. */
+export class FakeServiceFile {
+  writes: Model3dServiceFile[] = []
+  async write(file: Model3dServiceFile): Promise<void> {
+    this.writes.push({ ...file })
+  }
+  last(): Model3dServiceFile {
+    const file = this.writes.at(-1)
+    if (!file) throw new Error('service.json was never written')
+    return file
   }
 }
 
@@ -165,13 +186,15 @@ export function fakePorts(): {
   server: FakeServer
   workers: FakeWorkers
   processes: FakeProcesses
+  serviceFile: FakeServiceFile
 } {
   const clock = new FakeClock()
   const coord = new FakeCoord()
   const comfy = new FakeComfy()
   const server = new FakeServer(comfy)
-  const workers = new FakeWorkers()
+  const workers = new FakeWorkers(comfy.calls)
   const processes = new FakeProcesses()
+  const serviceFile = new FakeServiceFile()
   const ports: Model3dPorts = {
     clock,
     coord,
@@ -179,9 +202,10 @@ export function fakePorts(): {
     server,
     workers,
     processes,
-    watchFolder: () => () => undefined
+    watchFolder: () => () => undefined,
+    writeServiceFile: (file) => serviceFile.write(file)
   }
-  return { ports, clock, coord, comfy, server, workers, processes }
+  return { ports, clock, coord, comfy, server, workers, processes, serviceFile }
 }
 
 let seq = 0
@@ -216,8 +240,4 @@ export async function readStatus(folder: string, id: string): Promise<Model3dSta
   } catch {
     return null
   }
-}
-
-export async function readService(folder: string): Promise<Model3dServiceFile> {
-  return JSON.parse(await fs.readFile(join(folder, 'service.json'), 'utf8')) as Model3dServiceFile
 }

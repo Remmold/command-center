@@ -190,7 +190,9 @@ export const IPC = {
   UPDATE_CHANGED: 'update:changed',
   MODEL3D_VIEW: 'model3d:view',
   MODEL3D_CHANGED: 'model3d:changed',
-  MODEL3D_STOP_SERVER: 'model3d:stopServer'
+  MODEL3D_STOP_SERVER: 'model3d:stopServer',
+  MODEL3D_CANCEL: 'model3d:cancel',
+  MODEL3D_RUN_ANYWAY: 'model3d:runAnyway'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

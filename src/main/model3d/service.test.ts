@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createModel3dService, type Model3dService } from './service'
-import { drop, fakePorts, readService, readStatus, request } from './testFakes'
-
-/** An hour on the fake clock writes service.json for real every 5 s; on a busy machine that outruns Vitest's 5 s default. */
-const LONG_CLOCK_MS = 30_000
+import { drop, fakePorts, readStatus, request } from './testFakes'
 
 let root: string
 let folder: string
@@ -43,12 +40,12 @@ async function submit(...reqs: ReturnType<typeof request>[]): Promise<void> {
 }
 
 describe('jobs folder and service.json', () => {
-  it('creates the jobs folder on start and writes service.json with a heartbeat every 5 s', async () => {
+  it('writes service.json on start and as a heartbeat every 5 s', async () => {
     await boot()
-    const first = await readService(folder)
+    const first = fakes.serviceFile.last()
     expect(first).toEqual({ pid: 777, heartbeatAt: '2026-11-28T10:00:00.000Z', server: 'stopped', startedByApp: false })
     await advance(5000)
-    expect((await readService(folder)).heartbeatAt).toBe('2026-11-28T10:00:05.000Z')
+    expect(fakes.serviceFile.last().heartbeatAt).toBe('2026-11-28T10:00:05.000Z')
   })
 })
 
@@ -160,19 +157,19 @@ describe('the server', () => {
     await boot()
     await submit(request())
     expect(order).toEqual(['start (claimed: true)'])
-    expect(await readService(folder)).toMatchObject({ server: 'ready', startedByApp: true })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'ready', startedByApp: true })
   })
 
   it('shows the server starting until /system_stats answers', async () => {
     fakes.server.answersOnStart = false
     await boot()
     await submit(request())
-    expect(await readService(folder)).toMatchObject({ server: 'starting' })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'starting' })
     expect(fakes.workers.runs).toHaveLength(0)
     await advance(30_000)
     fakes.comfy.answering = true
     await advance(1000)
-    expect(await readService(folder)).toMatchObject({ server: 'ready' })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'ready' })
     expect(fakes.workers.runs).toHaveLength(1)
   })
 
@@ -187,7 +184,7 @@ describe('the server', () => {
     expect(await readStatus(folder, job.id)).toMatchObject({ state: 'failed', error: 'The 3D server did not answer within 120 s.' })
     expect(fakes.server.stops).toBe(1)
     expect(fakes.coord.holds()).toBe(false)
-    expect(await readService(folder)).toMatchObject({ server: 'stopped' })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'stopped' })
   })
 
   it('stops the server and unclaims 10 minutes after the queue empties, not before', async () => {
@@ -200,7 +197,7 @@ describe('the server', () => {
     await advance(1000)
     expect(fakes.server.stops).toBe(1)
     expect(fakes.coord.holds()).toBe(false)
-    expect(await readService(folder)).toMatchObject({ server: 'stopped', startedByApp: false })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'stopped', startedByApp: false })
   })
 
   it('never idle-stops while a job runs, keeps the server for the next job, and counts the 10 minutes from the queue emptying', async () => {
@@ -218,7 +215,7 @@ describe('the server', () => {
     expect(fakes.server.stops).toBe(0)
     await advance(60_000)
     expect(fakes.server.stops).toBe(1)
-  }, LONG_CLOCK_MS)
+  })
 
   it('starts a fresh server for a job after the idle stop', async () => {
     await boot()
@@ -238,7 +235,7 @@ describe('the server', () => {
     fakes.server.crash()
     await service!.settled()
     expect(fakes.coord.holds()).toBe(false)
-    expect(await readService(folder)).toMatchObject({ server: 'stopped' })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'stopped' })
   })
 })
 
@@ -250,13 +247,13 @@ describe('a server started outside the app', () => {
     expect(fakes.server.starts).toBe(0)
     expect(fakes.workers.runs).toHaveLength(1)
     expect(fakes.coord.holds()).toBe(true)
-    expect(await readService(folder)).toMatchObject({ server: 'ready', startedByApp: false })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'ready', startedByApp: false })
     await finish()
     expect(fakes.coord.holds()).toBe(false)
     await advance(60 * 60_000)
     expect(fakes.server.stops).toBe(0)
     expect(fakes.comfy.answering).toBe(true)
-  }, LONG_CLOCK_MS)
+  })
 
   it('is not used while another job claims gpu', async () => {
     fakes.comfy.answering = true
@@ -266,6 +263,117 @@ describe('a server started outside the app', () => {
     await submit(job)
     expect(fakes.workers.runs).toHaveLength(0)
     expect(await readStatus(folder, job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: gpu claimed by model3d since 10:27' })
+  })
+})
+
+describe('wait reasons', () => {
+  const cluster = (): void => {
+    fakes.processes.names = ['blender.exe', 'SFGamelogicDistributor.exe', 'Unity.exe']
+    fakes.coord.claimsList.push({ job: 'model3d', since: Date.parse('2026-11-28T10:27:45Z'), why: 'gen3d.py run' })
+  }
+
+  it('checks the GPU turn, then the cluster, then Unity, then the coord board, and the first hit is the reason; Blender is no check', async () => {
+    await boot()
+    const first = request({ summary: 'crate.png, prop' })
+    const second = request()
+    await submit(first)
+    cluster()
+    await submit(second)
+    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: crate.png, prop running' })
+
+    await finish()
+    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: Darkfall cluster running' })
+    fakes.processes.names = ['blender.exe', 'Unity.exe']
+    await advance(5000)
+    expect(await readStatus(folder, second.id)).toMatchObject({ waitReason: 'Waiting: Unity running' })
+    fakes.processes.names = ['blender.exe']
+    await advance(5000)
+    expect(await readStatus(folder, second.id)).toMatchObject({ waitReason: 'Waiting: gpu claimed by model3d since 10:27' })
+    fakes.coord.claimsList = []
+    await advance(5000)
+    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'running', waitReason: null })
+  })
+
+  it("skips the cluster, Unity and coord checks for a request's run-anyway flag", async () => {
+    cluster()
+    await boot()
+    const job = request({ runAnyway: true })
+    await submit(job)
+    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'running' })
+  })
+
+  it('runs a waiting job at once on Run anyway, but never before the job that holds the GPU turn', async () => {
+    await boot()
+    const first = request({ summary: 'crate.png, prop' })
+    const waiting = request()
+    await submit(first)
+    cluster()
+    await submit(waiting)
+    await service!.runAnyway(waiting.id)
+    await service!.settled()
+    expect(await readStatus(folder, waiting.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: crate.png, prop running' })
+    expect(service!.view().jobs.find((j) => j.request.id === waiting.id)?.request.runAnyway).toBe(true)
+
+    await finish()
+    expect(await readStatus(folder, waiting.id)).toMatchObject({ state: 'running' })
+  })
+})
+
+describe('Cancel', () => {
+  it('removes a queued job at once as cancelled, and it never runs', async () => {
+    await boot()
+    const [first, second] = [request(), request()]
+    await submit(first, second)
+    expect(await service!.cancel(second.id)).toEqual({ ok: true })
+    await service!.settled()
+    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled in Command Center', endedAt: '2026-11-28T10:00:05.000Z' })
+    await finish()
+    expect(fakes.workers.runs).toHaveLength(1)
+  })
+
+  it('interrupts ComfyUI, kills the worker, clears the queue, sets cancelled and gives the next job its turn', async () => {
+    await boot()
+    const [first, second] = [request(), request()]
+    await submit(first, second)
+    const worker = fakes.workers.last()
+    expect(await service!.cancel(first.id)).toEqual({ ok: true })
+    await service!.settled()
+    expect(fakes.comfy.calls).toEqual(['interrupt', 'kill worker', 'clearQueue'])
+    expect(await readStatus(folder, first.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled in Command Center' })
+    worker.events.exit(1)
+    await service!.settled()
+    expect(await readStatus(folder, first.id)).toMatchObject({ state: 'cancelled' })
+    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'running' })
+  })
+
+  it('refuses a job that has already finished', async () => {
+    await boot()
+    const job = request()
+    await submit(job)
+    await finish()
+    expect(await service!.cancel(job.id)).toEqual({ ok: false, error: 'The job has already finished.' })
+    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'done' })
+  })
+})
+
+describe('orphan drop', () => {
+  it('drops a queued job once its waiting gen3d.py has ended, but never a --no-wait job or a running one', async () => {
+    await boot()
+    const running = request({ waiterPid: 100 })
+    const waiting = request({ waiterPid: 200 })
+    const noWait = request({ waiterPid: 300, wait: false })
+    await submit(running, waiting, noWait)
+    await advance(5000)
+    expect(await readStatus(folder, waiting.id)).toMatchObject({ state: 'queued' })
+
+    fakes.processes.ended = new Set([100, 200, 300])
+    await advance(5000)
+    expect(await readStatus(folder, waiting.id)).toMatchObject({ state: 'cancelled', error: 'Dropped: waiting gen3d.py ended' })
+    expect(await readStatus(folder, noWait.id)).toMatchObject({ state: 'queued' })
+    expect(await readStatus(folder, running.id)).toMatchObject({ state: 'running' })
+    await finish()
+    expect(await readStatus(folder, running.id)).toMatchObject({ state: 'done' })
+    expect(await readStatus(folder, noWait.id)).toMatchObject({ state: 'running' })
   })
 })
 
@@ -279,7 +387,7 @@ describe('Stop server', () => {
     expect(fakes.server.stops).toBe(1)
     expect(fakes.coord.holds()).toBe(false)
     expect(service!.view()).toMatchObject({ server: 'stopped', startedByApp: false })
-    expect(await readService(folder)).toMatchObject({ server: 'stopped' })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'stopped' })
   })
 
   it('refuses while a job runs and leaves the server and the job alone', async () => {
@@ -399,6 +507,6 @@ describe('quitting', () => {
     expect(fakes.server.stops).toBe(1)
     expect(fakes.coord.holds()).toBe(false)
     for (const r of [a, b]) expect(await readStatus(folder, r.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled: app closed' })
-    expect(await readService(folder)).toMatchObject({ server: 'stopped' })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'stopped' })
   })
 })

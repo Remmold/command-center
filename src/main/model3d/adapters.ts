@@ -1,9 +1,11 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, openSync, closeSync, watch } from 'node:fs'
+import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { childEnv } from '../util/childEnv'
 import { progressStep, watchComfyMessages } from './comfyWs'
 import type { Model3dConfig } from './config'
+import { SERVICE_FILE, writeJsonAtomic } from './jobsFolder'
 import { COORD_JOB, type ComfyClient, type CoordBoard, type CoordClaim, type Model3dClock, type Model3dPorts, type ProcessList, type ServerLauncher, type WorkerRunner } from './service'
 
 const KILL_LIMIT_MS = 5000
@@ -189,6 +191,17 @@ const workerRunner: WorkerRunner = {
   }
 }
 
+/** Signal 0 only asks; a process of another user answers EPERM and is alive too. */
+export function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
 const processList: ProcessList = {
   async list() {
     const { stdout } = await exec('tasklist', ['/FO', 'CSV', '/NH'])
@@ -196,7 +209,8 @@ const processList: ProcessList = {
       .split(/\r?\n/)
       .map((line) => /^"([^"]+)"/.exec(line)?.[1])
       .filter((name): name is string => name !== undefined)
-  }
+  },
+  alive: async (pid) => pidAlive(pid)
 }
 
 const clock: Model3dClock = {
@@ -234,6 +248,7 @@ export function realModel3dPorts(config: Model3dConfig): Model3dPorts {
     comfy: comfyClient(config.port),
     server: serverLauncher(config),
     workers: workerRunner,
-    watchFolder
+    watchFolder,
+    writeServiceFile: (file) => writeJsonAtomic(join(config.folder, SERVICE_FILE), file)
   }
 }

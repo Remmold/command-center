@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { renameSync, writeFileSync } from 'node:fs'
+import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Model3dRequest } from '../src/shared/model3d'
 import { expect, model3dView, test, titleBar, type Model3dFakes } from './harness'
@@ -82,4 +82,31 @@ test('the 3D view on Ctrl+6: a dropped request goes queued, running with progres
   } finally {
     outside.kill()
   }
+})
+
+test('a job held by another job’s gpu claim waits with that reason and Cancel ends it; Run anyway skips the claim, and Cancel on the running job interrupts ComfyUI', async ({ launched }) => {
+  const { page, workspace, model3d } = launched
+  const view = model3dView(page)
+  const job = (name: string) => view.getByRole('list', { name: '3D jobs' }).getByRole('listitem').filter({ hasText: new RegExp(`^${name}\\.png · prop`) })
+  const at = '2026-11-28T09:27:45Z'
+  writeFileSync(model3d.coordBoard, JSON.stringify([{ job: 'boss2', path: 'gpu', why: 'bake', at: at.replace('T', ' ') }]))
+  const waiting = `Waiting: gpu claimed by boss2 since ${new Date(Date.parse(at)).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+
+  await page.keyboard.press('Control+6')
+  dropRequest(model3d, workspace, 'statue', '2026-11-28T10:00:00.000Z')
+  await expect(job('statue')).toContainText(waiting)
+  await job('statue').getByRole('button', { name: 'Cancel' }).click()
+  await expect(job('statue')).toContainText('Cancelled in Command Center')
+  await expect(job('statue').getByRole('button')).toHaveCount(0)
+  await expect(view.getByText('Stopped', { exact: true })).toBeVisible()
+
+  dropRequest(model3d, workspace, 'idol', '2026-11-28T10:00:01.000Z')
+  await expect(job('idol')).toContainText(waiting)
+  await job('idol').getByRole('button', { name: 'Run anyway' }).click()
+  await expect(job('idol')).toContainText(/Item 1 of 1 · idol · generate · step \d+\/12/)
+  await job('idol').getByRole('button', { name: 'Cancel' }).click()
+  await expect(job('idol')).toContainText('Cancelled in Command Center')
+  await expect(view.getByRole('button', { name: 'Stop server' })).toBeEnabled()
+  const posts = (): string[] => readFileSync(join(model3d.engineDir, 'calls.log'), 'utf8').split(/\r?\n/)
+  await expect.poll(posts).toEqual(expect.arrayContaining(['/interrupt', '/queue']))
 })

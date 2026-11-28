@@ -1,10 +1,11 @@
+import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createCoordBoard, listenerPids, parseCoordClaims, type Exec } from './adapters'
+import { createCoordBoard, listenerPids, parseCoordClaims, pidAlive, realModel3dPorts, type Exec } from './adapters'
 import { progressStep, watchComfyMessages } from './comfyWs'
 import { model3dConfig } from './config'
 
@@ -119,5 +120,25 @@ describe('ComfyUI /ws progress', () => {
     stop()
     expect(path).toBe('/ws?clientId=abc')
     expect(steps).toEqual([{ step: 7, steps: 30 }])
+  })
+})
+
+describe('the waiting gen3d.py', () => {
+  it('is alive while its pid runs, and gone once it has ended', () => {
+    expect(pidAlive(process.pid)).toBe(true)
+    const ended = spawnSync(process.execPath, ['-e', ''], { windowsHide: true }).pid
+    expect(pidAlive(ended)).toBe(false)
+    expect(pidAlive(0)).toBe(false)
+  })
+})
+
+describe('service.json', () => {
+  it('is written into the jobs folder', async () => {
+    const folder = await fs.mkdtemp(join(tmpdir(), 'model3d-service-'))
+    const config = model3dConfig({ CC_MODEL3D_PORT: '1', CC_MODEL3D_COORD: join(folder, 'no-coord.py') }, folder)
+    const file = { pid: 1, heartbeatAt: '2026-11-28T10:00:00.000Z', server: 'stopped' as const, startedByApp: false }
+    await realModel3dPorts(config).writeServiceFile(file)
+    expect(JSON.parse(await fs.readFile(join(folder, 'service.json'), 'utf8'))).toEqual(file)
+    await fs.rm(folder, { recursive: true, force: true })
   })
 })

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import {
   parseModel3dRequest,
+  type Model3dActionResult,
   type Model3dJob,
   type Model3dJobState,
   type Model3dProgress,
@@ -11,9 +12,8 @@ import {
   type Model3dStatus,
   type Model3dView
 } from '../../shared/model3d'
-import { listJobFiles, readJson, removeJobFiles, requestFile, SERVICE_FILE, statusFile, writeJsonAtomic } from './jobsFolder'
+import { listJobFiles, readJson, removeJobFiles, requestFile, statusFile, writeJsonAtomic } from './jobsFolder'
 import { progressMarker, workerError, workerOutputs } from './workerOutput'
-import { join } from 'node:path'
 
 /** The app's job name on the coord board. */
 export const COORD_JOB = 'command-center-3d'
@@ -25,6 +25,10 @@ export const READY_POLL_MS = 1_000
 export const HISTORY_KEEP = 50
 export const CANCELLED_APP_CLOSED = 'Cancelled: app closed'
 export const STOP_REFUSED_RUNNING = 'A job is running. Wait for it to finish, then stop the server.'
+export const CANCELLED = 'Cancelled in Command Center'
+export const DROPPED_ORPHAN = 'Dropped: waiting gen3d.py ended'
+const ALREADY_FINISHED = 'The job has already finished.'
+const NO_SUCH_JOB = 'There is no such job.'
 const CLAIM_REFUSED = 'Waiting: the coord board refused the gpu claim'
 const STDERR_KEEP = 200
 
@@ -99,6 +103,7 @@ export interface WorkerRunner {
 export interface ProcessList {
   /** The image names of the running processes, e.g. `Unity.exe`. */
   list(): Promise<string[]>
+  alive(pid: number): Promise<boolean>
 }
 
 export interface Model3dPorts {
@@ -110,6 +115,8 @@ export interface Model3dPorts {
   workers: WorkerRunner
   /** Calls back when something in the folder changes; returns the stop. The 5 s scan runs either way. */
   watchFolder(folder: string, onChange: () => void): () => void
+  /** Writes `service.json` atomically: on start, on each server change and as the 5 s heartbeat. */
+  writeServiceFile(file: Model3dServiceFile): Promise<void>
 }
 
 export interface Model3dServiceConfig {
@@ -221,7 +228,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
   function writeService(): void {
     const file: Model3dServiceFile = { pid: config.pid, heartbeatAt: iso(clock.now()), server, startedByApp }
     track(async () => {
-      const next = serviceWrite.then(() => writeJsonAtomic(join(folder, SERVICE_FILE), file))
+      const next = serviceWrite.then(() => ports.writeServiceFile(file))
       serviceWrite = next.catch(() => undefined)
       await next
     })
@@ -522,9 +529,31 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     await pump()
   }
 
+  /** A queued job whose waiting gen3d.py has ended is dropped; a `--no-wait` job has no waiter, and a running job always finishes. */
+  async function dropOrphans(): Promise<void> {
+    let dropped = false
+    for (const job of jobs.values()) {
+      if (job.status.state !== 'queued' || !job.request.wait) continue
+      if (await ports.processes.alive(job.request.waiterPid)) continue
+      end(job, 'cancelled', DROPPED_ORPHAN)
+      dropped = true
+    }
+    if (dropped) await prune()
+  }
+
+  async function cancelRunning(job: Job): Promise<void> {
+    const worker = job.worker
+    end(job, 'cancelled', CANCELLED)
+    // The kill comes before the queue clear, so a prompt the worker queues after the interrupt is cleared too.
+    await comfy.interrupt()
+    await worker?.kill()
+    await comfy.clearQueue()
+  }
+
   const kick = (): void => track(() => serial(async () => {
     if (disposed) return
     await scan()
+    await dropOrphans()
     await pump()
   }))
 
@@ -549,7 +578,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     },
     view,
     /** Stop server: at once, whoever started it; refused while a job holds the GPU turn. */
-    stopServer(): Promise<{ ok: true } | { ok: false; error: string }> {
+    stopServer(): Promise<Model3dActionResult> {
       return serial(async () => {
         if (turn) return { ok: false as const, error: STOP_REFUSED_RUNNING }
         cancelIdleTimer()
@@ -560,6 +589,31 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
           await ports.server.stopOutside()
           await serverGone()
         } else if (server === 'ready' || proc) await stopServer()
+        return { ok: true as const }
+      })
+    },
+    /** Cancel: a queued job ends at once; a running one has ComfyUI interrupted and its queue cleared, and its worker killed. */
+    cancel(id: string): Promise<Model3dActionResult> {
+      return serial(async () => {
+        const job = jobs.get(id)
+        if (!job) return { ok: false as const, error: NO_SUCH_JOB }
+        if (isFinished(job.status.state)) return { ok: false as const, error: ALREADY_FINISHED }
+        if (job.status.state === 'running') await cancelRunning(job)
+        else end(job, 'cancelled', CANCELLED)
+        await prune()
+        await pump()
+        return { ok: true as const }
+      })
+    },
+    /** Run anyway on a waiting job: it skips the cluster, Unity and coord checks from now on, never the GPU turn. */
+    runAnyway(id: string): Promise<Model3dActionResult> {
+      return serial(async () => {
+        const job = jobs.get(id)
+        if (!job) return { ok: false as const, error: NO_SUCH_JOB }
+        if (job.status.state !== 'queued') return { ok: false as const, error: 'The job is not waiting.' }
+        job.request = { ...job.request, runAnyway: true }
+        changed()
+        await pump()
         return { ok: true as const }
       })
     },

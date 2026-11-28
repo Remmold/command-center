@@ -72,7 +72,7 @@ export function Model3dView() {
 }
 
 function ServiceHeader({ view }: { view: ServiceView | null }) {
-  const stopError = useModel3dStore((s) => s.stopError)
+  const actionError = useModel3dStore((s) => s.actionError)
   const stopServer = useModel3dStore((s) => s.stopServer)
   const [confirming, setConfirming] = useState(false)
   const server = view?.server ?? 'stopped'
@@ -99,9 +99,9 @@ function ServiceHeader({ view }: { view: ServiceView | null }) {
       >
         <HeaderRow title="3D server" note={note} />
       </Toolbar>
-      {stopError && (
+      {actionError && (
         <NoticeLine tone="warning" strip>
-          {stopError}
+          {actionError}
         </NoticeLine>
       )}
       {confirming && (
@@ -118,6 +118,8 @@ function ServiceHeader({ view }: { view: ServiceView | null }) {
 }
 
 function JobItem({ row, now }: { row: Model3dJobRow; now: number }) {
+  const cancel = useModel3dStore((s) => s.cancel)
+  const runAnyway = useModel3dStore((s) => s.runAnyway)
   const where = [row.session, row.workspace, row.account].filter((part): part is string => !!part).join(' · ')
   const line = row.error ?? row.waitReason ?? row.progress
   return (
@@ -141,6 +143,16 @@ function JobItem({ row, now }: { row: Model3dJobRow; now: number }) {
           </>
         }
       />
+      {row.state === 'queued' && !row.runAnyway && (
+        <Button variant="secondary" onClick={() => void runAnyway(row.id)} tooltip="Run without waiting for the Darkfall cluster, Unity or another job's GPU claim; it still waits its GPU turn">
+          Run anyway
+        </Button>
+      )}
+      {(row.state === 'queued' || row.state === 'running') && (
+        <Button variant="danger" onClick={() => void cancel(row.id)} tooltip={row.state === 'running' ? 'Stop this job now and free the GPU' : 'Remove this job from the queue'}>
+          Cancel
+        </Button>
+      )}
     </ListItem>
   )
 }

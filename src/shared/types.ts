@@ -3,7 +3,7 @@ import type { ChooseImageResult, RepoIconRequest, RepoIdentityViews } from './re
 import type { ChatItem } from './chatItems'
 import type { SubagentItemsSource, SubagentSource, SubagentTailEvent } from './subagentTail'
 import type { AppView } from './views'
-import type { Model3dStopResult, Model3dView } from './model3d'
+import type { Model3dActionResult, Model3dView } from './model3d'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
@@ -799,7 +799,11 @@ export interface RendererApi {
   model3d: {
     view: () => Promise<Model3dView>
     onChanged: (cb: (view: Model3dView) => void) => () => void
-    stopServer: () => Promise<Model3dStopResult>
+    stopServer: () => Promise<Model3dActionResult>
+    /** Cancel: a queued job ends at once, a running one is interrupted and its worker stopped. */
+    cancel: (id: string) => Promise<Model3dActionResult>
+    /** Run anyway on a waiting job: skips the cluster, Unity and coord checks, never the GPU turn. */
+    runAnyway: (id: string) => Promise<Model3dActionResult>
   }
   startWithWindows: {
     get: () => Promise<StartWithWindowsState>

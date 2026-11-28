@@ -9,7 +9,7 @@ Spec: `.scratch/model3d-service/spec.md`.
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] While anything waits, the checks run every 5 s, in this order; the first hit is the wait reason:
   1. another job or the editor holds the GPU turn ("Waiting: <summary> running" / "Waiting: editor open");

@@ -20,6 +20,8 @@ export interface Model3dJobRow {
   workspace: string | null
   account: string
   waitReason: string | null
+  /** Run anyway is on: the cluster, Unity and coord checks are skipped. */
+  runAnyway: boolean
   progress: string | null
   error: string | null
   outputs: Model3dOutput[]
@@ -68,6 +70,7 @@ export function model3dJobRows({ view, sessions, workspaces, profiles }: Model3d
         workspace: folders.find((f) => isInside(f.key, cwd))?.name ?? null,
         account: account(r.configDir),
         waitReason: s.state === 'queued' ? s.waitReason : null,
+        runAnyway: r.runAnyway,
         progress: s.state === 'running' ? progressText(s.progress) : null,
         error: s.state === 'failed' || s.state === 'cancelled' ? s.error : null,
         outputs: s.outputs,

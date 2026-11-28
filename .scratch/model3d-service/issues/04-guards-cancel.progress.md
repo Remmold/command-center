@@ -1,0 +1,3 @@
+- done: wait reasons in order, Run anyway (flag + button), Cancel queued/running, orphan drop, heartbeat via a fakeable port (the two slow tests ~130 ms under full load, default limit); Vitest + e2e (b), 19 of 20
+- next: commit, then self code review of 100789b..HEAD
+- open reds: none; one unreproduced red of scenario (a) seen once (barrel stuck waiting after crate done), 0 of 16 reruns

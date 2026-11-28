@@ -394,6 +394,8 @@ const api: RendererApi = {
   model3d: {
     view: () => ipcRenderer.invoke(IPC.MODEL3D_VIEW),
     stopServer: () => ipcRenderer.invoke(IPC.MODEL3D_STOP_SERVER),
+    cancel: (id) => ipcRenderer.invoke(IPC.MODEL3D_CANCEL, id),
+    runAnyway: (id) => ipcRenderer.invoke(IPC.MODEL3D_RUN_ANYWAY, id),
     onChanged: (cb) => {
       const handler = (_e: IpcRendererEvent, view: Model3dView) => cb(view)
       ipcRenderer.on(IPC.MODEL3D_CHANGED, handler)
