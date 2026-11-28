@@ -3,6 +3,7 @@ import type { ChooseImageResult, RepoIconRequest, RepoIdentityViews } from './re
 import type { ChatItem } from './chatItems'
 import type { SubagentItemsSource, SubagentSource, SubagentTailEvent } from './subagentTail'
 import type { AppView } from './views'
+import type { Model3dStopResult, Model3dView } from './model3d'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
@@ -793,6 +794,12 @@ export interface RendererApi {
     portOpen: (port: number) => Promise<boolean>
     /** Opens a local address in the default browser; anything else is refused. The error, or null. */
     openInBrowser: (url: string) => Promise<string | null>
+  }
+  /** The 3D service: its jobs and server (ADR 0011). */
+  model3d: {
+    view: () => Promise<Model3dView>
+    onChanged: (cb: (view: Model3dView) => void) => () => void
+    stopServer: () => Promise<Model3dStopResult>
   }
   startWithWindows: {
     get: () => Promise<StartWithWindowsState>

@@ -76,6 +76,9 @@ export interface Model3dView {
   jobs: Model3dJob[]
 }
 
+/** Stop server's answer: refused while a job runs. */
+export type Model3dStopResult = { ok: true } | { ok: false; error: string }
+
 export const MODEL3D_JOB_ID = /^[A-Za-z0-9_-]{1,80}$/
 
 const isString = (v: unknown): v is string => typeof v === 'string'

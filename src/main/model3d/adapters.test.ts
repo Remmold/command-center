@@ -4,9 +4,24 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createCoordBoard, parseCoordClaims, type Exec } from './adapters'
+import { createCoordBoard, listenerPids, parseCoordClaims, type Exec } from './adapters'
 import { progressStep, watchComfyMessages } from './comfyWs'
 import { model3dConfig } from './config'
+
+describe('a server started outside the app', () => {
+  it('is found by the pid listening on its port in netstat, on any address, never a connection to it', () => {
+    const netstat = [
+      '  Proto  Local Address          Foreign Address        State           PID',
+      '  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       1180',
+      '  TCP    127.0.0.1:8189         0.0.0.0:0              LISTENING       5120',
+      '  TCP    127.0.0.1:52011        127.0.0.1:8189         ESTABLISHED     9000',
+      '  TCP    127.0.0.1:81890        0.0.0.0:0              LISTENING       7000',
+      '  TCP    [::]:8189              [::]:0                 LISTENING       5120',
+      '  TCP    0.0.0.0:8189           0.0.0.0:0              LISTENING       6000'
+    ].join('\r\n')
+    expect(listenerPids(netstat, 8189)).toEqual([5120, 6000])
+  })
+})
 
 describe('the coord board', () => {
   it('skips every call while the script is missing, and then has no claims and takes the claim', async () => {

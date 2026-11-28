@@ -16,6 +16,7 @@ import { startUpdates } from './update/service'
 import type { StartWithWindowsState } from '../shared/types'
 import { iconPath } from './util/paths'
 import { startModel3dService } from './model3d/run'
+import { registerModel3dIpc } from './model3d/ipc'
 import { routeMenuZoom } from './zoom/menu'
 import { handleMediaScheme, MEDIA_SCHEME_PRIVILEGES } from './files/media'
 import { handleTestFlowScheme, TEST_FLOW_SCHEME_PRIVILEGES } from './testFlow/scheme'
@@ -103,6 +104,7 @@ if (!app.requestSingleInstanceLock()) {
     const startWithWindows = createStartWithWindowsControl()
     registerIpc({ repoIdentities, startWithWindows })
     const model3d = startModel3dService()
+    registerModel3dIpc(model3d)
     handleMediaScheme()
     handleTestFlowScheme()
     startUpdates({ confirmRestart: () => confirmQuit('update-restart') })

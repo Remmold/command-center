@@ -4,6 +4,7 @@ import { IPC } from '../shared/ipc-channels'
 import { observedRefreshMs } from '../shared/observedRefresh'
 import type { SubagentTailEvent } from '../shared/subagentTail'
 import type { SettingsFileChange } from '../shared/claudeSettings'
+import type { Model3dView } from '../shared/model3d'
 import type {
   AccountProfile,
   AppExitEvent,
@@ -388,6 +389,15 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, entry: BackgroundProcessesEntry) => cb(entry)
       ipcRenderer.on(IPC.BACKGROUND_PROCESSES_CHANGED, handler)
       return () => ipcRenderer.off(IPC.BACKGROUND_PROCESSES_CHANGED, handler)
+    }
+  },
+  model3d: {
+    view: () => ipcRenderer.invoke(IPC.MODEL3D_VIEW),
+    stopServer: () => ipcRenderer.invoke(IPC.MODEL3D_STOP_SERVER),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, view: Model3dView) => cb(view)
+      ipcRenderer.on(IPC.MODEL3D_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.MODEL3D_CHANGED, handler)
     }
   },
   startWithWindows: {

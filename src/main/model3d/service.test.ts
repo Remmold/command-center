@@ -151,7 +151,8 @@ describe('the server', () => {
       start: () => {
         order.push(`start (claimed: ${fakes.coord.holds()})`)
         return start()
-      }
+      },
+      stopOutside: () => fakes.server.stopOutside()
     }
     await boot()
     await submit(request())
@@ -262,6 +263,41 @@ describe('a server started outside the app', () => {
     await submit(job)
     expect(fakes.workers.runs).toHaveLength(0)
     expect(await readStatus(folder, job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: gpu claimed by model3d since 10:27' })
+  })
+})
+
+describe('Stop server', () => {
+  it('stops an app-started server at once, before the idle stop, and unclaims', async () => {
+    await boot()
+    await submit(request())
+    await finish()
+    expect(await service!.stopServer()).toEqual({ ok: true })
+    await service!.settled()
+    expect(fakes.server.stops).toBe(1)
+    expect(fakes.coord.holds()).toBe(false)
+    expect(service!.view()).toMatchObject({ server: 'stopped', startedByApp: false })
+    expect(await readService(folder)).toMatchObject({ server: 'stopped' })
+  })
+
+  it('refuses while a job runs and leaves the server and the job alone', async () => {
+    await boot()
+    const job = request()
+    await submit(job)
+    expect(await service!.stopServer()).toEqual({ ok: false, error: 'A job is running. Wait for it to finish, then stop the server.' })
+    expect(fakes.server.stops).toBe(0)
+    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'running' })
+  })
+
+  it('stops a server started outside the app too', async () => {
+    fakes.comfy.answering = true
+    await boot()
+    await submit(request())
+    await finish()
+    expect(await service!.stopServer()).toEqual({ ok: true })
+    await service!.settled()
+    expect(fakes.server.outsideStops).toBe(1)
+    expect(fakes.comfy.answering).toBe(false)
+    expect(service!.view()).toMatchObject({ server: 'stopped', startedByApp: false })
   })
 })
 

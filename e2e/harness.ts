@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { _electron, test as base, expect, type ElectronApplication, type Page } from '@playwright/test'
-import { FAKE_BIN, assertFakeClaude } from './guard'
+import { FAKE_BIN, assertFakeClaude, assertFakeModel3d } from './guard'
 import { treeOf, type ProcessRow } from './processTree'
 
 const REPO = resolve(__dirname, '..')
@@ -112,6 +113,8 @@ interface Launched {
   vscodeUserDir: string
   /** The test's temp root, for extra folders. */
   root: string
+  /** The 3D service's jobs folder and its fake engine, worker and coord board. */
+  model3d: Model3dFakes
   /** Quits the app and starts it again on the same user data, as a restart would; use the returned app and page from then on. */
   relaunch: () => Promise<{ app: ElectronApplication; page: Page }>
 }
@@ -177,6 +180,55 @@ export async function useScript(app: ElectronApplication, script: ScriptName): P
   }, SCRIPTS[script])
 }
 
+const FAKES = join(__dirname, 'fakes')
+
+export interface Model3dFakes {
+  /** The app's jobs folder, where a test drops requests. */
+  jobs: string
+  /** The fake ComfyUI's port, free and never 8189. */
+  port: number
+  /** The fake gen3d.py a request names as its script. */
+  worker: string
+  /** The fake engine dir; its `calls.log` lists each POST the fake ComfyUI got. */
+  engineDir: string
+  /** The fake coord board's claims file. */
+  coordBoard: string
+}
+
+/** A port nothing listens on right now. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer()
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as AddressInfo
+      server.close(() => resolve(port))
+    })
+  })
+}
+
+/** Copies the fake ComfyUI in as the engine's `main.py` and the fake coord board in as `coord.py`, each in the test root. */
+function seedModel3dFakes(root: string, userData: string, port: number): Model3dFakes {
+  const engineDir = join(root, 'model3d-engine')
+  const coordDir = join(root, 'model3d-coord')
+  for (const dir of [engineDir, coordDir]) mkdirSync(dir, { recursive: true })
+  copyFileSync(join(FAKES, 'fake_comfy.py'), join(engineDir, 'main.py'))
+  copyFileSync(join(FAKES, 'fake_coord.py'), join(coordDir, 'coord.py'))
+  return { jobs: join(userData, 'model3d-jobs'), port, worker: join(FAKES, 'fake_gen3d.py'), engineDir, coordBoard: join(coordDir, 'board.json') }
+}
+
+function model3dEnv(fakes: Model3dFakes): Record<string, string> {
+  return {
+    CC_MODEL3D_ENGINE_DIR: fakes.engineDir,
+    CC_MODEL3D_ENGINE_PYTHON: 'python',
+    CC_MODEL3D_PORT: String(fakes.port),
+    CC_MODEL3D_COORD: join(dirname(fakes.coordBoard), 'coord.py'),
+    // Darkfall or Unity may run on this machine; the fakes' jobs must not wait on them.
+    CC_MODEL3D_CLUSTER_PROCESSES: 'cc-e2e-no-cluster.exe',
+    CC_MODEL3D_UNITY_PROCESSES: 'cc-e2e-no-unity.exe'
+  }
+}
+
 function seedDirs(
   root: string,
   userSettings: Record<string, unknown> | null
@@ -199,7 +251,7 @@ function seedDirs(
   return dirs
 }
 
-function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName, extra: Record<string, string>): Record<string, string> {
+function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName, model3d: Model3dFakes, root: string, extra: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
   delete env.ELECTRON_RUN_AS_NODE
@@ -215,13 +267,11 @@ function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName, extra: Re
     CC_VSCODE_USER_DIR: dirs.vscodeUserDir,
     USERPROFILE: dirs.home,
     HOME: dirs.home,
-    // The 3D service must never reach the real coord board or ComfyUI3D: a real run may be live on the machine.
-    CC_MODEL3D_COORD: join(dirs.userData, 'no-coord', 'coord.py'),
-    CC_MODEL3D_ENGINE_DIR: join(dirs.userData, 'no-engine'),
-    CC_MODEL3D_PORT: '1'
+    ...model3dEnv(model3d)
   })
   Object.assign(env, extra)
   assertFakeClaude(env.CC_CLAUDE_BIN)
+  assertFakeModel3d(env, root)
   return env
 }
 
@@ -271,12 +321,13 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
     const online: string[] = []
     try {
       const dirs = seedDirs(root, userSettings)
+      const model3d = seedModel3dFakes(root, dirs.userData, await freePort())
       const start = async (): Promise<{ app: ElectronApplication; page: Page }> => {
         const app = await _electron.launch({
           executablePath: ELECTRON,
           args: [MAIN, `--user-data-dir=${dirs.userData}`],
           cwd: REPO,
-          env: appEnv(dirs, script, env)
+          env: appEnv(dirs, script, model3d, root, env)
         })
         await app.context().route(/^https?:\/\//, (route) => {
           // A feature's own servers on this machine are not the internet.
@@ -295,7 +346,7 @@ export const test = base.extend<{ script: ScriptName; userSettings: Record<strin
           current = await start()
           return current
         }
-        await use({ ...current, log: new FakeLog(dirs.logFile), workspace: dirs.workspace, configDir: dirs.configDir, vscodeUserDir: dirs.vscodeUserDir, root, relaunch })
+        await use({ ...current, log: new FakeLog(dirs.logFile), workspace: dirs.workspace, configDir: dirs.configDir, vscodeUserDir: dirs.vscodeUserDir, root, model3d, relaunch })
       } finally {
         await shutdown(current.app)
       }
@@ -336,6 +387,7 @@ export const chatPane = (page: Page) => page.locator('[data-chat-pane]:visible')
 export const chatTabs = (page: Page) => chatPane(page).locator('[data-tab-strip]')
 export const shellDrawer = (page: Page) => page.getByRole('region', { name: 'Shell drawer', exact: true })
 export const processesView = (page: Page) => page.getByTestId('view-processes')
+export const model3dView = (page: Page) => page.getByTestId('view-3d')
 
 export function prompt(page: Page) {
   return page.locator('[data-chat-pane] textarea:visible:not(.xterm-helper-textarea)')

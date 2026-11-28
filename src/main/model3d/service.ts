@@ -24,6 +24,7 @@ export const READY_TIMEOUT_MS = 120_000
 export const READY_POLL_MS = 1_000
 export const HISTORY_KEEP = 50
 export const CANCELLED_APP_CLOSED = 'Cancelled: app closed'
+export const STOP_REFUSED_RUNNING = 'A job is running. Wait for it to finish, then stop the server.'
 const CLAIM_REFUSED = 'Waiting: the coord board refused the gpu claim'
 const STDERR_KEEP = 200
 
@@ -68,6 +69,8 @@ export interface ServerProcess {
 
 export interface ServerLauncher {
   start(): Promise<ServerProcess>
+  /** Stops a server that answers on the port but was started outside the app, with its process tree. */
+  stopOutside(): Promise<void>
 }
 
 export interface WorkerSpec {
@@ -197,9 +200,9 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
 
   // State changes run one at a time.
   let chain: Promise<void> = Promise.resolve()
-  function serial(work: () => Promise<void>): Promise<void> {
+  function serial<T>(work: () => Promise<T>): Promise<T> {
     const next = chain.then(work)
-    chain = next.catch(() => undefined)
+    chain = next.then(() => undefined, () => undefined)
     return next
   }
 
@@ -545,6 +548,21 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
       return new Promise<void>((resolve) => settledWaiters.push(resolve)).then(() => this.settled())
     },
     view,
+    /** Stop server: at once, whoever started it; refused while a job holds the GPU turn. */
+    stopServer(): Promise<{ ok: true } | { ok: false; error: string }> {
+      return serial(async () => {
+        if (turn) return { ok: false as const, error: STOP_REFUSED_RUNNING }
+        cancelIdleTimer()
+        if (server === 'ready' && !startedByApp) {
+          server = 'stopping'
+          writeService()
+          changed()
+          await ports.server.stopOutside()
+          await serverGone()
+        } else if (server === 'ready' || proc) await stopServer()
+        return { ok: true as const }
+      })
+    },
     onChanged(cb: (view: Model3dView) => void): () => void {
       listeners.push(cb)
       return () => {

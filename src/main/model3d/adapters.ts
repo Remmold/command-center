@@ -75,6 +75,18 @@ export function createCoordBoard(script: string, run: Exec = exec, python = 'pyt
   }
 }
 
+/** The pids listening on `port` in `netstat -ano -p TCP` output (IPv4 and IPv6 rows), each once. */
+export function listenerPids(stdout: string, port: number): number[] {
+  const pids = new Set<number>()
+  for (const line of stdout.split(/\r?\n/)) {
+    const [proto, local, , state, pid] = line.trim().split(/\s+/)
+    if (proto !== 'TCP' || state !== 'LISTENING' || !local?.endsWith(`:${port}`)) continue
+    const n = Number(pid)
+    if (Number.isInteger(n) && n > 0) pids.add(n)
+  }
+  return [...pids]
+}
+
 function comfyClient(port: number): ComfyClient {
   const url = (path: string): string => `http://127.0.0.1:${port}${path}`
   const post = async (path: string, body?: unknown): Promise<void> => {
@@ -131,6 +143,10 @@ function serverLauncher(config: Model3dConfig): ServerLauncher {
           else child.once('exit', () => cb())
         }
       }
+    },
+    async stopOutside() {
+      const { stdout } = await exec('netstat', ['-ano', '-p', 'TCP'])
+      for (const pid of listenerPids(stdout, config.port)) await exec('taskkill', ['/PID', String(pid), '/T', '/F'])
     }
   }
 }

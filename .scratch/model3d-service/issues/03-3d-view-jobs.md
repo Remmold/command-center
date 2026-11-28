@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] `AppView` gains `3d`, labelled "3D", after Processes, on Ctrl+6.
 - [ ] Each job row shows the session, workspace, account, input (picture names or prompt and count), preset, state, wait reason, progress (item i of n, stage, sampling step N/M) and duration. A failed job shows its `error` line.

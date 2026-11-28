@@ -96,6 +96,7 @@ export class FakeComfy {
 export class FakeServer {
   starts = 0
   stops = 0
+  outsideStops = 0
   /** Whether a started server answers at once; false leaves it starting until the test sets `comfy.answering`. */
   answersOnStart = true
   private exitCb: (() => void) | null = null
@@ -113,6 +114,10 @@ export class FakeServer {
         this.exitCb = cb
       }
     }
+  }
+  async stopOutside(): Promise<void> {
+    this.outsideStops++
+    this.comfy.answering = false
   }
   /** The server process ends by itself. */
   crash(): void {
