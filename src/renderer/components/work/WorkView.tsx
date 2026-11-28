@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels'
 import { halfShowing, type HalfIndex } from '../../state/chatPair'
 import { useChatPairStore } from '../../state/chatPairStore'
@@ -8,7 +8,6 @@ import { chatOnScreen } from '../../state/projectViewLayout'
 import { useProjectViewsStore, type ActivityView, type ProjectView } from '../../state/projectViewsStore'
 import { focusChatHalf } from '../../state/sessionNavigation'
 import { useShownChats } from '../../state/workSessions'
-import { mainChatWorkspace, useMainChatStore } from '../../state/mainChatStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { ChatView } from '../chat/ChatView'
 import { ObservedChatView } from '../chat/ObservedChatView'
@@ -109,9 +108,7 @@ function WorkMain({ registerFocus }: { registerFocus: (fn: () => void) => void }
   const { halves, focused } = useShownChats()
   const views = useProjectViewsStore((s) => s.views)
   const order = useProjectViewsStore((s) => s.order)
-  const listedWorkspaces = useWorkspacesStore((s) => s.workspaces)
-  const mainChat = useMainChatStore((s) => s.info)
-  const workspaces = useMemo(() => (mainChat ? [...listedWorkspaces, mainChatWorkspace(mainChat)] : listedWorkspaces), [listedWorkspaces, mainChat])
+  const workspaces = useWorkspacesStore((s) => s.workspaces)
   const observedSessions = useObservedStore((s) => s.sessions)
   const borrow = useDrawerBorrow()
 

@@ -1,8 +1,7 @@
 import { useEffect, useMemo } from 'react'
-import { featureChecklistPath, findTestFlows, repoNameFor, type TestFlowFocus } from '../../shared/testFlow'
+import { findTestFlows, repoNameFor, type TestFlowFocus } from '../../shared/testFlow'
 import type { ChatItem } from '../components/chat/types'
 import { useChatItemsStore } from '../state/chatItemsStore'
-import { useFeaturesStore } from '../state/featuresStore'
 import { useChatPairStore } from '../state/chatPairStore'
 import { useObservedStore } from '../state/observedStore'
 import { useProjectViewsStore } from '../state/projectViewsStore'
@@ -58,10 +57,9 @@ export function usePublishTestFlow(): void {
   const title = session?.title
   const repoName = useMemo(() => repoNameFor(workspaces, cwd), [workspaces, cwd])
   const picks = useMemo(() => (folder === null ? [] : findTestFlows({ items, folder, repoName })), [items, folder, repoName])
-  const checklist = useFeaturesStore((s) => (folder === null ? null : featureChecklistPath(s.features, cwd, folder, repoName)))
   const focus = useMemo(
-    (): TestFlowFocus | null => (folder === null || title === undefined ? null : { picks, folder, repoName, title, ...(checklist ? { checklist } : {}) }),
-    [picks, folder, repoName, title, checklist]
+    (): TestFlowFocus | null => (folder === null || title === undefined ? null : { picks, folder, repoName, title }),
+    [picks, folder, repoName, title]
   )
   // Every streamed item rebuilds the picks; only a change in what the pop-out would show is sent.
   const key = focus ? JSON.stringify(focus) : null

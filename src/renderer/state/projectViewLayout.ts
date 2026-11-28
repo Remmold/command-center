@@ -1,7 +1,7 @@
 import type { PtyKind } from '../../shared/types'
 import type { ProjectView } from './projectViewsStore'
 
-export const LAYOUT_VERSION = 13
+export const LAYOUT_VERSION = 14
 
 interface SavedLayout {
   idePanelsOpen?: unknown
@@ -24,6 +24,22 @@ export function migrateLayout(persisted: { views?: Record<string, SavedLayout> }
       v.activeShellTabId = null
     }
   }
+}
+
+/** The pane the retired main chat ran under. */
+const RETIRED_MAIN_CHAT_PANE = 'main-chat'
+
+/** Drops the view the retired main chat kept for its own folder, whose workspace record is removed too. Mutates in place. */
+export function dropRetiredMainChat(persisted: { views?: Record<string, { claudeSessions?: unknown }>; order?: unknown; activeProjectId?: unknown }): void {
+  const views = persisted.views ?? {}
+  const gone = Object.keys(views).filter((id) => {
+    const sessions = views[id].claudeSessions
+    return Array.isArray(sessions) && sessions.some((c) => (c as { id?: unknown } | null)?.id === RETIRED_MAIN_CHAT_PANE)
+  })
+  if (gone.length === 0) return
+  for (const id of gone) delete views[id]
+  if (Array.isArray(persisted.order)) persisted.order = persisted.order.filter((id) => !gone.includes(id))
+  if (typeof persisted.activeProjectId === 'string' && gone.includes(persisted.activeProjectId)) persisted.activeProjectId = null
 }
 
 /** What the side panel shows while the IDE panels are open. */

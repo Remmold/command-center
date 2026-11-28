@@ -8,18 +8,9 @@ import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval
 import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
 import type { TestFlowFocus, TestFlowView } from './testFlow'
-import type { Mark, StepsView } from './testSteps'
 import type { ZoomStep } from './zoom'
 import type { LocalServer } from './localPorts'
 import type { SidebarLayout } from './sidebarGroups'
-import type { FeatureStageView } from './featureStage'
-import type { FeatureServersView } from './featureServers'
-import type { FeatureRecord, NewFeatureRequest, NewFeatureResult, PreflightRequest, PreflightResult } from './features'
-import type { AdoptPreflight, AdoptRequest, AdoptWorkResult } from './adoptWork'
-import type { HousekeepingCheck, HousekeepingRequest, HousekeepingRun } from './housekeeping'
-import type { JustStarted, MainChatInfo } from './mainChat'
-import type { PreviewConfig } from './previewConfig'
-import type { PreviewDraftRead } from './previewSetup'
 import type { HistoryChange } from './chatHistory'
 import type { ContextFileResult, ContextFileText, ContextReport } from './context'
 import type { ClaudeSettingsRead, SettingsFileChange, SettingsObject, SettingsPatch, SettingsSaveResult } from './claudeSettings'
@@ -466,71 +457,6 @@ export interface RendererApi {
     /** Saves this order; ids it leaves out keep their place after the ones it names. */
     reorder: (ids: string[]) => Promise<Workspace[]>
   }
-  features: {
-    list: () => Promise<FeatureRecord[]>
-    /** Makes the worktree, its workspace and the record; the caller then starts the feature session under `request.sessionId`. */
-    create: (request: NewFeatureRequest) => Promise<NewFeatureResult>
-    /** The checks a start makes first, with nothing made; the proposal card shows a failure's message before Go. */
-    preflight: (request: PreflightRequest) => Promise<PreflightResult>
-    /** Undoes a created feature whose session could not start; resolves with what the undo could not remove. */
-    discard: (name: string, workspaceId: string) => Promise<string[]>
-    /** Each feature's stage by name, read from its files. */
-    stages: () => Promise<Record<string, FeatureStageView>>
-    /** Keeps the feature session's Claude id on its record, so the session can be resumed once its chat is gone. */
-    setClaudeSession: (name: string, claudeSessionId: string) => Promise<void>
-    onStagesChanged: (cb: (stages: Record<string, FeatureStageView>) => void) => () => void
-    /** Told while New feature's install command runs (true) and when it ends (false), by feature name. */
-    onInstalling: (cb: (name: string, running: boolean) => void) => () => void
-    /** The Test button: boots the servers, then opens the test pair once every one is Ready (or only the test flow without a preview config); an open pair is brought to the front. Resolves once the windows are open, or with why not. */
-    test: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
-    /** Complete: stops the servers, closes the pair and its browser store, frees the ports and marks the feature Completed; the worktree and branch stay. */
-    complete: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
-    /** Returns a completed feature to its stage with fresh ports. */
-    reopen: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
-    /** Removes a completed feature's worktree; refused while its branch has commits the main branch lacks. */
-    removeWorktree: (name: string) => Promise<{ ok: true } | { ok: false; error: string }>
-    /** Boots the feature's servers from its preview config on its own ports; resolves once they are launched, not ready. */
-    startServers: (name: string) => Promise<{ ok: true; note?: string } | { ok: false; error: string }>
-    /** Runs one server again, e.g. after it Failed. */
-    retryServer: (name: string, server: string) => Promise<{ ok: true; note?: string } | { ok: false; error: string }>
-    /** Stops the feature's servers; it keeps its ports. */
-    stopServers: (name: string) => Promise<void>
-    /** Every started feature's servers by feature name. */
-    servers: () => Promise<Record<string, FeatureServersView>>
-    onServersChanged: (cb: (name: string, view: FeatureServersView) => void) => () => void
-    /** An adopt-work card's check: a fresh scan of the workspace's repo, resolved to one item; nothing is changed. */
-    adoptPreflight: (request: AdoptRequest) => Promise<AdoptPreflight>
-    /** Makes the open work a feature; the caller then starts or resumes its session under `request.sessionId`. */
-    adopt: (request: AdoptRequest & { sessionId: string }) => Promise<AdoptWorkResult>
-    /** Undoes the last adopt of this feature, whose session did not start; resolves with what could not be put back. */
-    undoAdopt: (name: string) => Promise<string[]>
-  }
-  /** A housekeeping card's check and click: every item checked again, then only the safe ones done. */
-  housekeeping: {
-    check: (request: HousekeepingRequest) => Promise<HousekeepingCheck>
-    run: (request: HousekeepingRequest) => Promise<HousekeepingRun>
-  }
-  mainChat: {
-    /** Makes the main chat's folder and workspace record when missing, and says how to host it. */
-    info: () => Promise<MainChatInfo>
-    /** Chooses the account the main chat runs on; its conversation starts afresh, since the old one lives in the old account's folder. */
-    setProfile: (profileId: string) => Promise<MainChatInfo>
-    setClaudeSession: (claudeSessionId: string) => Promise<void>
-    /** Forgets the conversation so the next start is fresh; after a Go, names the feature it started. The account stays. */
-    reset: (justStarted?: JustStarted) => Promise<MainChatInfo>
-  }
-  previewConfig: {
-    /** The workspace's saved preview config; null when it has none (no browser, only the test flow). */
-    get: (workspaceId: string) => Promise<PreviewConfig | null>
-    /** Validates, then saves; an empty config removes the entry. The refusal names the field. */
-    save: (workspaceId: string, config: unknown) => Promise<{ ok: true; config: PreviewConfig | null } | { ok: false; error: string }>
-    /** Names a fresh draft file in the app's data folder for a Set up preview session to write; writes nothing. */
-    draftBegin: () => Promise<{ ok: true; file: string } | { ok: false; error: string }>
-    /** What Claude has written to the draft file: waiting until it holds JSON, then a validated config, the no-browser outcome, or a refusal with its reason. */
-    draftRead: (file: string) => Promise<PreviewDraftRead>
-    /** Removes a draft file once read or given up on. */
-    draftDiscard: (file: string) => Promise<void>
-  }
   sidebarGroups: {
     /** null before the first save: the list then seeds one from its repo groups. */
     load: () => Promise<SidebarLayout | null>
@@ -694,10 +620,6 @@ export interface RendererApi {
     /** The last published focus, null before the first. */
     focus: () => Promise<TestFlowFocus | null>
     onFocus: (cb: (focus: TestFlowFocus) => void) => () => void
-    /** A feature's checklist with its marks; main watches the checklist and results file for `watcher` (changes arrive on `onChanged`). Not found outside the test-flows folder. */
-    showSteps: (watcher: string, path: string) => Promise<StepsView>
-    /** Sets (or with null clears) one step's mark and a Fail's note in the results file; resolves to the checklist as it now stands. */
-    markStep: (path: string, hash: string, mark: Mark | null, note: string) => Promise<StepsView>
   }
   files: {
     /** Where a file link in a chat points, or null when nothing is there. */

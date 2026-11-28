@@ -6,7 +6,6 @@ import { useTicking } from '../../hooks/useTicking'
 import { jobDuration, model3dJobRows, type Model3dJobRow } from '../../../shared/model3dJobs'
 import { useModel3dStore } from '../../state/model3dStore'
 import { useProfilesStore } from '../../state/profilesStore'
-import { useFeaturesStore } from '../../state/featuresStore'
 import { useSessionStatusStore } from '../../state/sessionStatusStore'
 import { useToastStore } from '../../state/toastStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
@@ -31,17 +30,15 @@ const DOT: Record<Model3dJobRow['state'], Exclude<TimelineDot, 'none' | 'neutral
   cancelled: 'pending'
 }
 
-/** Sessions are named from what the main chat's digest knows too, so both name a job's session the same way. */
 function useJobRows(view: ServiceView | null): Model3dJobRow[] {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const profiles = useProfilesStore((s) => s.profiles)
-  const features = useFeaturesStore((s) => s.features)
   const byPane = useSessionStatusStore((s) => s.byPane)
   return useMemo(() => {
     if (!view) return []
     const hosted = Object.values(byPane).map((e) => ({ paneId: e.paneId, cwd: e.cwd }))
-    return model3dJobRows({ view, features, hosted, workspaces, profiles })
-  }, [view, workspaces, profiles, features, byPane])
+    return model3dJobRows({ view, hosted, workspaces, profiles })
+  }, [view, workspaces, profiles, byPane])
 }
 
 /** The 3D service: its server, and every job from every session, newest first. The model viewer takes the right side. */

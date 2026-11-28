@@ -16,8 +16,8 @@ describe('prompt history entries', () => {
   })
 
   it("leave out the app's own prompts, sent or queued", () => {
-    const app: ChatItem = { kind: 'user', id: 'a', text: 'You are the main chat of Command Center. Hi', appPrompt: 'main-chat' }
-    expect(historyEntries([app, user('typed')], [{ uuid: 'q', text: '[Command Center] Sent to x.', appPrompt: 'outcome' }])).toEqual(['typed'])
+    const app: ChatItem = { kind: 'user', id: 'a', text: 'Drift check: check that the context files below still match the code.', appPrompt: 'drift-check' }
+    expect(historyEntries([app, user('typed')], [{ uuid: 'q', text: 'Fix findings: x', appPrompt: 'fix-findings' }])).toEqual(['typed'])
   })
 
   it('trim the prompt and skip blank ones', () => {

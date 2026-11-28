@@ -4,7 +4,7 @@ import { AccentDot } from '../ui/AccentDot'
 import { useMinuteClock } from '../../hooks/useMinuteClock'
 import { useUsageEntries } from '../../state/useUsageEntries'
 import { useMenu } from '../../hooks/useMenu'
-import { ChevronLeft, Columns2, FolderInput, FolderPlus, GitBranchPlus, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { ChevronLeft, Columns2, FolderInput, FolderPlus, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { SESSION_LIST_SHORTCUT } from '../../hooks/useKeyboardShortcuts'
 import { useSessionListStore } from '../../state/sessionListStore'
 import {
@@ -33,9 +33,6 @@ import { closeSession } from '../../state/sessionNavigation'
 import { renameHostedSession } from '../../state/sessionTitleSync'
 import { changeLayout, isShown, openRow, useAccountSectionsStore, useListFold, useSessionSections, useWorkSearchStore } from '../../state/workSessions'
 import type { ChatPair } from '../../state/chatPair'
-import { useFeaturesStore } from '../../state/featuresStore'
-import { FeaturesGroup } from './FeaturesGroup'
-import { MainChatRow } from './MainChatRow'
 import { RepoIcon } from '../RepoIcon'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -160,9 +157,6 @@ export function SessionList() {
             New session
           </Button>
         </span>
-        <IconButton onClick={() => useFeaturesStore.getState().openDialog()} label="New feature" tooltip="Start a feature: its own worktree and a session that runs /flow">
-          <GitBranchPlus size={14} />
-        </IconButton>
         <NewGroupButton accounts={sections.map((s) => s.account)} onPick={startGroup} />
         <ListMenu />
         <IconButton onClick={() => useSessionListStore.getState().toggle()} label="Hide sessions" tooltip={`Hide sessions (${SESSION_LIST_SHORTCUT})`}>
@@ -173,8 +167,6 @@ export function SessionList() {
         <SearchField label="Search sessions" placeholder="Search title, repo or worktree" value={search} onChange={setSearch} />
       </div>
       <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
-        <MainChatRow />
-        <FeaturesGroup />
         {!loading && sections.length === 0 && <EmptyHint>{search.trim() ? 'No session matches.' : 'No sessions yet.'}</EmptyHint>}
         {headed
           ? sections.map((section) => (

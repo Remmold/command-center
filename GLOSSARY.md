@@ -37,7 +37,7 @@ Moving an observed session into the command center: it is resumed as a hosted se
 _Avoid_: Handover, import
 
 **Session title**:
-The name a session goes by in lists and headers. It is "New session" before any prompt, then the first prompt, shortened, until Claude names the session (as in the extension). A session the app starts with its own prompt takes the name the app knows it by, for good: the main chat is "Main chat", a feature session its feature's name, a drift check its name in Context; Claude is never asked to name it from that prompt. A rename beats all of these for good, and reaches the CLI, so VS Code's history shows it too.
+The name a session goes by in lists and headers. It is "New session" before any prompt, then the first prompt, shortened, until Claude names the session (as in the extension). A session the app starts with its own prompt takes the name the app knows it by, for good: a drift check takes its name in Context; Claude is never asked to name it from that prompt. A rename beats all of these for good, and reaches the CLI, so VS Code's history shows it too.
 _Avoid_: Chat name, label, tab name
 
 **Session status**:
@@ -110,84 +110,6 @@ _Avoid_: Moved session, foreign session
 **Last prompt strip**:
 The one-line strip at the top of a chat showing the last prompt Andreas sent there, shown while that prompt is scrolled out of view. Clicking it scrolls the chat back to the prompt.
 _Avoid_: Pinned message, sticky prompt
-
-## Features
-
-**Feature session**:
-The one hosted session that belongs to a feature, started by New feature or by adopting open work, and linked to the feature for good. It sits under Features in the Work list, not among the ordinary sessions.
-_Avoid_: Sub-session, feature chat
-
-**New feature**:
-The dialog that starts a feature: Andreas picks a workspace and describes the feature. The app makes the feature's worktree, starts its feature session and sends it `/flow` with the description. A **feature proposal** started from the main chat takes the same path, plus the starting brief.
-_Avoid_: Start flow, create ticket
-
-**Feature account**:
-The account profile of the workspace a feature was started in. The feature session, its worktree workspace, its servers and its terminals all run on it. The main chat may run on another account and still answers about every feature.
-_Avoid_: Feature login
-
-**Feature worktree**:
-The git worktree and branch made for one feature, so two features of one repo can run and be tested side by side; an adopted feature keeps the worktree it was found in. It is kept when the feature is completed.
-_Avoid_: Sandbox, checkout
-
-**Main chat**:
-The one permanent hosted session pinned at the top of Work: Andreas's orchestrator for planning work across every workspace. It reads the digest, every workspace, every feature worktree and the test flows, and acts only through cards it writes, such as a **feature proposal**, which the app carries out when Andreas clicks. Its tools only read. After a successful Go, and on Reset, it starts a new conversation in the same place; a fresh chat after a Go names the feature just started.
-_Avoid_: Conductor, assistant, master session
-
-**Reset (main chat)**:
-Starting the main chat on a new Claude session in place: the old conversation and its cards go, and the chat knows only the digest again. It happens after every successful Go and from the Reset button.
-_Avoid_: Clear, new chat, restart
-
-**Action card**:
-A card the app draws in the main chat for a block the chat wrote, showing exactly what will happen, with one button. Every kind follows the same rules: only the newest card is live, and only once the chat's reply has finished; a newer card or any later message makes it read-only. The app checks the card before its button enables, and tells the chat how the action ended in one message beginning [Command Center], except where a kind says otherwise. The kinds are the feature proposal, Open session (shows a feature's session and reports nothing), Adopt work, Send message (delivers its message to a feature's session as if typed there, held until that session's turn ends) and Housekeeping (removes merged worktrees, deletes merged local branches, prunes missing worktrees or completes a feature, each item checked again at the click and skipped with its reason when unsafe).
-_Avoid_: Action button, tool card
-
-**Open work**:
-Work in a workspace's repo that no feature tracks: a worktree, a local branch not merged into main and checked out nowhere, or the main checkout sitting on another branch. The digest lists it per workspace; nothing is adopted or removed by itself.
-_Avoid_: Untracked work, orphans
-
-**Adopt work**:
-Making one item of open work a feature in place, from the main chat's card. A worktree stays where it is; a branch gets a worktree where New feature would put one; a main checkout on a branch is switched back to main and the branch moves to a new worktree (refused while it has uncommitted changes). A Claude session found for the folder is resumed, else a new one reads the notes and git log first.
-_Avoid_: Import, take over (that moves a VS Code session), adopted folder (an account's config folder)
-
-**Feature proposal**:
-What the main chat writes when a plan is agreed: a workspace, a name, a description and a starting brief, shown in the chat as a card with a Go button. Nothing is made until Andreas presses Go. Only the newest card is live; an older one reads as superseded, or as Started when its feature exists.
-_Avoid_: Draft feature, request
-
-**Starting brief**:
-The agreed plan (goal, scope, out of scope, open questions, first steps) of a feature started from a proposal. It is saved as `brief.md` in the feature's `.scratch` folder and is the first thing the feature session reads.
-_Avoid_: Plan file, handoff
-
-**Feature digest**:
-The file the app keeps up to date for the main chat: each feature with its stage, tickets done out of total, state (running, waiting on approval or idle), the start of its last reply, test result and server state, then the workspaces with their folders, which it can read and propose a feature in, the open work no feature tracks, and the test-flows folder.
-_Avoid_: Status report, summary file
-
-**Feature stage**:
-Where a feature stands, read from its files: Grilling, Spec, Tickets, Building, Testing, Completed.
-_Avoid_: Phase, status (a ticket's word)
-
-**Preview config**:
-A workspace's saved recipe for booting its servers for testing: an install command, one or more server commands with their ready checks, and the page to open first. A workspace without one (a game, a native app) has no browser, only its test flow. Claude drafts it from the project and Andreas confirms it.
-_Avoid_: Run config, dev config
-
-**Feature port**:
-A free local port the app reserves for one of a feature's servers and hands to it, so features and projects never clash.
-_Avoid_: Assigned port
-
-**Preview browser**:
-The app's own browser window for one feature. It loads only that feature's servers on localhost, and keeps its own cookies and storage, apart from every other feature's.
-_Avoid_: Embedded browser, webview
-
-**Test pair**:
-A feature's test flow window and its preview browser, opened together by Test and flipped between with one hotkey. Several features can each have a pair open.
-_Avoid_: Test layout
-
-**Test step**:
-One line of a feature's test flow checklist: where to go, what to do, what should be seen. Andreas marks it Pass or Fail; a Fail is saved with a note for the feature session to read.
-_Avoid_: Test case, check
-
-**Complete**:
-What Andreas does when the feature's test steps pass: its servers stop, its windows close, the feature is marked Completed and its session moves under Completed. The worktree and branch stay.
-_Avoid_: Close, finish, archive
 
 ## Views
 

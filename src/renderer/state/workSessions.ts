@@ -21,8 +21,6 @@ import {
   nextWaitingRow,
   waitingRows,
   type AccountSection,
-  isNeedsYouRow,
-  type HostedRow,
   type HostedSessionInput,
   type ListFold,
   type SessionGroup,
@@ -38,7 +36,6 @@ import type { ChatProcess } from './chatAccount'
 import { currentAccounts, useAccounts } from './useAccounts'
 import { useSessionStatusStore } from './sessionStatusStore'
 import { useWorkspacesStore } from './workspacesStore'
-import { featurePanes, useFeaturesStore } from './featuresStore'
 
 interface WorkSearchState {
   search: string
@@ -107,12 +104,11 @@ function hostedInputs(
   views: Record<string, ProjectView>,
   byPane: Record<string, SessionStatusEntry>,
   models: ModelSources,
-  workspaces: readonly Workspace[],
-  features: ReadonlySet<string>
+  workspaces: readonly Workspace[]
 ): HostedSessionInput[] {
   return Object.values(views).flatMap((v) => {
     const profileId = workspaces.find((w) => w.id === v.projectId)?.profileId
-    return v.claudeSessions.filter((c) => !features.has(c.id)).map((c) => ({
+    return v.claudeSessions.map((c) => ({
       paneId: c.id,
       workspaceId: v.projectId,
       title: c.title,
@@ -123,18 +119,14 @@ function hostedInputs(
   })
 }
 
-const NO_PANES: ReadonlySet<string> = new Set()
-
 interface ListSources extends Omit<SessionListInput, 'hosted' | 'statuses'> {
   views: Record<string, ProjectView>
   byPane: Record<string, SessionStatusEntry>
   models: ModelSources
-  /** Feature sessions, which the Features group shows instead. */
-  features: ReadonlySet<string>
 }
 
-function listInput({ views, byPane, models, features, ...rest }: ListSources): SessionListInput {
-  return { hosted: hostedInputs(views, byPane, models, rest.workspaces, features), statuses: Object.values(byPane), ...rest }
+function listInput({ views, byPane, models, ...rest }: ListSources): SessionListInput {
+  return { hosted: hostedInputs(views, byPane, models, rest.workspaces), statuses: Object.values(byPane), ...rest }
 }
 
 function currentModelSources(): ModelSources {
@@ -147,7 +139,6 @@ function currentSources(): ListSources {
   return {
     views: useProjectViewsStore.getState().views,
     models: currentModelSources(),
-    features: featurePanes(useFeaturesStore.getState().features),
     byPane: useSessionStatusStore.getState().byPane,
     observed: useObservedStore.getState().sessions,
     workspaces: useWorkspacesStore.getState().workspaces,
@@ -156,8 +147,8 @@ function currentSources(): ListSources {
   }
 }
 
-/** Every session the list is built from, unfiltered; `withFeatures` adds feature sessions, which the Needs you queue counts. */
-export function useSessionSources(withFeatures = false): Omit<SessionListInput, 'search'> {
+/** Every session the list is built from, unfiltered. */
+export function useSessionSources(): Omit<SessionListInput, 'search'> {
   const views = useProjectViewsStore((s) => s.views)
   const byPane = useSessionStatusStore((s) => s.byPane)
   const observed = useObservedStore((s) => s.sessions)
@@ -169,20 +160,18 @@ export function useSessionSources(withFeatures = false): Omit<SessionListInput, 
   const applied = useModelStore((s) => s.applied)
   const defaultByProfile = useModelStore((s) => s.defaultByProfile)
   const processes = useSessionInitStore((s) => s.processByPane)
-  const featureList = useFeaturesStore((s) => s.features)
   return useMemo(
     () =>
       listInput({
         views,
         byPane,
         models: { inits, cachedModels, settingsByProfile, applied, defaultByProfile, processes },
-        features: withFeatures ? NO_PANES : featurePanes(featureList),
         observed,
         workspaces,
         identities,
         search: ''
       }),
-    [views, byPane, inits, cachedModels, settingsByProfile, applied, defaultByProfile, processes, featureList, withFeatures, observed, workspaces, identities]
+    [views, byPane, inits, cachedModels, settingsByProfile, applied, defaultByProfile, processes, observed, workspaces, identities]
   )
 }
 
@@ -334,24 +323,12 @@ export function openRowAt(index: number): void {
   if (row) openRow(row)
 }
 
-/** Waiting feature sessions, which the list's own sections leave out; the Features group shows them first. */
-function waitingFeatureRows(): HostedRow[] {
-  const panes = featurePanes(useFeaturesStore.getState().features)
-  const { search: _search, ...sources } = listInput({ ...currentSources(), features: NO_PANES })
-  return sessionList({ ...sources, search: '' })
-    .flatMap((g) => g.rows)
-    .filter((r): r is HostedRow => isNeedsYouRow(r) && panes.has(r.paneId))
-}
-
-/** The waiting session after the one on screen, in the order the list shows them (features first); a search never hides one. */
+/** The waiting session after the one on screen, in the order the list shows them; a search never hides one. */
 export function jumpToNextWaiting(): void {
   const { sections } = currentSections(false)
-  const features = waitingFeatureRows()
-  const panes = new Set(features.map((r) => r.paneId))
-  const row = nextWaitingRow([...features, ...waitingRows(sections)], paneOnScreen())
+  const row = nextWaitingRow(waitingRows(sections), paneOnScreen())
   if (row)
     openWhereShown(row.paneId, () => {
-      if (panes.has(row.paneId)) return openSession(row.paneId)
       openRow(row)
       return true
     })

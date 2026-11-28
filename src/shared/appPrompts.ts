@@ -1,7 +1,7 @@
 import type { ChatItem } from './chatItems'
 
 /** A prompt the app writes and sends on its own, as opposed to one Andreas typed. */
-export type AppPromptKind = 'main-chat' | 'feature-start' | 'adopt-start' | 'work-moved' | 'outcome' | 'drift-check' | 'fix-findings' | 'preview-setup'
+export type AppPromptKind = 'drift-check' | 'fix-findings'
 
 /** Where an app prompt came from: its kind, and the title the app knows its session by, used if the prompt is the session's first. */
 export interface AppOrigin {
@@ -24,52 +24,20 @@ export function outgoing(prompt: OutgoingPrompt): { text: string; origin?: AppOr
 
 export const APP_PROMPT_MARK = 'Command Center'
 
-const OUTCOME_PREFIX = '[Command Center] '
-const SUMMARY_MAX = 80
-
-/** An outcome line's own first clause, e.g. "Adopted spike/x in app as the feature x". */
-function outcomeSummary(text: string): string {
-  const body = text.startsWith(OUTCOME_PREFIX) ? text.slice(OUTCOME_PREFIX.length) : text
-  const clause = body.split(/;|\.(?=\s|$)/)[0].trim()
-  return clause.length > SUMMARY_MAX ? `${clause.slice(0, SUMMARY_MAX - 1).trimEnd()}…` : clause
+const LABELS: Record<AppPromptKind, string> = {
+  'drift-check': 'drift check instructions',
+  'fix-findings': 'findings to fix'
 }
 
-function what(kind: AppPromptKind, text: string): string {
-  switch (kind) {
-    case 'main-chat':
-      return 'main chat instructions'
-    case 'feature-start':
-      return /\nStarting brief: /.test(text) ? 'started feature with /flow and its brief' : 'started feature with /flow'
-    case 'adopt-start':
-      return 'adopted work, read its notes first'
-    case 'work-moved':
-      return 'told the session where its work moved'
-    case 'outcome':
-      return outcomeSummary(text)
-    case 'drift-check':
-      return 'drift check instructions'
-    case 'fix-findings':
-      return 'findings to fix'
-    case 'preview-setup':
-      return 'preview setup instructions'
-  }
+/** The one line an app prompt shows as, collapsed, e.g. "Command Center · drift check instructions". A kind of a retired feature, kept in old history, shows as a plain app prompt. */
+export function appPromptLabel(kind: AppPromptKind): string {
+  return `${APP_PROMPT_MARK} · ${LABELS[kind] ?? 'app prompt'}`
 }
 
-/** The one line an app prompt shows as, collapsed, e.g. "Command Center · main chat instructions". */
-export function appPromptLabel(kind: AppPromptKind, text: string): string {
-  return `${APP_PROMPT_MARK} · ${what(kind, text)}`
-}
-
-/** The start of each prompt the app writes, in the shapes its builders give it: `mainChatFirstPrompt`, `featureFirstPrompt`, `adoptedFirstPrompt`, `movedWorkPrompt`, the outcome messages, `buildDriftCheck`, `fixMessage` and `buildPreviewSetupPrompt`. */
+/** The start of each prompt the app writes, in the shapes `buildDriftCheck` and `fixMessage` give it. */
 const KNOWN: readonly [AppPromptKind, RegExp][] = [
-  ['main-chat', /^You are the main chat of Command Center\. /],
-  ['feature-start', /^\/flow [^\n]*\n(?:[^\n]*\n)*?Feature name: [^\n]+\nFeature worktree: [^\n]+/],
-  ['adopt-start', /^Adopted work: branch \S+ in [^\n]+\. Read its \.scratch notes and git log -20 first/],
-  ['work-moved', /^This work moved: branch \S+ is now in [^\n]+, and [^\n]+ is back on /],
-  ['outcome', /^\[Command Center\] \S/],
   ['drift-check', /^Drift check: check that the context files below still match the code/],
-  ['fix-findings', /^Fix findings: apply only the findings below, nothing else\./],
-  ['preview-setup', /^Set up preview: propose how this project runs in a browser/]
+  ['fix-findings', /^Fix findings: apply only the findings below, nothing else\./]
 ]
 
 /**

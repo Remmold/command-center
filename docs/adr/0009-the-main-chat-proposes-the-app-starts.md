@@ -1,5 +1,7 @@
 # The main chat proposes a feature; the app starts it
 
+Superseded by ADR 0012: the main chat and features made by the app were removed.
+
 The main chat can plan a feature with Andreas and propose it, but it never starts one. It writes a proposal block in its reply; the app turns that into a card in the chat, and the app starts the feature only when Andreas presses Go on the card. The chat's process keeps read tools only and gains no tool, no MCP server and no write access. This keeps ADR 0008's rule that the main chat is read-only by construction: a proposal is text, and text cannot act.
 
 The consequences that follow from that:

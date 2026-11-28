@@ -111,7 +111,7 @@ if (!app.requestSingleInstanceLock()) {
     const startWithWindows = createStartWithWindowsControl()
     const service = startModel3dService()
     model3d = service
-    registerIpc({ repoIdentities, startWithWindows, model3d: service })
+    registerIpc({ repoIdentities, startWithWindows })
     registerModel3dIpc(service)
     holdQuit(app, () => service.shutdown(), MODEL3D_SHUTDOWN_LIMIT_MS)
     handleMediaScheme()

@@ -15,14 +15,14 @@ describe('chat sends', () => {
   it("hand the chat an app prompt's origin with its text, and none with a typed one", async () => {
     const sent: unknown[][] = []
     const record = async (...args: unknown[]): Promise<boolean> => (sent.push(args), true)
-    void requestSendOnMount('m', appPrompt('main-chat', 'You are the main chat of Command Center. Hi', 'Main chat'))
-    void sendToChat('n', appPrompt('outcome', '[Command Center] Sent to x.', 'Main chat'))
+    void requestSendOnMount('m', appPrompt('drift-check', 'Drift check: x', 'Drift check · This project'))
+    void sendToChat('n', appPrompt('fix-findings', 'Fix findings: x', 'Drift check · This project'))
     void sendToChat('n', 'typed')
     deliver(takeSendRequest('m')!, record)
     for (const send of takeChatSends('n')) deliver(send, record)
     expect(sent).toEqual([
-      ['You are the main chat of Command Center. Hi', { kind: 'main-chat', title: 'Main chat' }],
-      ['[Command Center] Sent to x.', { kind: 'outcome', title: 'Main chat' }],
+      ['Drift check: x', { kind: 'drift-check', title: 'Drift check · This project' }],
+      ['Fix findings: x', { kind: 'fix-findings', title: 'Drift check · This project' }],
       ['typed', undefined]
     ])
   })

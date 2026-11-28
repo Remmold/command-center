@@ -3,6 +3,7 @@ import type { ProjectView } from './projectViewsStore'
 import {
   LAYOUT_VERSION,
   chatOnScreen,
+  dropRetiredMainChat,
   dropShellTabs,
   migrateLayout,
   openShellTab,
@@ -85,5 +86,21 @@ describe('chat on screen', () => {
     const open = toggleIdePanels(view('a'))
     expect(chatOnScreen(open)).toBe(false)
     expect(chatOnScreen({ ...open, centerView: 'chat' })).toBe(true)
+  })
+})
+
+describe('the retired main chat', () => {
+  it("drops the view that held the main chat's pane, from the views, the order and the active project", () => {
+    const mainChat = { ...view('mc'), claudeSessions: [{ id: 'main-chat', title: 'Main chat' }] }
+    const kept = { ...view('app'), claudeSessions: [{ id: 'pane-1', title: 'Fix the login' }] }
+    const saved = { views: { mc: mainChat, app: kept }, order: ['app', 'mc'], activeProjectId: 'mc' as string | null }
+    dropRetiredMainChat(saved)
+    expect(saved).toEqual({ views: { app: kept }, order: ['app'], activeProjectId: null })
+  })
+
+  it('leaves the views alone when no main chat was saved', () => {
+    const saved = { views: { app: view('app') }, order: ['app'], activeProjectId: 'app' }
+    dropRetiredMainChat(saved)
+    expect(saved).toEqual({ views: { app: view('app') }, order: ['app'], activeProjectId: 'app' })
   })
 })

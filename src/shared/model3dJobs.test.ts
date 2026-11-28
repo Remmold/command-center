@@ -33,7 +33,6 @@ const status = (over: Partial<Model3dStatus> = {}): Model3dStatus => ({
 const view = (...jobs: Model3dJob[]): Model3dView => ({ server: 'ready', startedByApp: true, jobs })
 
 const INPUT: Omit<Model3dRowsInput, 'view'> = {
-  features: [{ sessionId: 'pane-1', name: 'make-the-axe' }],
   hosted: [
     { paneId: 'pane-1', cwd: 'C:\\src\\game\\.worktrees\\make-the-axe' },
     { paneId: 'pane-2', cwd: 'C:\\src\\tools' }
@@ -60,12 +59,12 @@ describe('3D view job rows', () => {
     expect(rows.map((r) => r.id)).toEqual(['new', 'old'])
   })
 
-  it("names a feature's session by the feature, its workspace by the deepest folder holding cwd, and its account by configDir", () => {
+  it("names a hosted session by its folder, its workspace by the deepest folder holding cwd, and its account by configDir", () => {
     const [row] = model3dJobRows({
       ...INPUT,
       view: view({ request: req('a', { sessionId: 'pane-1', cwd: 'c:\\SRC\\game\\art', configDir: 'C:/Users/me/.claude-work/' }), status: status() })
     })
-    expect(row).toMatchObject({ session: 'make-the-axe', workspace: 'game', account: 'Work' })
+    expect(row).toMatchObject({ session: 'A session in make-the-axe', workspace: 'game', account: 'Work' })
   })
 
   it('names another hosted session by its folder, and a session the app no longer hosts as closed', () => {
@@ -104,7 +103,7 @@ describe('3D view job rows', () => {
     })
     expect(rows.map((r) => [r.summary, r.session, r.workspace])).toEqual([
       ['Editor turn', 'Command Center', null],
-      ['Editor turn', 'make-the-axe', 'game']
+      ['Editor turn', 'A session in make-the-axe', 'game']
     ])
   })
 

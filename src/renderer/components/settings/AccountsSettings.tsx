@@ -5,14 +5,12 @@ import { profileEnv, removalConfirmText } from '../../../shared/profiles'
 import { loginWorkspace, useProfilesStore } from '../../state/profilesStore'
 import { openShell } from '../../state/sessionNavigation'
 import { useAccounts } from '../../state/useAccounts'
-import { chooseMainChatAccount, useMainChatStore } from '../../state/mainChatStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { Button } from '../ui/Button'
 import { DrawerList } from '../ui/Drawer'
 import { ListItem, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { NoticeLine } from '../ui/NoticeLine'
 import { Page, PageBody, PageGroup, PageHeader, PageNote } from '../ui/Page'
-import { Select } from '../ui/Select'
 import { TextField } from '../ui/TextField'
 import { VsCodeAccountsBanner } from '../VsCodeAccountsBanner'
 import { AccountColorPicker } from './AccountColorPicker'
@@ -47,7 +45,6 @@ export function AccountsSettings() {
               : 'Log in opens a shell as that profile; run claude and then /login in it.'}
           </PageNote>
         </PageGroup>
-        <MainChatAccount />
         <PageGroup
           title="New profile"
           actions={
@@ -71,28 +68,6 @@ export function AccountsSettings() {
         )}
       </PageBody>
     </Page>
-  )
-}
-
-/** The account the main chat runs on; features on other accounts are still read through their files. */
-function MainChatAccount() {
-  const profiles = useProfilesStore((s) => s.profiles)
-  const info = useMainChatStore((s) => s.info)
-  const load = useMainChatStore((s) => s.load)
-  useEffect(() => {
-    void load()
-  }, [load])
-  if (!info) return null
-  return (
-    <PageGroup title="Main chat">
-      <Select
-        label="main chat account"
-        options={profiles.map((p) => ({ value: p.id, label: p.name }))}
-        value={info.profileId}
-        onChange={(profileId) => void chooseMainChatAccount(profileId)}
-      />
-      <PageNote>The account the main chat runs on, the Default account until chosen. Changing it starts a new main chat conversation: the old one stays in the old account's folder.</PageNote>
-    </PageGroup>
   )
 }
 

@@ -32,9 +32,6 @@ import { RunInBackgroundLine } from './RunInBackgroundLine'
 import { AnsweredQuestions } from './QuestionCard'
 import { questionOutcome } from './questionCardModel'
 import { QUESTION_TOOL, parseQuestions } from '../../../shared/approval'
-import { mentionsActionBlock } from '../../../shared/actionBlocks'
-import { ACTION_BLOCKS } from '../../../shared/mainChatActions'
-import { ActionBlocksText } from './ActionCard'
 import { appPromptLabel, type AppPromptKind } from '../../../shared/appPrompts'
 
 const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
@@ -142,7 +139,7 @@ function AppPromptLine({ kind, text, queued }: { kind: AppPromptKind; text: stri
         <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-subtle bg-input">
           <Command size={10} />
         </span>
-        <span className="truncate">{appPromptLabel(kind, text)}</span>
+        <span className="truncate">{appPromptLabel(kind)}</span>
         {queued && <span className="shrink-0 text-faint">· queued</span>}
         <Chevron size={12} className="shrink-0" />
       </button>
@@ -195,8 +192,6 @@ function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens, joinAb
           <TimelinePlaceProvider key={i} value={place}>
             <ContentBlockView
               block={content[i]}
-              itemId={item.id}
-              index={i}
               streaming={streamingFrom !== undefined && i >= streamingFrom}
               durationMs={item.thinkingMs?.[i]}
               thinkingTokens={thinkingTokens}
@@ -218,8 +213,6 @@ function AssistantMessage({ item, stampAt, streamingFrom, thinkingTokens, joinAb
 
 interface BlockProps {
   block: ContentBlock
-  itemId: string
-  index: number
   streaming: boolean
   durationMs: number | undefined
   thinkingTokens?: number
@@ -227,13 +220,12 @@ interface BlockProps {
   footer?: ReactNode
 }
 
-function ContentBlockView({ block, itemId, index, streaming, durationMs, thinkingTokens, stamp, footer }: BlockProps) {
-  const { actions } = useToolContext()
+function ContentBlockView({ block, streaming, durationMs, thinkingTokens, stamp, footer }: BlockProps) {
   if (block.type === 'text') {
     const text = (block as { text: string }).text
     return (
       <TimelineRow dot="neutral" stamp={stamp}>
-        {actions && mentionsActionBlock(text, ACTION_BLOCKS) ? <ActionBlocksText text={text} itemId={itemId} block={index} /> : <Markdown text={text} />}
+        <Markdown text={text} />
         {footer}
       </TimelineRow>
     )

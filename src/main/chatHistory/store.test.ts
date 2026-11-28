@@ -43,7 +43,7 @@ describe('chat history store', () => {
   })
 
   it("keeps an app prompt's origin across a restart", async () => {
-    const sent: ChatItem = { kind: 'user', id: 'u1', text: '[Command Center] Sent to x. Confirm this to the user in words.', appPrompt: 'outcome', at: 5 }
+    const sent: ChatItem = { kind: 'user', id: 'u1', text: 'Fix findings: apply only the findings below, nothing else.', appPrompt: 'fix-findings', at: 5 }
     await store.apply('pane-1', [{ kind: 'append', items: [sent, user('u2', 'typed')] }])
     expect((await restart().load())['pane-1']).toEqual([sent, user('u2', 'typed')])
     expect((await restart().load())['pane-1']).toEqual([sent, user('u2', 'typed')])

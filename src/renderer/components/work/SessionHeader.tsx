@@ -9,18 +9,12 @@ import {
   MoreHorizontal,
   PanelLeft,
   PieChart,
-  RotateCcw,
   Terminal,
   Trash2,
   X
 } from 'lucide-react'
-import { MAIN_CHAT_PANE_ID } from '../../../shared/mainChat'
-import type { ObservedSession, SessionStatus, Workspace } from '../../../shared/types'
+import type { ObservedSession, Workspace } from '../../../shared/types'
 import { useChatItemsStore } from '../../state/chatItemsStore'
-import { useFeaturesStore } from '../../state/featuresStore'
-import { useFreshStartStore } from '../../state/freshStartStore'
-import { resetMainChat } from '../../state/mainChatStore'
-import { useToastStore } from '../../state/toastStore'
 import {
   useProjectViewsStore,
   type ClaudeChatSession,
@@ -123,7 +117,6 @@ export function HostedSessionHeader({ workspace, view, session, place }: HostedP
             >
               <Terminal size={14} strokeWidth={2} />
             </Button>
-            {session.id === MAIN_CHAT_PANE_ID && <MainChatReset status={status} />}
             <ChatMenu view={view} session={session} />
             <HalfControls place={place} closable={false} />
           </span>
@@ -137,31 +130,6 @@ export function HostedSessionHeader({ workspace, view, session, place }: HostedP
       <AccountMismatchNotice workspace={workspace} paneId={session.id} />
       <CurrentTicketStrip workspace={workspace} paneId={session.id} />
     </>
-  )
-}
-
-/** Starts the main chat on a new conversation; asks first while it is answering, and waits while a feature is starting. */
-function MainChatReset({ status }: { status: SessionStatus }) {
-  const starting = useFeaturesStore((s) => s.starting > 0)
-  const resetting = useFreshStartStore((s) => MAIN_CHAT_PANE_ID in s.pending)
-  const reset = () => {
-    const answering = status === 'running' || status === 'needs-approval'
-    if (answering && !confirm('The main chat is answering. Reset it anyway? Its turn stops and a new conversation starts.')) return
-    void resetMainChat().catch((err) => {
-      console.error('failed to reset the main chat', err)
-      useToastStore.getState().show('The main chat could not be reset.')
-    })
-  }
-  return (
-    <Button
-      variant="ghost"
-      onClick={reset}
-      disabled={starting || resetting}
-      label="Reset"
-      tooltip={starting ? 'Wait until the feature has started' : "Start a new main chat; plans already started live in each feature's brief"}
-    >
-      <RotateCcw size={14} strokeWidth={2} />
-    </Button>
   )
 }
 

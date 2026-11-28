@@ -26,7 +26,7 @@ describe('last prompt', () => {
   })
 
   it('skips prompts the app wrote', () => {
-    const app: ChatItem = { kind: 'user', id: 'u2', text: '[Command Center] Sent to x.', appPrompt: 'outcome' }
+    const app: ChatItem = { kind: 'user', id: 'u2', text: 'Fix findings: x', appPrompt: 'fix-findings' }
     expect(lastPrompt([user('u1', 'typed'), reply('a'), app, reply('b')])).toEqual({ id: 'u1', text: 'typed' })
   })
 

@@ -1,23 +1,12 @@
 import { app } from 'electron'
 import { join } from 'node:path'
-import { digestFileName } from '../features/digest'
 
 export function userDataPath(...parts: string[]): string {
   return join(app.getPath('userData'), ...parts)
 }
 
-/** The feature digest the main chat reads, alone in its own folder so the chat's read access takes in nothing else of the app's data. */
-export function featureDigestFile(): string {
-  return userDataPath('feature-digest', digestFileName)
-}
-
-/** Where the digest was kept before it had a folder of its own. */
-export function legacyFeatureDigestFile(): string {
-  return userDataPath(digestFileName)
-}
-
-/** The fixed folder the main chat runs in. */
-export function mainChatDir(): string {
+/** The folder the retired main chat ran in; only its leftover workspace record is looked for. */
+export function retiredMainChatDir(): string {
   return userDataPath('main-chat')
 }
 
@@ -32,11 +21,6 @@ export function appsFile(): string {
 /** Where drift checks write their run files, one JSON file per run (ADR 0005). */
 export function driftChecksFolder(): string {
   return userDataPath('drift-checks')
-}
-
-/** Where Set up preview sessions write their proposed preview configs, one JSON file per request. */
-export function previewDraftsFolder(): string {
-  return userDataPath('preview-drafts')
 }
 
 /** The 3D service's jobs folder (ADR 0011): requests from gen3d.py, statuses and service.json from the app. */

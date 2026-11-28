@@ -20,7 +20,7 @@ function shortened(line: string): string {
 
 /**
  * Only the first prompt with text names a session, and never once it was renamed. A prompt the app wrote never names it
- * by its text: the session takes `appTitle`, the name the app knows it by (the main chat, a feature's name, a drift check).
+ * by its text: the session takes `appTitle`, the name the app knows it by (a drift check).
  */
 export function titleAfterPrompt(session: SessionTitle, prompt: string, appTitle?: string): SessionTitle {
   if (session.titleRenamed || session.title !== NEW_SESSION_TITLE) return session
@@ -53,11 +53,6 @@ export function wantsClaudeTitle(
   if (firstPrompt) return { ask: true, requests: 1 }
   if (requests === 0 || requests >= MAX_TITLE_REQUESTS) return { ask: false, requests }
   return { ask: true, requests: requests + 1 }
-}
-
-/** A session that starts a new conversation in place is named again by its next prompt, unless the user named it. */
-export function titleAfterFreshStart(session: SessionTitle): SessionTitle {
-  return session.titleRenamed ? session : { title: NEW_SESSION_TITLE }
 }
 
 export function titleAfterRename(session: SessionTitle, name: string): SessionTitle {

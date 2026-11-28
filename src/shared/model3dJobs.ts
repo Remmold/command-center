@@ -1,12 +1,8 @@
 import { MODEL3D_APP_SESSION, type Model3dJobState, type Model3dOutput, type Model3dProgress, type Model3dView } from './model3d'
 import { DEFAULT_PROFILE_ID } from './types'
 
-/**
- * The sessions both the 3D view and the main chat's digest know, so both name a job's session the same way: the main
- * process knows a feature session's title (the feature's name) and the folder of every session it hosts, nothing more.
- */
+/** The sessions the 3D view knows: the folder of every session the app hosts. */
 export interface Model3dKnownSessions {
-  features: readonly { sessionId: string; name: string }[]
   hosted: readonly { paneId: string; cwd: string }[]
 }
 
@@ -58,7 +54,7 @@ function progressText(p: Model3dProgress | null): string | null {
 }
 
 /**
- * Who asked for a job: "Command Center" for Open editor, a feature's name, "A session in <folder>" for another hosted
+ * Who asked for a job: "Command Center" for Open editor, "A session in <folder>" for a hosted
  * session, "A closed session" for one the app no longer hosts, and "Outside the app" with no session id, naming the
  * cwd folder only when no workspace holds it.
  */
@@ -70,15 +66,13 @@ export function model3dSessionLabel(
   const id = request.sessionId
   if (id === MODEL3D_APP_SESSION) return 'Command Center'
   if (id === '') return inWorkspace ? 'Outside the app' : `Outside the app · ${folderName(request.cwd)}`
-  const feature = known.features.find((f) => f.sessionId === id)
-  if (feature) return feature.name
   const hosted = known.hosted.find((h) => h.paneId === id)
   return hosted ? `A session in ${folderName(hosted.cwd)}` : 'A closed session'
 }
 
 /** The 3D view's job list, newest first, with who asked: the session, its workspace and its account. */
-export function model3dJobRows({ view, features, hosted, workspaces, profiles }: Model3dRowsInput): Model3dJobRow[] {
-  const known: Model3dKnownSessions = { features, hosted }
+export function model3dJobRows({ view, hosted, workspaces, profiles }: Model3dRowsInput): Model3dJobRow[] {
+  const known: Model3dKnownSessions = { hosted }
   const folders = workspaces.map((w) => ({ name: w.name, key: pathKey(w.path) })).sort((a, b) => b.key.length - a.key.length)
   const account = (configDir: string): string => {
     const found = configDir === '' ? profiles.find((p) => p.id === DEFAULT_PROFILE_ID) : profiles.find((p) => pathKey(p.configDir) === pathKey(configDir))

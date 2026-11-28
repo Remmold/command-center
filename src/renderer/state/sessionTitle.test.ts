@@ -8,7 +8,6 @@ import {
   titleRequests,
   wantsClaudeTitle
 } from './sessionTitle'
-import { MAIN_CHAT_TITLE } from '../../shared/mainChat'
 
 const fresh = { title: NEW_SESSION_TITLE }
 
@@ -112,33 +111,29 @@ describe('session title', () => {
   })
 
   describe('of a session whose first prompt the app wrote', () => {
-    const MAIN = 'You are the main chat of Command Center. Your instructions describe your role.'
-    const FLOW = '/flow Export the report as CSV\n\nFeature name: add-export\nFeature worktree: C:\\wt'
+    const CHECK = 'Drift check: check that the context files below still match the code.'
+    const TITLE = 'Drift check · This project'
 
-    it('is the main chat\'s title for the main chat, never the prompt\'s text', () => {
-      expect(titleAfterPrompt(fresh, MAIN, MAIN_CHAT_TITLE).title).toBe('Main chat')
-    })
-
-    it("is the feature's name for a feature session", () => {
-      expect(titleAfterPrompt(fresh, FLOW, 'add-export').title).toBe('add-export')
+    it("is the app's title for it, never the prompt's text", () => {
+      expect(titleAfterPrompt(fresh, CHECK, TITLE).title).toBe(TITLE)
     })
 
     it('is the name the app gave a session it hosts again, before any prompt', () => {
-      expect(titleAfterPrompt(fresh, '', 'add-export').title).toBe('add-export')
+      expect(titleAfterPrompt(fresh, '', TITLE).title).toBe(TITLE)
     })
 
     it('never asks Claude to name it from the app prompt, so a later typed prompt neither renames it nor asks', () => {
       const first = wantsClaudeTitle(titleRequests(), fresh, true, true)
       expect(first.ask).toBe(false)
-      const named = titleAfterPrompt(fresh, MAIN, MAIN_CHAT_TITLE)
-      expect(titleAfterPrompt(named, 'plan the export').title).toBe('Main chat')
+      const named = titleAfterPrompt(fresh, CHECK, TITLE)
+      expect(titleAfterPrompt(named, 'apply the fixes').title).toBe(TITLE)
       expect(wantsClaudeTitle(first.requests, named, false).ask).toBe(false)
     })
 
     it('keeps a rename the user made, before or after', () => {
       const renamed = titleAfterRename(fresh, 'Planning')
-      expect(titleAfterPrompt(renamed, MAIN, MAIN_CHAT_TITLE).title).toBe('Planning')
-      expect(titleAfterRename(titleAfterPrompt(fresh, FLOW, 'add-export'), 'Export').title).toBe('Export')
+      expect(titleAfterPrompt(renamed, CHECK, TITLE).title).toBe('Planning')
+      expect(titleAfterRename(titleAfterPrompt(fresh, CHECK, TITLE), 'Memory').title).toBe('Memory')
     })
 
     it('leaves a typed first prompt naming the session as before', () => {

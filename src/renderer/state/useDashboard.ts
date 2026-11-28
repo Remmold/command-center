@@ -16,7 +16,7 @@ function useObservedTail(): ObservedTail | null {
 }
 
 export function useDashboard(now: number): Dashboard {
-  const sources = useSessionSources(true)
+  const sources = useSessionSources()
   const board = useBoardStore((s) => s.model)
   const profiles = useProfilesStore((s) => s.profiles)
   const usage = useUsageStore((s) => s.byProfile)

@@ -13,7 +13,6 @@ import { pairCompactions } from './compaction'
 import { rowKind, timelineJoins, type RowKind } from './timelineRows'
 import { FileOpenerProvider } from './fileOpener'
 import { LabeledDivider } from '../ui/LabeledDivider'
-import { useActionHost } from './useActionHost'
 
 interface Props {
   items: ChatItem[]
@@ -25,8 +24,6 @@ interface Props {
   /** True while the turn runs: calls without a result are then running. */
   busy?: boolean
   background?: BackgroundHost
-  /** The main chat: feature proposal blocks are drawn as cards. */
-  proposalCards?: boolean
 }
 
 function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
@@ -63,7 +60,7 @@ function stampTime(item: ChatItem, streamingId: string | undefined): number | un
 }
 
 /** Chat items with each tool result folded into the row of the call it answers, subagent items under their Agent call, and a date line where the day changes. */
-export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents, busy = false, background, proposalCards = false }: Props) {
+export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents, busy = false, background }: Props) {
   // The passes below see only the streaming message's shape, so a delta reruns none of them; its row alone gets the real text.
   const shape = useStreamShape(streaming)
   const view = useMemo(() => withStreaming(items, shape), [items, shape])
@@ -80,10 +77,9 @@ export function ChatItems({ items, cwd, streaming = null, thinkingTokens, agents
   const joins = useMemo(() => timelineJoins(kinds), [kinds])
   const latestTodoId = useMemo(() => latestTodoCallId(groups.main, pairs), [groups, pairs])
   const running = useRunningCalls(view.items, busy)
-  const actions = useActionHost(items, busy, proposalCards)
   const context = useMemo(
-    () => ({ pairs, cwd, latestTodoId, subagentItems: groups.byCall, agents, running, background, actions }),
-    [pairs, cwd, latestTodoId, groups, agents, running, background, actions]
+    () => ({ pairs, cwd, latestTodoId, subagentItems: groups.byCall, agents, running, background }),
+    [pairs, cwd, latestTodoId, groups, agents, running, background]
   )
   const stamps = useMemo(() => groups.main.map((item) => stampTime(item, view.live?.id)), [groups, view.live])
   const days = useMemo(() => dayBreaks(stamps), [stamps])

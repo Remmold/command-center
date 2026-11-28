@@ -7,12 +7,9 @@ import { useObservedStore } from '../../state/observedStore'
 import { useAgentTails } from '../../state/subagentTailsStore'
 import { useTestFlowsFolder } from '../../state/testFlowStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
-import { featureChecklistPath, findTestFlows, repoNameFor, type TestFlowPick, type TestFlowView } from '../../../shared/testFlow'
-import type { Mark, StepsView } from '../../../shared/testSteps'
+import { findTestFlows, repoNameFor, type TestFlowPick, type TestFlowView } from '../../../shared/testFlow'
 import { TestFlowPanel } from '../testFlow/TestFlowPanel'
 import { useTestFlowView, viewKeyOf } from '../testFlow/useTestFlowView'
-import { useTestStepsView } from '../testFlow/useTestStepsView'
-import { useFeaturesStore } from '../../state/featuresStore'
 import { TabStrip } from '../ui/TabStrip'
 import { collectMedia, type MediaAttachment, type MediaEntry } from './chatMedia'
 import { MediaGrid } from './MediaGrid'
@@ -77,8 +74,6 @@ interface SessionTestFlow {
   view: TestFlowView | null
   folder: string
   repoName: string
-  /** The feature checklist with marks, when the session is a feature's. */
-  steps: { view: StepsView | null; onMark: (hash: string, mark: Mark | null, note?: string) => void }
 }
 
 function useSessionTestFlow(items: readonly ChatItem[], cwd: string | undefined): SessionTestFlow {
@@ -87,9 +82,7 @@ function useSessionTestFlow(items: readonly ChatItem[], cwd: string | undefined)
   const picks = useMemo(() => findTestFlows({ items, folder, repoName }), [items, folder, repoName])
   const paths = useMemo(() => picks.map((p) => p.path), [picks])
   const view = useTestFlowView(paths)
-  const checklist = useFeaturesStore((s) => featureChecklistPath(s.features, cwd, folder, repoName))
-  const steps = useTestStepsView(checklist)
-  return { picks, view, folder, repoName, steps: { view: steps.view, onMark: steps.mark } }
+  return { picks, view, folder, repoName }
 }
 
 /** True once what the Test tab shows changed while another tab was open, until the Test tab opens again. */

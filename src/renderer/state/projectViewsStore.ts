@@ -4,6 +4,7 @@ import { DEFAULT_PROFILE_ID, DEFAULT_SHELL_KIND, type PtyKind, type Workspace } 
 import { useChatItemsStore } from './chatItemsStore'
 import {
   LAYOUT_VERSION,
+  dropRetiredMainChat,
   dropShellTabs,
   loadedActivityView,
   migrateLayout,
@@ -23,7 +24,6 @@ import {
   NEW_SESSION_TITLE,
   migratedTitle,
   titleAfterClaude,
-  titleAfterFreshStart,
   titleAfterPrompt,
   titleAfterRename,
   type SessionTitle
@@ -108,14 +108,12 @@ interface ProjectViewsState {
 
   addClaudeSession: (
     projectId: string,
-    options?: { id?: string; claudeSessionId?: string; model?: ClaudeModel; effort?: string; permissionMode?: PermissionMode; addDirs?: string[]; appTitle?: string }
+    options?: { id?: string; claudeSessionId?: string; model?: ClaudeModel; effort?: string; permissionMode?: PermissionMode; addDirs?: string[] }
   ) => ClaudeChatSession | null
   closeClaudeSession: (projectId: string, sessionId: string) => void
   setActiveClaudeSession: (projectId: string, sessionId: string) => void
   setClaudeSessionId: (paneId: string, claudeSessionId: string) => void
   clearClaudeSessionId: (paneId: string) => void
-  /** The session drops its Claude id and its title, so its next start is a new conversation named afresh. */
-  startOver: (paneId: string) => void
   setSessionPermissionMode: (paneId: string, mode: PermissionMode) => void
   /** A new model drops the effort pick; the CLI applies the new model's own default. */
   setSessionModel: (paneId: string, model: ClaudeModel) => void
@@ -332,8 +330,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         if (!view) return null
         const session: ClaudeChatSession = {
           id: options?.id ?? makeId(),
-          // A session the app hosts again (the main chat, a feature's) is named as the app knows it, as its first app prompt named it.
-          ...titleAfterPrompt({ title: NEW_SESSION_TITLE }, '', options?.appTitle),
+          title: NEW_SESSION_TITLE,
           ...(options?.model || options?.effort ? pickedOf(options) : startingChoiceOn(profileOf(projectId))),
           thinking: true,
           ...(options?.claudeSessionId ? { claudeSessionId: options.claudeSessionId } : {}),
@@ -414,11 +411,6 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
             }
           }
         }),
-
-      startOver: (paneId) => {
-        get().clearClaudeSessionId(paneId)
-        retitle(set, paneId, titleAfterFreshStart)
-      },
 
       setSessionPermissionMode: (paneId, mode) => updateSession(set, paneId, { permissionMode: mode }),
       setSessionModel: (paneId, model) => updateSession(set, paneId, { model, effort: undefined }),
@@ -765,6 +757,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         if (fromVersion < 10) migratePermissionModes(state as SavedModes)
         if (fromVersion < 11) migrateModelChoices(state as SavedModelChoices)
         if (fromVersion < 12) unsetStoreDefault(state as SavedModes)
+        if (fromVersion < 14) dropRetiredMainChat(state)
         return persisted as ProjectViewsState
       },
       partialize: (state) => ({
