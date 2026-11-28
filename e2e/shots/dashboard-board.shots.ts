@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { shutdown } from '../harness'
+import { captureWindow } from './capture'
 import { env, resize, seed, startIn } from './seed'
 
 /**
@@ -21,7 +22,7 @@ async function shoot(app: ElectronApplication, page: Page, name: string): Promis
   for (const [label, w, h] of [['1440', 1440, 900], ['1100', 1100, 800]] as const) {
     await resize(app, w, h)
     await page.waitForTimeout(400)
-    await page.screenshot({ path: join(OUT, `${PREFIX}-${name}-${label}.png`) })
+    await captureWindow(app, page, join(OUT, `${PREFIX}-${name}-${label}.png`))
   }
 }
 

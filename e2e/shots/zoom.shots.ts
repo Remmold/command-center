@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron, expect, test, type Locator, type Page } from '@playwright/test'
 import { shutdown } from '../harness'
+import { captureWindow } from './capture'
 import { env, resize, seed, startIn } from './seed'
 
 /**
@@ -171,9 +172,7 @@ for (const percent of [110, 125, 150]) {
       await startIn(page, 'ledger-web', 'run the onboarding tests', 'Ran the onboarding suite')
       const shot = async (name: string) => {
         await page.waitForTimeout(800)
-        // Playwright's page screenshot crops a zoomed page to its CSS viewport, so the window paints itself instead.
-        const png = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'))
-        writeFileSync(join(OUT, `zoom-${percent}-${name}.png`), Buffer.from(png, 'base64'))
+        await captureWindow(app, page, join(OUT, `zoom-${percent}-${name}.png`))
       }
       const sideways = ['body', 'header', 'nav[aria-label="Sessions"]', 'nav[aria-label="Sessions"] li']
 
@@ -187,14 +186,7 @@ for (const percent of [110, 125, 150]) {
       await expect(page.locator(`${LIST} section > [data-section-header] > button .meter-reading-percent`)).toHaveCount(2, { timeout: 15_000 })
       expect(await narrowListProblems(page)).toEqual([])
       const listShot = async (name: string) => {
-        const listBox = (await page.locator(LIST).boundingBox())!
-        const listPng = await app.evaluate(async ({ BrowserWindow }, b) => {
-          const contents = BrowserWindow.getAllWindows()[0].webContents
-          const z = contents.getZoomFactor()
-          const rect = { x: Math.round(b.x * z), y: Math.round(b.y * z), width: Math.round(b.width * z), height: Math.round(b.height * z) }
-          return (await contents.capturePage(rect)).toPNG().toString('base64')
-        }, listBox)
-        writeFileSync(join(OUT, `zoom-${percent}-${name}.png`), Buffer.from(listPng, 'base64'))
+        await captureWindow(app, page, join(OUT, `zoom-${percent}-${name}.png`), (await page.locator(LIST).boundingBox())!)
       }
       await listShot('work-list-accounts')
       const workSection = page.getByRole('navigation', { name: 'Sessions' }).getByRole('button', { name: /^Work · Team/ })
