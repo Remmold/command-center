@@ -13,7 +13,7 @@ const keyOf = (path: string): string => normalize(path).toLowerCase()
 
 export const MEDIA_SCHEME_PRIVILEGES = { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }
 
-/** Looks up each path a chat named, as a file link resolves, and lets the scheme serve the ones that are images or videos. */
+/** Looks up each path a chat or the 3D view named, as a file link resolves, and lets the scheme serve the ones that are images, videos or GLB models. */
 export async function resolveMedia(cwd: string, paths: readonly string[]): Promise<MediaFile[]> {
   return Promise.all(
     paths.map(async (path): Promise<MediaFile> => {

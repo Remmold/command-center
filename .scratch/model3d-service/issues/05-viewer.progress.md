@@ -1,0 +1,3 @@
+- done: ticket 05 viewer built (three.js bundled, GLTFLoader + OrbitControls, wireframe, lit/unlit, .json stats with scene-count fallback, sheet, job models, Open model…, .glb Media tiles); quick tier green; full e2e 19 passed in 2.5 min; scenario (a) checks canvas pixels change for wireframe and unlit (WebGL draws in the e2e window)
+- next: code review of git diff 373bb07..HEAD, fixes in a follow-up commit
+- open reds: none

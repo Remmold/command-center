@@ -115,3 +115,43 @@ export function parseModel3dRequest(raw: unknown): { ok: true; request: Model3dR
     }
   }
 }
+
+/** A model's budget figures as gen3d.py's `<name>.json` gives them; null where the file has no such value. */
+export interface Model3dStats {
+  tris: number | null
+  /** Each texture as `<width>x<height>`. */
+  textures: string[] | null
+  preset: string | null
+  seconds: number | null
+  /** The bounding box, x by y by z. */
+  size: [number, number, number] | null
+}
+
+/** A `.glb` the 3D view may show: its URL and its sheet's went through the media gate. */
+export interface Model3dModel {
+  path: string
+  /** The file name without `.glb`. */
+  name: string
+  url: string
+  sheetUrl: string | null
+  /** From `<name>.json`; all null without one. */
+  stats: Model3dStats
+}
+
+export type Model3dOpenResult = { ok: true; model: Model3dModel } | { ok: false; error: string }
+
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0
+const isLength = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+
+/** The stats in a parsed `<name>.json`; a value of the wrong shape counts as missing. */
+export function parseModel3dStats(raw: unknown): Model3dStats {
+  const r = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
+  const size = r.size_xyz
+  return {
+    tris: isCount(r.tris) ? r.tris : null,
+    textures: Array.isArray(r.textures) && r.textures.every((t) => typeof t === 'string' && /^\d+x\d+$/.test(t)) ? (r.textures as string[]) : null,
+    preset: isString(r.preset) && r.preset !== '' ? r.preset : null,
+    seconds: isLength(r.seconds) ? r.seconds : null,
+    size: Array.isArray(size) && size.length === 3 && size.every(isLength) ? [size[0], size[1], size[2]] : null
+  }
+}

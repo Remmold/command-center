@@ -6,7 +6,7 @@ import type { ChatItem } from './types'
 
 export type MediaSource = { kind: 'file'; path: string } | { kind: 'data'; dataUrl: string }
 
-/** An image or video the chat touched, at its newest mention. */
+/** An image, video or GLB model the chat touched, at its newest mention. */
 export interface MediaEntry {
   /** The resolved path, lower-cased with forward slashes, or the attachment's own id. */
   key: string
@@ -136,7 +136,7 @@ function mentionsOf(items: readonly ChatItem[], attachments: readonly MediaAttac
   return found
 }
 
-/** Every image and video the chat named, newest first, one per resolved path at its newest mention. */
+/** Every image, video and GLB model the chat named, newest first, one per resolved path at its newest mention. */
 export function collectMedia({ items, cwd, attachments = [] }: MediaInput): MediaEntry[] {
   const byKey = new Map<string, MediaEntry>()
   for (const mention of mentionsOf(items, attachments)) {

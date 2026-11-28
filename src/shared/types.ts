@@ -3,7 +3,7 @@ import type { ChooseImageResult, RepoIconRequest, RepoIdentityViews } from './re
 import type { ChatItem } from './chatItems'
 import type { SubagentItemsSource, SubagentSource, SubagentTailEvent } from './subagentTail'
 import type { AppView } from './views'
-import type { Model3dActionResult, Model3dView } from './model3d'
+import type { Model3dActionResult, Model3dOpenResult, Model3dView } from './model3d'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
@@ -804,6 +804,10 @@ export interface RendererApi {
     cancel: (id: string) => Promise<Model3dActionResult>
     /** Run anyway on a waiting job: skips the cluster, Unity and coord checks, never the GPU turn. */
     runAnyway: (id: string) => Promise<Model3dActionResult>
+    /** A `.glb` for the viewer, through the media gate, with its sheet and `.json` stats. */
+    openModel: (path: string) => Promise<Model3dOpenResult>
+    /** Open model…: a native picker for one `.glb`, then as openModel; null when cancelled. */
+    pickModel: () => Promise<Model3dOpenResult | null>
   }
   startWithWindows: {
     get: () => Promise<StartWithWindowsState>

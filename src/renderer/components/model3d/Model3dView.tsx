@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Model3dServerState, Model3dView as ServiceView } from '../../../shared/model3d'
+import { Box } from 'lucide-react'
+import type { Model3dOutput, Model3dServerState, Model3dView as ServiceView } from '../../../shared/model3d'
+import { fileBaseName } from '../../../shared/fileLinks'
 import { useTicking } from '../../hooks/useTicking'
 import { jobDuration, model3dJobRows, type Model3dJobRow } from '../../state/model3dJobs'
 import { useModel3dStore } from '../../state/model3dStore'
@@ -11,11 +13,12 @@ import { Button } from '../ui/Button'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { EmptyState } from '../ui/EmptyState'
 import { HeaderRow } from '../ui/HeaderRow'
-import { ListItem, ListRowLines, ListRowMeta } from '../ui/ListRow'
+import { ListItem, ListRow, ListRowLines, ListRowMeta, ListRowText } from '../ui/ListRow'
 import { NoticeLine } from '../ui/NoticeLine'
 import { SidebarLayout } from '../ui/SidebarLayout'
 import { DotMark, type TimelineDot } from '../ui/Timeline'
 import { Toolbar } from '../ui/Toolbar'
+import { ModelViewer } from './ModelViewer'
 
 const SERVER_LABEL: Record<Model3dServerState, string> = { stopped: 'Stopped', starting: 'Starting', ready: 'Ready', stopping: 'Stopping' }
 const DOT: Record<Model3dJobRow['state'], Exclude<TimelineDot, 'none' | 'neutral'>> = {
@@ -66,7 +69,7 @@ export function Model3dView() {
         </>
       }
     >
-      <EmptyState>No model open.</EmptyState>
+      <ModelViewer />
     </SidebarLayout>
   )
 }
@@ -122,11 +125,19 @@ function JobItem({ row, now }: { row: Model3dJobRow; now: number }) {
   const runAnyway = useModel3dStore((s) => s.runAnyway)
   const where = [row.session, row.workspace, row.account].filter((part): part is string => !!part).join(' · ')
   const line = row.error ?? row.waitReason ?? row.progress
+  const models = row.state === 'done' && row.outputs.length > 0 ? <JobModels outputs={row.outputs} /> : null
   return (
     <ListItem
       alignWithRows
       tooltip={row.summary}
-      detail={line ? <NoticeLine tone={row.state === 'failed' ? 'warning' : 'muted'}>{line}</NoticeLine> : undefined}
+      detail={
+        line || models ? (
+          <>
+            {line && <NoticeLine tone={row.state === 'failed' ? 'warning' : 'muted'}>{line}</NoticeLine>}
+            {models}
+          </>
+        ) : undefined
+      }
     >
       <DotMark dot={DOT[row.state]} />
       <ListRowLines
@@ -154,5 +165,23 @@ function JobItem({ row, now }: { row: Model3dJobRow; now: number }) {
         </Button>
       )}
     </ListItem>
+  )
+}
+
+const pathKey = (p: string): string => p.replace(/\\/g, '/').toLowerCase()
+
+/** A finished job's models; a click opens one in the viewer. */
+function JobModels({ outputs }: { outputs: Model3dOutput[] }) {
+  const open = useModel3dStore((s) => s.model)
+  const openModel = useModel3dStore((s) => s.openModel)
+  return (
+    <ul aria-label="Models">
+      {outputs.map((o) => (
+        <ListRow key={o.glb} nested active={open !== null && pathKey(open.path) === pathKey(o.glb)} tooltip={o.glb} onClick={() => void openModel(o.glb)}>
+          <Box size={14} strokeWidth={1.75} />
+          <ListRowText primary={fileBaseName(o.glb)} />
+        </ListRow>
+      ))}
+    </ul>
   )
 }
