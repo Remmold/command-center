@@ -25,6 +25,7 @@ async function openInEditor(cwd: string, relative: string): Promise<boolean> {
   if (!read.ok || read.binary) return false
   store.openFile(view.projectId, { path: relative, content: read.content ?? '', dirty: false })
   store.setActive(view.projectId)
+  store.setActivityView('explorer')
   if (!useProjectViewsStore.getState().views[view.projectId]?.idePanelsOpen) store.toggleIdePanels(view.projectId)
   return true
 }

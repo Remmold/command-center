@@ -5,10 +5,12 @@ import { useChatItemsStore } from './chatItemsStore'
 import {
   LAYOUT_VERSION,
   dropShellTabs,
+  loadedActivityView,
   migrateLayout,
   openShellTab,
   persistableView,
   toggleIdePanels,
+  type ActivityView,
   type ShellOptions
 } from './projectViewLayout'
 import { migratePermissionModes, unsetStoreDefault, type PermissionMode, type SavedModes } from './permissionModes'
@@ -82,7 +84,7 @@ export interface ProjectView {
   shellDrawerOpen: boolean
 }
 
-export type ActivityView = 'explorer' | 'sourceControl' | null
+export type { ActivityView }
 
 interface ProjectViewsState {
   views: Record<string, ProjectView>
@@ -90,7 +92,7 @@ interface ProjectViewsState {
   activeProjectId: string | null
   /** The mode the user last picked for new sessions; unset follows settings.json. */
   defaultPermissionMode?: PermissionMode
-  /** Currently visible side activity (file tree etc.). null = nothing visible. */
+  /** What the side panel shows while the IDE panels are open, shared by all workspaces. */
   activityView: ActivityView
   setActivityView: (view: ActivityView) => void
 
@@ -311,10 +313,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         set((s) => {
           const v = s.views[projectId]
           if (!v) return s
-          const next = toggleIdePanels(v)
-          // The side panel choice is shared by all workspaces; never open the IDE onto an empty side.
-          const activityView = next.idePanelsOpen && s.activityView === null ? 'explorer' : s.activityView
-          return { views: { ...s.views, [projectId]: next }, activityView }
+          return { views: { ...s.views, [projectId]: toggleIdePanels(v) } }
         }),
 
       toggleShellDrawer: (projectId) => {
@@ -719,6 +718,10 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
       name: 'command-center.project-views',
       storage: createJSONStorage(() => localStorage),
       version: LAYOUT_VERSION,
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as Partial<ProjectViewsState>
+        return { ...current, ...saved, activityView: loadedActivityView(saved.activityView) }
+      },
       migrate: (persisted: unknown, fromVersion: number) => {
         if (!persisted || typeof persisted !== 'object') return persisted as ProjectViewsState
         const state = persisted as {
