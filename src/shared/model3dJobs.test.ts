@@ -33,7 +33,11 @@ const status = (over: Partial<Model3dStatus> = {}): Model3dStatus => ({
 const view = (...jobs: Model3dJob[]): Model3dView => ({ server: 'ready', startedByApp: true, jobs })
 
 const INPUT: Omit<Model3dRowsInput, 'view'> = {
-  sessions: [{ paneId: 'pane-1', title: 'Make the axe' }],
+  features: [{ sessionId: 'pane-1', name: 'make-the-axe' }],
+  hosted: [
+    { paneId: 'pane-1', cwd: 'C:\\src\\game\\.worktrees\\make-the-axe' },
+    { paneId: 'pane-2', cwd: 'C:\\src\\tools' }
+  ],
   workspaces: [
     { name: 'src', path: 'C:/src' },
     { name: 'game', path: 'C:/src/game' }
@@ -56,17 +60,37 @@ describe('3D view job rows', () => {
     expect(rows.map((r) => r.id)).toEqual(['new', 'old'])
   })
 
-  it('names a known session by its title, its workspace by the deepest folder holding cwd, and its account by configDir', () => {
+  it("names a feature's session by the feature, its workspace by the deepest folder holding cwd, and its account by configDir", () => {
     const [row] = model3dJobRows({
       ...INPUT,
       view: view({ request: req('a', { sessionId: 'pane-1', cwd: 'c:\\SRC\\game\\art', configDir: 'C:/Users/me/.claude-work/' }), status: status() })
     })
-    expect(row).toMatchObject({ session: 'Make the axe', workspace: 'game', account: 'Work' })
+    expect(row).toMatchObject({ session: 'make-the-axe', workspace: 'game', account: 'Work' })
   })
 
-  it('reads "Outside the app · <cwd folder>" for an unknown session, the default account for an empty configDir, and no workspace outside them all', () => {
-    const [row] = model3dJobRows({ ...INPUT, view: view({ request: req('a', { sessionId: 'pane-9', cwd: 'D:\\art\\props\\' }), status: status() }) })
-    expect(row).toMatchObject({ session: 'Outside the app · props', workspace: null, account: 'Personal' })
+  it('names another hosted session by its folder, and a session the app no longer hosts as closed', () => {
+    const rows = model3dJobRows({
+      ...INPUT,
+      view: view(
+        { request: req('hosted', { sessionId: 'pane-2', submittedAt: '2026-11-28T10:00:05.000Z' }), status: status() },
+        { request: req('closed', { sessionId: 'pane-9' }), status: status() }
+      )
+    })
+    expect(rows.map((r) => r.session)).toEqual(['A session in tools', 'A closed session'])
+  })
+
+  it('reads "Outside the app · <cwd folder>" without a session id outside every workspace, and only "Outside the app" in one, with the default account for an empty configDir', () => {
+    const rows = model3dJobRows({
+      ...INPUT,
+      view: view(
+        { request: req('loose', { cwd: 'D:\\art\\props\\', submittedAt: '2026-11-28T10:00:05.000Z' }), status: status() },
+        { request: req('in', { cwd: 'C:\\src\\game' }), status: status() }
+      )
+    })
+    expect(rows.map((r) => [r.session, r.workspace, r.account])).toEqual([
+      ['Outside the app · props', null, 'Personal'],
+      ['Outside the app', 'game', 'Personal']
+    ])
   })
 
   it('reads an editor turn as "Editor turn", and one from Open editor as asked by Command Center, in no workspace', () => {
@@ -80,7 +104,7 @@ describe('3D view job rows', () => {
     })
     expect(rows.map((r) => [r.summary, r.session, r.workspace])).toEqual([
       ['Editor turn', 'Command Center', null],
-      ['Editor turn', 'Make the axe', 'game']
+      ['Editor turn', 'make-the-axe', 'game']
     ])
   })
 
@@ -100,17 +124,19 @@ describe('3D view job rows', () => {
     expect(early.progress).toBe('Item 2 of 3 · generate')
   })
 
-  it('labels each state, keeps a waiting reason and a failed error line', () => {
+  it('labels each state, keeps a waiting reason, a failed error line and the failed items of a done batch', () => {
     const rows = model3dJobRows({
       ...INPUT,
       view: view(
         { request: req('q', { submittedAt: '2026-11-28T10:00:05.000Z' }), status: status({ waitReason: 'Waiting: Unity running' }) },
-        { request: req('f'), status: status({ state: 'failed', error: 'FAILED: out of memory' }) }
+        { request: req('f', { submittedAt: '2026-11-28T10:00:04.000Z' }), status: status({ state: 'failed', error: 'FAILED: out of memory' }) },
+        { request: req('d'), status: status({ state: 'done', error: '1 of 3 failed: lid: out of memory' }) }
       )
     })
     expect(rows.map((r) => [r.stateLabel, r.waitReason, r.error])).toEqual([
       ['Queued', 'Waiting: Unity running', null],
-      ['Failed', null, 'FAILED: out of memory']
+      ['Failed', null, 'FAILED: out of memory'],
+      ['Done', null, '1 of 3 failed: lid: out of memory']
     ])
   })
 })

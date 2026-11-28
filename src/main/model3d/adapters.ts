@@ -1,12 +1,13 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import { appendFile } from 'node:fs/promises'
+import { appendFile, realpath, stat } from 'node:fs/promises'
 import { existsSync, openSync, closeSync, watch } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
+import type { Model3dRequest } from '../../shared/model3d'
 import { childEnv } from '../util/childEnv'
 import { progressStep, watchComfyMessages } from './comfyWs'
 import type { Model3dConfig } from './config'
-import { SERVICE_FILE, writeJsonAtomic } from './jobsFolder'
+import { SERVICE_FILE, diskJobsFolder, writeJsonAtomic } from './jobsFolder'
 import { COORD_JOB, type ComfyClient, type CoordBoard, type CoordClaim, type Model3dClock, type Model3dPorts, type ProcessList, type ServerLauncher, type WorkerRunner } from './service'
 
 const KILL_LIMIT_MS = 5000
@@ -15,16 +16,27 @@ const HTTP_TIMEOUT_MS = 3000
 export interface ExecResult {
   code: number | null
   stdout: string
+  stderr?: string
+  /** Why the command did not run at all, e.g. `spawn python ENOENT`. */
+  error?: string
 }
 export type Exec = (command: string, args: string[]) => Promise<ExecResult>
 
 const exec: Exec = (command, args) =>
   new Promise((resolve) => {
-    execFile(command, args, { windowsHide: true, timeout: 30_000 }, (err, stdout) => {
+    execFile(command, args, { windowsHide: true, timeout: 30_000 }, (err, stdout, stderr) => {
       const code = err ? (typeof (err as { code?: unknown }).code === 'number' ? ((err as { code: number }).code) : null) : 0
-      resolve({ code, stdout: String(stdout ?? '') })
+      const result: ExecResult = { code, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }
+      if (err && code === null) result.error = err.message
+      resolve(result)
     })
   })
+
+/** What went wrong in a run that did not end 0: the spawn error, else stderr's first line, else the exit code. */
+function failure(result: ExecResult): string {
+  const line = (result.stderr ?? '').split(/\r?\n/).map((l) => l.trim()).find(Boolean)
+  return result.error ?? line ?? `exit code ${result.code ?? 'unknown'}`
+}
 
 /** Stops a process and its children, and resolves once taskkill is done or after a limit. */
 function killTree(child: ChildProcess): Promise<void> {
@@ -60,13 +72,19 @@ export function parseCoordClaims(stdout: string): CoordClaim[] {
   return claims
 }
 
+/** The engine venv's python runs coord.py when it is there: `python` on PATH may be missing or the WindowsApps stub. */
+export function coordPython(enginePython: string): string {
+  return existsSync(enginePython) ? enginePython : 'python'
+}
+
 /** The coord board through `python -I coord.py`; every call is skipped while the script is missing. */
 export function createCoordBoard(script: string, run: Exec = exec, python = 'python'): CoordBoard {
   const call = (...args: string[]): Promise<ExecResult> | null => (existsSync(script) ? run(python, ['-I', script, ...args]) : null)
   return {
     async claims() {
       const result = await call('claims', 'gpu')
-      return result ? parseCoordClaims(result.stdout) : []
+      if (!result) return { ok: true, claims: [] }
+      return result.code === 0 ? { ok: true, claims: parseCoordClaims(result.stdout) } : { ok: false, error: failure(result) }
     },
     async claim() {
       const result = await call('claim', COORD_JOB, 'gpu', 'Command Center 3D server')
@@ -116,8 +134,78 @@ function comfyClient(port: number): ComfyClient {
     },
     interrupt: () => post('/interrupt'),
     clearQueue: () => post('/queue', { clear: true }),
+    async busy() {
+      try {
+        const res = await fetch(url('/queue'), { signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) })
+        if (!res.ok) return false
+        const q = (await res.json()) as { queue_running?: unknown; queue_pending?: unknown }
+        return (Array.isArray(q.queue_running) && q.queue_running.length > 0) || (Array.isArray(q.queue_pending) && q.queue_pending.length > 0)
+      } catch {
+        return false
+      }
+    },
     free: () => post('/free', { unload_models: true, free_memory: true })
   }
+}
+
+interface ProcessRow {
+  ProcessId?: unknown
+  Name?: unknown
+  CommandLine?: unknown
+}
+
+/** ComfyUI's own process: a python*.exe running main.py. */
+const isComfy = (row: ProcessRow): boolean =>
+  typeof row.Name === 'string' && /^python[^\\/]*\.exe$/i.test(row.Name) && typeof row.CommandLine === 'string' && /(^|[\\/\s"])main\.py\b/i.test(row.CommandLine)
+
+/** Stops what listens on `port` (IPv4 and IPv6), but only ComfyUI's python processes and their trees; anything else is left alone. */
+export async function stopOutsideServer(port: number, run: Exec = exec): Promise<void> {
+  const pids = listenerPids((await run('netstat', ['-ano'])).stdout, port)
+  if (pids.length === 0) return
+  const filter = pids.map((pid) => `ProcessId=${pid}`).join(' or ')
+  const listed = await run('powershell', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `Get-CimInstance Win32_Process -Filter '${filter}' | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress`
+  ])
+  if (listed.code !== 0) return
+  let rows: ProcessRow[]
+  try {
+    const parsed = JSON.parse(listed.stdout) as ProcessRow | ProcessRow[]
+    rows = Array.isArray(parsed) ? parsed : [parsed]
+  } catch {
+    return
+  }
+  for (const row of rows) {
+    if (isComfy(row) && typeof row.ProcessId === 'number' && pids.includes(row.ProcessId)) await run('taskkill', ['/PID', String(row.ProcessId), '/T', '/F'])
+  }
+}
+
+/** The folders a request's `script` may be in: the model3d skill of the home account and of each account profile, and the one e2e names. */
+export function model3dScriptDirs(home: string, configDirs: readonly string[], extra: string | null): string[] {
+  const dirs = [join(home, '.claude'), ...configDirs].map((d) => join(d, 'skills', 'model3d', 'scripts'))
+  const key = (d: string): string => resolve(d).toLowerCase()
+  const unique = dirs.filter((d, i) => dirs.findIndex((o) => key(o) === key(d)) === i)
+  return extra ? [...unique, extra] : unique
+}
+
+const PATH_PYTHON = /^(python[0-9.]*|py)(\.exe)?$/i
+const PYTHON_EXE = /^python[^\\/]*\.exe$/i
+
+const real = (p: string): Promise<string | null> => realpath(p).then((r) => r.toLowerCase(), () => null)
+
+/** Why the worker a generate request names may not run, or null: the skill's gen3d.py, a python, an existing folder. */
+export async function vetWorkerRequest(request: Pick<Model3dRequest, 'script' | 'python' | 'cwd'>, scriptDirs: readonly string[]): Promise<string | null> {
+  const script = isAbsolute(request.script) ? await real(request.script) : null
+  const dirs = await Promise.all(scriptDirs.map(real))
+  if (!script || basename(script) !== 'gen3d.py' || !dirs.includes(dirname(script))) return 'script is not gen3d.py in a model3d skill folder'
+  const python = request.python
+  const onPath = PATH_PYTHON.test(python)
+  const pythonOk = onPath || (isAbsolute(python) && PYTHON_EXE.test(basename(python)) && (await stat(python).then((s) => s.isFile(), () => false)))
+  if (!pythonOk) return 'python is not a python*.exe that exists, nor python or py on PATH'
+  if (!isAbsolute(request.cwd) || !(await stat(request.cwd).then((s) => s.isDirectory(), () => false))) return 'cwd is not a folder that exists'
+  return null
 }
 
 function serverLauncher(config: Model3dConfig): ServerLauncher {
@@ -147,10 +235,7 @@ function serverLauncher(config: Model3dConfig): ServerLauncher {
         }
       }
     },
-    async stopOutside() {
-      const { stdout } = await exec('netstat', ['-ano', '-p', 'TCP'])
-      for (const pid of listenerPids(stdout, config.port)) await exec('taskkill', ['/PID', String(pid), '/T', '/F'])
-    }
+    stopOutside: () => stopOutsideServer(config.port)
   }
 }
 
@@ -240,13 +325,18 @@ function watchFolder(folder: string, onChange: () => void): () => void {
   }
 }
 
-/** The real outside world: tasklist, coord.py, ComfyUI3D over HTTP and `/ws`, child processes and the browser (`openExternal`). */
-export function realModel3dPorts(config: Model3dConfig, openExternal: (url: string) => Promise<void>): Model3dPorts {
+/**
+ * The real outside world: tasklist, coord.py, ComfyUI3D over HTTP and `/ws`, child processes, the jobs folder and the
+ * browser (`openExternal`). `scriptDirs` names the folders a request's gen3d.py may be in, read again for each request.
+ */
+export function realModel3dPorts(config: Model3dConfig, openExternal: (url: string) => Promise<void>, scriptDirs: () => Promise<string[]> = async () => []): Model3dPorts {
   const editorUrl = `http://127.0.0.1:${config.port}`
   return {
     clock,
     processes: processList,
-    coord: createCoordBoard(config.coordScript),
+    coord: createCoordBoard(config.coordScript, exec, coordPython(config.enginePython)),
+    jobs: diskJobsFolder(config.folder),
+    vetRequest: async (request) => vetWorkerRequest(request, await scriptDirs()),
     comfy: comfyClient(config.port),
     server: serverLauncher(config),
     workers: workerRunner,

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MODEL3D_APP_SESSION, type Model3dJob, type Model3dRequest, type Model3dStatus } from '../../shared/model3d'
+import { model3dJobRows } from '../../shared/model3dJobs'
 import { MODEL3D_DIGEST_MODELS, digestModel3d, type DigestModel3dInput } from './digestModel3d'
 
 let root: string
@@ -60,9 +61,17 @@ describe('the digest facts of the 3D service', () => {
     expect(jobs).toEqual([
       { summary: 'running.png · prop', session: 'dark-mode', state: 'Running' },
       { summary: 'waiting.png · prop', session: 'A session in tools', state: 'Waiting: Darkfall cluster running' },
-      { summary: 'next.png · prop', session: 'Outside the app · game', state: 'Queued' },
+      { summary: 'next.png · prop', session: 'Outside the app', state: 'Queued' },
       { summary: 'Editor turn', session: 'Command Center', state: 'Held' }
     ])
+  })
+
+  it('names each session as the 3D view does from the same facts: a closed one as closed, never as outside the app', async () => {
+    const facts = input(job('gone', { sessionId: 'pane-closed' }, {}), job('loose', { cwd: join(root, 'elsewhere'), submittedAt: at(1) }, {}))
+    const { jobs } = await digestModel3d(facts)
+    expect(jobs.map((j) => j.session)).toEqual(['A closed session', 'Outside the app · elsewhere'])
+    const rows = model3dJobRows({ ...facts, profiles: [] })
+    expect(rows.map((r) => r.session).reverse()).toEqual(jobs.map((j) => j.session))
   })
 
   it('lists every model a finished job wrote, newest finished first, with its workspace and the tris of its .json', async () => {

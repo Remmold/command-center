@@ -1,33 +1,36 @@
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { MODEL3D_APP_SESSION } from '../../shared/model3d'
-import { CHECKING, createModel3dService, IDLE_STOP_MS, type Model3dService } from './service'
-import { drop, fakePorts, readStatus, request } from './testFakes'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished } from 'vitest'
+import { MODEL3D_APP_SESSION, type Model3dStatus } from '../../shared/model3d'
+import { CHECKING, createModel3dService, IDLE_STOP_MS, STOP_OUTSIDE_FAILED, type Model3dService, type Model3dTimings } from './service'
+import { fakePorts, request } from './testFakes'
 
-let root: string
-let folder: string
+/** No file is made here: the jobs folder is in memory, and a worker's outputs only need paths. */
+const root = join(tmpdir(), 'cc-model3d-service-test')
+const folder = join(root, 'model3d-jobs')
 let fakes: ReturnType<typeof fakePorts>
 let service: Model3dService | null
 
-beforeEach(async () => {
-  root = await fs.mkdtemp(join(tmpdir(), 'model3d-'))
-  folder = join(root, 'model3d-jobs')
+beforeEach(() => {
   fakes = fakePorts()
   service = null
 })
-afterEach(async () => {
+afterEach(() => {
   service?.dispose()
-  await fs.rm(root, { recursive: true, force: true })
 })
 
-async function boot(): Promise<Model3dService> {
-  service = createModel3dService(fakes.ports, { folder, pid: 777, clusterProcesses: ['SFGamelogicServer.exe', 'SFGamelogicDistributor.exe'], unityProcesses: ['Unity.exe'] })
+async function boot(timings: Partial<Model3dTimings> = {}): Promise<Model3dService> {
+  service = createModel3dService(fakes.ports, { folder, pid: 777, clusterProcesses: ['SFGamelogicServer.exe', 'SFGamelogicDistributor.exe'], unityProcesses: ['Unity.exe'], timings })
   await service.start()
   await service.settled()
   return service
 }
+
+const drop = (r: ReturnType<typeof request>): void => fakes.jobs.drop(r)
+const readStatus = async (id: string): Promise<Model3dStatus | null> => fakes.jobs.status(id)
+/** Lets every promise the service set off run, while a held round still waits: the fakes answer without I/O. */
+const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
 /** Moves the fake clock on and lets the service finish what that set off. */
 async function advance(ms: number): Promise<void> {
@@ -36,7 +39,7 @@ async function advance(ms: number): Promise<void> {
 
 /** Drops a request and lets the next 5 s scan pick it up. */
 async function submit(...reqs: ReturnType<typeof request>[]): Promise<void> {
-  for (const r of reqs) await drop(folder, r)
+  for (const r of reqs) await drop(r)
   await advance(5000)
 }
 
@@ -61,23 +64,23 @@ describe('a dropped request', () => {
       args: ['C:\\skills\\gen3d.py', '--image', 'chest.png', '--service-worker'],
       cwd: 'C:\\game'
     })
-    const running = await readStatus(folder, job.id)
+    const running = await readStatus(job.id)
     expect(running).toMatchObject({ state: 'running', waitReason: null, startedAt: '2026-11-28T10:00:05.000Z', endedAt: null })
 
-    const out = join(root, 'out')
-    await fs.mkdir(out)
+    const out = await fs.mkdtemp(join(tmpdir(), 'model3d-out-'))
+    onTestFinished(() => fs.rm(out, { recursive: true, force: true }))
     await fs.writeFile(join(out, 'chest.json'), '{"tris": 4000}')
     worker.events.stderr('@@model3d {"item":1,"of":2,"name":"chest","stage":"generate"}')
     fakes.comfy.watchers.get(worker.spec.clientId)?.(7, 30)
     await service!.settled()
-    expect((await readStatus(folder, job.id))?.progress).toEqual({ item: 1, of: 2, name: 'chest', stage: 'generate', step: 7, steps: 30 })
+    expect((await readStatus(job.id))?.progress).toEqual({ item: 1, of: 2, name: 'chest', stage: 'generate', step: 7, steps: 30 })
 
     worker.events.stdout(join(out, 'chest.glb'))
     worker.events.stdout(join(out, 'chest_sheet.png'))
     worker.events.stdout(join(out, 'lid.glb'))
     worker.events.exit(0)
     await service!.settled()
-    const done = await readStatus(folder, job.id)
+    const done = await readStatus(job.id)
     expect(done).toMatchObject({
       state: 'done',
       error: null,
@@ -104,43 +107,42 @@ describe('the queue', () => {
     const newer = request({ submittedAt: '2026-11-28T08:00:01+00:00' })
     await submit(newer, older)
     expect(fakes.workers.runs).toHaveLength(1)
-    expect(await readStatus(folder, older.id)).toMatchObject({ state: 'running' })
-    expect(await readStatus(folder, newer.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: barrel.png, prop running' })
+    expect(await readStatus(older.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(newer.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: barrel.png, prop running' })
 
     await finish()
     expect(fakes.workers.runs).toHaveLength(2)
-    expect(await readStatus(folder, older.id)).toMatchObject({ state: 'done' })
-    expect(await readStatus(folder, newer.id)).toMatchObject({ state: 'running', waitReason: null })
+    expect(await readStatus(older.id)).toMatchObject({ state: 'done' })
+    expect(await readStatus(newer.id)).toMatchObject({ state: 'running', waitReason: null })
     expect(fakes.server.starts).toBe(1)
   })
 
-  it('writes a failed status for a request that is not valid, and leaves no temp files behind', async () => {
+  it('writes a failed status for a request that is not valid', async () => {
     await boot()
-    await fs.writeFile(join(folder, 'bad.request.json'), JSON.stringify({ id: 'bad', kind: 'sculpt' }))
+    fakes.jobs.put('bad.request.json', JSON.stringify({ id: 'bad', kind: 'sculpt' }))
     await advance(5000)
-    expect(await readStatus(folder, 'bad')).toMatchObject({ state: 'failed', error: 'The request is not valid: kind is not generate or editor.' })
-    expect((await fs.readdir(folder)).filter((n) => n.endsWith('.tmp'))).toEqual([])
+    expect(await readStatus('bad')).toMatchObject({ state: 'failed', error: 'The request is not valid: kind is not generate or editor.' })
     expect(fakes.workers.runs).toHaveLength(0)
   })
 
   it('keeps the first failed status of a request that is not valid across a restart, so it ages out of the history', async () => {
     await boot()
-    await fs.writeFile(join(folder, 'bad.request.json'), JSON.stringify({ id: 'bad', kind: 'sculpt' }))
+    fakes.jobs.put('bad.request.json', JSON.stringify({ id: 'bad', kind: 'sculpt' }))
     await advance(5000)
     service!.dispose()
     await advance(60_000)
     await boot()
-    expect(await readStatus(folder, 'bad')).toMatchObject({ state: 'failed', endedAt: '2026-11-28T10:00:05.000Z' })
+    expect(await readStatus('bad')).toMatchObject({ state: 'failed', endedAt: '2026-11-28T10:00:05.000Z' })
   })
 
   it('waits for a request that is not JSON yet, and reads it on the next scan', async () => {
     await boot()
     const job = request()
-    await fs.writeFile(join(folder, `${job.id}.request.json`), '{"id": ')
+    fakes.jobs.put(`${job.id}.request.json`, '{"id": ')
     await advance(5000)
-    expect(await readStatus(folder, job.id)).toBeNull()
+    expect(await readStatus(job.id)).toBeNull()
     await submit(job)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'running' })
   })
 })
 
@@ -180,9 +182,9 @@ describe('the server', () => {
     const job = request()
     await submit(job)
     await advance(119_000)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'running' })
     await advance(2000)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'failed', error: 'The 3D server did not answer within 120 s.' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'failed', error: 'The 3D server did not answer within 120 s.' })
     expect(fakes.server.stops).toBe(1)
     expect(fakes.coord.holds()).toBe(false)
     expect(fakes.serviceFile.last()).toMatchObject({ server: 'stopped' })
@@ -263,7 +265,7 @@ describe('a server started outside the app', () => {
     const job = request()
     await submit(job)
     expect(fakes.workers.runs).toHaveLength(0)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: gpu claimed by model3d since 10:27' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: gpu claimed by model3d since 10:27' })
   })
 })
 
@@ -280,19 +282,19 @@ describe('wait reasons', () => {
     await submit(first)
     cluster()
     await submit(second)
-    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: crate.png, prop running' })
+    expect(await readStatus(second.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: crate.png, prop running' })
 
     await finish()
-    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: Darkfall cluster running' })
+    expect(await readStatus(second.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: Darkfall cluster running' })
     fakes.processes.names = ['blender.exe', 'Unity.exe']
     await advance(5000)
-    expect(await readStatus(folder, second.id)).toMatchObject({ waitReason: 'Waiting: Unity running' })
+    expect(await readStatus(second.id)).toMatchObject({ waitReason: 'Waiting: Unity running' })
     fakes.processes.names = ['blender.exe']
     await advance(5000)
-    expect(await readStatus(folder, second.id)).toMatchObject({ waitReason: 'Waiting: gpu claimed by model3d since 10:27' })
+    expect(await readStatus(second.id)).toMatchObject({ waitReason: 'Waiting: gpu claimed by model3d since 10:27' })
     fakes.coord.claimsList = []
     await advance(5000)
-    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'running', waitReason: null })
+    expect(await readStatus(second.id)).toMatchObject({ state: 'running', waitReason: null })
   })
 
   it("skips the cluster, Unity and coord checks for a request's run-anyway flag", async () => {
@@ -300,7 +302,7 @@ describe('wait reasons', () => {
     await boot()
     const job = request({ runAnyway: true })
     await submit(job)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'running' })
   })
 
   it('runs a waiting job at once on Run anyway, but never before the job that holds the GPU turn', async () => {
@@ -312,11 +314,11 @@ describe('wait reasons', () => {
     await submit(waiting)
     await service!.runAnyway(waiting.id)
     await service!.settled()
-    expect(await readStatus(folder, waiting.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: crate.png, prop running' })
+    expect(await readStatus(waiting.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: crate.png, prop running' })
     expect(service!.view().jobs.find((j) => j.request.id === waiting.id)?.request.runAnyway).toBe(true)
 
     await finish()
-    expect(await readStatus(folder, waiting.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(waiting.id)).toMatchObject({ state: 'running' })
   })
 
   it('drops the turn reason as soon as the turn ends, lets a newer round start the job past a slow process list, and ignores the slow answer when it lands', async () => {
@@ -329,15 +331,19 @@ describe('wait reasons', () => {
     expect(status()?.waitReason).toBe('Waiting: crate.png, prop running')
 
     fakes.processes.hold = true
+    const listed = fakes.processes.listed
     const worker = fakes.workers.last()
     worker.events.stdout(join(root, 'm.glb'))
     worker.events.exit(0)
-    await expect.poll(() => status()?.waitReason, { timeout: 1000 }).toBe(CHECKING)
+    await fakes.processes.whenListed(listed + 1)
+    expect(status()?.waitReason).toBe(CHECKING)
     expect(fakes.processes.held).toHaveLength(1)
 
     fakes.processes.hold = false
-    await fakes.clock.advance(5000, () => new Promise((resolve) => setTimeout(resolve, 20)))
-    await expect.poll(() => status()?.state, { timeout: 1000 }).toBe('running')
+    await fakes.clock.advance(5000)
+    await fakes.processes.whenListed(listed + 2)
+    await flush()
+    expect(status()?.state).toBe('running')
     expect(fakes.workers.runs).toHaveLength(2)
 
     fakes.processes.held[0]!(['Unity.exe'])
@@ -354,7 +360,7 @@ describe('Cancel', () => {
     await submit(first, second)
     expect(await service!.cancel(second.id)).toEqual({ ok: true })
     await service!.settled()
-    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled in Command Center', endedAt: '2026-11-28T10:00:05.000Z' })
+    expect(await readStatus(second.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled in Command Center', endedAt: '2026-11-28T10:00:05.000Z' })
     await finish()
     expect(fakes.workers.runs).toHaveLength(1)
   })
@@ -367,11 +373,11 @@ describe('Cancel', () => {
     expect(await service!.cancel(first.id)).toEqual({ ok: true })
     await service!.settled()
     expect(fakes.comfy.calls).toEqual(['interrupt', 'kill worker', 'clearQueue'])
-    expect(await readStatus(folder, first.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled in Command Center' })
+    expect(await readStatus(first.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled in Command Center' })
     worker.events.exit(1)
     await service!.settled()
-    expect(await readStatus(folder, first.id)).toMatchObject({ state: 'cancelled' })
-    expect(await readStatus(folder, second.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(first.id)).toMatchObject({ state: 'cancelled' })
+    expect(await readStatus(second.id)).toMatchObject({ state: 'running' })
   })
 
   it('refuses a job that has already finished', async () => {
@@ -380,7 +386,7 @@ describe('Cancel', () => {
     await submit(job)
     await finish()
     expect(await service!.cancel(job.id)).toEqual({ ok: false, error: 'The job has already finished.' })
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'done' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'done' })
   })
 })
 
@@ -392,16 +398,16 @@ describe('orphan drop', () => {
     const noWait = request({ waiterPid: 300, wait: false })
     await submit(running, waiting, noWait)
     await advance(5000)
-    expect(await readStatus(folder, waiting.id)).toMatchObject({ state: 'queued' })
+    expect(await readStatus(waiting.id)).toMatchObject({ state: 'queued' })
 
     fakes.processes.ended = new Set([100, 200, 300])
     await advance(5000)
-    expect(await readStatus(folder, waiting.id)).toMatchObject({ state: 'cancelled', error: 'Dropped: waiting gen3d.py ended' })
-    expect(await readStatus(folder, noWait.id)).toMatchObject({ state: 'queued' })
-    expect(await readStatus(folder, running.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(waiting.id)).toMatchObject({ state: 'cancelled', error: 'Dropped: waiting gen3d.py ended' })
+    expect(await readStatus(noWait.id)).toMatchObject({ state: 'queued' })
+    expect(await readStatus(running.id)).toMatchObject({ state: 'running' })
     await finish()
-    expect(await readStatus(folder, running.id)).toMatchObject({ state: 'done' })
-    expect(await readStatus(folder, noWait.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(running.id)).toMatchObject({ state: 'done' })
+    expect(await readStatus(noWait.id)).toMatchObject({ state: 'running' })
   })
 })
 
@@ -424,7 +430,7 @@ describe('Stop server', () => {
     await submit(job)
     expect(await service!.stopServer()).toEqual({ ok: false, error: 'A job is running. Wait for it to finish, then stop the server.' })
     expect(fakes.server.stops).toBe(0)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'running' })
   })
 
   it('stops a server started outside the app too', async () => {
@@ -446,14 +452,14 @@ describe('a refused claim', () => {
     await boot()
     const job = request()
     await submit(job)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: the coord board refused the gpu claim' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: the coord board refused the gpu claim' })
     const asked = fakes.coord.calls.filter((c) => c === 'claim').length
     await advance(5000)
     expect(fakes.coord.calls.filter((c) => c === 'claim').length).toBe(asked + 1)
     expect(fakes.server.starts).toBe(0)
     fakes.coord.refuse = false
     await advance(5000)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'running' })
   })
 })
 
@@ -467,7 +473,7 @@ describe('a worker that fails', () => {
     worker.events.stderr('[2/2] lid: pixal/full, 4000 faces')
     worker.events.stderr('@@model3d {"item":2,"of":2,"name":"lid","stage":"render"}')
     await finish(worker, 1)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'failed', error: 'FAILED chest: generation failed: CUDA out of memory' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'failed', error: 'FAILED chest: generation failed: CUDA out of memory' })
   })
 
   it('is failed when a batch made no model, even on exit 0', async () => {
@@ -478,24 +484,23 @@ describe('a worker that fails', () => {
     worker.events.stderr('  FAILED chest: generation failed: bad picture')
     worker.events.exit(0)
     await service!.settled()
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'failed', error: 'FAILED chest: generation failed: bad picture', outputs: [] })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'failed', error: 'FAILED chest: generation failed: bad picture', outputs: [] })
   })
 })
 
 describe('restart cleanup', () => {
   it('cancels what was queued or running, and a request with no status, keeps finished jobs and releases a stale claim', async () => {
-    await fs.mkdir(folder, { recursive: true })
     const [queued, running, bare, finished] = [request(), request(), request(), request()]
-    for (const r of [queued, running, bare, finished]) await drop(folder, r)
-    await fs.writeFile(join(folder, `${queued.id}.status.json`), storedStatus('queued'))
-    await fs.writeFile(join(folder, `${running.id}.status.json`), storedStatus('running'))
-    await fs.writeFile(join(folder, `${finished.id}.status.json`), storedStatus('done'))
+    for (const r of [queued, running, bare, finished]) await drop(r)
+    fakes.jobs.put(`${queued.id}.status.json`, storedStatus('queued'))
+    fakes.jobs.put(`${running.id}.status.json`, storedStatus('running'))
+    fakes.jobs.put(`${finished.id}.status.json`, storedStatus('done'))
     fakes.coord.claimsList.push({ job: 'command-center-3d', since: 0, why: 'left over' })
     await boot()
     for (const r of [queued, running, bare]) {
-      expect(await readStatus(folder, r.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled: app closed', endedAt: '2026-11-28T10:00:00.000Z' })
+      expect(await readStatus(r.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled: app closed', endedAt: '2026-11-28T10:00:00.000Z' })
     }
-    expect(await readStatus(folder, finished.id)).toMatchObject({ state: 'done' })
+    expect(await readStatus(finished.id)).toMatchObject({ state: 'done' })
     expect(fakes.coord.holds()).toBe(false)
     await advance(5000)
     expect(fakes.workers.runs).toHaveLength(0)
@@ -504,14 +509,13 @@ describe('restart cleanup', () => {
 
 describe('history', () => {
   it('keeps the newest 50 finished jobs and deletes older request and status pairs', async () => {
-    await fs.mkdir(folder, { recursive: true })
     for (let i = 0; i < 52; i++) {
       const r = request({ id: `old${String(i).padStart(2, '0')}` })
-      await drop(folder, r)
-      await fs.writeFile(join(folder, `${r.id}.status.json`), storedStatus('done', new Date(Date.parse('2026-11-01T00:00:00Z') + i * 60_000).toISOString()))
+      await drop(r)
+      fakes.jobs.put(`${r.id}.status.json`, storedStatus('done', new Date(Date.parse('2026-11-01T00:00:00Z') + i * 60_000).toISOString()))
     }
     await boot()
-    const names = await fs.readdir(folder)
+    const names = fakes.jobs.names()
     expect(names).not.toContain('old00.request.json')
     expect(names).not.toContain('old01.status.json')
     expect(names).toContain('old02.request.json')
@@ -519,7 +523,7 @@ describe('history', () => {
 
     await submit(request())
     await finish()
-    const after = await fs.readdir(folder)
+    const after = fakes.jobs.names()
     expect(after).not.toContain('old02.status.json')
     expect(after.filter((n) => n.endsWith('.request.json'))).toHaveLength(50)
   })
@@ -533,7 +537,7 @@ describe('the editor turn', () => {
     await boot()
     const ui = editor()
     await submit(ui)
-    expect(await readStatus(folder, ui.id)).toMatchObject({ state: 'running', waitReason: null })
+    expect(await readStatus(ui.id)).toMatchObject({ state: 'running', waitReason: null })
     expect(fakes.server.starts).toBe(1)
     expect(fakes.coord.holds()).toBe(true)
     expect(fakes.browser.opened).toBe(1)
@@ -541,7 +545,7 @@ describe('the editor turn', () => {
 
     const job = request()
     await submit(job)
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: editor open' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: editor open' })
     await service!.cancel(job.id)
     await advance(IDLE_STOP_MS + 5000)
     expect(fakes.server.stops).toBe(0)
@@ -549,7 +553,7 @@ describe('the editor turn', () => {
 
     expect(await service!.doneWithEditor()).toEqual({ ok: true })
     await service!.settled()
-    expect(await readStatus(folder, ui.id)).toMatchObject({ state: 'done', error: null })
+    expect(await readStatus(ui.id)).toMatchObject({ state: 'done', error: null })
     expect(fakes.browser.opened).toBe(1)
     await advance(10 * 60_000)
     expect(fakes.server.stops).toBe(1)
@@ -562,21 +566,21 @@ describe('the editor turn', () => {
     expect(await service!.openEditor()).toEqual({ ok: true })
     await service!.settled()
     const ui = service!.view().jobs.find((j) => j.request.kind === 'editor')!
-    expect(JSON.parse(await fs.readFile(join(folder, `${ui.request.id}.request.json`), 'utf8'))).toMatchObject({
+    expect(fakes.jobs.request(ui.request.id)).toMatchObject({
       kind: 'editor',
       argv: ['ui'],
       sessionId: MODEL3D_APP_SESSION,
       wait: false,
       summary: 'editor'
     })
-    expect(await readStatus(folder, ui.request.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: crate.png, prop running' })
+    expect(await readStatus(ui.request.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: crate.png, prop running' })
     expect(await service!.openEditor()).toEqual({ ok: false, error: 'The editor is already open or queued.' })
     expect(await service!.doneWithEditor()).toEqual({ ok: false, error: 'The editor is not open.' })
     expect(fakes.browser.opened).toBe(0)
 
     await finish()
     await advance(5000)
-    expect(await readStatus(folder, ui.request.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(ui.request.id)).toMatchObject({ state: 'running' })
     expect(fakes.browser.opened).toBe(1)
     expect(await service!.stopServer()).toEqual({ ok: false, error: 'The editor is open. Click Done with editor, then stop the server.' })
     expect(service!.view().jobs.filter((j) => j.request.kind === 'editor')).toHaveLength(1)
@@ -590,9 +594,9 @@ describe('the editor turn', () => {
     await submit(job)
     expect(await service!.cancel(ui.id)).toEqual({ ok: true })
     await service!.settled()
-    expect(await readStatus(folder, ui.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled in Command Center' })
+    expect(await readStatus(ui.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled in Command Center' })
     expect(fakes.comfy.calls).toEqual(['interrupt', 'clearQueue'])
-    expect(await readStatus(folder, job.id)).toMatchObject({ state: 'running' })
+    expect(await readStatus(job.id)).toMatchObject({ state: 'running' })
     expect(fakes.workers.runs).toHaveLength(1)
   })
 
@@ -623,13 +627,17 @@ describe('the editor turn', () => {
     expect(state(job.id)?.waitReason).toBe('Waiting: editor open')
 
     fakes.processes.hold = true
+    const listed = fakes.processes.listed
     await service!.doneWithEditor()
-    await expect.poll(() => state(job.id)?.waitReason, { timeout: 1000 }).toBe(CHECKING)
+    await fakes.processes.whenListed(listed + 1)
+    expect(state(job.id)?.waitReason).toBe(CHECKING)
     expect(fakes.processes.held).toHaveLength(1)
 
     fakes.processes.hold = false
-    await fakes.clock.advance(5000, () => new Promise((resolve) => setTimeout(resolve, 20)))
-    await expect.poll(() => state(job.id)?.state, { timeout: 1000 }).toBe('running')
+    await fakes.clock.advance(5000)
+    await fakes.processes.whenListed(listed + 2)
+    await flush()
+    expect(state(job.id)?.state).toBe('running')
     fakes.processes.held[0]!(['Unity.exe'])
     await service!.settled()
     expect(state(job.id)).toMatchObject({ state: 'running', waitReason: null })
@@ -646,7 +654,7 @@ describe('quitting', () => {
     expect(fakes.workers.last().killed).toBe(true)
     expect(fakes.server.stops).toBe(1)
     expect(fakes.coord.holds()).toBe(false)
-    for (const r of [a, b]) expect(await readStatus(folder, r.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled: app closed' })
+    for (const r of [a, b]) expect(await readStatus(r.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled: app closed' })
     expect(fakes.serviceFile.last()).toMatchObject({ server: 'stopped' })
   })
 
@@ -660,8 +668,8 @@ describe('quitting', () => {
     await submit(ui, a, b)
     expect(service!.unfinished()).toEqual({ jobs: 2, editor: true })
     await service!.shutdown()
-    for (const r of [ui, a, b]) expect(await readStatus(folder, r.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled: app closed' })
-    expect(await readStatus(folder, done.id)).toMatchObject({ state: 'done' })
+    for (const r of [ui, a, b]) expect(await readStatus(r.id)).toMatchObject({ state: 'cancelled', error: 'Cancelled: app closed' })
+    expect(await readStatus(done.id)).toMatchObject({ state: 'done' })
     expect(fakes.server.stops).toBe(1)
     expect(fakes.coord.holds()).toBe(false)
   })
@@ -671,9 +679,10 @@ describe('quitting', () => {
     const start = fakes.server.start.bind(fakes.server)
     fakes.server.start = () => new Promise((resolve) => (started = () => resolve(start())))
     await boot()
-    await drop(folder, request())
-    await fakes.clock.advance(5000, () => new Promise((resolve) => setTimeout(resolve, 20)))
-    await expect.poll(() => service!.view().server, { timeout: 1000 }).toBe('starting')
+    drop(request())
+    await fakes.clock.advance(5000)
+    await flush()
+    expect(service!.view().server).toBe('starting')
     const quit = service!.shutdown()
     started()
     await quit
@@ -681,5 +690,146 @@ describe('quitting', () => {
     expect(fakes.server.starts).toBe(1)
     expect(fakes.server.stops).toBe(1)
     expect(fakes.coord.holds()).toBe(false)
+  })
+})
+
+describe('the gpu claim over a long run (coord.py drops a gpu claim older than 180 min on the next claim)', () => {
+  const MIN = 60_000
+
+  it('is taken afresh before 180 min while the server is up, so another job never gets the gpu under a running job', async () => {
+    await boot({ checkMs: MIN, heartbeatMs: MIN })
+    drop(request())
+    await advance(MIN)
+    expect(fakes.workers.runs).toHaveLength(1)
+    await advance(185 * MIN)
+    expect(fakes.coord.claimAs('darkfall-bake')).toBe(false)
+    expect(fakes.coord.holds()).toBe(true)
+  })
+
+  it('is taken afresh at each turn start', async () => {
+    await boot()
+    await submit(request())
+    await finish()
+    await advance(5 * MIN)
+    await submit(request())
+    expect(fakes.coord.claimsList).toEqual([expect.objectContaining({ job: 'command-center-3d', since: fakes.clock.now() })])
+  })
+
+  it("does not wait on another job's gpu claim older than 180 min", async () => {
+    fakes.coord.claimsList.push({ job: 'hero-portraits', since: fakes.clock.now() - 181 * MIN, why: 'left over' })
+    await boot()
+    const job = request()
+    await submit(job)
+    expect(await readStatus(job.id)).toMatchObject({ state: 'running' })
+    expect(fakes.coord.holds()).toBe(true)
+  })
+})
+
+describe('a coord board that cannot be run', () => {
+  it('is the wait reason, never an empty claims list', async () => {
+    fakes.coord.broken = 'spawn python ENOENT'
+    await boot()
+    const job = request()
+    await submit(job)
+    expect(await readStatus(job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: coord board could not be run: spawn python ENOENT' })
+    expect(fakes.workers.runs).toHaveLength(0)
+  })
+})
+
+describe('a request whose worker may not run', () => {
+  it('is failed with why, and its worker never starts; an editor request runs no worker and is let through', async () => {
+    fakes.vet.answer = () => 'script is not gen3d.py in a model3d skill folder'
+    await boot()
+    const job = request()
+    const ui = request({ kind: 'editor', argv: ['ui'], summary: 'editor', wait: false })
+    await submit(job, ui)
+    expect(await readStatus(job.id)).toMatchObject({ state: 'failed', error: 'The request is not valid: script is not gen3d.py in a model3d skill folder.' })
+    expect(fakes.workers.runs).toHaveLength(0)
+    expect(await readStatus(ui.id)).toMatchObject({ state: 'running' })
+  })
+})
+
+describe('a server still answering when the app starts', () => {
+  it('has its work interrupted and its queue cleared, shows as outside the app, and keeps the claim until its queue is empty', async () => {
+    fakes.comfy.answering = true
+    fakes.comfy.queued = true
+    fakes.coord.claimsList.push({ job: 'command-center-3d', since: 0, why: 'left over' })
+    await boot()
+    expect(fakes.comfy.calls).toEqual(['interrupt', 'clearQueue'])
+    expect(service!.view()).toMatchObject({ server: 'ready', startedByApp: false })
+    expect(fakes.coord.claimsList).toEqual([expect.objectContaining({ job: 'command-center-3d', since: fakes.clock.now() })])
+    await advance(10_000)
+    expect(fakes.coord.holds()).toBe(true)
+    fakes.comfy.queued = false
+    await advance(5000)
+    expect(fakes.coord.holds()).toBe(false)
+    expect(service!.view()).toMatchObject({ server: 'ready', startedByApp: false })
+    expect(fakes.server.stops + fakes.server.outsideStops).toBe(0)
+  })
+})
+
+describe('an outside server', () => {
+  it('that ends shows as stopped on the next check', async () => {
+    fakes.comfy.answering = true
+    await boot()
+    await submit(request())
+    await finish()
+    expect(service!.view().server).toBe('ready')
+    fakes.comfy.answering = false
+    await advance(5000)
+    expect(service!.view()).toMatchObject({ server: 'stopped', startedByApp: false })
+    expect(fakes.serviceFile.last()).toMatchObject({ server: 'stopped' })
+  })
+
+  it('that still answers after Stop server stays ready, and Stop server says so', async () => {
+    fakes.comfy.answering = true
+    fakes.ports.server = { start: () => fakes.server.start(), stopOutside: async () => undefined }
+    await boot()
+    await submit(request())
+    await finish()
+    expect(await service!.stopServer()).toEqual({ ok: false, error: STOP_OUTSIDE_FAILED })
+    await service!.settled()
+    expect(service!.view()).toMatchObject({ server: 'ready', startedByApp: false })
+  })
+})
+
+describe('a stored status of the wrong shape', () => {
+  it('is read back with only the fields of the right shape: a model without a glb is dropped', async () => {
+    const job = request()
+    drop(job)
+    fakes.jobs.put(
+      `${job.id}.status.json`,
+      JSON.stringify({ state: 'done', waitReason: 7, progress: 'half', startedAt: null, endedAt: '2026-11-28T09:30:00.000Z', error: { no: 1 }, outputs: [{}, { glb: 'C:\\out\\a.glb', sheet: 5, json: 'C:\\out\\a.json' }, 'b.glb'] })
+    )
+    await boot()
+    expect(service!.view().jobs[0]?.status).toEqual({
+      state: 'done',
+      waitReason: null,
+      progress: null,
+      startedAt: null,
+      endedAt: '2026-11-28T09:30:00.000Z',
+      error: null,
+      outputs: [{ glb: 'C:\\out\\a.glb', json: 'C:\\out\\a.json' }]
+    })
+  })
+})
+
+describe('a batch where some items fail', () => {
+  it('ends done with its models, and names the failed items in its error', async () => {
+    await boot()
+    const job = request()
+    await submit(job)
+    const worker = fakes.workers.last()
+    worker.events.stderr('@@model3d {"item":1,"of":3,"name":"chest","stage":"generate"}')
+    worker.events.stdout(join(root, 'chest.glb'))
+    worker.events.stderr('  FAILED lid: generation failed: CUDA out of memory')
+    worker.events.stdout(join(root, 'barrel.glb'))
+    worker.events.exit(0)
+    await service!.settled()
+    expect(await readStatus(job.id)).toMatchObject({
+      state: 'done',
+      error: '1 of 3 failed: lid: generation failed: CUDA out of memory',
+      outputs: [{ glb: join(root, 'chest.glb') }, { glb: join(root, 'barrel.glb') }]
+    })
   })
 })

@@ -12,6 +12,8 @@ export interface Model3dConfig {
   serverLog: string
   /** e2e only: the editor's URL is appended here instead of opening a browser. */
   browserLog: string | null
+  /** e2e only: a folder whose gen3d.py a request may run, besides the model3d skill's. */
+  extraScripts: string | null
 }
 
 export const MODEL3D_ENV = {
@@ -21,7 +23,8 @@ export const MODEL3D_ENV = {
   coordScript: 'CC_MODEL3D_COORD',
   clusterProcesses: 'CC_MODEL3D_CLUSTER_PROCESSES',
   unityProcesses: 'CC_MODEL3D_UNITY_PROCESSES',
-  browserLog: 'CC_MODEL3D_BROWSER_LOG'
+  browserLog: 'CC_MODEL3D_BROWSER_LOG',
+  extraScripts: 'CC_MODEL3D_SCRIPTS'
 } as const
 
 const list = (value: string | undefined, fallback: string[]): string[] => {
@@ -41,6 +44,7 @@ export function model3dConfig(env: Record<string, string | undefined>, folder: s
     clusterProcesses: list(env[MODEL3D_ENV.clusterProcesses], ['SFGamelogicServer.exe', 'SFGamelogicDistributor.exe']),
     unityProcesses: list(env[MODEL3D_ENV.unityProcesses], ['Unity.exe']),
     serverLog: join(engineDir, 'server.log'),
-    browserLog: env[MODEL3D_ENV.browserLog] || null
+    browserLog: env[MODEL3D_ENV.browserLog] || null,
+    extraScripts: env[MODEL3D_ENV.extraScripts] || null
   }
 }

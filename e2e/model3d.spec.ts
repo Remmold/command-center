@@ -45,7 +45,7 @@ test('the 3D view on Ctrl+6: a dropped request goes queued, running with progres
   const crate = dropRequest(model3d, workspace, 'crate', '2026-11-28T10:00:00.000Z')
   await expect(job('crate')).toContainText('Running')
   await expect(job('crate')).toContainText(/Item 1 of 1 · crate · generate · step \d+\/12/)
-  await expect(job('crate')).toContainText('Outside the app · e2e-workspace · e2e-workspace · Personal')
+  await expect(job('crate')).toContainText('Outside the app · e2e-workspace · Personal')
   await expect(view.getByText('Ready', { exact: true })).toBeVisible()
   await expect(stop).toBeDisabled()
 
@@ -114,7 +114,8 @@ test('a job held by another job’s gpu claim waits with that reason and Cancel 
   const { page, workspace, model3d } = launched
   const view = model3dView(page)
   const job = (name: string) => view.getByRole('list', { name: '3D jobs' }).getByRole('listitem').filter({ hasText: new RegExp(`^${name}\\.png · prop`) })
-  const at = '2026-11-28T09:27:45Z'
+  // Recent: the app counts a gpu claim older than coord.py's 180 min as void.
+  const at = `${new Date(Date.now() - 5 * 60_000).toISOString().slice(0, 19)}Z`
   writeFileSync(model3d.coordBoard, JSON.stringify([{ job: 'boss2', path: 'gpu', why: 'bake', at: at.replace('T', ' ') }]))
   const waiting = `Waiting: gpu claimed by boss2 since ${new Date(Date.parse(at)).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
 

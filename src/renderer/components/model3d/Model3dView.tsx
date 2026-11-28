@@ -6,7 +6,8 @@ import { useTicking } from '../../hooks/useTicking'
 import { jobDuration, model3dJobRows, type Model3dJobRow } from '../../../shared/model3dJobs'
 import { useModel3dStore } from '../../state/model3dStore'
 import { useProfilesStore } from '../../state/profilesStore'
-import { useProjectViewsStore } from '../../state/projectViewsStore'
+import { useFeaturesStore } from '../../state/featuresStore'
+import { useSessionStatusStore } from '../../state/sessionStatusStore'
 import { useWorkspacesStore } from '../../state/workspacesStore'
 import { duration } from '../chat/subagents'
 import { Button } from '../ui/Button'
@@ -29,15 +30,17 @@ const DOT: Record<Model3dJobRow['state'], Exclude<TimelineDot, 'none' | 'neutral
   cancelled: 'pending'
 }
 
+/** Sessions are named from what the main chat's digest knows too, so both name a job's session the same way. */
 function useJobRows(view: ServiceView | null): Model3dJobRow[] {
   const workspaces = useWorkspacesStore((s) => s.workspaces)
   const profiles = useProfilesStore((s) => s.profiles)
-  const views = useProjectViewsStore((s) => s.views)
+  const features = useFeaturesStore((s) => s.features)
+  const byPane = useSessionStatusStore((s) => s.byPane)
   return useMemo(() => {
     if (!view) return []
-    const sessions = Object.values(views).flatMap((v) => v.claudeSessions.map((c) => ({ paneId: c.id, title: c.title })))
-    return model3dJobRows({ view, sessions, workspaces, profiles })
-  }, [view, workspaces, profiles, views])
+    const hosted = Object.values(byPane).map((e) => ({ paneId: e.paneId, cwd: e.cwd }))
+    return model3dJobRows({ view, features, hosted, workspaces, profiles })
+  }, [view, workspaces, profiles, features, byPane])
 }
 
 /** The 3D service: its server, and every job from every session, newest first. The model viewer takes the right side. */
@@ -154,7 +157,7 @@ function JobItem({ row, now }: { row: Model3dJobRow; now: number }) {
       detail={
         line || models ? (
           <>
-            {line && <NoticeLine tone={row.state === 'failed' ? 'warning' : 'muted'}>{line}</NoticeLine>}
+            {line && <NoticeLine tone={row.state === 'failed' || (row.state === 'done' && row.error) ? 'warning' : 'muted'}>{line}</NoticeLine>}
             {models}
           </>
         ) : undefined

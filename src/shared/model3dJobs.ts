@@ -1,9 +1,17 @@
 import { MODEL3D_APP_SESSION, type Model3dJobState, type Model3dOutput, type Model3dProgress, type Model3dView } from './model3d'
 import { DEFAULT_PROFILE_ID } from './types'
 
-export interface Model3dRowsInput {
+/**
+ * The sessions both the 3D view and the main chat's digest know, so both name a job's session the same way: the main
+ * process knows a feature session's title (the feature's name) and the folder of every session it hosts, nothing more.
+ */
+export interface Model3dKnownSessions {
+  features: readonly { sessionId: string; name: string }[]
+  hosted: readonly { paneId: string; cwd: string }[]
+}
+
+export interface Model3dRowsInput extends Model3dKnownSessions {
   view: Model3dView
-  sessions: readonly { paneId: string; title: string }[]
   workspaces: readonly { name: string; path: string }[]
   profiles: readonly { id: string; name: string; configDir: string }[]
 }
@@ -15,7 +23,7 @@ export interface Model3dJobRow {
   summary: string
   state: Model3dJobState
   stateLabel: string
-  /** The session title, "Command Center" for Open editor, or "Outside the app · <cwd folder>". */
+  /** See `model3dSessionLabel`. */
   session: string
   workspace: string | null
   account: string
@@ -47,9 +55,28 @@ function progressText(p: Model3dProgress | null): string | null {
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
+/**
+ * Who asked for a job: "Command Center" for Open editor, a feature's name, "A session in <folder>" for another hosted
+ * session, "A closed session" for one the app no longer hosts, and "Outside the app" with no session id, naming the
+ * cwd folder only when no workspace holds it.
+ */
+export function model3dSessionLabel(
+  request: { sessionId: string; cwd: string },
+  known: Model3dKnownSessions,
+  inWorkspace: boolean
+): string {
+  const id = request.sessionId
+  if (id === MODEL3D_APP_SESSION) return 'Command Center'
+  if (id === '') return inWorkspace ? 'Outside the app' : `Outside the app · ${folderName(request.cwd)}`
+  const feature = known.features.find((f) => f.sessionId === id)
+  if (feature) return feature.name
+  const hosted = known.hosted.find((h) => h.paneId === id)
+  return hosted ? `A session in ${folderName(hosted.cwd)}` : 'A closed session'
+}
+
 /** The 3D view's job list, newest first, with who asked: the session, its workspace and its account. */
-export function model3dJobRows({ view, sessions, workspaces, profiles }: Model3dRowsInput): Model3dJobRow[] {
-  const titles = new Map(sessions.map((s) => [s.paneId, s.title]))
+export function model3dJobRows({ view, features, hosted, workspaces, profiles }: Model3dRowsInput): Model3dJobRow[] {
+  const known: Model3dKnownSessions = { features, hosted }
   const folders = workspaces.map((w) => ({ name: w.name, key: pathKey(w.path) })).sort((a, b) => b.key.length - a.key.length)
   const account = (configDir: string): string => {
     const found = configDir === '' ? profiles.find((p) => p.id === DEFAULT_PROFILE_ID) : profiles.find((p) => pathKey(p.configDir) === pathKey(configDir))
@@ -60,20 +87,21 @@ export function model3dJobRows({ view, sessions, workspaces, profiles }: Model3d
     .map(({ request: r, status: s }) => {
       const cwd = pathKey(r.cwd)
       const fromApp = r.sessionId === MODEL3D_APP_SESSION
-      const title = fromApp ? 'Command Center' : r.sessionId ? titles.get(r.sessionId) : undefined
+      const workspace = fromApp ? null : (folders.find((f) => isInside(f.key, cwd))?.name ?? null)
       return {
         id: r.id,
         kind: r.kind,
         summary: r.kind === 'editor' ? 'Editor turn' : r.summary,
         state: s.state,
         stateLabel: STATE_LABEL[s.state],
-        session: title ?? `Outside the app · ${folderName(r.cwd)}`,
-        workspace: fromApp ? null : (folders.find((f) => isInside(f.key, cwd))?.name ?? null),
+        session: model3dSessionLabel(r, known, workspace !== null),
+        workspace,
         account: account(r.configDir),
         waitReason: s.state === 'queued' ? s.waitReason : null,
         runAnyway: r.runAnyway,
         progress: s.state === 'running' ? progressText(s.progress) : null,
-        error: s.state === 'failed' || s.state === 'cancelled' ? s.error : null,
+        // A done batch keeps the lines of the items that failed.
+        error: s.state === 'queued' || s.state === 'running' ? null : s.error,
         outputs: s.outputs,
         from: Date.parse(s.startedAt ?? r.submittedAt),
         to: s.endedAt ? Date.parse(s.endedAt) : null

@@ -1,28 +1,47 @@
 import { randomUUID } from 'node:crypto'
-import { promises as fs } from 'node:fs'
 import {
   MODEL3D_APP_SESSION,
   parseModel3dRequest,
   type Model3dActionResult,
   type Model3dJob,
   type Model3dJobState,
+  type Model3dOutput,
   type Model3dProgress,
   type Model3dRequest,
   type Model3dServerState,
   type Model3dServiceFile,
+  type Model3dStage,
   type Model3dStatus,
   type Model3dView
 } from '../../shared/model3d'
-import { listJobFiles, readJson, removeJobFiles, requestFile, statusFile, writeJsonAtomic } from './jobsFolder'
-import { progressMarker, workerError, workerOutputs } from './workerOutput'
+import type { JobsFolder } from './jobsFolder'
+import { failedItems, progressMarker, workerError, workerOutputs } from './workerOutput'
 
 /** The app's job name on the coord board. */
 export const COORD_JOB = 'command-center-3d'
-export const HEARTBEAT_MS = 5_000
-export const CHECK_MS = 5_000
 export const IDLE_STOP_MS = 10 * 60_000
-export const READY_TIMEOUT_MS = 120_000
-export const READY_POLL_MS = 1_000
+/** coord.py's `GPU_CLAIM_MAX_MIN`: the next `claim` by anyone drops a `gpu` claim older than this, and a repeat claim keeps its age. */
+export const GPU_CLAIM_MAX_MS = 180 * 60_000
+
+export interface Model3dTimings {
+  heartbeatMs: number
+  /** The scan, orphan drop, outside checks and outside-server probe. */
+  checkMs: number
+  idleStopMs: number
+  readyTimeoutMs: number
+  readyPollMs: number
+  /** A held claim is taken afresh once it is this old, before coord.py would drop it. */
+  claimRefreshMs: number
+}
+
+export const MODEL3D_TIMINGS: Model3dTimings = {
+  heartbeatMs: 5_000,
+  checkMs: 5_000,
+  idleStopMs: IDLE_STOP_MS,
+  readyTimeoutMs: 120_000,
+  readyPollMs: 1_000,
+  claimRefreshMs: 150 * 60_000
+}
 export const HISTORY_KEEP = 50
 export const CANCELLED_APP_CLOSED = 'Cancelled: app closed'
 export const STOP_REFUSED_RUNNING = 'A job is running. Wait for it to finish, then stop the server.'
@@ -30,6 +49,7 @@ export const STOP_REFUSED_EDITOR = 'The editor is open. Click Done with editor, 
 const EDITOR_NOT_OPEN = 'The editor is not open.'
 const EDITOR_TAKEN = 'The editor is already open or queued.'
 export const CANCELLED = 'Cancelled in Command Center'
+export const STOP_OUTSIDE_FAILED = 'The 3D server still answers: no ComfyUI process (python running main.py) was found on its port to stop.'
 export const DROPPED_ORPHAN = 'Dropped: waiting gen3d.py ended'
 const ALREADY_FINISHED = 'The job has already finished.'
 export const NO_SUCH_JOB = 'There is no such job.'
@@ -52,9 +72,12 @@ export interface CoordClaim {
   why: string
 }
 
+/** The board's `gpu` claims, or why coord.py could not be run. */
+export type CoordReading = { ok: true; claims: CoordClaim[] } | { ok: false; error: string }
+
 /** The coord board's `gpu` claims; a board whose script is missing has none and takes every claim. */
 export interface CoordBoard {
-  claims(): Promise<CoordClaim[]>
+  claims(): Promise<CoordReading>
   /** False when another job holds `gpu`. */
   claim(): Promise<boolean>
   unclaim(): Promise<void>
@@ -67,6 +90,8 @@ export interface ComfyClient {
   watchProgress(clientId: string, onStep: (step: number, steps: number) => void): () => void
   interrupt(): Promise<void>
   clearQueue(): Promise<void>
+  /** Whether `/queue` lists a running or pending prompt. */
+  busy(): Promise<boolean>
   free(): Promise<void>
 }
 
@@ -118,6 +143,9 @@ export interface Model3dPorts {
   comfy: ComfyClient
   server: ServerLauncher
   workers: WorkerRunner
+  jobs: JobsFolder
+  /** Why a generate request may not run as a worker (its script, python or cwd), or null when it may. */
+  vetRequest(request: Model3dRequest): Promise<string | null>
   /** Calls back when something in the folder changes; returns the stop. The 5 s scan runs either way. */
   watchFolder(folder: string, onChange: () => void): () => void
   /** Writes `service.json` atomically: on start, on each server change and as the 5 s heartbeat. */
@@ -134,6 +162,7 @@ export interface Model3dServiceConfig {
   unityProcesses: readonly string[]
   /** Named in the error when the server does not come up. */
   serverLog?: string
+  timings?: Partial<Model3dTimings>
 }
 
 interface Job {
@@ -150,7 +179,7 @@ interface Job {
 interface Outside {
   round: number
   names: Set<string>
-  claims: CoordClaim[]
+  board: CoordReading
 }
 
 type TurnResult = { kind: 'ready' } | { kind: 'requeue' } | { kind: 'failed'; error: string }
@@ -165,11 +194,48 @@ function freshStatus(): Model3dStatus {
   return { state: 'queued', waitReason: null, progress: null, startedAt: null, endedAt: null, error: null, outputs: [] }
 }
 
+const STATES: readonly Model3dJobState[] = ['queued', 'running', 'done', 'failed', 'cancelled']
+const STAGES: readonly string[] = ['picture', 'mask', 'generate', 'render']
+const textOrNull = (v: unknown): string | null => (typeof v === 'string' ? v : null)
+const intOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) ? v : null)
+
+function storedOutput(v: unknown): Model3dOutput | null {
+  if (typeof v !== 'object' || v === null) return null
+  const o = v as Record<string, unknown>
+  if (typeof o.glb !== 'string' || o.glb === '') return null
+  const out: Model3dOutput = { glb: o.glb }
+  if (typeof o.sheet === 'string') out.sheet = o.sheet
+  if (typeof o.json === 'string') out.json = o.json
+  return out
+}
+
+function storedProgress(v: unknown): Model3dProgress | null {
+  if (typeof v !== 'object' || v === null) return null
+  const p = v as Record<string, unknown>
+  return {
+    item: intOrNull(p.item),
+    of: intOrNull(p.of),
+    name: textOrNull(p.name),
+    stage: STAGES.includes(p.stage as string) ? (p.stage as Model3dStage) : null,
+    step: intOrNull(p.step),
+    steps: intOrNull(p.steps)
+  }
+}
+
+/** A status read back from disk, each field checked: one of the wrong shape counts as missing. */
 function readStoredStatus(value: unknown): Model3dStatus | null {
   if (typeof value !== 'object' || value === null) return null
-  const s = value as Partial<Model3dStatus>
-  if (typeof s.state !== 'string' || !['queued', 'running', 'done', 'failed', 'cancelled'].includes(s.state)) return null
-  return { ...freshStatus(), ...s, outputs: Array.isArray(s.outputs) ? s.outputs : [] }
+  const s = value as Record<string, unknown>
+  if (!STATES.includes(s.state as Model3dJobState)) return null
+  return {
+    state: s.state as Model3dJobState,
+    waitReason: textOrNull(s.waitReason),
+    progress: storedProgress(s.progress),
+    startedAt: textOrNull(s.startedAt),
+    endedAt: textOrNull(s.endedAt),
+    error: textOrNull(s.error),
+    outputs: Array.isArray(s.outputs) ? s.outputs.map(storedOutput).filter((o): o is Model3dOutput => o !== null) : []
+  }
 }
 
 /**
@@ -177,8 +243,9 @@ function readStoredStatus(value: unknown): Model3dStatus | null {
  * process, and owns the ComfyUI3D server, the coord board's `gpu` claim and the idle stop.
  */
 export function createModel3dService(ports: Model3dPorts, config: Model3dServiceConfig) {
-  const { clock, coord, comfy } = ports
+  const { clock, coord, comfy, jobs: files } = ports
   const { folder } = config
+  const timings: Model3dTimings = { ...MODEL3D_TIMINGS, ...config.timings }
   const jobs = new Map<string, Job>()
   /** Requests that are not valid, by id, with the time their failed status was written; pruned like finished jobs. */
   const rejected = new Map<string, number>()
@@ -190,6 +257,10 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
   let startedByApp = false
   let proc: ServerProcess | null = null
   let claimed = false
+  /** When the held claim was taken, by the app's clock. */
+  let claimedAt = 0
+  /** A server left answering by an earlier run: the claim is kept until its ComfyUI queue is empty. */
+  let draining = false
   let stopping: Promise<void> | null = null
   let cancelIdle: (() => void) | null = null
   let disposed = false
@@ -233,7 +304,8 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
   function persist(job: Job): void {
     const id = job.request.id
     track(async () => {
-      const next = (writes.get(id) ?? Promise.resolve()).then(() => writeJsonAtomic(statusFile(folder, id), job.status))
+      const status = job.status
+      const next = (writes.get(id) ?? Promise.resolve()).then(() => files.writeStatus(id, status))
       writes.set(id, next.catch(() => undefined))
       await next
     })
@@ -288,7 +360,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
       rejected.delete(old.id)
       await (writes.get(old.id) ?? Promise.resolve())
       writes.delete(old.id)
-      await removeJobFiles(folder, old.id)
+      await files.remove(old.id)
     }
     if (finished.length > HISTORY_KEEP) changed()
   }
@@ -296,16 +368,15 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
   async function reject(id: string, error: string): Promise<void> {
     const at = clock.now()
     rejected.set(id, at)
-    await writeJsonAtomic(statusFile(folder, id), { ...freshStatus(), state: 'failed', endedAt: iso(at), error } satisfies Model3dStatus)
+    await files.writeStatus(id, { ...freshStatus(), state: 'failed', endedAt: iso(at), error })
   }
 
   /** On start: what a crash or quit left queued or running is cancelled, never resumed. */
   async function loadFolder(): Promise<void> {
-    const { requests } = await listJobFiles(folder)
-    for (const id of requests) {
-      const raw = await readJson(requestFile(folder, id))
+    for (const id of await files.requests()) {
+      const raw = await files.readRequest(id)
       const parsed = raw.kind === 'ok' ? parseModel3dRequest(raw.value) : null
-      const stored = await readJson(statusFile(folder, id))
+      const stored = await files.readStatus(id)
       const status = stored.kind === 'ok' ? readStoredStatus(stored.value) : null
       if (!parsed?.ok || parsed.request.id !== id) {
         if (status && isFinished(status.state)) rejected.set(id, Date.parse(status.endedAt ?? '') || 0)
@@ -319,15 +390,20 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
   }
 
   async function scan(): Promise<void> {
-    const { requests } = await listJobFiles(folder)
-    for (const id of requests) {
+    for (const id of await files.requests()) {
       if (jobs.has(id) || rejected.has(id)) continue
-      const raw = await readJson(requestFile(folder, id))
+      const raw = await files.readRequest(id)
       // Not JSON yet: gen3d.py may still be writing it; the next scan reads it again.
       if (raw.kind !== 'ok') continue
       const parsed = parseModel3dRequest(raw.value)
       if (!parsed.ok || parsed.request.id !== id) {
         await reject(id, `The request is not valid: ${parsed.ok ? 'its id does not match its file name' : parsed.error}.`)
+        continue
+      }
+      // Only a generate request runs a process; it may name only the skill's own script, an interpreter and a folder.
+      const problem = parsed.request.kind === 'generate' ? await ports.vetRequest(parsed.request) : null
+      if (problem) {
+        await reject(id, `The request is not valid: ${problem}.`)
         continue
       }
       const job: Job = { request: parsed.request, status: freshStatus(), stdout: [], stderr: [], worker: null, waitIsTurn: false }
@@ -352,10 +428,10 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
   function startRound(): void {
     const round = ++rounds
     track(async () => {
-      const [names, claims] = await Promise.all([ports.processes.list(), coord.claims()])
+      const [names, board] = await Promise.all([ports.processes.list(), coord.claims()])
       await serial(async () => {
         if (outside && outside.round > round) return
-        outside = { round, names: new Set(names.map((n) => n.toLowerCase())), claims }
+        outside = { round, names: new Set(names.map((n) => n.toLowerCase())), board }
         await pump()
       })
     })
@@ -367,7 +443,9 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     const has = (list: readonly string[]): boolean => list.some((n) => seen.names.has(n.toLowerCase()))
     if (has(config.clusterProcesses)) return 'Waiting: Darkfall cluster running'
     if (has(config.unityProcesses)) return 'Waiting: Unity running'
-    const other = seen.claims.find((c) => c.job !== COORD_JOB)
+    if (!seen.board.ok) return `Waiting: coord board could not be run: ${seen.board.error}`
+    // coord.py drops a gpu claim this old on the next claim, and its `claims` still lists it until then.
+    const other = seen.board.claims.find((c) => c.job !== COORD_JOB && clock.now() - c.since <= GPU_CLAIM_MAX_MS)
     return other ? `Waiting: gpu claimed by ${other.job} since ${clock.localTime(other.since)}` : null
   }
 
@@ -433,19 +511,31 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     track(() => ports.openEditor())
   }
 
-  async function takeClaim(runAnyway: boolean): Promise<boolean> {
-    if (claimed) return true
+  /** Asks the board for the claim; true when the app holds it afterwards. */
+  async function claimNow(): Promise<boolean> {
     claimed = await coord.claim()
+    if (claimed) claimedAt = clock.now()
     // The app quit while the board answered: shutdown has already let go of the claim, so this one is given back.
     if (disposed && claimed) {
       claimed = false
       await coord.unclaim()
-      return false
     }
-    return claimed || runAnyway
+    return claimed
+  }
+
+  /** A repeat claim keeps its first time on the board, so a held claim is given back and taken again to restart its 180 min. */
+  async function refreshClaim(): Promise<boolean> {
+    if (claimed) await coord.unclaim()
+    return claimNow()
+  }
+
+  /** At each turn start the claim is taken afresh, so a turn always has the full 180 min of the board's rule. */
+  async function takeClaim(runAnyway: boolean): Promise<boolean> {
+    return (await refreshClaim()) || runAnyway
   }
 
   async function releaseClaim(): Promise<void> {
+    draining = false
     if (!claimed) return
     claimed = false
     await coord.unclaim()
@@ -473,7 +563,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
   /** The server for a turn: the app's own, one already answering outside the app, or a fresh start; the `gpu` claim is taken first. */
   async function bringUpServer(runAnyway: boolean): Promise<TurnResult> {
     if (stopping) await stopping
-    if (server === 'ready' && startedByApp && proc) return { kind: 'ready' }
+    if (server === 'ready' && startedByApp && proc) return (await takeClaim(runAnyway)) ? { kind: 'ready' } : { kind: 'requeue' }
     if (await comfy.up()) {
       if (!(await takeClaim(runAnyway))) return { kind: 'requeue' }
       if (server !== 'ready' || startedByApp) {
@@ -509,7 +599,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
       await reconsiderIdle()
     })))
     const seeLog = config.serverLog ? `; see ${config.serverLog}` : ''
-    const deadline = clock.now() + READY_TIMEOUT_MS
+    const deadline = clock.now() + timings.readyTimeoutMs
     for (;;) {
       if (proc !== started) return { kind: 'failed', error: `The 3D server ended before it answered${seeLog}.` }
       if (await comfy.up()) {
@@ -520,9 +610,9 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
       }
       if (clock.now() >= deadline) {
         await stopServer()
-        return { kind: 'failed', error: `The 3D server did not answer within ${READY_TIMEOUT_MS / 1000} s${seeLog}.` }
+        return { kind: 'failed', error: `The 3D server did not answer within ${timings.readyTimeoutMs / 1000} s${seeLog}.` }
       }
-      await pause(READY_POLL_MS)
+      await pause(timings.readyPollMs)
     }
   }
 
@@ -556,11 +646,11 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
   /** The idle stop runs only while the queue is empty, no turn is held and the app started the server; an outside server is only let go of. */
   async function reconsiderIdle(): Promise<void> {
     const empty = !turn && ![...jobs.values()].some((j) => j.status.state === 'queued')
-    if (empty && server === 'ready' && !startedByApp) await releaseClaim()
+    if (empty && server === 'ready' && !startedByApp && !draining) await releaseClaim()
     const idle = empty && server === 'ready' && startedByApp
     if (!idle) return cancelIdleTimer()
     if (cancelIdle) return
-    cancelIdle = clock.after(IDLE_STOP_MS, () => {
+    cancelIdle = clock.after(timings.idleStopMs, () => {
       cancelIdle = null
       track(() => serial(async () => {
         if (!turn && ![...jobs.values()].some((j) => j.status.state === 'queued') && server === 'ready' && startedByApp) await stopServer()
@@ -604,7 +694,11 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     job.worker = null
     if (job.status.state !== 'running') return
     const outputs = await workerOutputs(job.stdout, job.request.cwd)
-    if (code === 0 && outputs.length > 0) end(job, 'done', null, outputs)
+    if (code === 0 && outputs.length > 0) {
+      const failed = failedItems(job.stderr)
+      const total = Math.max(job.status.progress?.of ?? 0, outputs.length + failed.length)
+      end(job, 'done', failed.length > 0 ? `${failed.length} of ${total} failed: ${failed.join('; ')}` : null, outputs)
+    }
     else {
       const fallback = code === 0 ? 'The batch made no models.' : `The worker ended with exit code ${code ?? 'unknown'}.`
       end(job, 'failed', workerError(job.stderr) ?? fallback, outputs)
@@ -634,26 +728,74 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     await comfy.clearQueue()
   }
 
+  /** The claim stays on the board while the server is up: refreshed before coord.py's 180 min would drop it. */
+  async function keepClaim(): Promise<void> {
+    if (!claimed || server === 'stopped' || clock.now() - claimedAt < timings.claimRefreshMs) return
+    await refreshClaim()
+  }
+
+  /**
+   * A server the app did not start may end without the app knowing, so it is asked on each check, outside the chain
+   * like the wait checks. One left by an earlier run keeps the claim until its ComfyUI queue is empty.
+   */
+  function probeOutside(): void {
+    if (server !== 'ready' || startedByApp) return
+    track(async () => {
+      const up = await comfy.up()
+      const busy = up && draining ? await comfy.busy() : false
+      await serial(async () => {
+        if (disposed || server !== 'ready' || startedByApp) return
+        if (!up) {
+          await serverGone()
+          return pump()
+        }
+        if (draining && !busy) {
+          draining = false
+          await reconsiderIdle()
+        }
+      })
+    })
+  }
+
   const kick = (): void => track(() => serial(async () => {
     if (disposed) return
     await scan()
     await dropOrphans()
+    await keepClaim()
+    probeOutside()
     if (needsCheck()) startRound()
     await pump()
   }))
 
+  /** A server still answering at start was left by an earlier run or started outside: its work is stopped and it is used as an outside server. */
+  async function adoptLeftServer(): Promise<void> {
+    // A claim an earlier run left keeps its first time on the board, so it is let go of either way.
+    await coord.unclaim()
+    if (!(await comfy.up())) return
+    await comfy.interrupt()
+    await comfy.clearQueue()
+    server = 'ready'
+    startedByApp = false
+    draining = true
+    await claimNow()
+    changed()
+  }
+
   return {
-    /** Creates the folder, cancels what an earlier run left queued or running, releases a stale claim and starts watching. */
+    /**
+     * Creates the folder, cancels what an earlier run left queued or running, and starts watching. A stale claim is
+     * released, unless a server still answers: then its work is stopped and it is kept as an outside server.
+     */
     async start(): Promise<void> {
-      await fs.mkdir(folder, { recursive: true })
+      await files.ensure()
       await serial(async () => {
         await loadFolder()
-        await coord.unclaim()
+        await adoptLeftServer()
         await prune()
       })
       writeService()
-      stops.push(clock.every(HEARTBEAT_MS, writeService))
-      stops.push(clock.every(CHECK_MS, kick))
+      stops.push(clock.every(timings.heartbeatMs, writeService))
+      stops.push(clock.every(timings.checkMs, kick))
       stops.push(ports.watchFolder(folder, kick))
     },
     /** Resolves once nothing the service set off is left but waits on the clock, a worker or the server. */
@@ -677,6 +819,12 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
           writeService()
           changed()
           await ports.server.stopOutside()
+          if (await comfy.up()) {
+            server = 'ready'
+            writeService()
+            changed()
+            return { ok: false as const, error: STOP_OUTSIDE_FAILED }
+          }
           await serverGone()
         } else if (server === 'ready' || proc) await stopServer()
         return { ok: true as const }
@@ -714,7 +862,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
           summary: 'editor',
           runAnyway: false
         }
-        await writeJsonAtomic(requestFile(folder, request.id), request)
+        await files.writeRequest(request.id, request)
         const job: Job = { request, status: freshStatus(), stdout: [], stderr: [], worker: null, waitIsTurn: false }
         jobs.set(request.id, job)
         needFresh()

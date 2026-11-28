@@ -50,6 +50,11 @@ export async function workerOutputs(stdout: readonly string[], cwd: string): Pro
   return outputs
 }
 
+/** `<name>: <why>` from gen3d.py's `FAILED` line for each batch item it could not make, in order. */
+export function failedItems(stderr: readonly string[]): string[] {
+  return stderr.map((l) => /^\s*FAILED\s+(.+)$/.exec(l)?.[1]?.trim()).filter((l): l is string => !!l)
+}
+
 /** The last `FAILED` or error line the worker gave, else its last line. */
 export function workerError(stderr: readonly string[]): string | null {
   const lines = stderr.map((l) => l.trim()).filter((l) => l && !l.includes(MARKER))

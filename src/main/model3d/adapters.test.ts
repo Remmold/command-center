@@ -3,11 +3,13 @@ import { promises as fs } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { createCoordBoard, listenerPids, parseCoordClaims, pidAlive, realModel3dPorts, type Exec } from './adapters'
+import { dirname, join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { Model3dRequest } from '../../shared/model3d'
+import { coordPython, createCoordBoard, listenerPids, model3dScriptDirs, parseCoordClaims, pidAlive, realModel3dPorts, stopOutsideServer, vetWorkerRequest, type Exec, type ExecResult } from './adapters'
 import { progressStep, watchComfyMessages } from './comfyWs'
 import { model3dConfig } from './config'
+import { diskJobsFolder } from './jobsFolder'
 
 describe('a server started outside the app', () => {
   it('is found by the pid listening on its port in netstat, on any address, never a connection to it', () => {
@@ -32,7 +34,7 @@ describe('the coord board', () => {
       return { code: 0, stdout: '' }
     }
     const board = createCoordBoard(join(tmpdir(), 'no-such-coord', 'coord.py'), run)
-    expect(await board.claims()).toEqual([])
+    expect(await board.claims()).toEqual({ ok: true, claims: [] })
     expect(await board.claim()).toBe(true)
     await board.unclaim()
     expect(calls).toEqual([])
@@ -158,5 +160,154 @@ describe('opening the editor', () => {
     expect(opened).toHaveLength(1)
     expect(await fs.readFile(log, 'utf8')).toBe('http://127.0.0.1:4321\n')
     await fs.rm(folder, { recursive: true, force: true })
+  })
+})
+
+describe('the coord board python', () => {
+  it("is the engine venv's python when it exists, else python on PATH", async () => {
+    const dir = await fs.mkdtemp(join(tmpdir(), 'coord-py-'))
+    const venv = join(dir, 'python.exe')
+    await fs.writeFile(venv, '')
+    expect(coordPython(venv)).toBe(venv)
+    expect(coordPython(join(dir, 'missing', 'python.exe'))).toBe('python')
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  it('gives the reason a board that cannot be run fails, never an empty list', async () => {
+    const dir = await fs.mkdtemp(join(tmpdir(), 'coord-'))
+    const script = join(dir, 'coord.py')
+    await fs.writeFile(script, '')
+    let result: ExecResult = { code: null, stdout: '', stderr: '', error: 'spawn python ENOENT' }
+    const board = createCoordBoard(script, async () => result)
+    expect(await board.claims()).toEqual({ ok: false, error: 'spawn python ENOENT' })
+    result = { code: 9009, stdout: '', stderr: 'Python was not found; run without arguments to install from the Microsoft Store\r\nmore' }
+    expect(await board.claims()).toEqual({ ok: false, error: 'Python was not found; run without arguments to install from the Microsoft Store' })
+    result = { code: 0, stdout: '2026-11-28 10:27:45Z  {"job": "model3d", "path": "gpu", "why": "run"}', stderr: '' }
+    expect(await board.claims()).toEqual({ ok: true, claims: [{ job: 'model3d', since: Date.parse('2026-11-28T10:27:45Z'), why: 'run' }] })
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+})
+
+describe('stopping a server started outside the app', () => {
+  const netstat = [
+    '  TCP    127.0.0.1:8189         0.0.0.0:0              LISTENING       5120',
+    '  TCP    [::1]:8189             [::]:0                 LISTENING       6000',
+    '  TCP    0.0.0.0:8189           0.0.0.0:0              LISTENING       7000'
+  ].join('\r\n')
+  const processes = JSON.stringify([
+    { ProcessId: 5120, Name: 'python.exe', CommandLine: String.raw`C:\ComfyUI3D\.venv\Scripts\python.exe main.py --port 8189` },
+    { ProcessId: 6000, Name: 'python3.12.exe', CommandLine: String.raw`"C:\py\python3.12.exe" C:\ComfyUI3D\main.py` },
+    { ProcessId: 7000, Name: 'node.exe', CommandLine: 'node main.py' }
+  ])
+
+  it('reads netstat for IPv4 and IPv6 and kills only python running main.py on the port', async () => {
+    const calls: string[][] = []
+    const run: Exec = async (cmd, args) => {
+      calls.push([cmd, ...args])
+      if (cmd === 'netstat') return { code: 0, stdout: netstat, stderr: '' }
+      if (cmd === 'powershell') return { code: 0, stdout: processes, stderr: '' }
+      return { code: 0, stdout: '', stderr: '' }
+    }
+    await stopOutsideServer(8189, run)
+    expect(calls[0]).toEqual(['netstat', '-ano'])
+    expect(calls.filter((c) => c[0] === 'taskkill')).toEqual([
+      ['taskkill', '/PID', '5120', '/T', '/F'],
+      ['taskkill', '/PID', '6000', '/T', '/F']
+    ])
+  })
+
+  it('kills nothing when the process list cannot be read', async () => {
+    const calls: string[][] = []
+    const run: Exec = async (cmd, args) => {
+      calls.push([cmd, ...args])
+      return cmd === 'netstat' ? { code: 0, stdout: netstat, stderr: '' } : { code: 1, stdout: '', stderr: 'denied' }
+    }
+    await stopOutsideServer(8189, run)
+    expect(calls.filter((c) => c[0] === 'taskkill')).toEqual([])
+  })
+})
+
+describe('a request that runs a worker', () => {
+  let home: string
+  let scripts: string
+  let cwd: string
+  beforeEach(async () => {
+    home = await fs.mkdtemp(join(tmpdir(), 'model3d-vet-'))
+    scripts = join(home, '.claude', 'skills', 'model3d', 'scripts')
+    cwd = join(home, 'game')
+    await fs.mkdir(scripts, { recursive: true })
+    await fs.mkdir(cwd)
+    await fs.writeFile(join(scripts, 'gen3d.py'), '')
+    await fs.writeFile(join(scripts, 'other.py'), '')
+    await fs.mkdir(join(home, 'py'))
+    await fs.writeFile(join(home, 'py', 'python.exe'), '')
+    await fs.writeFile(join(home, 'py', 'evil.exe'), '')
+  })
+  afterEach(() => fs.rm(home, { recursive: true, force: true }))
+
+  const vet = (patch: Partial<Model3dRequest>) => vetWorkerRequest({ ...vetRequestBase, script: join(scripts, 'gen3d.py'), cwd, ...patch }, [scripts])
+
+  it('may run gen3d.py from a model3d skill folder with python on PATH or a python*.exe, in an existing folder', async () => {
+    expect(await vet({ python: 'python' })).toBeNull()
+    expect(await vet({ python: 'py' })).toBeNull()
+    expect(await vet({ python: join(home, 'py', 'python.exe') })).toBeNull()
+    expect(await vet({ script: join(scripts, '..', 'scripts', 'GEN3D.PY') })).toBeNull()
+  })
+
+  it.each([
+    ['another script in the skill folder', () => ({ script: join(scripts, 'other.py') }), /script/],
+    ['a gen3d.py elsewhere', () => ({ script: join(home, 'gen3d.py') }), /script/],
+    ['a python that is not python', () => ({ python: join(home, 'py', 'evil.exe') }), /python/],
+    ['a python that does not exist', () => ({ python: join(home, 'py', 'missing', 'python.exe') }), /python/],
+    ['a command on PATH that is not python', () => ({ python: 'cmd' }), /python/],
+    ['a cwd that does not exist', () => ({ cwd: join(home, 'nowhere') }), /cwd/]
+  ])('refuses %s', async (_name, patch, error) => {
+    expect(await vet(patch())).toMatch(error)
+  })
+
+  it('takes the skill folder of the home account, each account profile and the extra folder e2e names', () => {
+    expect(model3dScriptDirs(String.raw`C:\Users\me`, [String.raw`C:\Users\me\.claude`, String.raw`D:\work-claude`], String.raw`C:\Temp\e2e\scripts`)).toEqual([
+      join(String.raw`C:\Users\me`, '.claude', 'skills', 'model3d', 'scripts'),
+      join(String.raw`D:\work-claude`, 'skills', 'model3d', 'scripts'),
+      String.raw`C:\Temp\e2e\scripts`
+    ])
+  })
+})
+
+const vetRequestBase: Model3dRequest = {
+  id: 'job1',
+  kind: 'generate',
+  argv: ['--image', 'chest.png'],
+  cwd: '',
+  python: 'python',
+  script: '',
+  waiterPid: 1,
+  wait: true,
+  sessionId: '',
+  configDir: '',
+  submittedAt: '2026-11-28T10:00:00.000Z',
+  summary: 'chest.png · prop',
+  runAnyway: false
+}
+
+describe('the jobs folder on disk', () => {
+  it('lists request ids, reads missing and half-written files apart, writes statuses atomically and removes a job', async () => {
+    const folder = join(await fs.mkdtemp(join(tmpdir(), 'model3d-jobs-')), 'model3d-jobs')
+    const jobs = diskJobsFolder(folder)
+    await jobs.ensure()
+    await fs.writeFile(join(folder, 'a.request.json'), '{"id": "a"}')
+    await fs.writeFile(join(folder, 'b.request.json'), '{"id": ')
+    await fs.writeFile(join(folder, 'bad name!.request.json'), '{}')
+    expect((await jobs.requests()).sort()).toEqual(['a', 'b'])
+    expect(await jobs.readRequest('a')).toEqual({ kind: 'ok', value: { id: 'a' } })
+    expect(await jobs.readRequest('b')).toEqual({ kind: 'unreadable' })
+    expect(await jobs.readStatus('a')).toEqual({ kind: 'missing' })
+    const status = { state: 'queued' as const, waitReason: null, progress: null, startedAt: null, endedAt: null, error: null, outputs: [] }
+    await Promise.all([jobs.writeStatus('a', status), jobs.writeStatus('a', { ...status, waitReason: 'Waiting: Unity running' })])
+    expect(await jobs.readStatus('a')).toMatchObject({ kind: 'ok' })
+    expect((await fs.readdir(folder)).filter((n) => n.endsWith('.tmp'))).toEqual([])
+    await jobs.remove('a')
+    expect((await fs.readdir(folder)).sort()).toEqual(['b.request.json', 'bad name!.request.json'])
+    await fs.rm(dirname(folder), { recursive: true, force: true })
   })
 })

@@ -1,17 +1,13 @@
 import { promises as fs } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
 import { parseModel3dStats, type Model3dOutput, type Model3dView } from '../../shared/model3d'
-import { model3dJobRows, type Model3dJobRow } from '../../shared/model3dJobs'
+import { model3dJobRows, type Model3dJobRow, type Model3dKnownSessions } from '../../shared/model3dJobs'
 import type { DigestModel3d, DigestModel3dJob, DigestModel3dModel } from './digest'
 
 export const MODEL3D_DIGEST_MODELS = 10
 
-export interface DigestModel3dInput {
+export interface DigestModel3dInput extends Model3dKnownSessions {
   view: Model3dView
-  /** Main knows a feature session's title: it is the feature's name. */
-  features: readonly { sessionId: string; name: string }[]
-  /** Every session the app hosts, by pane id; one that is not a feature's is named by its folder. */
-  hosted: readonly { paneId: string; cwd: string }[]
   workspaces: readonly { name: string; path: string }[]
 }
 
@@ -34,12 +30,7 @@ async function trisOf(output: Model3dOutput): Promise<number | null> {
 
 /** The `# 3D models` facts: the queued and running jobs, and the last finished models with the tris their `.json` gives. */
 export async function digestModel3d({ view, features, hosted, workspaces }: DigestModel3dInput): Promise<DigestModel3d> {
-  const named = new Set(features.map((f) => f.sessionId))
-  const sessions = [
-    ...features.map((f) => ({ paneId: f.sessionId, title: f.name })),
-    ...hosted.filter((h) => !named.has(h.paneId)).map((h) => ({ paneId: h.paneId, title: `A session in ${basename(h.cwd) || h.cwd}` }))
-  ]
-  const rows = model3dJobRows({ view, sessions, workspaces, profiles: [] })
+  const rows = model3dJobRows({ view, features, hosted, workspaces, profiles: [] })
   const jobs: DigestModel3dJob[] = rows
     .filter(isOpen)
     .reverse()

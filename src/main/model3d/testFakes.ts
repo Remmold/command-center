@@ -1,7 +1,6 @@
-import { promises as fs } from 'node:fs'
-import { join } from 'node:path'
 import type { Model3dRequest, Model3dServiceFile, Model3dStatus } from '../../shared/model3d'
-import type { CoordClaim, Model3dClock, Model3dPorts, ServerProcess, WorkerEvents, WorkerSpec } from './service'
+import { parseJsonText, requestIds, requestName, statusName, type JobsFolder, type ReadResult } from './jobsFolder'
+import { GPU_CLAIM_MAX_MS, type CoordClaim, type CoordReading, type Model3dClock, type Model3dPorts, type ServerProcess, type WorkerEvents, type WorkerSpec } from './service'
 
 interface Timer {
   at: number
@@ -47,19 +46,29 @@ export class FakeClock implements Model3dClock {
   }
 }
 
+/** coord.py's gpu rules: `claims` lists every claim, a `claim` by anyone first drops those older than 180 min, and a repeat claim keeps its time. */
 export class FakeCoord {
   claimsList: CoordClaim[] = []
   calls: string[] = []
   /** Refuses every claim without listing a holder, as a board whose python fails would. */
   refuse = false
-  async claims(): Promise<CoordClaim[]> {
-    return this.claimsList.map((c) => ({ ...c }))
+  constructor(private readonly clock: { now(): number }) {}
+  /** Set, coord.py cannot be run and `claims` gives this reason. */
+  broken: string | null = null
+  async claims(): Promise<CoordReading> {
+    if (this.broken) return { ok: false, error: this.broken }
+    return { ok: true, claims: this.claimsList.map((c) => ({ ...c })) }
   }
   async claim(): Promise<boolean> {
     this.calls.push('claim')
     if (this.refuse) return false
-    if (this.claimsList.some((c) => c.job !== 'command-center-3d')) return false
-    if (!this.claimsList.some((c) => c.job === 'command-center-3d')) this.claimsList.push({ job: 'command-center-3d', since: Date.now(), why: 'test' })
+    return this.claimAs('command-center-3d')
+  }
+  /** A `claim <job> gpu` from any job. */
+  claimAs(job: string): boolean {
+    this.claimsList = this.claimsList.filter((c) => this.clock.now() - c.since <= GPU_CLAIM_MAX_MS)
+    if (this.claimsList.some((c) => c.job !== job)) return false
+    if (!this.claimsList.some((c) => c.job === job)) this.claimsList.push({ job, since: this.clock.now(), why: 'test' })
     return true
   }
   async unclaim(): Promise<void> {
@@ -73,6 +82,8 @@ export class FakeCoord {
 
 export class FakeComfy {
   answering = false
+  /** Whether `/queue` lists a running or pending prompt. */
+  queued = false
   watchers = new Map<string, (step: number, steps: number) => void>()
   calls: string[] = []
   async up(): Promise<boolean> {
@@ -87,6 +98,9 @@ export class FakeComfy {
   }
   async clearQueue(): Promise<void> {
     this.calls.push('clearQueue')
+  }
+  async busy(): Promise<boolean> {
+    return this.answering && this.queued
   }
   async free(): Promise<void> {
     this.calls.push('free')
@@ -160,9 +174,19 @@ export class FakeProcesses {
   /** While true, each `list()` waits until the test answers it through `held`, as a slow tasklist would. */
   hold = false
   held: ((names: string[]) => void)[] = []
+  listed = 0
+  private listWaiters: { at: number; resolve: () => void }[] = []
   list(): Promise<string[]> {
+    this.listed++
+    for (const w of this.listWaiters.filter((x) => x.at <= this.listed)) w.resolve()
+    this.listWaiters = this.listWaiters.filter((x) => x.at > this.listed)
     if (this.hold) return new Promise((resolve) => this.held.push(resolve))
     return Promise.resolve([...this.names])
+  }
+  /** Resolves once `list()` has been asked `count` times in all: the handshake for a round that starts while another is held. */
+  whenListed(count: number): Promise<void> {
+    if (this.listed >= count) return Promise.resolve()
+    return new Promise((resolve) => this.listWaiters.push({ at: count, resolve }))
   }
   async alive(pid: number): Promise<boolean> {
     return !this.ended.has(pid)
@@ -190,6 +214,52 @@ export class FakeServiceFile {
   }
 }
 
+/** The jobs folder kept in memory, as file names and their text, so a test can drop a half-written request too. */
+export class FakeJobsFolder implements JobsFolder {
+  files = new Map<string, string>()
+  async ensure(): Promise<void> {}
+  async requests(): Promise<string[]> {
+    return requestIds(this.names())
+  }
+  async readRequest(id: string): Promise<ReadResult> {
+    return this.read(requestName(id))
+  }
+  async readStatus(id: string): Promise<ReadResult> {
+    return this.read(statusName(id))
+  }
+  async writeRequest(id: string, request: Model3dRequest): Promise<void> {
+    this.files.set(requestName(id), JSON.stringify(request))
+  }
+  async writeStatus(id: string, status: Model3dStatus): Promise<void> {
+    this.files.set(statusName(id), JSON.stringify(status))
+  }
+  async remove(id: string): Promise<void> {
+    this.files.delete(requestName(id))
+    this.files.delete(statusName(id))
+  }
+  names(): string[] {
+    return [...this.files.keys()].sort()
+  }
+  put(name: string, text: string): void {
+    this.files.set(name, text)
+  }
+  drop(req: Model3dRequest): void {
+    this.files.set(requestName(req.id), JSON.stringify(req))
+  }
+  status(id: string): Model3dStatus | null {
+    const text = this.files.get(statusName(id))
+    return text === undefined ? null : (JSON.parse(text) as Model3dStatus)
+  }
+  request(id: string): unknown {
+    const text = this.files.get(requestName(id))
+    return text === undefined ? null : (JSON.parse(text) as unknown)
+  }
+  private read(name: string): ReadResult {
+    const text = this.files.get(name)
+    return text === undefined ? { kind: 'missing' } : parseJsonText(text)
+  }
+}
+
 export function fakePorts(): {
   ports: Model3dPorts
   clock: FakeClock
@@ -200,16 +270,23 @@ export function fakePorts(): {
   processes: FakeProcesses
   serviceFile: FakeServiceFile
   browser: FakeBrowser
+  jobs: FakeJobsFolder
+  /** What `vetRequest` answers for a request; null lets it run. */
+  vet: { answer: (request: Model3dRequest) => string | null }
 } {
   const clock = new FakeClock()
-  const coord = new FakeCoord()
+  const coord = new FakeCoord(clock)
   const comfy = new FakeComfy()
   const server = new FakeServer(comfy)
   const workers = new FakeWorkers(comfy.calls)
   const processes = new FakeProcesses()
   const serviceFile = new FakeServiceFile()
   const browser = new FakeBrowser()
+  const jobs = new FakeJobsFolder()
+  const vet = { answer: (_request: Model3dRequest): string | null => null }
   const ports: Model3dPorts = {
+    jobs,
+    vetRequest: async (r) => vet.answer(r),
     clock,
     coord,
     comfy,
@@ -220,7 +297,7 @@ export function fakePorts(): {
     writeServiceFile: (file) => serviceFile.write(file),
     openEditor: () => browser.openEditor()
   }
-  return { ports, clock, coord, comfy, server, workers, processes, serviceFile, browser }
+  return { ports, clock, coord, comfy, server, workers, processes, serviceFile, browser, jobs, vet }
 }
 
 let seq = 0
@@ -245,14 +322,3 @@ export function request(patch: Partial<Model3dRequest> = {}): Model3dRequest {
   }
 }
 
-export async function drop(folder: string, req: Model3dRequest): Promise<void> {
-  await fs.writeFile(join(folder, `${req.id}.request.json`), JSON.stringify(req))
-}
-
-export async function readStatus(folder: string, id: string): Promise<Model3dStatus | null> {
-  try {
-    return JSON.parse(await fs.readFile(join(folder, `${id}.status.json`), 'utf8')) as Model3dStatus
-  } catch {
-    return null
-  }
-}

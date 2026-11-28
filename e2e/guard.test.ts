@@ -35,7 +35,7 @@ describe('assertFakeClaude', () => {
 
 describe('assertFakeModel3d', () => {
   const root = String.raw`C:\Temp\cc-e2e-1`
-  const fake = { CC_MODEL3D_PORT: '50123', CC_MODEL3D_ENGINE_DIR: join(root, 'engine'), CC_MODEL3D_COORD: join(root, 'coord', 'coord.py'), CC_MODEL3D_BROWSER_LOG: join(root, 'browser.log') }
+  const fake = { CC_MODEL3D_PORT: '50123', CC_MODEL3D_ENGINE_DIR: join(root, 'engine'), CC_MODEL3D_COORD: join(root, 'coord', 'coord.py'), CC_MODEL3D_BROWSER_LOG: join(root, 'browser.log'), CC_MODEL3D_SCRIPTS: join(root, 'scripts') }
 
   it('accepts fakes inside the test root on another port', () => {
     expect(() => assertFakeModel3d(fake, root)).not.toThrow()
@@ -47,7 +47,9 @@ describe('assertFakeModel3d', () => {
     ['the real engine', { CC_MODEL3D_ENGINE_DIR: String.raw`C:\ComfyUI3D` }],
     ['the real coord board', { CC_MODEL3D_COORD: String.raw`C:\dfst_coord\coord.py` }],
     ['no coord board', { CC_MODEL3D_COORD: undefined }],
-    ['a real browser', { CC_MODEL3D_BROWSER_LOG: undefined }]
+    ['a real browser', { CC_MODEL3D_BROWSER_LOG: undefined }],
+    ['no fake worker folder', { CC_MODEL3D_SCRIPTS: undefined }],
+    ['a worker folder outside the test', { CC_MODEL3D_SCRIPTS: String.raw`C:\Users\me\.claude\skills\model3d\scripts` }]
   ])('refuses %s', (_name, over) => {
     expect(() => assertFakeModel3d({ ...fake, ...over }, root)).toThrow(/e2e refuses to run/)
   })

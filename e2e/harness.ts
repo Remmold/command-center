@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -187,7 +187,7 @@ export interface Model3dFakes {
   jobs: string
   /** The fake ComfyUI's port, free and never 8189. */
   port: number
-  /** The fake gen3d.py a request names as its script. */
+  /** The fake gen3d.py a request names as its script, in the test root's only folder the app lets a worker come from. */
   worker: string
   /** The fake engine dir; its `calls.log` lists each POST the fake ComfyUI got. */
   engineDir: string
@@ -209,14 +209,17 @@ function freePort(): Promise<number> {
   })
 }
 
-/** Copies the fake ComfyUI in as the engine's `main.py` and the fake coord board in as `coord.py`, each in the test root. */
+/** Copies the fake ComfyUI in as the engine's `main.py`, the fake coord board as `coord.py` and the fake worker as `gen3d.py` with its fixture, each in the test root. */
 function seedModel3dFakes(root: string, userData: string, port: number): Model3dFakes {
   const engineDir = join(root, 'model3d-engine')
   const coordDir = join(root, 'model3d-coord')
-  for (const dir of [engineDir, coordDir]) mkdirSync(dir, { recursive: true })
+  const scriptsDir = join(root, 'model3d-scripts')
+  for (const dir of [engineDir, coordDir, join(scriptsDir, 'fixture')]) mkdirSync(dir, { recursive: true })
   copyFileSync(join(FAKES, 'fake_comfy.py'), join(engineDir, 'main.py'))
   copyFileSync(join(FAKES, 'fake_coord.py'), join(coordDir, 'coord.py'))
-  return { jobs: join(userData, 'model3d-jobs'), port, worker: join(FAKES, 'fake_gen3d.py'), engineDir, coordBoard: join(coordDir, 'board.json'), browserLog: join(root, 'model3d-browser.log') }
+  copyFileSync(join(FAKES, 'fake_gen3d.py'), join(scriptsDir, 'gen3d.py'))
+  for (const name of readdirSync(join(FAKES, 'fixture'))) copyFileSync(join(FAKES, 'fixture', name), join(scriptsDir, 'fixture', name))
+  return { jobs: join(userData, 'model3d-jobs'), port, worker: join(scriptsDir, 'gen3d.py'), engineDir, coordBoard: join(coordDir, 'board.json'), browserLog: join(root, 'model3d-browser.log') }
 }
 
 function model3dEnv(fakes: Model3dFakes): Record<string, string> {
@@ -226,6 +229,7 @@ function model3dEnv(fakes: Model3dFakes): Record<string, string> {
     CC_MODEL3D_PORT: String(fakes.port),
     CC_MODEL3D_COORD: join(dirname(fakes.coordBoard), 'coord.py'),
     CC_MODEL3D_BROWSER_LOG: fakes.browserLog,
+    CC_MODEL3D_SCRIPTS: dirname(fakes.worker),
     // Darkfall or Unity may run on this machine; the fakes' jobs must not wait on them.
     CC_MODEL3D_CLUSTER_PROCESSES: 'cc-e2e-no-cluster.exe',
     CC_MODEL3D_UNITY_PROCESSES: 'cc-e2e-no-unity.exe'

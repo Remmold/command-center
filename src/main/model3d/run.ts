@@ -1,6 +1,8 @@
+import { homedir } from 'node:os'
 import { shell } from 'electron'
+import { list as listProfiles } from '../profiles/store'
 import { model3dJobsFolder } from '../util/paths'
-import { realModel3dPorts } from './adapters'
+import { model3dScriptDirs, realModel3dPorts } from './adapters'
 import { model3dConfig } from './config'
 import { createModel3dService, type Model3dService } from './service'
 
@@ -12,7 +14,11 @@ export function model3dSessionEnv(jobsFolder: string, sessionId: string): Record
 /** Starts the app's 3D service on the real engine, or the fakes the env points at. */
 export function startModel3dService(): Model3dService {
   const config = model3dConfig(process.env, model3dJobsFolder())
-  const service = createModel3dService(realModel3dPorts(config, (url) => shell.openExternal(url)), {
+  const scriptDirs = async (): Promise<string[]> => {
+    const profiles = await listProfiles().catch(() => [])
+    return model3dScriptDirs(homedir(), profiles.map((p) => p.configDir), config.extraScripts)
+  }
+  const service = createModel3dService(realModel3dPorts(config, (url) => shell.openExternal(url), scriptDirs), {
     folder: config.folder,
     pid: process.pid,
     clusterProcesses: config.clusterProcesses,
