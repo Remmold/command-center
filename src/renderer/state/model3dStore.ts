@@ -27,10 +27,13 @@ export const useModel3dStore = create<Model3dState>((set) => {
     const result = await action()
     if (!result.ok) set({ actionError: result.error })
   }
+  let opening = 0
   const show = async (open: () => Promise<Model3dOpenResult | null>): Promise<void> => {
+    const turn = ++opening
     set({ openError: null })
     const result = await open()
-    if (!result) return
+    // Two clicks in a row: the model clicked last wins, however the answers arrive.
+    if (!result || turn !== opening) return
     set(result.ok ? { model: result.model } : { openError: result.error })
   }
   return {

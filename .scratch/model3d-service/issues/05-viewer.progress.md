@@ -1,3 +1,3 @@
-- done: ticket 05 viewer built (three.js bundled, GLTFLoader + OrbitControls, wireframe, lit/unlit, .json stats with scene-count fallback, sheet, job models, Open model…, .glb Media tiles); quick tier green; full e2e 19 passed in 2.5 min; scenario (a) checks canvas pixels change for wireframe and unlit (WebGL draws in the e2e window)
-- next: code review of git diff 373bb07..HEAD, fixes in a follow-up commit
-- open reds: none
+- done: ticket 05 built — 49040d7, review fix (last clicked model wins) in the next commit; quick green; full e2e 19 passed in 2.5 min; model3d.spec 2 passed after the fix; WebGL draws in the e2e window (wireframe and unlit change the canvas pixels)
+- next: Lane 2 by Andreas (orbit feel, lit/unlit look, a .glb tile in a chat's Media tab), then ticket 06
+- open reds: none; the first commit's pre-commit quick tier failed once (output not kept), 0 of 8 later full Vitest runs failed
