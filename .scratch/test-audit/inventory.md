@@ -344,3 +344,51 @@ A scripted check (test-imported exports with no production caller; duplicate tes
 | Quick tier (`pnpm quick`) | green | green |
 | Assertions removed | - | **0** |
 | Named regression guards | 11 | **11, assertions unchanged** |
+
+# 0.1.38
+
+Scheduled audit at 0.1.38, run on `retire-main-chat` (0.1.37 plus the removal of the main chat and features made by the app, ADR 0012). Baseline: 19 scenarios at 0.1.37; after: 17, one JSON reporter run through `pnpm e2e:gate`, **165.1 s** of 200 s, green with no rerun. The suite is slower than at 0.1.33 (122.5 s) mostly from the two 3D scenarios added since and the larger chat-rendering scenario; times are per scenario, launch and shutdown included.
+
+## UI scenarios, before -> after
+
+| # | Scenario | Time | Proves | R | Now |
+| --- | --- | --- | --- | --- | --- |
+| 1 | chat > thinking, todos, copy, timestamps, scroll hold | 19.9 s | rendering, scroll-follow, MCP/compaction, Media and Agents tabs | **R** | unchanged |
+| 2 | processes > the Processes tab | 14.3 s | background server, port, badge, Stop, Run it myself | | unchanged |
+| 3 | model3d > the 3D view on Ctrl+6 | 13.5 s | queue, progress, done, who asked, viewer, Stop server | | unchanged (its "who asked" is now a session's folder, not a feature's name) |
+| 4 | sessions > naming, rename, Past sessions, VS Code session | 12.8 s | rename to CLI, observed cut-off, take-over | **R** | unchanged |
+| 5 | chat > a basic chat | 12.5 s | views, Manual start, @ menu, attachments, history, slash menu | | unchanged |
+| 6 | accounts > VS Code's accounts adopted in one click | 12.4 s | banner, adopt, Work chats, repo icon | | unchanged |
+| 7 | app > zoom, Ctrl+B, history | 11.6 s | zoom keys, window place, update busy gate | **R** | unchanged |
+| 8 | model3d > gpu claim, Run anyway, Open editor | 9.5 s | wait reason, cancel, editor turn | | unchanged |
+| 9 | chat > mid-turn queue, Stop, approvals | 8.9 s | queue, interrupt, approvals | **R** | unchanged |
+| 10 | testFlow > the Test tab | 7.8 s | markdown, HTML twin offline, reload, pop-out | | unchanged |
+| 11 | accounts > account headers, Board By account | 7.2 s | sections, waiting badge, groups | | unchanged |
+| 12 | accounts > a VS Code profile's folder | 6.8 s | profile adopt, badge, mismatch warning | | unchanged |
+| 13 | processes > New terminal | 6.8 s | terminal, Shell drawer, Close | | unchanged |
+| 14 | context > Files and the Map tour | 6.4 s | CLAUDE.md edit, drift check, Apply | | unchanged |
+| 15 | chat > the last prompt strip | 5.5 s | strip and click-back | | unchanged |
+| 16 | dashboard > chat drawer | 5.5 s | drawer reply, swap, Open in Work | | unchanged |
+| 17 | claudeSettings > Claude Code settings | 3.2 s | save bar writes only the changed key | | unchanged |
+| - | featureCockpit > New feature on two accounts; Test boots the feature server | - | feature start, test pair, Complete | | **deleted with the feature** |
+| - | featureCockpit > the main chat proposes a feature; Go starts it | - | proposal card, Go, brief.md | | **deleted with the feature** |
+
+No other merge: the remaining pairs differ in script, accounts or fixtures, as at 0.1.33. The two deleted scenarios test code that no longer exists, so none of their assertions move.
+
+## Unit tests (light pass)
+
+- **Tests of deleted code:** 44 test files went with the removed modules (features, main chat, cards, preview config, test steps, feature stages). Tests that only used a retired prompt kind as sample data (`appPrompts`, `transcriptItems`, `chatHistory/store`, `promptHistory`, `lastPrompt`, `startRequests`, `sessionTitle`, `model3dJobs`) now use the drift-check and fix-findings prompts. `place.test.ts` lost its test-pair window key test; `testFlow.test.ts` its feature checklist test.
+- **New:** the migration that drops the main chat's saved view (2 tests); a retired prompt kind in old history labels as a plain app prompt (1 test).
+- **Duplicates, copied constants:** a scan of the remaining tests' names for retired concepts found only Board features and test-flow feature files, which still exist. Nothing else changed.
+
+2,268 (+2 skipped) in 227 files before, **1,819 (+2 skipped) in 183 files** after.
+
+## Before / after
+
+| Measure | Before (0.1.37) | After |
+| --- | --- | --- |
+| UI scenarios | 19 | **17** |
+| UI time, JSON total (`pnpm e2e:gate`) | not measured at 0.1.37 | **165.1 s** (green, no rerun) |
+| Unit tests | 2,268 (+2 skipped) in 227 files | **1,819 (+2 skipped) in 183 files** |
+| Quick tier | green | green |
+| Assertions removed from code that still exists | - | **0** |
