@@ -1,5 +1,5 @@
-import { MODEL3D_APP_SESSION, type Model3dJobState, type Model3dOutput, type Model3dProgress, type Model3dView } from '../../shared/model3d'
-import { DEFAULT_PROFILE_ID } from '../../shared/types'
+import { MODEL3D_APP_SESSION, type Model3dJobState, type Model3dOutput, type Model3dProgress, type Model3dView } from './model3d'
+import { DEFAULT_PROFILE_ID } from './types'
 
 export interface Model3dRowsInput {
   view: Model3dView

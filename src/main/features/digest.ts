@@ -97,12 +97,62 @@ export interface DigestWorkspace {
   path: string
 }
 
-/** What the digest says besides the features: the workspaces, the work in them no feature tracks, and where test flows are kept. */
+/** A queued or running 3D job; `state` is its wait reason when it has one. */
+export interface DigestModel3dJob {
+  summary: string
+  session: string
+  state: string
+}
+
+/** A finished model, one per `.glb` a job wrote. */
+export interface DigestModel3dModel {
+  name: string
+  glb: string
+  session: string
+  workspace: string | null
+  /** From the model's `.json`; null without one. */
+  tris: number | null
+  /** Epoch ms. */
+  finishedAt: number | null
+}
+
+export interface DigestModel3d {
+  /** Oldest first. */
+  jobs: readonly DigestModel3dJob[]
+  /** Newest first. */
+  models: readonly DigestModel3dModel[]
+}
+
+/** What the digest says besides the features: the workspaces, the work in them no feature tracks, the 3D jobs and models, and where test flows are kept. */
 export interface DigestPlaces {
   workspaces?: readonly DigestWorkspace[]
   /** The Open work section as written, or the line saying its scan failed. */
   openWork?: string
+  model3d?: DigestModel3d
   testFlowsFolder?: string
+}
+
+function model3dSection({ jobs, models }: DigestModel3d): string[] {
+  const lines = [
+    '# 3D models',
+    '',
+    'The 3D service runs model3d jobs from every session, one at a time. Point the user at a finished model by its path and the 3D view (Ctrl+6).',
+    '',
+    '## Queued and running',
+    ''
+  ]
+  if (jobs.length === 0) lines.push('No 3D jobs queued or running.')
+  for (const j of jobs) lines.push(`- ${j.summary} · ${j.session} · ${j.state}`)
+  lines.push('', '## Last finished models', '')
+  if (models.length === 0) lines.push('No finished models.')
+  for (const m of models) {
+    const workspace = m.workspace === null ? 'no workspace' : `workspace ${m.workspace}`
+    const tris = m.tris === null ? 'tris unknown' : `${m.tris} tris`
+    const finished = m.finishedAt === null ? 'finished at an unknown time' : `finished ${new Date(m.finishedAt).toISOString()}`
+    lines.push(`- ${m.name}: ${m.glb} · session ${m.session} · ${workspace} · ${tris} · ${finished}`)
+  }
+  lines.push('')
+  return lines
 }
 
 /** Everything after the header; what decides whether the file needs writing again. */
@@ -128,6 +178,7 @@ export function digestBody(features: readonly DigestFeature[], places: DigestPla
   for (const w of workspaces) lines.push(`- ${w.label} (${w.path})`)
   lines.push('')
   if (places.openWork) lines.push(places.openWork.trimEnd(), '')
+  if (places.model3d) lines.push(...model3dSection(places.model3d))
   if (places.testFlowsFolder) lines.push('# Test flows', '', `Manual test-flow documents, one per feature, are kept in ${places.testFlowsFolder}. You may read them.`, '')
   return lines.join('\n')
 }

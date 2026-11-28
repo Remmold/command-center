@@ -4,8 +4,8 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
-- [ ] One rule line in the main chat's instructions: suggest `model3d` when an idea needs 3D assets, say a session runs it, and point at finished models by path and the 3D view.
-- [ ] The digest gains `# 3D models`: queued and running jobs (summary, session, state or wait reason), then the last 10 finished models (name, `.glb` path, session, workspace, tris, finished time).
-- [ ] Vitest next to the digest builder's existing tests.
+- [x] One rule line in the main chat's instructions: suggest `model3d` when an idea needs 3D assets, say a session runs it, and point at finished models by path and the 3D view.
+- [x] The digest gains `# 3D models`: queued and running jobs (summary, session, state or wait reason), then the last 10 finished models (name, `.glb` path, session, workspace, tris, finished time).
+- [x] Vitest next to the digest builder's existing tests.

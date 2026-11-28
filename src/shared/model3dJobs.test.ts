@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MODEL3D_APP_SESSION, type Model3dJob, type Model3dRequest, type Model3dStatus, type Model3dView } from '../../shared/model3d'
+import { MODEL3D_APP_SESSION, type Model3dJob, type Model3dRequest, type Model3dStatus, type Model3dView } from './model3d'
 import { jobDuration, model3dJobRows, type Model3dRowsInput } from './model3dJobs'
 
 const req = (id: string, over: Partial<Model3dRequest> = {}): Model3dRequest => ({

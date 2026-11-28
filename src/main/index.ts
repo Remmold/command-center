@@ -109,9 +109,9 @@ if (!app.requestSingleInstanceLock()) {
     })
     setTimeout(() => void repoIdentities.detectMissing(), ICON_SEARCH_DELAY_MS)
     const startWithWindows = createStartWithWindowsControl()
-    registerIpc({ repoIdentities, startWithWindows })
     const service = startModel3dService()
     model3d = service
+    registerIpc({ repoIdentities, startWithWindows, model3d: service })
     registerModel3dIpc(service)
     holdQuit(app, () => service.shutdown(), MODEL3D_SHUTDOWN_LIMIT_MS)
     handleMediaScheme()
