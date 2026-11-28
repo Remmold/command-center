@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createModel3dService, type Model3dService } from './service'
+import { CHECKING, createModel3dService, type Model3dService } from './service'
 import { drop, fakePorts, readStatus, request } from './testFakes'
 
 let root: string
@@ -316,6 +316,33 @@ describe('wait reasons', () => {
 
     await finish()
     expect(await readStatus(folder, waiting.id)).toMatchObject({ state: 'running' })
+  })
+
+  it('drops the turn reason as soon as the turn ends, lets a newer round start the job past a slow process list, and ignores the slow answer when it lands', async () => {
+    await boot()
+    const first = request({ summary: 'crate.png, prop' })
+    const second = request()
+    await submit(first)
+    await submit(second)
+    const status = () => service!.view().jobs.find((j) => j.request.id === second.id)?.status
+    expect(status()?.waitReason).toBe('Waiting: crate.png, prop running')
+
+    fakes.processes.hold = true
+    const worker = fakes.workers.last()
+    worker.events.stdout(join(root, 'm.glb'))
+    worker.events.exit(0)
+    await expect.poll(() => status()?.waitReason, { timeout: 1000 }).toBe(CHECKING)
+    expect(fakes.processes.held).toHaveLength(1)
+
+    fakes.processes.hold = false
+    await fakes.clock.advance(5000, () => new Promise((resolve) => setTimeout(resolve, 20)))
+    await expect.poll(() => status()?.state, { timeout: 1000 }).toBe('running')
+    expect(fakes.workers.runs).toHaveLength(2)
+
+    fakes.processes.held[0]!(['Unity.exe'])
+    await service!.settled()
+    expect(status()).toMatchObject({ state: 'running', waitReason: null })
+    expect(fakes.workers.runs).toHaveLength(2)
   })
 })
 

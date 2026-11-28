@@ -30,6 +30,7 @@ export const DROPPED_ORPHAN = 'Dropped: waiting gen3d.py ended'
 const ALREADY_FINISHED = 'The job has already finished.'
 export const NO_SUCH_JOB = 'There is no such job.'
 const CLAIM_REFUSED = 'Waiting: the coord board refused the gpu claim'
+export const CHECKING = 'Waiting: checking for the cluster, Unity and gpu claims'
 const STDERR_KEEP = 200
 
 export interface Model3dClock {
@@ -135,6 +136,15 @@ interface Job {
   stdout: string[]
   stderr: string[]
   worker: WorkerProcess | null
+  /** Whether `waitReason` names the job that held the GPU turn, so it is stale once that turn ends. */
+  waitIsTurn: boolean
+}
+
+/** One check round's look at the outside: running process names (lower case) and the coord board's `gpu` claims. */
+interface Outside {
+  round: number
+  names: Set<string>
+  claims: CoordClaim[]
 }
 
 type TurnResult = { kind: 'ready' } | { kind: 'requeue' } | { kind: 'failed'; error: string }
@@ -254,7 +264,12 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
 
   function end(job: Job, state: Model3dJobState, error: string | null, outputs = job.status.outputs): void {
     setStatus(job, { state, waitReason: null, endedAt: iso(clock.now()), error, outputs })
-    if (turn === job) turn = null
+    if (turn === job) freeTurn()
+  }
+
+  function freeTurn(): void {
+    turn = null
+    needFresh()
   }
 
   async function prune(): Promise<void> {
@@ -291,7 +306,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
         else await reject(id, `The request is not valid: ${parsed && !parsed.ok ? parsed.error : 'not JSON'}.`)
         continue
       }
-      const job: Job = { request: parsed.request, status: status ?? freshStatus(), stdout: [], stderr: [], worker: null }
+      const job: Job = { request: parsed.request, status: status ?? freshStatus(), stdout: [], stderr: [], worker: null, waitIsTurn: false }
       jobs.set(id, job)
       if (!status || !isFinished(status.state)) end(job, 'cancelled', CANCELLED_APP_CLOSED)
     }
@@ -309,45 +324,76 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
         await reject(id, `The request is not valid: ${parsed.ok ? 'its id does not match its file name' : parsed.error}.`)
         continue
       }
-      const job: Job = { request: parsed.request, status: freshStatus(), stdout: [], stderr: [], worker: null }
+      const job: Job = { request: parsed.request, status: freshStatus(), stdout: [], stderr: [], worker: null, waitIsTurn: false }
       jobs.set(id, job)
+      needFresh()
       persist(job)
     }
   }
 
   const turnReason = (holder: Job): string => (holder.request.kind === 'editor' ? 'Waiting: editor open' : `Waiting: ${holder.request.summary} running`)
 
-  /** Checks 2 and 3 (cluster or Unity running, another job's `gpu` claim); fetched once per round. */
-  function outsideChecks(): (job: Job) => Promise<string | null> {
-    let names: Promise<Set<string>> | null = null
-    let claims: Promise<CoordClaim[]> | null = null
-    const has = async (list: readonly string[]): Promise<boolean> => {
-      names ??= ports.processes.list().then((l) => new Set(l.map((n) => n.toLowerCase())))
-      const running = await names
-      return list.some((n) => running.has(n.toLowerCase()))
-    }
-    return async (job) => {
-      if (job.request.runAnyway) return null
-      if (await has(config.clusterProcesses)) return 'Waiting: Darkfall cluster running'
-      if (await has(config.unityProcesses)) return 'Waiting: Unity running'
-      claims ??= coord.claims()
-      const other = (await claims).find((c) => c.job !== COORD_JOB)
-      return other ? `Waiting: gpu claimed by ${other.job} since ${clock.localTime(other.since)}` : null
-    }
+  // Checks 2 and 3 (cluster or Unity running, another job's `gpu` claim) run as rounds outside the serial chain, so
+  // one slow tasklist or coord.py call holds neither the chain nor the queue: a newer round that lands first wins.
+  let rounds = 0
+  let outside: Outside | null = null
+  /** The first round whose answer may start a job: one that began after the last turn ended or job arrived. */
+  let freshFrom = 1
+  function needFresh(): void {
+    freshFrom = rounds + 1
+  }
+
+  function startRound(): void {
+    const round = ++rounds
+    track(async () => {
+      const [names, claims] = await Promise.all([ports.processes.list(), coord.claims()])
+      await serial(async () => {
+        if (outside && outside.round > round) return
+        outside = { round, names: new Set(names.map((n) => n.toLowerCase())), claims }
+        await pump()
+      })
+    })
+  }
+
+  const needsCheck = (): boolean => !turn && [...jobs.values()].some((j) => j.status.state === 'queued' && !j.request.runAnyway)
+
+  function outsideReason(seen: Outside): string | null {
+    const has = (list: readonly string[]): boolean => list.some((n) => seen.names.has(n.toLowerCase()))
+    if (has(config.clusterProcesses)) return 'Waiting: Darkfall cluster running'
+    if (has(config.unityProcesses)) return 'Waiting: Unity running'
+    const other = seen.claims.find((c) => c.job !== COORD_JOB)
+    return other ? `Waiting: gpu claimed by ${other.job} since ${clock.localTime(other.since)}` : null
+  }
+
+  function setWait(job: Job, reason: string, isTurn: boolean): void {
+    job.waitIsTurn = isTurn
+    if (job.status.waitReason !== reason) setStatus(job, { waitReason: reason })
   }
 
   async function pump(): Promise<void> {
     if (disposed) return
     const queued = [...jobs.values()].filter((j) => j.status.state === 'queued').sort(fifo)
-    const check = outsideChecks()
+    const fresh = outside && outside.round >= freshFrom ? outside : null
+    let checking = false
     for (const job of queued) {
-      const reason = turn ? turnReason(turn) : await check(job)
+      if (turn) {
+        setWait(job, turnReason(turn), true)
+        continue
+      }
+      // A job behind one still being checked waits for that answer too, so the queue keeps its order.
+      if (checking || (!fresh && !job.request.runAnyway)) {
+        checking = true
+        if (job.status.waitReason === null || job.waitIsTurn) setWait(job, CHECKING, false)
+        continue
+      }
+      const reason = job.request.runAnyway || !fresh ? null : outsideReason(fresh)
       if (reason === null) {
         takeTurn(job)
         continue
       }
-      if (job.status.waitReason !== reason) setStatus(job, { waitReason: reason })
+      setWait(job, reason, false)
     }
+    if (checking && rounds < freshFrom) startRound()
     await reconsiderIdle()
   }
 
@@ -367,9 +413,10 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     await serial(async () => {
       if (turn !== job || job.status.state !== 'running') return
       if (result.kind === 'ready') return launchWorker(job)
-      turn = null
+      freeTurn()
       if (result.kind === 'requeue') {
         // Checks again on the next 5 s round, not at once: a board that refuses without showing a holder must not spin.
+        job.waitIsTurn = false
         setStatus(job, { state: 'queued', startedAt: null, waitReason: CLAIM_REFUSED })
         return
       }
@@ -554,6 +601,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
     if (disposed) return
     await scan()
     await dropOrphans()
+    if (needsCheck()) startRound()
     await pump()
   }))
 

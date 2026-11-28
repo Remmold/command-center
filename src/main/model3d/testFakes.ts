@@ -157,8 +157,12 @@ export class FakeProcesses {
   names: string[] = []
   /** Pids that have ended; every other pid is alive. */
   ended = new Set<number>()
-  async list(): Promise<string[]> {
-    return [...this.names]
+  /** While true, each `list()` waits until the test answers it through `held`, as a slow tasklist would. */
+  hold = false
+  held: ((names: string[]) => void)[] = []
+  list(): Promise<string[]> {
+    if (this.hold) return new Promise((resolve) => this.held.push(resolve))
+    return Promise.resolve([...this.names])
   }
   async alive(pid: number): Promise<boolean> {
     return !this.ended.has(pid)
