@@ -1,8 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, utimesSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 import { expect, type ElectronApplication, type Page } from '@playwright/test'
-import { FAKE_BIN, assertFakeClaude } from '../guard'
+import type { FeatureRecord } from '../../src/shared/features'
+import type { Model3dRequest, Model3dStatus } from '../../src/shared/model3d'
+import { formatResults, markStep, parseChecklist, resultsPathFor, type StepMarks } from '../../src/shared/testSteps'
+import { FAKE_BIN, assertFakeClaude, assertFakeModel3d } from '../guard'
 
 /**
  * Fake repos with tickets in every column, shared by the screenshot and perf runs.
@@ -141,10 +145,19 @@ function writeFeatures(root: string, features: Feature[]): void {
 }
 
 export interface Seeded {
+  root: string
   userData: string
   configDir: string
   home: string
   workspaces: { id: string; name: string; path: string }[]
+}
+
+/**
+ * A fresh folder for a seed whose paths a shot shows: under the shared Public folder when there is one, since the temp
+ * folder's path names the Windows account.
+ */
+export function neutralRoot(prefix: string): string {
+  return mkdtempSync(join(process.env.PUBLIC && existsSync(process.env.PUBLIC) ? process.env.PUBLIC : tmpdir(), prefix))
 }
 
 export function seed(root: string): Seeded {
@@ -172,7 +185,30 @@ export function seed(root: string): Seeded {
   }
   writeFileSync(join(userData, 'board-settings.json'), JSON.stringify({ scanRoots: [join(root, 'repos')] }))
   writeFileSync(join(userData, 'projects.json'), JSON.stringify(workspaces.map((w) => ({ ...w, createdAt: Date.now() }))))
-  return { userData, configDir, home, workspaces }
+  // Unset, the app reads the real test flows folder.
+  mkdirSync(join(root, 'test-flows'), { recursive: true })
+  writeFileSync(join(userData, 'test-flow-settings.json'), JSON.stringify({ folder: join(root, 'test-flows') }))
+  return { root, userData, configDir, home, workspaces }
+}
+
+/** The 3D service's folders, all in the seed root and empty: no engine to start, no worker to run, no coord board to read. */
+function model3dEnv(root: string): Record<string, string> {
+  const dir = (name: string): string => {
+    const path = join(root, name)
+    mkdirSync(path, { recursive: true })
+    return path
+  }
+  return {
+    CC_MODEL3D_ENGINE_DIR: dir('model3d-engine'),
+    CC_MODEL3D_ENGINE_PYTHON: 'python',
+    // Nothing listens on port 1, so the view reads the server as stopped; never 8189, a real ComfyUI3D's port.
+    CC_MODEL3D_PORT: '1',
+    CC_MODEL3D_COORD: join(dir('model3d-coord'), 'coord.py'),
+    CC_MODEL3D_BROWSER_LOG: join(root, 'model3d-browser.log'),
+    CC_MODEL3D_SCRIPTS: dir('model3d-scripts'),
+    CC_MODEL3D_CLUSTER_PROCESSES: 'cc-shots-no-cluster.exe',
+    CC_MODEL3D_UNITY_PROCESSES: 'cc-shots-no-unity.exe'
+  }
 }
 
 export function env(s: Seeded, logFile: string): Record<string, string> {
@@ -186,16 +222,19 @@ export function env(s: Seeded, logFile: string): Record<string, string> {
     FAKE_CLAUDE_LOG: logFile,
     CLAUDE_CONFIG_DIR: s.configDir,
     USERPROFILE: s.home,
-    HOME: s.home
+    HOME: s.home,
+    ...model3dEnv(s.root)
   })
   assertFakeClaude(out.CC_CLAUDE_BIN)
+  assertFakeModel3d(out, s.root)
   return out
 }
 
 export async function startIn(page: Page, workspace: string, text: string | null, expectText: string | null): Promise<void> {
   await page.keyboard.press('Control+2')
   await page.keyboard.press('Control+t')
-  await page.getByRole('option', { name: new RegExp(`^${workspace}\\b`) }).first().click()
+  // Not a worktree of the same repo, whose option starts with the repo's name too.
+  await page.getByRole('option', { name: new RegExp(`^${workspace}\\b(?! ·)`) }).first().click()
   await page.getByRole('option', { name: 'New chat' }).click()
   const input = page.locator('[data-chat-pane] textarea:visible')
   await expect(input).toBeVisible()
@@ -308,4 +347,175 @@ export function seedFinishedAgents(subagents: string, count: number): number {
     writeFileSync(join(subagents, `agent-${id}.jsonl`), text)
   }
   return bytes
+}
+
+interface SeedFeature {
+  repo: string
+  name: string
+  /** What the feature's `.scratch` folder holds; the stage is read from it. */
+  files: Feature
+  /** The feature's test steps, each passed or not yet marked; Testing once there are any. */
+  steps?: [step: string, passed: boolean][]
+  completed?: boolean
+  ageHours: number
+}
+
+/** One feature per stage, each in its own worktree as New feature makes it; the Testing one has a fake server for its Test pair. */
+const FEATURES: SeedFeature[] = [
+  { repo: 'atlas-api', name: 'webhook-retries', files: { name: 'webhook-retries', tickets: [] }, ageHours: 0.3 },
+  { repo: 'pixel-forge', name: 'batch-export', files: { name: 'batch-export', spec: true, tickets: [] }, ageHours: 2 },
+  {
+    repo: 'notes-cli',
+    name: 'offline-mode',
+    files: {
+      name: 'offline-mode',
+      spec: true,
+      tickets: [
+        ['01', 'Queue edits while offline', 'ready-for-agent'],
+        ['02', 'Replay the queue on reconnect', 'ready-for-agent', '01'],
+        ['03', 'Offline badge in the status line', 'needs-triage']
+      ]
+    },
+    ageHours: 5
+  },
+  {
+    repo: 'ledger-web',
+    name: 'invoice-search',
+    files: {
+      name: 'invoice-search',
+      spec: true,
+      tickets: [
+        ['01', 'Search index for invoices', 'resolved'],
+        ['02', 'Search box with filters', 'in-progress', '01'],
+        ['03', 'Highlight matches in results', 'ready-for-agent', '02']
+      ],
+      notes: ['- 01 resolved: invoices indexed by number, customer and total — 7e6d5c4']
+    },
+    ageHours: 8
+  },
+  {
+    repo: 'atlas-api',
+    name: 'audit-log',
+    files: {
+      name: 'audit-log',
+      spec: true,
+      tickets: [
+        ['01', 'Audit table and writer', 'resolved'],
+        ['02', 'Audit page with filters', 'resolved']
+      ],
+      notes: ['- 02 resolved: audit page lists the last 100 events — 3b2a190']
+    },
+    steps: [
+      ['Open the audit page from the admin menu', true],
+      ['See the last sign-in of the demo user at the top', true],
+      ['Filter by "token revoked" and see only those rows', false]
+    ],
+    ageHours: 20
+  },
+  { repo: 'pixel-forge', name: 'color-profiles', files: { name: 'color-profiles', spec: true, tickets: [['01', 'Embed the sRGB profile on export', 'resolved']] }, completed: true, ageHours: 60 }
+]
+
+const AUDIT_ROWS = [
+  ['10:42', 'demo-user', 'sign-in'],
+  ['10:40', 'demo-user', 'token revoked'],
+  ['09:15', 'ops-bot', 'key rotated']
+]
+const AUDIT_PAGE = `<title>atlas-api admin</title><body style="font-family:sans-serif;margin:2rem;background:#fff;color:#111"><h1>Audit log</h1><table border="1" cellpadding="6"><tr><th>When</th><th>Who</th><th>Event</th></tr>${AUDIT_ROWS.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</table></body>`
+const AUDIT_SERVER = `import http from 'node:http'\nhttp.createServer((_req, res) => {\n  res.setHeader('content-type', 'text/html')\n  res.end(${JSON.stringify(AUDIT_PAGE)})\n}).listen(Number(process.env.PORT))\n`
+
+/**
+ * Adds a feature of every stage to a seed: a worktree and workspace each, their `.scratch` files and feature records;
+ * the Testing one also gets its checklist with results and a preview config whose server is a local fake page.
+ */
+export function seedFeatures(s: Seeded): void {
+  const records: FeatureRecord[] = []
+  const previews: Record<string, unknown> = {}
+  for (const f of FEATURES) {
+    const repo = s.workspaces.find((w) => w.id === f.repo)!
+    const path = join(dirname(repo.path), `${f.repo}-worktrees`, f.name)
+    git(repo.path, 'worktree', 'add', '-q', '-b', `feat/${f.name}`, path)
+    writeFeatures(path, [{ ...f.files, ageHours: f.ageHours }])
+    const id = `${f.repo}-${f.name}`
+    s.workspaces.push({ id, name: basename(path), path })
+    const startedAt = Date.now() - f.ageHours * HOUR
+    records.push({ name: f.name, workspaceId: id, sourceWorkspaceId: f.repo, worktreePath: path, branch: `feat/${f.name}`, sessionId: `seed-feature-${f.name}`, ports: [], startedAt, completedAt: f.completed ? Date.now() - HOUR : null })
+    if (!f.steps) continue
+    const checklist = join(s.root, 'test-flows', f.repo, `${f.name}.md`)
+    const results = resultsPathFor(checklist)
+    const text = `Test results: ${results}\n\n${f.steps.map(([step]) => `- [ ] ${step}`).join('\n')}\n`
+    writeAged(checklist, text, Date.now())
+    const { steps } = parseChecklist(text)
+    const marks = steps.reduce<StepMarks>((acc, step, i) => (f.steps![i][1] ? markStep(acc, step.hash, 'pass') : acc), {})
+    writeFileSync(results, formatResults(f.name, steps, marks))
+    writeFileSync(join(path, 'server.mjs'), AUDIT_SERVER)
+    previews[f.repo] = { install: '', startPage: '/', servers: [{ name: 'admin', command: 'node server.mjs', cwd: '.', ready: 'port' }] }
+  }
+  writeFileSync(join(s.userData, 'features.json'), JSON.stringify(records))
+  writeFileSync(join(s.userData, 'preview-configs.json'), JSON.stringify(previews))
+  writeFileSync(join(s.userData, 'projects.json'), JSON.stringify(s.workspaces.map((w) => ({ ...w, createdAt: Date.now() }))))
+}
+
+/**
+ * Finished 3D jobs as the 3D service leaves them in its jobs folder: a done one with the fake fixture's model, a failed
+ * and a cancelled one. Finished jobs load as history, so no server or worker starts.
+ */
+export function seed3dJobs(s: Seeded): void {
+  const forge = s.workspaces.find((w) => w.id === 'pixel-forge')!.path
+  const out = join(forge, 'generated3d')
+  mkdirSync(out, { recursive: true })
+  const fixture = join(__dirname, '..', 'fakes', 'fixture')
+  for (const [from, to] of [['model.glb', 'lantern.glb'], ['model_sheet.png', 'lantern_sheet.png'], ['model.json', 'lantern.json']]) copyFileSync(join(fixture, from), join(out, to))
+  const jobs = join(s.userData, 'model3d-jobs')
+  mkdirSync(jobs, { recursive: true })
+  const at = (minutesAgo: number): string => new Date(Date.now() - minutesAgo * 60_000).toISOString()
+  const job = (name: string, minutesAgo: number, status: Partial<Model3dStatus>): void => {
+    const id = `seed-${name}`
+    const request: Model3dRequest = {
+      id,
+      kind: 'generate',
+      argv: ['--image', `${name}.png`, '--name', name, '--out', out],
+      cwd: forge,
+      python: 'python',
+      script: join(s.root, 'model3d-scripts', 'gen3d.py'),
+      waiterPid: 0,
+      wait: true,
+      sessionId: '',
+      configDir: '',
+      submittedAt: at(minutesAgo),
+      summary: `${name}.png · prop`,
+      runAnyway: false
+    }
+    const done: Model3dStatus = { state: 'done', waitReason: null, progress: null, startedAt: at(minutesAgo - 1), endedAt: at(minutesAgo - 4), error: null, outputs: [] }
+    writeFileSync(join(jobs, `${id}.request.json`), JSON.stringify(request))
+    writeFileSync(join(jobs, `${id}.status.json`), JSON.stringify({ ...done, ...status }))
+  }
+  job('lantern', 12, { outputs: [{ glb: join(out, 'lantern.glb'), sheet: join(out, 'lantern_sheet.png'), json: join(out, 'lantern.json') }] })
+  job('anvil', 40, { state: 'failed', error: 'The worker ended with code 1: the picture has no clear subject.' })
+  job('banner', 90, { state: 'cancelled', error: 'Cancelled in Command Center' })
+}
+
+/** A made-up CLAUDE.md and settings in atlas-api, and the account's own CLAUDE.md, for the Context view. */
+export function seedContext(s: Seeded): void {
+  const atlas = s.workspaces.find((w) => w.id === 'atlas-api')!.path
+  const rules = [
+    '# atlas-api',
+    '',
+    'HTTP API for the Atlas billing product: accounts, invoices, tokens and webhooks.',
+    '',
+    '## Commands',
+    '',
+    '- `pnpm dev`: the API on localhost:4100 with a seeded demo database',
+    '- `pnpm test`: unit and route tests',
+    '- `pnpm db:migrate`: apply migrations to the local database',
+    '',
+    '## Conventions',
+    '',
+    '- Every route validates its input with the shared schema module.',
+    '- Tokens are never logged; the audit log stores their id only.',
+    '- New migrations are additive; a column is dropped one release after its last reader.'
+  ]
+  writeFileSync(join(atlas, 'CLAUDE.md'), `${rules.join('\n')}\n`)
+  mkdirSync(join(atlas, '.claude'), { recursive: true })
+  writeFileSync(join(atlas, '.claude', 'settings.json'), JSON.stringify({ permissions: { allow: ['Bash(pnpm test:*)', 'Bash(pnpm dev)'] } }, null, 2))
+  writeFileSync(join(s.configDir, 'CLAUDE.md'), '# Working style\n\n- Explain the plan in two sentences before a large change.\n- Run the quick tests before every commit.\n')
 }
