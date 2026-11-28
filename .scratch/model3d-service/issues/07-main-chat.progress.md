@@ -1,3 +1,3 @@
-Done: rule line, # 3D models digest section (digest.ts + digestModel3d.ts), job rows moved to src/shared, digest rewrites on 3D service changes; pnpm quick green.
-Next: pnpm build, e2e featureCockpit, commit, self review.
-Open reds: none (one quick run had load timeouts in unrelated files; rerun green).
+Done: built and committed 1611e56 (rule line, # 3D models digest section, shared job rows, digest rewrite on 3D changes); review clean.
+Next: none; Lane 2 is Andreas asking the main chat about 3D models with real jobs.
+Open reds: none.
