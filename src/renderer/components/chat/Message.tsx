@@ -1,4 +1,5 @@
-import { memo, useMemo, type ReactNode } from 'react'
+import { memo, useMemo, useState, type ReactNode } from 'react'
+import { ChevronDown, ChevronRight, Command } from 'lucide-react'
 import { Markdown } from '../ui/Markdown'
 import type { ContentBlock } from '../../../shared/types'
 import { fileBaseName } from '../../../shared/fileLinks'
@@ -34,6 +35,7 @@ import { QUESTION_TOOL, parseQuestions } from '../../../shared/approval'
 import { mentionsActionBlock } from '../../../shared/actionBlocks'
 import { ACTION_BLOCKS } from '../../../shared/mainChatActions'
 import { ActionBlocksText } from './ActionCard'
+import { appPromptLabel, type AppPromptKind } from '../../../shared/appPrompts'
 
 const TODO_CHECK: Record<Todo['status'], CheckState> = { pending: 'unchecked', in_progress: 'mixed', completed: 'checked' }
 
@@ -55,7 +57,7 @@ interface MessageProps {
 export const Message = memo(function Message({ item, stampAt, streamingFrom, thinkingTokens, joinAbove = false, joinBelow = false, compactSummary }: MessageProps) {
   switch (item.kind) {
     case 'user':
-      return <UserPrompt id={item.id} {...userBubble(item)} at={stampAt} />
+      return <UserPrompt id={item.id} {...userBubble(item)} appPrompt={item.appPrompt} at={stampAt} />
     case 'assistant':
       return (
         <AssistantMessage
@@ -97,9 +99,12 @@ interface UserPromptProps {
   notKept?: string | null
   queued?: boolean
   at?: number
+  /** Set when the app wrote the prompt: it shows as one collapsed app line instead. */
+  appPrompt?: AppPromptKind
 }
 
-export function UserPrompt({ id, text, attachments = [], notKept = null, queued = false, at }: UserPromptProps) {
+export function UserPrompt({ id, text, attachments = [], notKept = null, queued = false, at, appPrompt }: UserPromptProps) {
+  if (appPrompt) return <AppPromptLine kind={appPrompt} text={text} queued={queued} />
   return (
     <div className="py-1.5">
       {at !== undefined && !queued && (
@@ -121,7 +126,36 @@ export function UserPrompt({ id, text, attachments = [], notKept = null, queued 
   )
 }
 
-const PARAGRAPH = '\n\n'
+/** A prompt the app sent on its own: one muted line naming what it was, opening to the full text as sent. */
+function AppPromptLine({ kind, text, queued }: { kind: AppPromptKind; text: string; queued: boolean }) {
+  const [open, setOpen] = useState(false)
+  const Chevron = open ? ChevronDown : ChevronRight
+  return (
+    <div data-app-prompt={kind} data-queued={queued || undefined} className="py-1">
+      <button
+        type="button"
+        aria-expanded={open}
+        title={open ? 'Hide the prompt the app sent' : 'Show the prompt the app sent'}
+        onClick={() => setOpen((o) => !o)}
+        className="flex max-w-full items-center gap-1.5 rounded px-0.5 text-[12px] text-muted opacity-80 hover:opacity-100 aria-expanded:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-focus"
+      >
+        <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-subtle bg-input">
+          <Command size={10} />
+        </span>
+        <span className="truncate">{appPromptLabel(kind, text)}</span>
+        {queued && <span className="shrink-0 text-faint">· queued</span>}
+        <Chevron size={12} className="shrink-0" />
+      </button>
+      {open && (
+        <div data-app-prompt-text="" className="ml-[22px] mt-1 whitespace-pre-wrap break-words border-l-[3px] border-subtle pl-3 text-[12px] leading-relaxed text-muted">
+          {text}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const PARAGRAPH ='\n\n'
 
 function textBlocks(content: ContentBlock[]): string[] {
   return content.flatMap((b) => (b.type === 'text' && typeof b.text === 'string' ? [b.text] : []))

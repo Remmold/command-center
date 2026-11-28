@@ -88,7 +88,8 @@ describe('the main chat first prompt and instructions', () => {
     expect(MAIN_CHAT_INSTRUCTIONS).toMatch(/never claim to have done it yourself/)
     expect(MAIN_CHAT_INSTRUCTIONS).toContain('````feature-proposal')
     expect(MAIN_CHAT_INSTRUCTIONS).toMatch(/Open work section lists work no feature tracks/)
-    expect(MAIN_CHAT_INSTRUCTIONS).toMatch(/never offer to adopt it/)
+    expect(MAIN_CHAT_INSTRUCTIONS).not.toMatch(/not available yet|never offer to adopt/)
+    expect(MAIN_CHAT_INSTRUCTIONS).toMatch(/offer to adopt as a feature or to tidy with housekeeping, item by item/)
     expect(proposalSegments(MAIN_CHAT_INSTRUCTIONS).filter((s) => s.kind === 'proposal')).toHaveLength(1)
   })
 

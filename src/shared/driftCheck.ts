@@ -3,6 +3,11 @@ import { FINDINGS_VERSION, type FindingsRun } from './findings'
 
 export type DriftCheckKind = FindingsRun['scope']
 
+const SCOPE_TITLES: Record<DriftCheckKind, string> = { project: 'This project', account: 'Account', 'cross-project': 'Across projects' }
+
+/** A drift check's name in Context and as its session's title, e.g. "Drift check · This project". */
+export const driftCheckTitle = (kind: DriftCheckKind): string => `Drift check · ${SCOPE_TITLES[kind]}`
+
 export interface DriftCheckProject {
   name: string
   report: ContextReport

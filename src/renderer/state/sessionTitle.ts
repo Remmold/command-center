@@ -18,10 +18,13 @@ function shortened(line: string): string {
   return line.length <= MAX_TITLE ? line : line.slice(0, MAX_TITLE - 1).trimEnd() + '…'
 }
 
-/** Only the first prompt with text names a session, and never once it was renamed. */
-export function titleAfterPrompt(session: SessionTitle, prompt: string): SessionTitle {
+/**
+ * Only the first prompt with text names a session, and never once it was renamed. A prompt the app wrote never names it
+ * by its text: the session takes `appTitle`, the name the app knows it by (the main chat, a feature's name, a drift check).
+ */
+export function titleAfterPrompt(session: SessionTitle, prompt: string, appTitle?: string): SessionTitle {
   if (session.titleRenamed || session.title !== NEW_SESSION_TITLE) return session
-  const line = firstLine(prompt)
+  const line = appTitle !== undefined ? appTitle.trim() : firstLine(prompt)
   return line ? { ...session, title: shortened(line) } : session
 }
 
@@ -36,13 +39,17 @@ const MAX_TITLE_REQUESTS = 3
 
 export const titleRequests = (): number => 0
 
-/** The extension's `wantsGeneratedTitle`: the first prompt asks, the next ones ask again until a title comes back. */
+/**
+ * The extension's `wantsGeneratedTitle`: the first prompt asks, the next ones ask again until a title comes back. A prompt
+ * the app wrote never asks, so a session it started keeps the app's title for good.
+ */
 export function wantsClaudeTitle(
   requests: number,
   session: SessionTitle,
-  firstPrompt: boolean
+  firstPrompt: boolean,
+  fromApp = false
 ): { ask: boolean; requests: number } {
-  if (session.titleRenamed || session.titleFromClaude) return { ask: false, requests }
+  if (fromApp || session.titleRenamed || session.titleFromClaude) return { ask: false, requests }
   if (firstPrompt) return { ask: true, requests: 1 }
   if (requests === 0 || requests >= MAX_TITLE_REQUESTS) return { ask: false, requests }
   return { ask: true, requests: requests + 1 }

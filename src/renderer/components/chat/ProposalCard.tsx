@@ -34,8 +34,12 @@ export function ProposalCard({ cardKey, fields, state }: { cardKey: string; fiel
         </p>
       )}
       <CardField label="Name">{proposal.name}</CardField>
-      <CardField label="Description">{proposal.description}</CardField>
-      <CardField label="Starting brief">{proposal.brief}</CardField>
+      <CardField label="Description" markdown>
+        {proposal.description}
+      </CardField>
+      <CardField label="Starting brief" markdown>
+        {proposal.brief}
+      </CardField>
     </ActionCardShell>
   )
 }

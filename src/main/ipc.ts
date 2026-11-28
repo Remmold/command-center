@@ -43,7 +43,11 @@ import { killRunningInstalls, runInstall } from './features/install'
 import { createPortReserver, portAccepts, portIsFree } from './features/ports'
 import { createServerRunner } from './features/serverRunner'
 import { closeFeaturePair, openPair } from './features/pairWindows'
-import { commitsBeyond, completeFeature, removeFeatureWorktree, removeWorktreeOnly, reopenFeature } from './features/complete'
+import { commitsBeyond, completeFeature, removeFeatureWorktree, removeWorktreeOnly, reopenFeature, runGit } from './features/complete'
+import { adoptWork, preflightAdopt, rollbackAdopt, type AdoptDeps, type AdoptUndo } from './features/adopt'
+import { checkHousekeeping, runHousekeeping, type HousekeepingDeps } from './features/housekeeping'
+import type { AdoptPreflight, AdoptRequest, AdoptWorkResult } from '../shared/adoptWork'
+import { HOUSEKEEPING_ACTIONS, type HousekeepingAction, type HousekeepingCheck, type HousekeepingRequest, type HousekeepingRun } from '../shared/housekeeping'
 import { testFeature } from './features/testPair'
 import { featureChecklistPath, repoNameFor } from '../shared/testFlow'
 import { sourceCandidates } from './features/source'
@@ -54,7 +58,7 @@ import { rateLimitOf, type DigestFeature } from './features/digest'
 import { workspaceOptions } from '../shared/workspaceLabel'
 import { createDigestWriter, type DigestWriter } from './features/digestWriter'
 import { coalesce, createLastReplies } from './features/featureActivity'
-import { listTranscripts, scanGit, scanOpenWork } from './features/openWork'
+import { listTranscripts, scanGit, scanOpenWork, type OpenWorkWorkspace } from './features/openWork'
 import { createOpenWorkSection } from './features/openWorkSection'
 import { readTestFlowsFolder } from './testFlow/settings'
 import { createFeature, discardFeature, preflightFeature, writeNewFile, type CreateDeps } from './features/create'
@@ -397,14 +401,14 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
   )
   ipcMain.handle(IPC.FEATURES_SERVERS_STOP, (_e, name: unknown) => (typeof name === 'string' ? serverRunner.stop(name) : undefined))
   const featureNamed = async (n: string) => (await featureStore.list()).find((f) => f.name === n)
-  ipcMain.handle(IPC.FEATURES_COMPLETE, async (_e, name: unknown) => {
-    if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
+  const completeNamed = async (name: string) => {
     const result = await serverRunner.lock.run(name, () =>
       completeFeature({ feature: featureNamed, runner: serverRunner, closePair: closeFeaturePair, setPorts: featureStore.setPorts, setCompleted: featureStore.setCompleted, now: () => Date.now() }, name)
     )
     featureStages?.changed()
     return result
-  })
+  }
+  ipcMain.handle(IPC.FEATURES_COMPLETE, (_e, name: unknown) => (typeof name === 'string' ? completeNamed(name) : { ok: false, error: 'No feature was named.' }))
   ipcMain.handle(IPC.FEATURES_REOPEN, async (_e, name: unknown) => {
     if (typeof name !== 'string') return { ok: false, error: 'No feature was named.' }
     const result = await serverRunner.lock.run(name, () =>
@@ -557,17 +561,92 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const options = workspaceOptions(known, await repoIdentities.list())
     return known.map((w, i) => ({ ...w, label: options[i].label }))
   }
-  const openWork = createOpenWorkSection({
-    scan: async () =>
-      scanOpenWork(await labelled(), await featureStore.list(), {
-        git: scanGit(),
-        mainBranch,
-        pathExists: (path) => fs.access(path).then(() => true, () => false),
-        transcriptsDir: async (profileId, cwd) => transcriptsDir((await profiles.get(profileId)).configDir, cwd),
-        listFiles: listTranscripts,
-        mainChatDir: mainChatDir(),
-        now: Date.now
-      })
+  const pathExists = (path: string): Promise<boolean> => fs.access(path).then(() => true, () => false)
+  const scanReader = scanGit()
+  const scanWork = async (known: OpenWorkWorkspace[]) =>
+    scanOpenWork(known, await featureStore.list(), {
+      git: scanReader,
+      mainBranch,
+      pathExists,
+      transcriptsDir: async (profileId, cwd) => transcriptsDir((await profiles.get(profileId)).configDir, cwd),
+      listFiles: listTranscripts,
+      mainChatDir: mainChatDir(),
+      now: Date.now
+    })
+  const openWork = createOpenWorkSection({ scan: async () => scanWork(await labelled()) })
+  /** After a card changed what is open: the next digest scans again rather than list what is gone. */
+  const workChanged = (): void => {
+    openWork.invalidate()
+    workspacesChanged()
+    featureStages?.changed()
+    featureDigest?.changed()
+  }
+  const adoptDeps: AdoptDeps = {
+    workspaces: {
+      get: async (id) => (await workspaces.list()).find((w) => w.id === id),
+      at: async (path) => (await workspaces.list()).find((w) => pathKey(w.path) === pathKey(path)),
+      add: workspaces.add,
+      remove: workspaces.remove
+    },
+    repoOf: async (workspaceId) => {
+      const known = await labelled()
+      const key = known.find((w) => w.id === workspaceId)?.repoGroupKey
+      return known.filter((w) => w.repoGroupKey === key)
+    },
+    scan: scanWork,
+    profile: profiles.get,
+    sessionRunning: async (profileId, sessionId) => (await liveConfigDir([(await profiles.get(profileId)).configDir], sessionId)) !== null,
+    features: featureStore,
+    git: runGit,
+    pathExists,
+    now: () => Date.now()
+  }
+  // What each adopt changed, by feature name, until its session started; an adopt whose session failed is undone from it.
+  const adoptUndos = new Map<string, AdoptUndo>()
+  const isAdoptRequest = (r: unknown): r is AdoptRequest => {
+    const v = r as Record<string, unknown> | null
+    const text = (x: unknown): boolean => typeof x === 'string'
+    return !!v && text(v.workspaceId) && text(v.branch) && (v.path === undefined || text(v.path)) && (v.name === undefined || text(v.name))
+  }
+  ipcMain.handle(IPC.FEATURES_ADOPT_PREFLIGHT, (_e, request: unknown): Promise<AdoptPreflight> =>
+    isAdoptRequest(request) ? preflightAdopt(adoptDeps, request) : Promise.resolve({ ok: false, error: 'The card could not be checked.' })
+  )
+  ipcMain.handle(IPC.FEATURES_ADOPT, async (_e, request: unknown): Promise<AdoptWorkResult> => {
+    if (!isAdoptRequest(request) || typeof (request as { sessionId?: unknown }).sessionId !== 'string') return { ok: false, error: 'The card could not be read.' }
+    const { undo, ...result } = await adoptWork(adoptDeps, request as AdoptRequest & { sessionId: string })
+    if (result.ok && undo) adoptUndos.set(result.feature.name, undo)
+    workChanged()
+    return result
+  })
+  ipcMain.handle(IPC.FEATURES_ADOPT_UNDO, async (_e, name: unknown): Promise<string[]> => {
+    const undo = typeof name === 'string' ? adoptUndos.get(name) : undefined
+    if (!undo) return [`the feature ${String(name)} (nothing is known of how it was adopted, so nothing was undone)`]
+    adoptUndos.delete(name as string)
+    const left = await rollbackAdopt(adoptDeps, undo)
+    workChanged()
+    return left
+  })
+  const housekeepingDeps: HousekeepingDeps = {
+    workspaces: async () => listed(await workspaces.list()),
+    features: featureStore.list,
+    read: scanReader,
+    write: runGit,
+    mainBranch,
+    pathExists,
+    complete: completeNamed
+  }
+  const isHousekeepingRequest = (r: unknown): r is HousekeepingRequest => {
+    const v = r as Record<string, unknown> | null
+    return !!v && typeof v.workspaceId === 'string' && HOUSEKEEPING_ACTIONS.includes(v.action as HousekeepingAction) && Array.isArray(v.items) && v.items.every((i) => typeof i === 'string')
+  }
+  ipcMain.handle(IPC.HOUSEKEEPING_CHECK, (_e, request: unknown): Promise<HousekeepingCheck> =>
+    isHousekeepingRequest(request) ? checkHousekeeping(housekeepingDeps, request) : Promise.resolve({ ok: false, error: 'The card could not be checked.' })
+  )
+  ipcMain.handle(IPC.HOUSEKEEPING_RUN, async (_e, request: unknown): Promise<HousekeepingRun> => {
+    if (!isHousekeepingRequest(request)) return { ok: false, error: 'The card could not be read.' }
+    const run = await runHousekeeping(housekeepingDeps, request)
+    workChanged()
+    return run
   })
   featureDigest = createDigestWriter({
     file: featureDigestFile(),

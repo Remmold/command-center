@@ -7,11 +7,12 @@ export interface ActionFacts {
 
 /**
  * One kind of action block the main chat writes: a fenced block opened with its tag, then labelled parts in a fixed
- * order. A `oneLine` part holds exactly one non-empty line; any other part may span lines, fenced code included.
+ * order. A `oneLine` part holds exactly one non-empty line; any other part may span lines, fenced code included. An
+ * `optional` part may be left out, but never written out of order.
  */
 export interface ActionBlockKind<L extends string = string> {
   tag: string
-  parts: readonly { label: L; oneLine: boolean }[]
+  parts: readonly { label: L; oneLine: boolean; optional?: boolean }[]
   /** The chat's rules for this kind; they reach its instructions only once the kind is registered. */
   instructions: readonly string[]
   /** True when an older card of this kind reads Done instead of Superseded; never, when absent. */
@@ -30,32 +31,46 @@ const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\
 const closes = (line: string, ticks: number): boolean => new RegExp('^`{' + ticks + ',}[ \\t]*$').test(line)
 const longestRun = (text: string): number => Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
 
-/** The block for `kind` holding `fields`; the fence is longer than any run of backticks inside it, and never shorter than four. */
-export function writeActionBlock<L extends string>(kind: ActionBlockKind<L>, fields: Record<L, string>): string {
-  const fence = '`'.repeat(Math.max(4, longestRun(kind.parts.map((p) => fields[p.label]).join('')) + 1))
-  const last = kind.parts.length - 1
-  const body = kind.parts.flatMap((p, i) => (i === last && !p.oneLine ? [`${p.label}:`, fields[p.label]] : [`${p.label}: ${fields[p.label]}`]))
+/** The block for `kind` holding `fields`, an optional part without a value left out; the fence is longer than any run of backticks inside it, and never shorter than four. */
+export function writeActionBlock<L extends string>(kind: ActionBlockKind<L>, fields: Partial<Record<L, string>>): string {
+  const parts = kind.parts.filter((p) => !p.optional || fields[p.label] !== undefined)
+  const fence = '`'.repeat(Math.max(4, longestRun(parts.map((p) => fields[p.label] ?? '').join('')) + 1))
+  const last = parts.length - 1
+  const body = parts.flatMap((p, i) => (i === last && !p.oneLine ? [`${p.label}:`, fields[p.label] ?? ''] : [`${p.label}: ${fields[p.label] ?? ''}`]))
   return [fence + kind.tag, ...body, fence].join('\n')
+}
+
+/** The part a label line opens after part `at`: the next one, or a later one when only optional parts lie between; -1 for none. */
+function nextPart(parts: ActionBlockKind['parts'], at: number, label: string): number {
+  for (let i = at + 1; i < parts.length; i++) {
+    if (parts[i].label === label) return i
+    if (!parts[i].optional) return -1
+  }
+  return -1
 }
 
 function parseBody(kind: ActionBlockKind, lines: readonly string[]): Record<string, string> | null {
   const { parts } = kind
   const label = new RegExp('^(' + parts.map((p) => escaped(p.label)).join('|') + '):[ \\t]*(.*)$')
-  const found: string[][] = parts.map(() => [])
+  // null: the part was left out.
+  const found: (string[] | null)[] = parts.map(() => null)
   let at = -1
   for (const line of lines) {
     const match = at < parts.length - 1 ? label.exec(line) : null
-    if (match && match[1] === parts[at + 1].label) {
-      at++
-      if (match[2] !== '') found[at].push(match[2])
-    } else if (at >= 0) found[at].push(line)
+    const next = match ? nextPart(parts, at, match[1]) : -1
+    if (match && next >= 0) {
+      at = next
+      found[at] = match[2] !== '' ? [match[2]] : []
+    } else if (at >= 0) found[at]?.push(line)
     else if (line.trim() !== '') return null
   }
-  if (at < parts.length - 1) return null
+  if (parts.slice(at + 1).some((p) => !p.optional)) return null
   const fields: Record<string, string> = {}
   for (const [i, part] of parts.entries()) {
-    const filled = found[i].filter((l) => l.trim() !== '')
-    const value = part.oneLine ? (filled.length === 1 ? filled[0].trim() : '') : found[i].join('\n').trim()
+    const partLines = found[i]
+    if (partLines === null) continue
+    const filled = partLines.filter((l) => l.trim() !== '')
+    const value = part.oneLine ? (filled.length === 1 ? filled[0].trim() : '') : partLines.join('\n').trim()
     if (value === '') return null
     fields[part.label] = value
   }
@@ -101,9 +116,9 @@ export const actionKey = (itemId: string, block: number, segment: number): strin
 /**
  * Each action block of the transcript, of every kind in `kinds`, keyed by `actionKey` with its index among
  * `actionSegments(text, kinds)`. The rules are the same for every kind: the newest block, even one that did not parse,
- * is the only one that can be live, and only while no user message follows it and the turn has settled. The live card
- * reads Done only when this app session carried it out (`done`). An older card reads Done when its kind's
- * `doneEarlier` says so, else Superseded.
+ * is the only one that can be live, and only while no user message follows it and the turn has settled. A card this
+ * app session carried out (`done`) reads Done, older or not: a kind whose outcome the app reports makes it older at
+ * once. Any other older card reads Done when its kind's `doneEarlier` says so, else Superseded.
  */
 export function actionStates(
   items: readonly ChatItem[],
@@ -127,7 +142,8 @@ export function actionStates(
   const states = new Map<string, ActionState>()
   const last = entries[entries.length - 1]
   for (const e of entries) {
-    if (e === last && !items.slice(e.itemIndex + 1).some((i) => i.kind === 'user')) states.set(e.key, done.has(e.key) ? 'done' : settled ? 'live' : 'waiting')
+    if (done.has(e.key)) states.set(e.key, 'done')
+    else if (e === last && !items.slice(e.itemIndex + 1).some((i) => i.kind === 'user')) states.set(e.key, settled ? 'live' : 'waiting')
     else states.set(e.key, e.fields !== null && e.kind.doneEarlier?.(e.fields, facts) ? 'done' : 'superseded')
   }
   return states

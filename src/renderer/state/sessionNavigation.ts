@@ -11,6 +11,7 @@ import { useObservedStore } from './observedStore'
 import { useRecentProjectsStore } from './recentProjectsStore'
 import { saveDraft } from './restoreStore'
 import { dropSendsOfClosed, requestSendOnMount } from './startRequests'
+import type { OutgoingPrompt } from '../../shared/appPrompts'
 import { drawerShown, isHosted, useChatDrawerStore } from './chatDrawer'
 
 export const NEXT_WAITING_SHORTCUT = 'Ctrl+Shift+J'
@@ -176,7 +177,8 @@ export interface StartOptions {
 }
 
 export interface SendStart {
-  prompt: string
+  /** An `AppPrompt` when the app wrote it: the chat then shows it as an app line. */
+  prompt: OutgoingPrompt
   /** Unset starts with what a new chat on the account starts with. */
   model?: string
   effort?: string

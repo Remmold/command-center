@@ -37,7 +37,7 @@ Moving an observed session into the command center: it is resumed as a hosted se
 _Avoid_: Handover, import
 
 **Session title**:
-The name a session goes by in lists and headers. It is "New session" before any prompt, then the first prompt, shortened, until Claude names the session (as in the extension). A rename beats both for good, and reaches the CLI, so VS Code's history shows it too.
+The name a session goes by in lists and headers. It is "New session" before any prompt, then the first prompt, shortened, until Claude names the session (as in the extension). A session the app starts with its own prompt takes the name the app knows it by, for good: the main chat is "Main chat", a feature session its feature's name, a drift check its name in Context; Claude is never asked to name it from that prompt. A rename beats all of these for good, and reaches the CLI, so VS Code's history shows it too.
 _Avoid_: Chat name, label, tab name
 
 **Session status**:
@@ -114,7 +114,7 @@ _Avoid_: Pinned message, sticky prompt
 ## Features
 
 **Feature session**:
-The one hosted session that belongs to a feature, started by New feature and linked to the feature for good. It sits under Features in the Work list, not among the ordinary sessions.
+The one hosted session that belongs to a feature, started by New feature or by adopting open work, and linked to the feature for good. It sits under Features in the Work list, not among the ordinary sessions.
 _Avoid_: Sub-session, feature chat
 
 **New feature**:
@@ -126,7 +126,7 @@ The account profile of the workspace a feature was started in. The feature sessi
 _Avoid_: Feature login
 
 **Feature worktree**:
-The git worktree and branch made for one feature, so two features of one repo can run and be tested side by side. It is kept when the feature is completed.
+The git worktree and branch made for one feature, so two features of one repo can run and be tested side by side; an adopted feature keeps the worktree it was found in. It is kept when the feature is completed.
 _Avoid_: Sandbox, checkout
 
 **Main chat**:
@@ -138,8 +138,16 @@ Starting the main chat on a new Claude session in place: the old conversation an
 _Avoid_: Clear, new chat, restart
 
 **Action card**:
-A card the app draws in the main chat for a block the chat wrote, showing exactly what will happen, with one button. Every kind follows the same rules: only the newest card is live, and only once the chat's reply has finished; a newer card or any later message makes it read-only. The app checks the card before its button enables, and tells the chat how the action ended in one message beginning [Command Center], except where a kind says otherwise. The kinds so far are the feature proposal and Open session, which shows a feature's session and reports nothing.
+A card the app draws in the main chat for a block the chat wrote, showing exactly what will happen, with one button. Every kind follows the same rules: only the newest card is live, and only once the chat's reply has finished; a newer card or any later message makes it read-only. The app checks the card before its button enables, and tells the chat how the action ended in one message beginning [Command Center], except where a kind says otherwise. The kinds are the feature proposal, Open session (shows a feature's session and reports nothing), Adopt work, Send message (delivers its message to a feature's session as if typed there, held until that session's turn ends) and Housekeeping (removes merged worktrees, deletes merged local branches, prunes missing worktrees or completes a feature, each item checked again at the click and skipped with its reason when unsafe).
 _Avoid_: Action button, tool card
+
+**Open work**:
+Work in a workspace's repo that no feature tracks: a worktree, a local branch not merged into main and checked out nowhere, or the main checkout sitting on another branch. The digest lists it per workspace; nothing is adopted or removed by itself.
+_Avoid_: Untracked work, orphans
+
+**Adopt work**:
+Making one item of open work a feature in place, from the main chat's card. A worktree stays where it is; a branch gets a worktree where New feature would put one; a main checkout on a branch is switched back to main and the branch moves to a new worktree (refused while it has uncommitted changes). A Claude session found for the folder is resumed, else a new one reads the notes and git log first.
+_Avoid_: Import, take over (that moves a VS Code session), adopted folder (an account's config folder)
 
 **Feature proposal**:
 What the main chat writes when a plan is agreed: a workspace, a name, a description and a starting brief, shown in the chat as a card with a Go button. Nothing is made until Andreas presses Go. Only the newest card is live; an older one reads as superseded, or as Started when its feature exists.

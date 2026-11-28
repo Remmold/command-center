@@ -3,7 +3,7 @@ import { connect } from 'node:net'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RendererApi } from '../src/shared/types'
-import { chatPane, expect, sessionList, test, useScript } from './harness'
+import { chatPane, expect, send, sessionList, test, useScript } from './harness'
 
 function repoAt(path: string, files: Record<string, string> = {}): string {
   mkdirSync(path, { recursive: true })
@@ -124,7 +124,7 @@ test('New feature on a workspace of each of two accounts makes two Features rows
   await expect(rowOf('export-reports')).toContainText('Testing')
 })
 
-test('The main chat proposes a feature; Go on the card starts it with brief.md in its worktree and a first prompt that names it, then the main chat starts afresh in place, naming the feature, with only the read tools and every workspace to read', async ({ launched }) => {
+test('The main chat proposes a feature; Go on the card starts it with brief.md in its worktree and a first prompt that names it, then the main chat starts afresh in place, naming the feature, with only the read tools and every workspace to read; an adopt card makes a worktree a feature and a send-message card reaches the idle feature session', async ({ launched }) => {
   const { page, app, root, configDir, log } = launched
   mkdirSync(join(configDir, 'skills', 'flow'), { recursive: true })
   writeFileSync(join(configDir, 'skills', 'flow', 'SKILL.md'), '# flow')
@@ -146,7 +146,7 @@ test('The main chat proposes a feature; Go on the card starts it with brief.md i
   await expect(field('workspace')).toHaveText('proposal-repo')
   await expect(field('name')).toHaveText('add-export')
   await expect(field('description')).toHaveText('Export the report as CSV')
-  await expect(field('starting brief')).toContainText('exportCsv(report)')
+  await expect(field('starting brief').locator('pre')).toContainText('exportCsv(report)')
 
   await card.getByRole('button', { name: 'Go' }).click()
 
@@ -165,6 +165,9 @@ test('The main chat proposes a feature; Go on the card starts it with brief.md i
   const fresh = log.userTexts().filter((t) => t.startsWith('You are the main chat of Command Center'))
   expect(fresh).toHaveLength(2)
   expect(fresh[1]).toContain('Just started: the feature add-export in workspace proposal-repo')
+  // The app's own first prompt shows as one collapsed app line, never as a typed prompt.
+  await expect(chatPane(page).locator('[data-app-prompt="main-chat"]')).toHaveText('Command Center · main chat instructions')
+  await expect(chatPane(page).locator('[data-user-prompt]')).toHaveCount(0)
 
   const mainStarts = log.entries().filter((e) => e.kind === 'argv' && (e.argv as string[]).some((a) => a.startsWith('--append-system-prompt=')))
   expect(mainStarts).toHaveLength(2)
@@ -186,4 +189,38 @@ test('The main chat proposes a feature; Go on the card starts it with brief.md i
   await sessionList(page).getByRole('button', { name: /Main chat/ }).click()
   await notice.getByRole('button', { name: 'Open session' }).click()
   await expect(notice.getByRole('alert')).toHaveCount(0)
+
+  // An adopt-work card makes an untracked worktree a feature in place; its new session is told to read first.
+  const spike = join(root, 'proposal-repo-spike')
+  const git = (cwd: string, ...a: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd })
+  git(repo, 'worktree', 'add', '-q', '-b', 'spike/old-idea', spike)
+  writeFileSync(join(spike, 'idea.txt'), 'idea')
+  git(spike, 'add', '.')
+  git(spike, 'commit', '-qm', 'idea')
+  await sessionList(page).getByRole('button', { name: /Main chat/ }).click()
+  await expect(notice).toBeVisible()
+  await send(page, 'adopt spike/old-idea')
+  const adopt = chatPane(page).locator('[data-action-card="adopt-work"]')
+  await expect(adopt).toHaveAttribute('data-action-state', 'live')
+  await expect(adopt.locator('[data-action-field="kind"]')).toHaveText('worktree')
+  await expect(adopt.locator('[data-action-field="session"]')).toHaveText('No session: a new one reads .scratch and git log first')
+  await adopt.getByRole('button', { name: 'Adopt' }).click()
+  const adoptedPrompt = (t: string) => t.startsWith('Adopted work: branch spike/old-idea in ') && t.toLowerCase().includes('proposal-repo-spike')
+  await expect.poll(() => log.userTexts().some(adoptedPrompt)).toBe(true)
+  await expect(sessionList(page).getByRole('region', { name: 'Features' }).getByRole('button', { name: /old-idea/ })).toBeVisible()
+  await expect.poll(() => log.userTexts().some((t) => t.startsWith('[Command Center] Adopted spike/old-idea in proposal-repo as the feature old-idea'))).toBe(true)
+  await expect(adopt).toHaveAttribute('data-action-state', 'done')
+  await expect(chatPane(page).locator('[data-app-prompt="outcome"]')).toHaveText('Command Center · Adopted spike/old-idea in proposal-repo as the feature old-idea')
+
+  // A send-message card shows the message verbatim and delivers it to the idle feature session as a typed prompt.
+  await send(page, 'tell add-export to run its tests')
+  const message = chatPane(page).locator('[data-action-card="send-message"]')
+  await expect(message).toHaveAttribute('data-action-state', 'live')
+  const text = 'Run the tests, then report.\n\n```sh\npnpm test\n```'
+  await expect(message.locator('[data-action-field="message"] p')).toHaveText('Run the tests, then report.')
+  await expect(message.locator('[data-action-field="message"] pre')).toContainText('pnpm test')
+  await message.getByRole('button', { name: 'Send' }).click()
+  await expect.poll(() => log.userTexts().filter((t) => t === text)).toHaveLength(1)
+  await expect.poll(() => log.userTexts().some((t) => t.startsWith('[Command Center] Sent to add-export.'))).toBe(true)
+  await expect(message.locator('[data-action-note]')).toHaveText('Sent')
 })

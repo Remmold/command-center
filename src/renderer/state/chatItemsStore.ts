@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { lastAssistantIndex, type HistoryChange } from '../../shared/chatHistory'
 import type { RendererApi } from '../../shared/types'
+import { markAppPrompts } from '../../shared/appPrompts'
 import type { AssistantMessageItem, ChatItem } from '../components/chat/types'
 import { mergeAssistant } from '../components/chat/liveItems'
 
@@ -58,9 +59,10 @@ export const useChatItemsStore = create<ChatItemsState>()((set, get) => ({
   }
 }))
 
-/** Shows saved history; a chat already changed in this window keeps its items. Nothing is sent back. */
+/** Shows saved history, with app prompts saved before their origin was kept marked; a chat already changed in this window keeps its items. Nothing is sent back. */
 export function hydrateChatItems(saved: Record<string, ChatItem[]>): void {
-  useChatItemsStore.setState((s) => ({ items: { ...saved, ...s.items } }))
+  const marked = Object.fromEntries(Object.entries(saved).map(([paneId, items]) => [paneId, markAppPrompts(items)]))
+  useChatItemsStore.setState((s) => ({ items: { ...marked, ...s.items } }))
 }
 
 /** Sends each session's changes made in one task as one message, in order. */

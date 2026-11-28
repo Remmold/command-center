@@ -88,7 +88,14 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, event: { name: string; view: FeatureServersView }) => cb(event.name, event.view)
       ipcRenderer.on(IPC.FEATURES_SERVERS_CHANGED, handler)
       return () => ipcRenderer.off(IPC.FEATURES_SERVERS_CHANGED, handler)
-    }
+    },
+    adoptPreflight: (request) => ipcRenderer.invoke(IPC.FEATURES_ADOPT_PREFLIGHT, request),
+    adopt: (request) => ipcRenderer.invoke(IPC.FEATURES_ADOPT, request),
+    undoAdopt: (name) => ipcRenderer.invoke(IPC.FEATURES_ADOPT_UNDO, name)
+  },
+  housekeeping: {
+    check: (request) => ipcRenderer.invoke(IPC.HOUSEKEEPING_CHECK, request),
+    run: (request) => ipcRenderer.invoke(IPC.HOUSEKEEPING_RUN, request)
   },
   previewConfig: {
     get: (workspaceId) => ipcRenderer.invoke(IPC.PREVIEW_CONFIG_GET, workspaceId),

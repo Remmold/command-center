@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { outgoing, type AppOrigin, type OutgoingPrompt } from '../../shared/appPrompts'
 
 /** Chats to start as soon as they mount, even with history to show; a take-over starts its resumed process at once. */
 const requested = new Set<string>()
@@ -37,20 +38,24 @@ export function settleable(): Settleable {
 
 /** A prompt for a chat, told whether it reached the chat's running process. */
 export interface ChatSend {
-  prompt: string
+  prompt: OutgoingPrompt
   delivered: (reached: boolean) => void
 }
 
+/** How the chat sends a prompt: `origin` is set when the app wrote it. */
+export type SendPrompt = (text: string, origin?: AppOrigin) => Promise<boolean>
+
 /** Sends with `send`, which resolves true once the prompt reached the running process; a throw counts as not reached. */
-export function deliver(chatSend: ChatSend, send: (prompt: string) => Promise<boolean>): void {
-  void send(chatSend.prompt).then(chatSend.delivered, () => chatSend.delivered(false))
+export function deliver(chatSend: ChatSend, send: SendPrompt): void {
+  const { text, origin } = outgoing(chatSend.prompt)
+  void send(text, origin).then(chatSend.delivered, () => chatSend.delivered(false))
 }
 
 /** First prompts to send as soon as their chat mounts, which starts its process. */
 const sends = new Map<string, ChatSend>()
 
 /** Resolves true once the prompt reached the chat's running process, false when the process failed to start or the chat closed first. */
-export function requestSendOnMount(paneId: string, prompt: string): Promise<boolean> {
+export function requestSendOnMount(paneId: string, prompt: OutgoingPrompt): Promise<boolean> {
   const { settled, settle } = settleable()
   sends.get(paneId)?.delivered(false)
   sends.set(paneId, { prompt, delivered: settle })
@@ -71,8 +76,11 @@ interface ChatSendsState {
 /** Prompts sent to a mounted chat from outside it; the chat sends each as if typed, so a mid-turn chat queues it. */
 export const useChatSendsStore = create<ChatSendsState>()(() => ({ byPane: {} }))
 
-/** Resolves true once the prompt reached the chat's running process, false when the process failed to start or the chat closed first. */
-export function sendToChat(paneId: string, prompt: string): Promise<boolean> {
+/**
+ * Resolves true once the prompt reached the chat's running process, false when the process failed to start or the chat
+ * closed first. An `AppPrompt` (one the app wrote) shows as an app line, also after a restart.
+ */
+export function sendToChat(paneId: string, prompt: OutgoingPrompt): Promise<boolean> {
   const { settled, settle } = settleable()
   const send = { prompt, delivered: settle }
   useChatSendsStore.setState((s) => ({ byPane: { ...s.byPane, [paneId]: [...(s.byPane[paneId] ?? []), send] } }))

@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import type { FeatureServersView } from '../../shared/featureServers'
 import type { FeatureStageView } from '../../shared/featureStage'
-import { MAIN_CHAT_PANE_ID } from '../../shared/mainChat'
+import { MAIN_CHAT_PANE_ID, MAIN_CHAT_TITLE } from '../../shared/mainChat'
 import { onePerName } from './proposalGo'
 import { sendToChat } from './startRequests'
+import { appPrompt } from '../../shared/appPrompts'
+import { adoptFailureReport, adoptedFirstPrompt, movedWorkPrompt, type AdoptRequest } from '../../shared/adoptWork'
 import { failureReport, featureFirstPrompt, featureOpenPlan, type FeatureRecord, type NewFeatureRequest } from '../../shared/features'
 import type { ChatItem } from '../components/chat/types'
 import { useChatItemsStore } from './chatItemsStore'
@@ -79,7 +81,7 @@ async function makeAndStart(request: Omit<NewFeatureRequest, 'sessionId'>): Prom
   await reload()
   const workspace = useWorkspacesStore.getState().workspaces.find((w) => w.id === feature.workspaceId)
   const started = workspace
-    ? startSession(workspace, { send: { id: sessionId, prompt: featureFirstPrompt(feature, request.description, previewBrowser, made.briefPath) } })
+    ? startSession(workspace, { send: { id: sessionId, prompt: appPrompt('feature-start', featureFirstPrompt(feature, request.description, previewBrowser, made.briefPath), feature.name) } })
     : false
   if (started) return null
   const left = await window.api.features.discard(feature.name, request.workspaceId).catch(() => [`the feature ${feature.name} with its worktree, branch and workspace entry (the undo itself failed)`])
@@ -90,10 +92,10 @@ async function makeAndStart(request: Omit<NewFeatureRequest, 'sessionId'>): Prom
 /** Go on a proposal card: the same start as New feature, with the brief; a press while the same name is starting does nothing. */
 export const goProposal = onePerName(startFeature)
 
-/** Sends the main chat one line about how a card's action ended, the way a typed prompt is sent. The action is already final: a send that fails only shows a toast. */
+/** Sends the main chat one line about how a card's action ended, queued like a typed prompt but shown as an app line. The action is already final: a send that fails only shows a toast. */
 export function tellMainChat(text: string): void {
   const unreached = (): void => useToastStore.getState().show('The main chat could not be told how the action ended; the card shows the outcome.')
-  sendToChat(MAIN_CHAT_PANE_ID, text).then((reached) => (reached ? undefined : unreached()), unreached)
+  sendToChat(MAIN_CHAT_PANE_ID, appPrompt('outcome', text, MAIN_CHAT_TITLE)).then((reached) => (reached ? undefined : unreached()), unreached)
 }
 
 /** Follows stage changes from main; call once. */
@@ -157,23 +159,82 @@ export function rememberFeatureSession(paneId: string, claudeSessionId: string):
   void window.api.features.setClaudeSession(feature.name, claudeSessionId).catch((err) => console.error('failed to save the feature session id', err))
 }
 
-/** Shows the feature's session; one whose chat is gone is hosted again, resumed, in the feature's worktree and on its account. Resolves with why it cannot, or null. */
-export async function openFeatureSession(feature: FeatureRecord): Promise<string | null> {
+/** The open plan of a feature's session as the stores see it now. */
+function openPlanOf(feature: FeatureRecord) {
   const views = useProjectViewsStore.getState()
   const workspace = useWorkspacesStore.getState().workspaces.find((w) => w.id === feature.workspaceId)
   const hosted = hostedSessions(views.views).some((s) => s.paneId === feature.sessionId)
-  const plan = featureOpenPlan(feature, hosted, workspace !== undefined, useFeaturesStore.getState().stages[feature.name]?.missing === true)
+  return { workspace, plan: featureOpenPlan(feature, hosted, workspace !== undefined, useFeaturesStore.getState().stages[feature.name]?.missing === true) }
+}
+
+/** The transcript of a resumed session; one adopted from the main checkout still lives under its old folder, the source workspace's. */
+async function readHistory(feature: FeatureRecord, workspaceId: string, claudeSessionId: string): Promise<ChatItem[]> {
+  const read = await window.api.observed.read(workspaceId, claudeSessionId)
+  if (read.ok) return read.items
+  const moved = feature.sourceWorkspaceId && feature.sourceWorkspaceId !== workspaceId ? await window.api.observed.read(feature.sourceWorkspaceId, claudeSessionId) : null
+  if (moved?.ok) return moved.items
+  return [{ kind: 'system', id: crypto.randomUUID(), text: `Could not read this session's transcript (${read.error}); Claude still has the whole conversation.`, at: Date.now() }]
+}
+
+/** Hosts the feature's session again, resumed, in the feature's worktree and on its account, without showing it. Resolves with why it cannot, or null; null too when it is hosted already. */
+export async function hostFeatureSession(feature: FeatureRecord): Promise<string | null> {
+  const { workspace, plan } = openPlanOf(feature)
+  if (plan.kind === 'missing') return plan.reason
+  if (plan.kind === 'open' || !workspace) return null
+  const views = useProjectViewsStore.getState()
+  if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
+  const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { id: feature.sessionId, claudeSessionId: plan.claudeSessionId, appTitle: feature.name })
+  if (!created) return `The session of ${feature.name} could not be hosted again.`
+  useChatItemsStore.getState().appendItems(created.id, await readHistory(feature, workspace.id, plan.claudeSessionId))
+  return null
+}
+
+/** Shows the feature's session; one whose chat is gone is hosted again first. Resolves with why it cannot, or null. */
+export async function openFeatureSession(feature: FeatureRecord): Promise<string | null> {
+  const { plan } = openPlanOf(feature)
   if (plan.kind === 'missing') return plan.reason
   if (plan.kind === 'open') return openSession(feature.sessionId, { focus: false }) ? null : `The session of ${feature.name} was not found.`
-  if (!workspace) return null
-  if (!views.views[workspace.id]) views.openProject(workspace, { firstSession: false })
-  const created = useProjectViewsStore.getState().addClaudeSession(workspace.id, { id: feature.sessionId, claudeSessionId: plan.claudeSessionId })
-  if (!created) return `The session of ${feature.name} could not be hosted again.`
-  const read = await window.api.observed.read(workspace.id, plan.claudeSessionId)
-  const history: ChatItem[] = read.ok
-    ? read.items
-    : [{ kind: 'system', id: crypto.randomUUID(), text: `Could not read this session's transcript (${read.error}); Claude still has the whole conversation.`, at: Date.now() }]
-  useChatItemsStore.getState().appendItems(created.id, history)
-  openSession(created.id, { focus: false })
+  const hosted = await hostFeatureSession(feature)
+  if (hosted) return hosted
+  openSession(feature.sessionId, { focus: false })
   return null
+}
+
+/** Whether a message can reach the feature's session: hosted now, or resumable. Null when it can, else why not. */
+export function featureSessionProblem(feature: FeatureRecord): string | null {
+  const { plan } = openPlanOf(feature)
+  return plan.kind === 'missing' ? plan.reason : null
+}
+
+/** Sends a message to the feature's session exactly as if typed there, hosting a closed one again (resumed) first. Resolves with why it was not delivered, or null. */
+export async function sendToFeature(feature: FeatureRecord, text: string): Promise<string | null> {
+  const hosted = await hostFeatureSession(feature)
+  if (hosted) return hosted
+  const reached = await sendToChat(feature.sessionId, text).catch(() => false)
+  return reached ? null : `the session of ${feature.name} did not start, so it did not take the message.`
+}
+
+/**
+ * Makes open work a feature, then starts its session in Work without showing it: resumed when a Claude session was
+ * found for the folder (told where the work moved, when it moved), else new and told to read the notes first. A
+ * session that cannot start undoes the adopt. Resolves with the outcome, or why it failed.
+ */
+export async function adoptOpenWork(request: AdoptRequest): Promise<{ ok: true; feature: FeatureRecord; resumed: string | null } | { ok: false; error: string }> {
+  const sessionId = crypto.randomUUID()
+  const made = await window.api.features.adopt({ ...request, sessionId })
+  if (!made.ok) return made
+  const { feature, preview } = made
+  await reload()
+  const workspace = useWorkspacesStore.getState().workspaces.find((w) => w.id === feature.workspaceId)
+  let started = false
+  if (workspace && preview.session) {
+    started = (await hostFeatureSession(feature)) === null
+    if (started && preview.kind === 'main-checkout') void sendToChat(sessionId, appPrompt('work-moved', movedWorkPrompt(feature, preview.mainPath, preview.mainBranch), feature.name))
+  } else if (workspace) {
+    started = startSession(workspace, { send: { id: sessionId, prompt: appPrompt('adopt-start', adoptedFirstPrompt(feature), feature.name) } })
+  }
+  if (started) return { ok: true, feature, resumed: preview.session?.id ?? null }
+  const left = await window.api.features.undoAdopt(feature.name).catch(() => [`the feature ${feature.name} and what adopting changed (the undo itself failed)`])
+  await reload()
+  return { ok: false, error: adoptFailureReport(feature.branch, 'session', 'the session did not start', left) }
 }

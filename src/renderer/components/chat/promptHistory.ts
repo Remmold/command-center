@@ -4,9 +4,9 @@ import type { HeldPrompt } from './heldPrompts'
 /** What items saved before 0.1.14 end with in place of their attachments; never part of a title or a recalled prompt. */
 export const ATTACHED_MARKER = /\n\n_\[\d+ (?:images?|videos?|files?) attached\]_$/
 
-/** This session's prompts, newest first, queued ones included, as in the extension. */
+/** This session's typed prompts, newest first, queued ones included, as in the extension; the app's own prompts are left out. */
 export function historyEntries(items: readonly ChatItem[], held: readonly HeldPrompt[]): string[] {
-  const texts = [...items.flatMap((item) => (item.kind === 'user' ? [item.text] : [])), ...held.map((p) => p.text)]
+  const texts = [...items.flatMap((item) => (item.kind === 'user' && !item.appPrompt ? [item.text] : [])), ...held.flatMap((p) => (p.appPrompt ? [] : [p.text]))]
   return texts
     .map((t) => t.replace(ATTACHED_MARKER, '').trim())
     .filter((t) => t.length > 0)

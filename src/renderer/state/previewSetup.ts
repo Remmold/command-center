@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { dirnameOf } from '../../shared/pathParts'
 import { buildPreviewSetupPrompt } from '../../shared/previewSetup'
+import { appPrompt } from '../../shared/appPrompts'
 import type { Workspace } from '../../shared/types'
 import { startingChoiceOn } from './modelStore'
 import { startSession } from './sessionNavigation'
@@ -42,7 +43,7 @@ export async function startPreviewSetup(workspace: Workspace): Promise<string | 
   setPending(workspace.id, begun.file)
   const started = startSession(workspace, {
     addDirs: [folder],
-    send: { prompt: buildPreviewSetupPrompt({ draftFile: begun.file }), id: crypto.randomUUID(), delivered: reached.settle, ...startingChoiceOn(workspace.profileId) }
+    send: { prompt: appPrompt('preview-setup', buildPreviewSetupPrompt({ draftFile: begun.file }), 'Set up preview'), id: crypto.randomUUID(), delivered: reached.settle, ...startingChoiceOn(workspace.profileId) }
   })
   if (!started) {
     await endPreviewSetup(workspace.id)

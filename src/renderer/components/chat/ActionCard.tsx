@@ -1,11 +1,17 @@
 import type { ComponentType } from 'react'
 import { ACTION_NOT_UNDERSTOOD, actionKey, actionSegments, type ActionState } from '../../../shared/actionBlocks'
+import { ADOPT_TAG } from '../../../shared/adoptWork'
 import { PROPOSAL_NOT_UNDERSTOOD, PROPOSAL_TAG } from '../../../shared/featureProposal'
 import { ACTION_BLOCKS } from '../../../shared/mainChatActions'
+import { HOUSEKEEPING_TAG } from '../../../shared/housekeeping'
 import { OPEN_SESSION_TAG } from '../../../shared/openSession'
+import { SEND_MESSAGE_TAG } from '../../../shared/sendMessage'
 import { Markdown } from '../ui/Markdown'
+import { AdoptWorkCard } from './AdoptWorkCard'
+import { HousekeepingCard } from './HousekeepingCard'
 import { OpenSessionCard } from './OpenSessionCard'
 import { ProposalCard } from './ProposalCard'
+import { SendMessageCard } from './SendMessageCard'
 import { useToolContext } from './toolContext'
 
 interface CardView {
@@ -17,7 +23,10 @@ interface CardView {
 /** The card each registered kind is drawn as; a new kind adds its card here and its block to `ACTION_BLOCKS`. */
 const CARDS: Record<string, CardView> = {
   [PROPOSAL_TAG]: { Card: ProposalCard, notUnderstood: PROPOSAL_NOT_UNDERSTOOD },
-  [OPEN_SESSION_TAG]: { Card: OpenSessionCard, notUnderstood: ACTION_NOT_UNDERSTOOD }
+  [OPEN_SESSION_TAG]: { Card: OpenSessionCard, notUnderstood: ACTION_NOT_UNDERSTOOD },
+  [ADOPT_TAG]: { Card: AdoptWorkCard, notUnderstood: ACTION_NOT_UNDERSTOOD },
+  [SEND_MESSAGE_TAG]: { Card: SendMessageCard, notUnderstood: ACTION_NOT_UNDERSTOOD },
+  [HOUSEKEEPING_TAG]: { Card: HousekeepingCard, notUnderstood: ACTION_NOT_UNDERSTOOD }
 }
 
 function ActionCard({ tag, fields, cardKey }: { tag: string; fields: Record<string, string>; cardKey: string }) {

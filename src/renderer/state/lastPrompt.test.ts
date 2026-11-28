@@ -25,6 +25,11 @@ describe('last prompt', () => {
     expect(lastPrompt([user('u1', 'first'), reply('a'), user('u2', 'second'), reply('b')])).toEqual({ id: 'u2', text: 'second' })
   })
 
+  it('skips prompts the app wrote', () => {
+    const app: ChatItem = { kind: 'user', id: 'u2', text: '[Command Center] Sent to x.', appPrompt: 'outcome' }
+    expect(lastPrompt([user('u1', 'typed'), reply('a'), app, reply('b')])).toEqual({ id: 'u1', text: 'typed' })
+  })
+
   it('skips prompts still queued or held', () => {
     const items = [user('u1', 'first'), reply('a'), user('u2', 'waiting')]
     expect(lastPrompt(items, [{ uuid: 'u2', text: 'waiting' }])).toEqual({

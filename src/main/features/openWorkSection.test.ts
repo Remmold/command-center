@@ -8,7 +8,7 @@ import { OPEN_WORK_TTL_MS, createOpenWorkSection } from './openWorkSection'
 
 const report = (branch: string): OpenWorkReport => ({
   scannedAt: 0,
-  workspaces: [{ workspaceId: 'a', label: 'app', path: 'C:\\app', mainBranch: 'main', items: [{ kind: 'branch', branch, lastCommitAt: 0, ahead: 2 }], missing: [] }]
+  workspaces: [{ workspaceId: 'a', label: 'app', path: 'C:\\app', mainBranch: 'main', items: [{ kind: 'branch', branch, lastCommitAt: 0, ahead: 2 }], missing: [], merged: [] }]
 })
 
 let root: string
@@ -37,6 +37,17 @@ describe('the Open work section of the digest', () => {
     expect(await section()).toBe(first)
     expect(scan).toHaveBeenCalledTimes(1)
     at += 1
+    expect(await section()).toContain('- branch b1 ')
+    expect(scan).toHaveBeenCalledTimes(2)
+  })
+
+  it('scans again within 60 s once a card adopted or removed work', async () => {
+    let scans = 0
+    const scan = vi.fn(async () => report(`b${scans++}`))
+    const section = createOpenWorkSection({ scan, now: () => 0 })
+    expect(await section()).toContain('- branch b0 ')
+    section.invalidate()
+    expect(await section()).toContain('- branch b1 ')
     expect(await section()).toContain('- branch b1 ')
     expect(scan).toHaveBeenCalledTimes(2)
   })

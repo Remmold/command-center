@@ -60,7 +60,8 @@ export async function reopenFeature(deps: ReopenDeps, name: string): Promise<Out
   return fail(reserved.error)
 }
 
-function git(cwd: string, args: string[]): Promise<string> {
+/** Runs git in `cwd`; rejects with git's own message. */
+export function runGit(cwd: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile('git', args, { cwd, windowsHide: true }, (err, stdout, stderr) => (err ? reject(new Error(stderr.toString().trim() || err.message)) : resolve(stdout)))
   })
@@ -68,13 +69,13 @@ function git(cwd: string, args: string[]): Promise<string> {
 
 /** Commits on `branch` that `base` does not have. */
 export async function commitsBeyond(repo: string, branch: string, base: string): Promise<number> {
-  return Number((await git(repo, ['rev-list', '--count', `${base}..${branch}`])).trim())
+  return Number((await runGit(repo, ['rev-list', '--count', `${base}..${branch}`])).trim())
 }
 
 /** `git worktree remove` without force, so a worktree with uncommitted changes is refused. The branch stays. */
 export async function removeWorktreeOnly(repo: string, path: string): Promise<void> {
-  await git(repo, ['worktree', 'remove', path])
-  await git(repo, ['worktree', 'prune']).catch(() => undefined)
+  await runGit(repo, ['worktree', 'remove', path])
+  await runGit(repo, ['worktree', 'prune']).catch(() => undefined)
 }
 
 export interface RemoveWorktreeDeps {

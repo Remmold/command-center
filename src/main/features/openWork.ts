@@ -50,8 +50,24 @@ async function lastSession(deps: OpenWorkDeps, profileId: string, cwd: string): 
   return newest
 }
 
-/** Commits on `ref` that none of `bases` has. */
-const aheadOf = async (deps: OpenWorkDeps, cwd: string, ref: string, bases: readonly string[]): Promise<number> => toNumber(await deps.git(cwd, ['rev-list', '--count', ref, '--not', ...bases]))
+/** Commits on `ref` that none of `bases` has; 0 means `ref` is fully merged. */
+export const commitsAhead = async (git: OpenWorkDeps['git'], cwd: string, ref: string, bases: readonly string[]): Promise<number> =>
+  toNumber(await git(cwd, ['rev-list', '--count', ref, '--not', ...bases]))
+
+const aheadOf = (deps: OpenWorkDeps, cwd: string, ref: string, bases: readonly string[]): Promise<number> => commitsAhead(deps.git, cwd, ref, bases)
+
+/** What work is measured against: main and, when it exists, origin's main, since a local main left behind its remote would count everything merged since as ahead. */
+export async function mergeBases(git: OpenWorkDeps['git'], repoPath: string, main: string): Promise<string[]> {
+  const remoteMain = `refs/remotes/origin/${main}`
+  const hasRemote = await git(repoPath, ['rev-parse', '--verify', '--quiet', remoteMain]).then(
+    () => true,
+    () => false
+  )
+  return hasRemote ? [`${HEADS}${main}`, remoteMain] : [`${HEADS}${main}`]
+}
+
+/** Where Claude Code keeps its own agent worktrees inside a repo; they belong to a running session. */
+export const agentWorktreesOf = (repoPath: string): string => `${pathKey(repoPath)}/.claude/worktrees/`
 
 async function checkoutState(deps: OpenWorkDeps, path: string, bases: readonly string[]): Promise<{ lastCommitAt: number | null; ahead: number; dirty: boolean }> {
   const [date, ahead, status] = await Promise.all([
@@ -67,19 +83,13 @@ async function scanRepo(group: OpenWorkWorkspace[], features: readonly FeatureRe
   const mainEntry = entries[0] && !entries[0].bare ? entries[0] : null
   const owner = (mainEntry && group.find((w) => pathKey(w.path) === pathKey(mainEntry.path))) || group[0]
   const repoPath = mainEntry ? resolve(mainEntry.path) : owner.path
-  const report: OpenWorkspaceReport = { workspaceId: owner.id, label: owner.label, path: repoPath, mainBranch: null, items: [], missing: [] }
+  const report: OpenWorkspaceReport = { workspaceId: owner.id, label: owner.label, path: repoPath, mainBranch: null, items: [], missing: [], merged: [] }
 
   const main = await deps.mainBranch(repoPath)
   if (!main) return { ...report, error: 'no main or master branch' }
   report.mainBranch = main
-  // A local main left behind its remote would count everything merged since as ahead.
-  const remoteMain = `refs/remotes/origin/${main}`
-  const hasRemote = await deps.git(repoPath, ['rev-parse', '--verify', '--quiet', remoteMain]).then(
-    () => true,
-    () => false
-  )
-  const bases = hasRemote ? [`${HEADS}${main}`, remoteMain] : [`${HEADS}${main}`]
-  const agentWorktrees = `${pathKey(repoPath)}/.claude/worktrees/`
+  const bases = await mergeBases(deps.git, repoPath, main)
+  const agentWorktrees = agentWorktreesOf(repoPath)
 
   const groupIds = new Set(group.map((w) => w.id))
   const trackedPaths = new Set(features.map((f) => pathKey(f.worktreePath)))
@@ -108,21 +118,27 @@ async function scanRepo(group: OpenWorkWorkspace[], features: readonly FeatureRe
   })()
 
   const checkedOut = new Set(entries.map((e) => e.branch).filter((b): b is string => b !== null))
-  const unmerged = (await deps.git(repoPath, ['for-each-ref', ...bases.map((b) => `--no-merged=${b}`), '--format=%(refname)%09%(committerdate:unix)', HEADS]))
-    .split(/\r?\n/)
-    .filter((l) => l.startsWith(HEADS))
-    .map((l) => {
-      const [ref, date] = l.split('\t')
-      return { branch: ref.slice(HEADS.length), lastCommitAt: unixMs(date ?? '') }
-    })
-    .filter((b) => b.branch !== main && !checkedOut.has(b.branch) && !featureBranches.has(b.branch))
+  const heads = async (filters: string[]): Promise<{ branch: string; lastCommitAt: number | null }[]> =>
+    (await deps.git(repoPath, ['for-each-ref', ...filters, '--format=%(refname)%09%(committerdate:unix)', HEADS]))
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith(HEADS))
+      .map((l) => {
+        const [ref, date] = l.split('\t')
+        return { branch: ref.slice(HEADS.length), lastCommitAt: unixMs(date ?? '') }
+      })
+  const [notMerged, allHeads] = await Promise.all([heads(bases.map((b) => `--no-merged=${b}`)), heads([])])
+  // A branch housekeeping would delete: merged into a base, and nothing of the app's or git's still holds it.
+  const anyFeatureBranch = new Set(features.map((f) => f.branch))
+  const unmergedNames = new Set(notMerged.map((b) => b.branch))
+  const merged = allHeads.filter((b) => !unmergedNames.has(b.branch) && b.branch !== main && !checkedOut.has(b.branch) && !anyFeatureBranch.has(b.branch))
+  const unmerged = notMerged.filter((b) => b.branch !== main && !checkedOut.has(b.branch) && !featureBranches.has(b.branch))
   const branchItems = unmerged.map(async (b): Promise<OpenWorkItem | null> => {
     const ahead = await aheadOf(deps, repoPath, `${HEADS}${b.branch}`, bases)
     return ahead > 0 ? { kind: 'branch', ...b, ahead } : null
   })
 
   const items = await Promise.all([mainItem, ...worktreeItems, ...branchItems])
-  return { ...report, items: items.filter((x): x is OpenWorkItem => x !== null), missing }
+  return { ...report, items: items.filter((x): x is OpenWorkItem => x !== null), missing, merged }
 }
 
 /**
@@ -146,6 +162,7 @@ export async function scanOpenWork(workspaces: readonly OpenWorkWorkspace[], fea
         mainBranch: null,
         items: [],
         missing: [],
+        merged: [],
         error: message(err)
       }))
     )

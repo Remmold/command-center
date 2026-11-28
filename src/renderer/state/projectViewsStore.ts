@@ -106,7 +106,7 @@ interface ProjectViewsState {
 
   addClaudeSession: (
     projectId: string,
-    options?: { id?: string; claudeSessionId?: string; model?: ClaudeModel; effort?: string; permissionMode?: PermissionMode; addDirs?: string[] }
+    options?: { id?: string; claudeSessionId?: string; model?: ClaudeModel; effort?: string; permissionMode?: PermissionMode; addDirs?: string[]; appTitle?: string }
   ) => ClaudeChatSession | null
   closeClaudeSession: (projectId: string, sessionId: string) => void
   setActiveClaudeSession: (projectId: string, sessionId: string) => void
@@ -120,8 +120,8 @@ interface ProjectViewsState {
   setSessionEffort: (paneId: string, effort: string) => void
   setSessionThinking: (paneId: string, thinking: boolean) => void
   renameSession: (paneId: string, name: string) => void
-  /** Names a session from its first prompt. */
-  notePrompt: (paneId: string, text: string) => void
+  /** Names a session from its first prompt; one the app wrote names it `appTitle`. */
+  notePrompt: (paneId: string, text: string, appTitle?: string) => void
   /** Claude's `generate_session_title` result; a rename keeps winning. */
   applyClaudeTitle: (paneId: string, title: string) => void
   duplicateSession: (projectId: string, sessionId: string) => ClaudeChatSession | null
@@ -333,7 +333,8 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
         if (!view) return null
         const session: ClaudeChatSession = {
           id: options?.id ?? makeId(),
-          title: NEW_SESSION_TITLE,
+          // A session the app hosts again (the main chat, a feature's) is named as the app knows it, as its first app prompt named it.
+          ...titleAfterPrompt({ title: NEW_SESSION_TITLE }, '', options?.appTitle),
           ...(options?.model || options?.effort ? pickedOf(options) : startingChoiceOn(profileOf(projectId))),
           thinking: true,
           ...(options?.claudeSessionId ? { claudeSessionId: options.claudeSessionId } : {}),
@@ -427,7 +428,7 @@ export const useProjectViewsStore = create<ProjectViewsState>()(
 
       renameSession: (paneId, name) => retitle(set, paneId, (t) => titleAfterRename(t, name)),
 
-      notePrompt: (paneId, text) => retitle(set, paneId, (t) => titleAfterPrompt(t, text)),
+      notePrompt: (paneId, text, appTitle) => retitle(set, paneId, (t) => titleAfterPrompt(t, text, appTitle)),
 
       applyClaudeTitle: (paneId, title) => retitle(set, paneId, (t) => titleAfterClaude(t, title)),
 

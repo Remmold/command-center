@@ -1,9 +1,10 @@
 import { create } from 'zustand'
+import type { OutgoingPrompt } from '../../shared/appPrompts'
 
 /** A mounted chat asked to drop its conversation and start a new Claude session in place, keeping its pane. */
 export interface FreshStart {
   /** Runs once the old process has exited; resolves with the new conversation's first prompt. A rejection keeps the old conversation. */
-  prepare: () => Promise<string>
+  prepare: () => Promise<OutgoingPrompt>
 }
 
 interface FreshStartState {
