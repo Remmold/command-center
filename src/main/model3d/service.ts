@@ -32,6 +32,8 @@ export interface Model3dTimings {
   readyPollMs: number
   /** A held claim is taken afresh once it is this old, before coord.py would drop it. */
   claimRefreshMs: number
+  /** A check round still waiting on tasklist or coord.py this long names the slow call as the wait reason. */
+  roundSlowMs: number
 }
 
 export const MODEL3D_TIMINGS: Model3dTimings = {
@@ -40,7 +42,8 @@ export const MODEL3D_TIMINGS: Model3dTimings = {
   idleStopMs: IDLE_STOP_MS,
   readyTimeoutMs: 120_000,
   readyPollMs: 1_000,
-  claimRefreshMs: 150 * 60_000
+  claimRefreshMs: 150 * 60_000,
+  roundSlowMs: 8_000
 }
 export const HISTORY_KEEP = 50
 export const CANCELLED_APP_CLOSED = 'Cancelled: app closed'
@@ -179,6 +182,8 @@ interface Job {
 interface Outside {
   round: number
   names: Set<string>
+  /** Why tasklist failed: then the cluster and Unity checks cannot be made. */
+  listError: string | null
   board: CoordReading
 }
 
@@ -421,17 +426,51 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
   let outside: Outside | null = null
   /** The first round whose answer may start a job: one that began after the last turn ended or job arrived. */
   let freshFrom = 1
+  /** A fresh round that has not answered within `roundSlowMs`: the wait reason names its calls still out. */
+  let slow: { round: number; reason: string } | null = null
   function needFresh(): void {
     freshFrom = rounds + 1
+    slow = null
+  }
+
+  function slowReason(pending: { list: boolean; coord: boolean }): string | null {
+    const out = [pending.list ? 'tasklist' : null, pending.coord ? 'the coord board' : null].filter((n): n is string => n !== null)
+    if (out.length === 0) return null
+    return `Waiting: ${out.join(' and ')} ${out.length > 1 ? 'have' : 'has'} not answered in ${timings.roundSlowMs / 1000} s`
   }
 
   function startRound(): void {
     const round = ++rounds
+    const pending = { list: true, coord: true }
+    let late = false
+    const markSlow = (): void => track(() => serial(async () => {
+      if (disposed || round < freshFrom || (outside && outside.round >= round) || (slow && slow.round > round)) return
+      const reason = slowReason(pending)
+      if (reason === null || slow?.reason === reason) return
+      slow = { round, reason }
+      await pump()
+    }))
+    const cancelSlow = clock.after(timings.roundSlowMs, () => {
+      late = true
+      markSlow()
+    })
+    const answered = (part: 'list' | 'coord'): void => {
+      pending[part] = false
+      if (late) markSlow()
+    }
     track(async () => {
-      const [names, board] = await Promise.all([ports.processes.list(), coord.claims()])
+      const [list, board] = await Promise.all([
+        ports.processes.list().then(
+          (names) => ({ names, error: null }),
+          (err: unknown) => ({ names: [], error: err instanceof Error ? err.message : String(err) })
+        ).finally(() => answered('list')),
+        coord.claims().catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) })).finally(() => answered('coord'))
+      ])
+      cancelSlow()
       await serial(async () => {
         if (outside && outside.round > round) return
-        outside = { round, names: new Set(names.map((n) => n.toLowerCase())), board }
+        outside = { round, names: new Set(list.names.map((n) => n.toLowerCase())), listError: list.error, board }
+        if (slow && slow.round <= round) slow = null
         await pump()
       })
     })
@@ -441,6 +480,7 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
 
   function outsideReason(seen: Outside): string | null {
     const has = (list: readonly string[]): boolean => list.some((n) => seen.names.has(n.toLowerCase()))
+    if (seen.listError !== null) return `Waiting: tasklist could not be run: ${seen.listError}`
     if (has(config.clusterProcesses)) return 'Waiting: Darkfall cluster running'
     if (has(config.unityProcesses)) return 'Waiting: Unity running'
     if (!seen.board.ok) return `Waiting: coord board could not be run: ${seen.board.error}`
@@ -467,7 +507,8 @@ export function createModel3dService(ports: Model3dPorts, config: Model3dService
       // A job behind one still being checked waits for that answer too, so the queue keeps its order.
       if (checking || (!fresh && !job.request.runAnyway)) {
         checking = true
-        if (job.status.waitReason === null || job.waitIsTurn) setWait(job, CHECKING, false)
+        if (slow) setWait(job, slow.reason, false)
+        else if (job.status.waitReason === null || job.waitIsTurn) setWait(job, CHECKING, false)
         continue
       }
       const reason = job.request.runAnyway || !fresh ? null : outsideReason(fresh)

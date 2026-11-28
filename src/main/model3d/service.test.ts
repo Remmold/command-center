@@ -353,6 +353,49 @@ describe('wait reasons', () => {
   })
 })
 
+describe('a check round that does not answer', () => {
+  it('says what has not answered after 8 s instead of checking forever, and the job starts once a round answers', async () => {
+    await boot()
+    const job = request()
+    fakes.processes.hold = true
+    fakes.coord.hold = true
+    await drop(job)
+    await fakes.clock.advance(5000)
+    await flush()
+    const status = () => service!.view().jobs.find((j) => j.request.id === job.id)?.status
+    expect(status()?.waitReason).toBe(CHECKING)
+
+    await fakes.clock.advance(8000)
+    await flush()
+    expect(status()?.waitReason).toBe('Waiting: tasklist and the coord board have not answered in 8 s')
+
+    for (const answer of fakes.coord.held.splice(0)) answer({ ok: true, claims: [] })
+    await flush()
+    expect(status()?.waitReason).toBe('Waiting: tasklist has not answered in 8 s')
+
+    fakes.processes.hold = false
+    fakes.coord.hold = false
+    await fakes.clock.advance(5000)
+    await flush()
+    await flush()
+    expect(status()).toMatchObject({ state: 'running', waitReason: null })
+    expect(fakes.workers.runs).toHaveLength(1)
+  })
+
+  it('is a wait reason when tasklist fails, never an empty process list that lets the job run', async () => {
+    fakes.processes.broken = 'tasklist did not answer within 30 s'
+    await boot()
+    const job = request()
+    await submit(job)
+    expect(await readStatus(job.id)).toMatchObject({ state: 'queued', waitReason: 'Waiting: tasklist could not be run: tasklist did not answer within 30 s' })
+    expect(fakes.workers.runs).toHaveLength(0)
+
+    fakes.processes.broken = null
+    await advance(5000)
+    expect(await readStatus(job.id)).toMatchObject({ state: 'running' })
+  })
+})
+
 describe('Cancel', () => {
   it('removes a queued job at once as cancelled, and it never runs', async () => {
     await boot()

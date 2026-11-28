@@ -55,7 +55,11 @@ export class FakeCoord {
   constructor(private readonly clock: { now(): number }) {}
   /** Set, coord.py cannot be run and `claims` gives this reason. */
   broken: string | null = null
+  /** While true, each `claims()` waits until the test answers it through `held`, as a slow coord.py would. */
+  hold = false
+  held: ((reading: CoordReading) => void)[] = []
   async claims(): Promise<CoordReading> {
+    if (this.hold) return new Promise((resolve) => this.held.push(resolve))
     if (this.broken) return { ok: false, error: this.broken }
     return { ok: true, claims: this.claimsList.map((c) => ({ ...c })) }
   }
@@ -174,6 +178,8 @@ export class FakeProcesses {
   /** While true, each `list()` waits until the test answers it through `held`, as a slow tasklist would. */
   hold = false
   held: ((names: string[]) => void)[] = []
+  /** Set, tasklist fails and `list()` rejects with this. */
+  broken: string | null = null
   listed = 0
   private listWaiters: { at: number; resolve: () => void }[] = []
   list(): Promise<string[]> {
@@ -181,6 +187,7 @@ export class FakeProcesses {
     for (const w of this.listWaiters.filter((x) => x.at <= this.listed)) w.resolve()
     this.listWaiters = this.listWaiters.filter((x) => x.at > this.listed)
     if (this.hold) return new Promise((resolve) => this.held.push(resolve))
+    if (this.broken) return Promise.reject(new Error(this.broken))
     return Promise.resolve([...this.names])
   }
   /** Resolves once `list()` has been asked `count` times in all: the handshake for a round that starts while another is held. */

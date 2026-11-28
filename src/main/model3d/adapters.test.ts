@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Model3dRequest } from '../../shared/model3d'
-import { coordPython, createCoordBoard, listenerPids, model3dScriptDirs, parseCoordClaims, pidAlive, realModel3dPorts, stopOutsideServer, vetWorkerRequest, type Exec, type ExecResult } from './adapters'
+import { coordPython, createCoordBoard, createProcessList, listenerPids, model3dScriptDirs, parseCoordClaims, pidAlive, realModel3dPorts, stopOutsideServer, vetWorkerRequest, type Exec, type ExecResult } from './adapters'
 import { progressStep, watchComfyMessages } from './comfyWs'
 import { model3dConfig } from './config'
 import { diskJobsFolder } from './jobsFolder'
@@ -185,6 +185,18 @@ describe('the coord board python', () => {
     result = { code: 0, stdout: '2026-11-28 10:27:45Z  {"job": "model3d", "path": "gpu", "why": "run"}', stderr: '' }
     expect(await board.claims()).toEqual({ ok: true, claims: [{ job: 'model3d', since: Date.parse('2026-11-28T10:27:45Z'), why: 'run' }] })
     await fs.rm(dir, { recursive: true, force: true })
+  })
+})
+
+describe('the process list', () => {
+  it('lists the image names, and fails with why when tasklist did not run or answer, never an empty list', async () => {
+    let result: ExecResult = { code: 0, stdout: '"Unity.exe","123","Console","1","10,000 K"\r\n"python.exe","9","Console","1","5 K"\r\n' }
+    const processes = createProcessList(async () => result)
+    expect(await processes.list()).toEqual(['Unity.exe', 'python.exe'])
+    result = { code: null, stdout: '"Unity.exe","123"', error: 'tasklist did not answer within 30 s' }
+    await expect(processes.list()).rejects.toThrow('tasklist did not answer within 30 s')
+    result = { code: 1, stdout: '', stderr: 'ERROR: something\r\n' }
+    await expect(processes.list()).rejects.toThrow('ERROR: something')
   })
 })
 

@@ -22,12 +22,14 @@ export interface ExecResult {
 }
 export type Exec = (command: string, args: string[]) => Promise<ExecResult>
 
+const EXEC_LIMIT_MS = 30_000
+
 const exec: Exec = (command, args) =>
   new Promise((resolve) => {
-    execFile(command, args, { windowsHide: true, timeout: 30_000 }, (err, stdout, stderr) => {
+    execFile(command, args, { windowsHide: true, timeout: EXEC_LIMIT_MS }, (err, stdout, stderr) => {
       const code = err ? (typeof (err as { code?: unknown }).code === 'number' ? ((err as { code: number }).code) : null) : 0
       const result: ExecResult = { code, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }
-      if (err && code === null) result.error = err.message
+      if (err && code === null) result.error = err.killed ? `${command} did not answer within ${EXEC_LIMIT_MS / 1000} s` : err.message
       resolve(result)
     })
   })
@@ -288,15 +290,19 @@ export function pidAlive(pid: number): boolean {
   }
 }
 
-const processList: ProcessList = {
-  async list() {
-    const { stdout } = await exec('tasklist', ['/FO', 'CSV', '/NH'])
-    return stdout
-      .split(/\r?\n/)
-      .map((line) => /^"([^"]+)"/.exec(line)?.[1])
-      .filter((name): name is string => name !== undefined)
-  },
-  alive: async (pid) => pidAlive(pid)
+/** The running processes through `tasklist`; a run that fails or is cut off rejects, as its list may miss the cluster or Unity. */
+export function createProcessList(run: Exec = exec): ProcessList {
+  return {
+    async list() {
+      const result = await run('tasklist', ['/FO', 'CSV', '/NH'])
+      if (result.code !== 0) throw new Error(failure(result))
+      return result.stdout
+        .split(/\r?\n/)
+        .map((line) => /^"([^"]+)"/.exec(line)?.[1])
+        .filter((name): name is string => name !== undefined)
+    },
+    alive: async (pid) => pidAlive(pid)
+  }
 }
 
 const clock: Model3dClock = {
@@ -333,7 +339,7 @@ export function realModel3dPorts(config: Model3dConfig, openExternal: (url: stri
   const editorUrl = `http://127.0.0.1:${config.port}`
   return {
     clock,
-    processes: processList,
+    processes: createProcessList(),
     coord: createCoordBoard(config.coordScript, exec, coordPython(config.enginePython)),
     jobs: diskJobsFolder(config.folder),
     vetRequest: async (request) => vetWorkerRequest(request, await scriptDirs()),
