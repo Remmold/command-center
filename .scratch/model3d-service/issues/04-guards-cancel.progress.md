@@ -1,0 +1,3 @@
+- done: ticket 04 resolved — 49a8114, review fix 88b7b17; Vitest 31 in service.test (each wait reason and order, Run anyway, both cancels, orphan drop), e2e (b) 4.9 s, 19 of 20
+- next: ticket 05 (viewer)
+- open reds: none; scenario (a) failed once (barrel stayed 'Waiting: crate running' 10 s after crate was done), 0 of 16 reruns, likely a slow tasklist/coord check holding the serial chain

@@ -1,7 +1,8 @@
-import { forwardRef, memo, useEffect, useRef, useState, type MouseEvent } from 'react'
-import { Copy, ExternalLink, FileQuestion, FolderOpen, MessageSquareText } from 'lucide-react'
+import { forwardRef, memo, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { Box, Copy, ExternalLink, FileQuestion, FolderOpen, MessageSquareText } from 'lucide-react'
 import type { MediaFile } from '../../../shared/media'
 import { useMenu } from '../../hooks/useMenu'
+import { openModelInView } from '../../state/model3dStore'
 import { useToastStore } from '../../state/toastStore'
 import { IconButton } from '../ui/IconButton'
 import { ImagePreview } from '../ui/ImagePreview'
@@ -103,7 +104,9 @@ const MediaTile = memo(function MediaTile({ entry, cwd, revision, onOpen, onJump
   const picture =
     loaded.state === 'missing' ? (
       <ThumbnailPlaceholder icon={<FileQuestion size={20} />}>File not found</ThumbnailPlaceholder>
-    ) : loaded.state === 'pending' ? null : entry.kind === 'video' ? (
+    ) : loaded.state === 'pending' ? null : entry.kind === 'model' ? (
+      <ThumbnailPlaceholder icon={<Box size={20} />}>Open in the 3D view</ThumbnailPlaceholder>
+    ) : entry.kind === 'video' ? (
       <ThumbnailVideo src={loaded.url} />
     ) : (
       <ThumbnailImage src={loaded.url} alt={entry.name} />
@@ -180,11 +183,15 @@ interface Props {
   onJump: (messageId: string) => void
 }
 
-/** Every image and video the chat touched, newest first, filling the transcript's space; a click opens the preview, which steps through them. */
+/** Every image, video and model the chat touched, newest first, filling the transcript's space; a click opens the preview, which steps through the images and videos, or a model in the 3D view. */
 export const MediaGrid = forwardRef<HTMLDivElement, Props>(function MediaGrid({ media, cwd, revision, onJump }, ref) {
   const [viewing, setViewing] = useState<string | null>(null)
-  const index = viewing === null ? -1 : media.findIndex((m) => m.key === viewing)
-  const onOpen = useRef((entry: MediaEntry) => setViewing(entry.key)).current
+  const previewed = useMemo(() => media.filter((m) => m.kind !== 'model'), [media])
+  const index = viewing === null ? -1 : previewed.findIndex((m) => m.key === viewing)
+  const onOpen = useRef((entry: MediaEntry) => {
+    if (entry.kind === 'model' && entry.source.kind === 'file') openModelInView(entry.source.path)
+    else setViewing(entry.key)
+  }).current
 
   return (
     <div ref={ref} role="tabpanel" aria-label="Media" tabIndex={-1} className="absolute inset-0 overflow-y-auto px-5 py-4 focus:outline-none">
@@ -194,7 +201,7 @@ export const MediaGrid = forwardRef<HTMLDivElement, Props>(function MediaGrid({ 
         ))}
       </ThumbnailGrid>
       {index !== -1 && (
-        <MediaViewer media={media} index={index} cwd={cwd} revision={revision} onIndex={(i) => setViewing(media[i].key)} onClose={() => setViewing(null)} />
+        <MediaViewer media={previewed} index={index} cwd={cwd} revision={revision} onIndex={(i) => setViewing(previewed[i].key)} onClose={() => setViewing(null)} />
       )}
     </div>
   )

@@ -93,6 +93,15 @@ describe('the main chat first prompt and instructions', () => {
     expect(proposalSegments(MAIN_CHAT_INSTRUCTIONS).filter((s) => s.kind === 'proposal')).toHaveLength(1)
   })
 
+  it('has one rule line on 3D assets: suggest model3d, a session runs it, point at finished models by path and the 3D view', () => {
+    const lines = MAIN_CHAT_INSTRUCTIONS.split('\n').filter((l) => /model3d/.test(l))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatch(/needs 3D assets, suggest the model3d skill/)
+    expect(lines[0]).toMatch(/a session runs it; you can't/)
+    expect(lines[0]).toMatch(/# 3D models section/)
+    expect(lines[0]).toMatch(/by its \.glb path and the 3D view/)
+  })
+
   it('says it has no write or run tool only for a request to edit a file or run a command, with a proposal offered', () => {
     const lines = MAIN_CHAT_INSTRUCTIONS.split('\n').filter((l) => /no tool/.test(l))
     expect(lines).toHaveLength(1)

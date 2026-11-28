@@ -3,6 +3,7 @@ import type { ChooseImageResult, RepoIconRequest, RepoIdentityViews } from './re
 import type { ChatItem } from './chatItems'
 import type { SubagentItemsSource, SubagentSource, SubagentTailEvent } from './subagentTail'
 import type { AppView } from './views'
+import type { Model3dActionResult, Model3dOpenResult, Model3dView } from './model3d'
 import type { ApprovalReply, ApprovalRequest, ApprovalSettled } from './approval'
 import type { ObservedTurn } from './takeOver'
 import type { MediaFile } from './media'
@@ -793,6 +794,24 @@ export interface RendererApi {
     portOpen: (port: number) => Promise<boolean>
     /** Opens a local address in the default browser; anything else is refused. The error, or null. */
     openInBrowser: (url: string) => Promise<string | null>
+  }
+  /** The 3D service: its jobs and server (ADR 0011). */
+  model3d: {
+    view: () => Promise<Model3dView>
+    onChanged: (cb: (view: Model3dView) => void) => () => void
+    stopServer: () => Promise<Model3dActionResult>
+    /** Cancel: a queued job ends at once, a running one is interrupted and its worker stopped. */
+    cancel: (id: string) => Promise<Model3dActionResult>
+    /** Run anyway on a waiting job: skips the cluster, Unity and coord checks, never the GPU turn. */
+    runAnyway: (id: string) => Promise<Model3dActionResult>
+    /** Open editor: an editor turn, queued like a job; the browser opens at its turn. */
+    openEditor: () => Promise<Model3dActionResult>
+    /** Done with editor: ends the held editor turn. */
+    doneWithEditor: () => Promise<Model3dActionResult>
+    /** A `.glb` for the viewer, through the media gate, with its sheet and `.json` stats. */
+    openModel: (path: string) => Promise<Model3dOpenResult>
+    /** Open model…: a native picker for one `.glb`, then as openModel; null when cancelled. */
+    pickModel: () => Promise<Model3dOpenResult | null>
   }
   startWithWindows: {
     get: () => Promise<StartWithWindowsState>

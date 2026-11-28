@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { FeatureServerView } from '../../shared/featureServers'
 import type { FeatureStageView } from '../../shared/featureStage'
-import { REPLY_LINE_MAX, digestBody, digestFileName, digestHeader, rateLimitOf, renderFeatureDigest, replyLine, type DigestFeature } from './digest'
+import { REPLY_LINE_MAX, digestBody, digestFileName, digestHeader, rateLimitOf, renderFeatureDigest, replyLine, type DigestFeature, type DigestModel3d } from './digest'
 
 const NOW = Date.UTC(2026, 10, 26, 12, 0, 0)
 const WT = join('C:', 'wt', 'dark-mode')
@@ -200,5 +200,54 @@ describe('the last reply line', () => {
     expect(replyLine('a'.repeat(REPLY_LINE_MAX))).toBe('a'.repeat(300))
     expect(replyLine(`${'b'.repeat(299)}\n\ncd${'e'.repeat(50)}`)).toBe(`${'b'.repeat(299)} …`)
     expect(replyLine('x'.repeat(400))).toBe(`${'x'.repeat(300)}…`)
+  })
+})
+
+describe('the 3D models section', () => {
+  const GLB = join('C:', 'src', 'game', 'out', 'crate.glb')
+  const BARREL = join('C:', 'x', 'barrel.glb')
+  const model3d: DigestModel3d = {
+    jobs: [
+      { summary: 'axe.png · prop', session: 'dark-mode', state: 'Waiting: Darkfall cluster running' },
+      { summary: 'Editor turn', session: 'Command Center', state: 'Held' }
+    ],
+    models: [
+      { name: 'crate', glb: GLB, session: 'Outside the app · game', workspace: 'game', tris: 12000, finishedAt: NOW },
+      { name: 'barrel', glb: BARREL, session: 'dark-mode', workspace: null, tris: null, finishedAt: null }
+    ]
+  }
+
+  it('lists the queued and running jobs, then the finished models with path, session, workspace, tris and finished time', () => {
+    const text = digestBody([feature()], { model3d })
+    expect(text.slice(text.indexOf('# 3D models'))).toContain(
+      [
+        '# 3D models',
+        '',
+        'The 3D service runs model3d jobs from every session, one at a time. Point the user at a finished model by its path and the 3D view (Ctrl+6).',
+        '',
+        '## Queued and running',
+        '',
+        '- axe.png · prop · dark-mode · Waiting: Darkfall cluster running',
+        '- Editor turn · Command Center · Held',
+        '',
+        '## Last finished models',
+        '',
+        `- crate: ${GLB} · session Outside the app · game · workspace game · 12000 tris · finished 2026-11-26T12:00:00.000Z`,
+        `- barrel: ${BARREL} · session dark-mode · no workspace · tris unknown · finished at an unknown time`,
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('says so when no job is open and no model is finished, and leaves the section out when none is given', () => {
+    const text = digestBody([feature()], { model3d: { jobs: [], models: [] } })
+    expect(text).toContain('## Queued and running\n\nNo 3D jobs queued or running.\n\n## Last finished models\n\nNo finished models.\n')
+    expect(digestBody([feature()])).not.toContain('# 3D models')
+  })
+
+  it('comes after the workspaces and before the test flows', () => {
+    const text = digestBody([feature()], { model3d, testFlowsFolder: 'C:\tf' })
+    expect(text.indexOf('# Workspaces')).toBeLessThan(text.indexOf('# 3D models'))
+    expect(text.indexOf('# 3D models')).toBeLessThan(text.indexOf('# Test flows'))
   })
 })

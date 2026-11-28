@@ -8,6 +8,7 @@ describe('app view', () => {
     expect(parseView('board')).toBe('board')
     expect(parseView('context')).toBe('context')
     expect(parseView('processes')).toBe('processes')
+    expect(parseView('3d')).toBe('3d')
   })
 
   it('reads the old Sessions view as Work', () => {

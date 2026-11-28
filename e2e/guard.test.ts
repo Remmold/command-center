@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { FAKE_BIN, assertFakeClaude, workerCrashWarning } from './guard'
+import { FAKE_BIN, assertFakeClaude, assertFakeModel3d, workerCrashWarning } from './guard'
 
 describe('workerCrashWarning', () => {
   it.each(['v24.15.0', 'v24.0.0', 'v22.23.5', 'v20.19.0'])('warns for %s on Windows', (version) => {
@@ -31,4 +31,26 @@ describe('assertFakeClaude', () => {
       expect(() => assertFakeClaude(bin)).toThrow(/e2e refuses to run/)
     }
   )
+})
+
+describe('assertFakeModel3d', () => {
+  const root = String.raw`C:\Temp\cc-e2e-1`
+  const fake = { CC_MODEL3D_PORT: '50123', CC_MODEL3D_ENGINE_DIR: join(root, 'engine'), CC_MODEL3D_COORD: join(root, 'coord', 'coord.py'), CC_MODEL3D_BROWSER_LOG: join(root, 'browser.log'), CC_MODEL3D_SCRIPTS: join(root, 'scripts') }
+
+  it('accepts fakes inside the test root on another port', () => {
+    expect(() => assertFakeModel3d(fake, root)).not.toThrow()
+  })
+
+  it.each([
+    ['the real port', { CC_MODEL3D_PORT: '8189' }],
+    ['no port', { CC_MODEL3D_PORT: undefined }],
+    ['the real engine', { CC_MODEL3D_ENGINE_DIR: String.raw`C:\ComfyUI3D` }],
+    ['the real coord board', { CC_MODEL3D_COORD: String.raw`C:\dfst_coord\coord.py` }],
+    ['no coord board', { CC_MODEL3D_COORD: undefined }],
+    ['a real browser', { CC_MODEL3D_BROWSER_LOG: undefined }],
+    ['no fake worker folder', { CC_MODEL3D_SCRIPTS: undefined }],
+    ['a worker folder outside the test', { CC_MODEL3D_SCRIPTS: String.raw`C:\Users\me\.claude\skills\model3d\scripts` }]
+  ])('refuses %s', (_name, over) => {
+    expect(() => assertFakeModel3d({ ...fake, ...over }, root)).toThrow(/e2e refuses to run/)
+  })
 })

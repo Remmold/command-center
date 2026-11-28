@@ -53,6 +53,18 @@ describe('collecting a chat media', () => {
     ])
   })
 
+  it('takes a .glb a Write names or a tool prints as a 3D model', () => {
+    const media = collectMedia({
+      items: [
+        call('a', 'Write', { file_path: 'models/crate.GLB' }, 1),
+        call('b', 'Bash', { command: 'python gen3d.py' }, 2),
+        result('r', 'b-call', 'C:\\work\\repo\\generated3d\\barrel.glb\nC:\\work\\repo\\generated3d\\barrel_sheet.png', 3)
+      ],
+      cwd: CWD
+    }).map((m) => `${m.name}:${m.kind}`)
+    expect(media).toEqual(['barrel_sheet.png:image', 'barrel.glb:model', 'crate.GLB:model'])
+  })
+
   it('finds image paths in tool output text, such as a Blender or MCP result, and jumps to the call', () => {
     const media = collectMedia({
       items: [

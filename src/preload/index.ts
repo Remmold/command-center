@@ -4,6 +4,7 @@ import { IPC } from '../shared/ipc-channels'
 import { observedRefreshMs } from '../shared/observedRefresh'
 import type { SubagentTailEvent } from '../shared/subagentTail'
 import type { SettingsFileChange } from '../shared/claudeSettings'
+import type { Model3dView } from '../shared/model3d'
 import type {
   AccountProfile,
   AppExitEvent,
@@ -388,6 +389,21 @@ const api: RendererApi = {
       const handler = (_e: IpcRendererEvent, entry: BackgroundProcessesEntry) => cb(entry)
       ipcRenderer.on(IPC.BACKGROUND_PROCESSES_CHANGED, handler)
       return () => ipcRenderer.off(IPC.BACKGROUND_PROCESSES_CHANGED, handler)
+    }
+  },
+  model3d: {
+    view: () => ipcRenderer.invoke(IPC.MODEL3D_VIEW),
+    stopServer: () => ipcRenderer.invoke(IPC.MODEL3D_STOP_SERVER),
+    cancel: (id) => ipcRenderer.invoke(IPC.MODEL3D_CANCEL, id),
+    runAnyway: (id) => ipcRenderer.invoke(IPC.MODEL3D_RUN_ANYWAY, id),
+    openEditor: () => ipcRenderer.invoke(IPC.MODEL3D_OPEN_EDITOR),
+    doneWithEditor: () => ipcRenderer.invoke(IPC.MODEL3D_DONE_WITH_EDITOR),
+    openModel: (path) => ipcRenderer.invoke(IPC.MODEL3D_OPEN_MODEL, path),
+    pickModel: () => ipcRenderer.invoke(IPC.MODEL3D_PICK_MODEL),
+    onChanged: (cb) => {
+      const handler = (_e: IpcRendererEvent, view: Model3dView) => cb(view)
+      ipcRenderer.on(IPC.MODEL3D_CHANGED, handler)
+      return () => ipcRenderer.off(IPC.MODEL3D_CHANGED, handler)
     }
   },
   startWithWindows: {

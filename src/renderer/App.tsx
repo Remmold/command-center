@@ -12,6 +12,7 @@ import { useViewStore } from './state/viewStore'
 import { BoardView } from './components/board/BoardView'
 import { ContextView } from './components/context/ContextView'
 import { ProcessesView } from './components/processes/ProcessesView'
+import { Model3dView } from './components/model3d/Model3dView'
 import { useSessionStatusStore } from './state/sessionStatusStore'
 import { useBackgroundProcessesStore } from './state/backgroundProcessesStore'
 import { useTerminalsStore } from './state/terminalsStore'
@@ -160,6 +161,11 @@ export function App() {
         {appView === 'processes' && (
           <div data-testid="view-processes" className="absolute inset-0 z-30">
             <ProcessesView />
+          </div>
+        )}
+        {appView === '3d' && (
+          <div data-testid="view-3d" className="absolute inset-0 z-30">
+            <Model3dView />
           </div>
         )}
         <div

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, protocol, session } from 'electron'
 import { registerIpc, terminals } from './ipc'
 import { quitQuestion, type QuitKind } from './quitConfirm'
+import { holdQuit } from './quitHold'
 import { routeMenuQuit } from './menuQuit'
 import { removeLegacyHook } from './permission/legacyHook'
 import { sessionStatusTracker } from './sessions/tracker'
@@ -15,6 +16,9 @@ import { createAppTray } from './tray/tray'
 import { startUpdates } from './update/service'
 import type { StartWithWindowsState } from '../shared/types'
 import { iconPath } from './util/paths'
+import { startModel3dService } from './model3d/run'
+import type { Model3dService } from './model3d/service'
+import { registerModel3dIpc } from './model3d/ipc'
 import { routeMenuZoom } from './zoom/menu'
 import { handleMediaScheme, MEDIA_SCHEME_PRIVILEGES } from './files/media'
 import { handleTestFlowScheme, TEST_FLOW_SCHEME_PRIVILEGES } from './testFlow/scheme'
@@ -38,7 +42,11 @@ const APP_USER_MODEL_ID = 'com.commandcenter.app'
 /** Lets the window draw first; the repo icon search then runs in the background. */
 const ICON_SEARCH_DELAY_MS = 3000
 
+/** The quit waits this long at most for the 3D service to cancel its jobs, stop its server and unclaim `gpu`. */
+const MODEL3D_SHUTDOWN_LIMIT_MS = 10_000
+
 let confirmingQuit = false
+let model3d: Model3dService | null = null
 
 async function confirmAndQuit(): Promise<void> {
   if (await confirmQuit('quit')) app.quit()
@@ -48,7 +56,8 @@ async function confirmAndQuit(): Promise<void> {
 async function confirmQuit(kind: QuitKind): Promise<boolean> {
   if (confirmingQuit) return false
   const sessions = sessionStatusTracker.list().filter((e) => e.status === 'running').length
-  const question = quitQuestion({ sessions, terminals: terminals.runningCount() }, kind)
+  const work = model3d?.unfinished() ?? { jobs: 0, editor: false }
+  const question = quitQuestion({ sessions, terminals: terminals.runningCount(), model3dJobs: work.jobs, editor: work.editor }, kind)
   if (!question) return true
   confirmingQuit = true
   try {
@@ -100,7 +109,11 @@ if (!app.requestSingleInstanceLock()) {
     })
     setTimeout(() => void repoIdentities.detectMissing(), ICON_SEARCH_DELAY_MS)
     const startWithWindows = createStartWithWindowsControl()
-    registerIpc({ repoIdentities, startWithWindows })
+    const service = startModel3dService()
+    model3d = service
+    registerIpc({ repoIdentities, startWithWindows, model3d: service })
+    registerModel3dIpc(service)
+    holdQuit(app, () => service.shutdown(), MODEL3D_SHUTDOWN_LIMIT_MS)
     handleMediaScheme()
     handleTestFlowScheme()
     startUpdates({ confirmRestart: () => confirmQuit('update-restart') })

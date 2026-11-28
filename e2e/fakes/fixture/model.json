@@ -1,0 +1,13 @@
+{
+ "preset": "prop",
+ "seconds": 42,
+ "tris": 1,
+ "textures": [
+  "1x1"
+ ],
+ "size_xyz": [
+  1,
+  1,
+  0
+ ]
+}

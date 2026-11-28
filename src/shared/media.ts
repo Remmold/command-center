@@ -1,6 +1,6 @@
 import { fileBaseName } from './fileLinks'
 
-export type MediaKind = 'image' | 'video'
+export type MediaKind = 'image' | 'video' | 'model'
 
 export const MEDIA_TYPES: Readonly<Record<string, { kind: MediaKind; mime: string }>> = {
   png: { kind: 'image', mime: 'image/png' },
@@ -14,7 +14,8 @@ export const MEDIA_TYPES: Readonly<Record<string, { kind: MediaKind; mime: strin
   webm: { kind: 'video', mime: 'video/webm' },
   mov: { kind: 'video', mime: 'video/quicktime' },
   mkv: { kind: 'video', mime: 'video/x-matroska' },
-  avi: { kind: 'video', mime: 'video/x-msvideo' }
+  avi: { kind: 'video', mime: 'video/x-msvideo' },
+  glb: { kind: 'model', mime: 'model/gltf-binary' }
 }
 
 export function mediaType(path: string): { kind: MediaKind; mime: string } | null {
@@ -27,7 +28,7 @@ export function mediaKind(path: string): MediaKind | null {
   return mediaType(path)?.kind ?? null
 }
 
-/** The panel's scheme: serves only files a chat named, read-only. */
+/** The panel's scheme: serves only files a chat or the 3D view named, read-only. */
 export const MEDIA_SCHEME = 'cc-media'
 
 /** How a named file stands on disk; `url` loads it through the media scheme. */

@@ -54,7 +54,8 @@ import { sourceCandidates } from './features/source'
 import { createPreviewConfigStore } from './previewConfig/store'
 import { beginPreviewDraft, discardPreviewDraft, readPreviewDraftFile, sweepStalePreviewDrafts } from './previewConfig/draftFile'
 import { createStageService, type StageService } from './features/stageService'
-import { rateLimitOf, type DigestFeature } from './features/digest'
+import { rateLimitOf, type DigestFeature, type DigestModel3d } from './features/digest'
+import { digestModel3d } from './features/digestModel3d'
 import { workspaceOptions } from '../shared/workspaceLabel'
 import { createDigestWriter, type DigestWriter } from './features/digestWriter'
 import { coalesce, createLastReplies } from './features/featureActivity'
@@ -78,7 +79,9 @@ import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
 import type { RateLimitInfo } from './usage/usageReply'
-import { featureDigestFile, legacyFeatureDigestFile, mainChatDir, previewDraftsFolder, userDataPath } from './util/paths'
+import { featureDigestFile, legacyFeatureDigestFile, mainChatDir, model3dJobsFolder, previewDraftsFolder, userDataPath } from './util/paths'
+import { model3dSessionEnv } from './model3d/run'
+import type { Model3dService } from './model3d/service'
 import { realPathFrom } from './features/realPath'
 import { createMainChatStore } from './features/mainChatStore'
 import { MAIN_CHAT_PANE_ID, mainChatLaunch, mainChatReply, type JustStarted, type MainChatInfo, type MainChatScope } from '../shared/mainChat'
@@ -114,9 +117,11 @@ const QUIT_KILL_LIMIT_MS = 3000
 interface IpcDeps {
   repoIdentities: RepoIdentityService
   startWithWindows: StartWithWindowsControl
+  /** Its jobs and finished models go into the digest. */
+  model3d: Model3dService
 }
 
-export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void {
+export function registerIpc({ repoIdentities, startWithWindows, model3d }: IpcDeps): void {
   let featureStages: StageService | undefined
   let featureDigest: DigestWriter | undefined
   // A feature session's state or reply asks for the digest at most every 2 s, not on every event of a turn.
@@ -648,11 +653,20 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     workChanged()
     return run
   })
+  const model3dDigestFacts = async (): Promise<DigestModel3d> => {
+    const [features, known] = await Promise.all([featureStore.list(), workspaces.list()])
+    return digestModel3d({
+      view: model3d.view(),
+      features: features.map((f) => ({ sessionId: f.sessionId, name: f.name })),
+      hosted: sessionStatusTracker.list().map((s) => ({ paneId: s.paneId, cwd: s.cwd })),
+      workspaces: listed(known).map((w) => ({ name: w.name, path: w.path }))
+    })
+  }
   featureDigest = createDigestWriter({
     file: featureDigestFile(),
     places: async () => {
-      const [known, openWorkText, testFlowsFolder] = await Promise.all([labelled(), openWork(), readTestFlowsFolder()])
-      return { workspaces: known.map((w) => ({ label: w.label, path: w.path })), openWork: openWorkText, testFlowsFolder }
+      const [known, openWorkText, testFlowsFolder, model3dFacts] = await Promise.all([labelled(), openWork(), readTestFlowsFolder(), model3dDigestFacts()])
+      return { workspaces: known.map((w) => ({ label: w.label, path: w.path })), openWork: openWorkText, model3d: model3dFacts, testFlowsFolder }
     },
     features: async (): Promise<DigestFeature[]> => {
       const [features, allWorkspaces, allProfiles, stages] = await Promise.all([featureStore.list(), workspaces.list(), profiles.list(), featureStages?.snapshot() ?? {}])
@@ -677,7 +691,11 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
       })
     }
   })
-  unsubscribers.push(serverRunner.onChanged(() => featureDigest?.changed()), () => featureDigest?.stop())
+  unsubscribers.push(
+    serverRunner.onChanged(() => featureDigest?.changed()),
+    model3d.onChanged(() => featureDigest?.changed()),
+    () => featureDigest?.stop()
+  )
   featureDigest.changed()
   ipcMain.handle(IPC.USAGE_LIST, () => usage.list())
   ipcMain.on(IPC.USAGE_REFRESH, (_e, profileId?: unknown) => usage.refresh(typeof profileId === 'string' ? profileId : undefined))
@@ -767,7 +785,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const teleported = options.resumeSessionId ? await isTeleportedSession(await transcriptsDirForCwd(options.cwd), options.resumeSessionId) : false
     const allowed = await readPromptSuggestionsAllowed(join((await profiles.get(profileId)).configDir, 'settings.json'))
     const promptSuggestions = options.promptSuggestions !== false && allowed
-    const started = claudeManager.start({ ...options, promptSuggestions, profileEnv: env, profileId, teleported })
+    const profileEnv = { ...env, ...model3dSessionEnv(model3dJobsFolder(), options.paneId) }
+    const started = claudeManager.start({ ...options, promptSuggestions, profileEnv, profileId, teleported })
     return started.ok ? { ...started, profileId: claudeManager.profileOf(options.paneId) } : started
   })
   // Read-only by construction: the process is given read tools only, and the app answers its permission requests itself.

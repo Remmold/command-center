@@ -7,16 +7,17 @@ const alt = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: fals
 const plain = (key: string, code: string): KeyChord => ({ key, code, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false })
 
 describe('keyboard shortcuts', () => {
-  it('Ctrl+1/2/3/4/5 pick Dashboard, Work, Board, Context and Processes', () => {
+  it('Ctrl+1/2/3/4/5/6 pick Dashboard, Work, Board, Context, Processes and 3D', () => {
     expect(shortcutFor(ctrl('1', 'Digit1'))).toEqual({ name: 'switchView', view: 'dashboard' })
     expect(shortcutFor(ctrl('2', 'Digit2'))).toEqual({ name: 'switchView', view: 'work' })
     expect(shortcutFor(ctrl('3', 'Digit3'))).toEqual({ name: 'switchView', view: 'board' })
     expect(shortcutFor(ctrl('4', 'Digit4'))).toEqual({ name: 'switchView', view: 'context' })
     expect(shortcutFor(ctrl('5', 'Digit5'))).toEqual({ name: 'switchView', view: 'processes' })
+    expect(shortcutFor(ctrl('6', 'Digit6'))).toEqual({ name: 'switchView', view: '3d' })
   })
 
-  it('Ctrl+6 and up do nothing', () => {
-    expect(shortcutFor(ctrl('6', 'Digit6'))).toBeNull()
+  it('Ctrl+7 and up do nothing', () => {
+    expect(shortcutFor(ctrl('7', 'Digit7'))).toBeNull()
   })
 
   it('Ctrl+, opens Settings, by key or by position', () => {

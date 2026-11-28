@@ -166,7 +166,7 @@ function ChatTabs({ chatKey, media, revision, items, cwd, agentHost, processesPa
     () => [
       { value: 'chat' as const, label: 'Chat', title: `The transcript (${MEDIA_TAB_SHORTCUT})` },
       ...(agentCount > 0 ? [{ value: 'agents' as const, label: 'Agents', count: agentsWorking, title: AGENTS_TITLE }] : []),
-      ...(media.length > 0 ? [{ value: 'media' as const, label: 'Media', count: media.length, title: `This session's images and videos (${MEDIA_TAB_SHORTCUT})` }] : []),
+      ...(media.length > 0 ? [{ value: 'media' as const, label: 'Media', count: media.length, title: `This session's images, videos and 3D models (${MEDIA_TAB_SHORTCUT})` }] : []),
       ...(processesPane !== undefined
         ? [{ value: 'processes' as const, label: 'Processes', count: processesRunning > 0 ? processesRunning : undefined, title: PROCESSES_TITLE }]
         : []),
