@@ -39,6 +39,11 @@ export function previewDraftsFolder(): string {
   return userDataPath('preview-drafts')
 }
 
+/** The 3D service's jobs folder (ADR 0011): requests from gen3d.py, statuses and service.json from the app. */
+export function model3dJobsFolder(): string {
+  return userDataPath('model3d-jobs')
+}
+
 /** Packaging must ship resources/icons as the extra resource "icons". */
 export function iconPath(file: string): string {
   if (app.isPackaged) return join(process.resourcesPath, 'icons', file)

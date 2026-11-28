@@ -78,7 +78,8 @@ import { agentSweep } from './claude/agentSweepService'
 import { UsageService } from './usage/service'
 import { probeUsage } from './usage/probe'
 import type { RateLimitInfo } from './usage/usageReply'
-import { featureDigestFile, legacyFeatureDigestFile, mainChatDir, previewDraftsFolder, userDataPath } from './util/paths'
+import { featureDigestFile, legacyFeatureDigestFile, mainChatDir, model3dJobsFolder, previewDraftsFolder, userDataPath } from './util/paths'
+import { model3dSessionEnv } from './model3d/run'
 import { realPathFrom } from './features/realPath'
 import { createMainChatStore } from './features/mainChatStore'
 import { MAIN_CHAT_PANE_ID, mainChatLaunch, mainChatReply, type JustStarted, type MainChatInfo, type MainChatScope } from '../shared/mainChat'
@@ -767,7 +768,8 @@ export function registerIpc({ repoIdentities, startWithWindows }: IpcDeps): void
     const teleported = options.resumeSessionId ? await isTeleportedSession(await transcriptsDirForCwd(options.cwd), options.resumeSessionId) : false
     const allowed = await readPromptSuggestionsAllowed(join((await profiles.get(profileId)).configDir, 'settings.json'))
     const promptSuggestions = options.promptSuggestions !== false && allowed
-    const started = claudeManager.start({ ...options, promptSuggestions, profileEnv: env, profileId, teleported })
+    const profileEnv = { ...env, ...model3dSessionEnv(model3dJobsFolder(), options.paneId) }
+    const started = claudeManager.start({ ...options, promptSuggestions, profileEnv, profileId, teleported })
     return started.ok ? { ...started, profileId: claudeManager.profileOf(options.paneId) } : started
   })
   // Read-only by construction: the process is given read tools only, and the app answers its permission requests itself.

@@ -15,6 +15,7 @@ import { createAppTray } from './tray/tray'
 import { startUpdates } from './update/service'
 import type { StartWithWindowsState } from '../shared/types'
 import { iconPath } from './util/paths'
+import { startModel3dService } from './model3d/run'
 import { routeMenuZoom } from './zoom/menu'
 import { handleMediaScheme, MEDIA_SCHEME_PRIVILEGES } from './files/media'
 import { handleTestFlowScheme, TEST_FLOW_SCHEME_PRIVILEGES } from './testFlow/scheme'
@@ -101,6 +102,7 @@ if (!app.requestSingleInstanceLock()) {
     setTimeout(() => void repoIdentities.detectMissing(), ICON_SEARCH_DELAY_MS)
     const startWithWindows = createStartWithWindowsControl()
     registerIpc({ repoIdentities, startWithWindows })
+    const model3d = startModel3dService()
     handleMediaScheme()
     handleTestFlowScheme()
     startUpdates({ confirmRestart: () => confirmQuit('update-restart') })
@@ -131,6 +133,7 @@ if (!app.requestSingleInstanceLock()) {
     })
 
     app.on('will-quit', () => {
+      void model3d.shutdown()
       stopAttention()
       tray.destroy()
     })

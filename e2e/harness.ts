@@ -214,7 +214,11 @@ function appEnv(dirs: ReturnType<typeof seedDirs>, script: ScriptName, extra: Re
     CLAUDE_CONFIG_DIR: dirs.configDir,
     CC_VSCODE_USER_DIR: dirs.vscodeUserDir,
     USERPROFILE: dirs.home,
-    HOME: dirs.home
+    HOME: dirs.home,
+    // The 3D service must never reach the real coord board or ComfyUI3D: a real run may be live on the machine.
+    CC_MODEL3D_COORD: join(dirs.userData, 'no-coord', 'coord.py'),
+    CC_MODEL3D_ENGINE_DIR: join(dirs.userData, 'no-engine'),
+    CC_MODEL3D_PORT: '1'
   })
   Object.assign(env, extra)
   assertFakeClaude(env.CC_CLAUDE_BIN)
