@@ -322,6 +322,19 @@ describe('failure report', () => {
     expect(result).toEqual({ ok: false, error: 'Could not make the feature while making the worktree and branch: git exploded. Nothing was left behind.' })
   })
 
+  it('takes back the branch git made when the checkout itself fails', async () => {
+    writeFileSync(join(repo, '.gitattributes'), '*.bin filter=boom\n')
+    writeFileSync(join(repo, 'big.bin'), 'data')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-m', 'binary')
+    git(repo, 'config', 'filter.boom.smudge', 'false')
+    git(repo, 'config', 'filter.boom.required', 'true')
+    const result = await createFeature(deps(), request)
+    expect(result).toEqual({ ok: false, error: expect.stringMatching(/while making the worktree and branch: [\s\S]*\. Nothing was left behind\.$/) })
+    expect(git(repo, 'branch', '--list', 'feat/login').trim()).toBe('')
+    expect(existsSync(folder())).toBe(false)
+  })
+
   it('removes nothing when the branch appeared after the checks, and says nothing of this call was left', async () => {
     const d = deps()
     d.git.branchTaken = async (cwd, branch) => (branch === 'feat/login' ? false : branchTaken(cwd, branch))

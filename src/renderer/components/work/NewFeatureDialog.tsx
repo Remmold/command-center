@@ -77,9 +77,9 @@ function NewFeatureDialog() {
             }}
           />
         </label>
-        {busy && installing[shownName] && (
+        {busy && (
           <p role="status" className="text-muted">
-            Installing the workspace's dependencies in the new worktree…
+            {installing[shownName] ? "Installing the workspace's dependencies in the new worktree…" : 'Making the worktree; a large repository takes a few minutes…'}
           </p>
         )}
         {(problem ?? error) && (
