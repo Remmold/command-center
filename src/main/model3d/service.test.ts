@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createModel3dService, type Model3dService } from './service'
 import { drop, fakePorts, readService, readStatus, request } from './testFakes'
 
+/** An hour on the fake clock writes service.json for real every 5 s; on a busy machine that outruns Vitest's 5 s default. */
+const LONG_CLOCK_MS = 30_000
+
 let root: string
 let folder: string
 let fakes: ReturnType<typeof fakePorts>
@@ -215,7 +218,7 @@ describe('the server', () => {
     expect(fakes.server.stops).toBe(0)
     await advance(60_000)
     expect(fakes.server.stops).toBe(1)
-  })
+  }, LONG_CLOCK_MS)
 
   it('starts a fresh server for a job after the idle stop', async () => {
     await boot()
@@ -253,7 +256,7 @@ describe('a server started outside the app', () => {
     await advance(60 * 60_000)
     expect(fakes.server.stops).toBe(0)
     expect(fakes.comfy.answering).toBe(true)
-  })
+  }, LONG_CLOCK_MS)
 
   it('is not used while another job claims gpu', async () => {
     fakes.comfy.answering = true

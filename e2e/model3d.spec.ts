@@ -1,16 +1,17 @@
+import { spawn } from 'node:child_process'
 import { renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Model3dRequest } from '../src/shared/model3d'
 import { expect, model3dView, test, titleBar, type Model3dFakes } from './harness'
 
 /** Drops a request as gen3d.py would, for the fake worker; it runs until `hold` exists. */
-function dropRequest(fakes: Model3dFakes, workspace: string, name: string, submittedAt: string): { id: string; hold: string } {
+function dropRequest(fakes: Model3dFakes, workspace: string, name: string, submittedAt: string, held = true): { id: string; hold: string } {
   const id = `e2e-${name}`
   const hold = join(workspace, `${name}.release`)
   const request: Model3dRequest = {
     id,
     kind: 'generate',
-    argv: ['--image', `${name}.png`, '--name', name, '--out', join(workspace, 'generated3d'), '--comfy-port', String(fakes.port), '--hold', hold],
+    argv: ['--image', `${name}.png`, '--name', name, '--out', join(workspace, 'generated3d'), '--comfy-port', String(fakes.port), ...(held ? ['--hold', hold] : [])],
     cwd: workspace,
     python: 'python',
     script: fakes.worker,
@@ -28,7 +29,7 @@ function dropRequest(fakes: Model3dFakes, workspace: string, name: string, submi
   return { id, hold }
 }
 
-test('the 3D view on Ctrl+6: a dropped request goes queued, running with progress, then done, newest first, with who asked; Stop server stops the app-started server', async ({ launched }) => {
+test('the 3D view on Ctrl+6: a dropped request goes queued, running with progress, then done, newest first, with who asked; Stop server stops the app-started server at once, and one started outside the app after a confirm', async ({ launched }) => {
   const { page, workspace, model3d } = launched
   const view = model3dView(page)
   const jobs = view.getByRole('list', { name: '3D jobs' }).getByRole('listitem')
@@ -63,4 +64,22 @@ test('the 3D view on Ctrl+6: a dropped request goes queued, running with progres
   await stop.click()
   await expect(view.getByText('Stopped', { exact: true })).toBeVisible()
   await expect(stop).toBeDisabled()
+
+  const outside = spawn('python', ['main.py', '--port', String(model3d.port)], { cwd: model3d.engineDir, stdio: 'ignore', windowsHide: true })
+  const ended = new Promise<void>((resolve) => outside.once('exit', () => resolve()))
+  try {
+    const answers = () => fetch(`http://127.0.0.1:${model3d.port}/system_stats`).then((r) => r.ok, () => false)
+    await expect.poll(answers).toBe(true)
+    dropRequest(model3d, workspace, 'lamp', '2026-11-28T10:00:02.000Z', false)
+    await expect(job('lamp')).toContainText('Done')
+    await expect(view.getByText('Ready · Started outside the app', { exact: true })).toBeVisible()
+    await stop.click()
+    const confirm = page.getByRole('dialog', { name: 'Stop server' })
+    await expect(confirm).toContainText('started outside Command Center')
+    await confirm.getByRole('button', { name: 'Stop it' }).click()
+    await expect(view.getByText('Stopped', { exact: true })).toBeVisible()
+    await ended
+  } finally {
+    outside.kill()
+  }
 })

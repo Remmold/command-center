@@ -124,7 +124,7 @@ function JobItem({ row, now }: { row: Model3dJobRow; now: number }) {
     <ListItem
       alignWithRows
       tooltip={row.summary}
-      detail={line ? <NoticeLine tone={row.error ? 'warning' : 'muted'}>{line}</NoticeLine> : undefined}
+      detail={line ? <NoticeLine tone={row.state === 'failed' ? 'warning' : 'muted'}>{line}</NoticeLine> : undefined}
     >
       <DotMark dot={DOT[row.state]} />
       <ListRowLines
